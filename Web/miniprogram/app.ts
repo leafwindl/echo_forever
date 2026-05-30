@@ -1,0 +1,21 @@
+// app.ts
+// 现在有一个问题在于我如何让不同的用户有不同的智能体记忆，而不是混在一起？也有可能是我调试所以是同一个ID吧？这个后续得讨论一下。
+App<IAppOption>({
+  // 定义全局共享的数据对象
+  globalData: {},
+  //生命周期函数，小程序初始化完成时触发（全局仅触发一次）
+  onLaunch() {
+    // 展示本地存储能力，记录小程序每次启动的时间戳，可用于统计启动次数、用户使用频率，或者调试冷启动问题。这是一种简单的行为埋点。
+    const logs = wx.getStorageSync('logs') || [] //同步读取本地存储中‘log’的数据
+    logs.unshift(Date.now()) //将时间戳放在头部
+    wx.setStorageSync('logs', logs) // 将更新后的数据写回本地存储
+
+    // 登录，实现身份识别
+    wx.login({
+      success: res => {
+        console.log(res.code)
+        // 发送 res.code 到后台换取 openId, sessionKey, unionId。这里需要补全
+      },
+    })
+  },
+})

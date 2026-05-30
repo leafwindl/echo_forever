@@ -1,0 +1,12 @@
+{ 
+  "pages": [  
+    "pages/chat/chat"
+  ],
+  "window": {
+    "navigationBarTitleText": "Echo AI 伴侣",
+    "navigationBarBackgroundColor": "#FF9A9E",
+    "navigationBarTextStyle": "white"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}
