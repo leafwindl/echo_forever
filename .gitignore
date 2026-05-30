@@ -1,0 +1,33 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+ENV/
+*.db
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment & secrets
+.env
+*.pem
+*.key
+
+# Audio & binary files
+static/voices/*.mp3
+*.mp3
+*.wav
+
+# Logs and temp files
+*.log
+*.tmp
+
+# OS garbage
+.DS_Store
+Thumbs.db
