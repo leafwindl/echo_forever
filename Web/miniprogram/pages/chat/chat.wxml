@@ -1,7 +1,7 @@
 <view class="page">
   <!-- 2D 动漫人物区域 -->
-  <view class="character-area">
-    <character id="mycharacter" 
+  <view class="character-area" style="flex: {{chatExpanded ? 3 : 7}};">
+    <character id="mycharacter"
       bindlongpress="onStartRecord"
       bindtouchend="onStopRecord"
       bindtouchcancel="onCancelRecord">
@@ -9,27 +9,35 @@
     <view class="character-hint" wx:if="{{isThinking}}">对方正在输入...</view>
   </view>
 
-  <!-- 对话列表 -->
-  <scroll-view class="chat-list" scroll-y scroll-into-view="{{lastMsgId}}" scroll-with-animation>
-    <view class="intro-msg" wx:if="{{messages.length === 0}}">
-      <text>嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？</text>
+  <!-- 聊天区域容器 -->
+  <view class="chat-container" style="flex: {{chatExpanded ? 7 : 3}};">
+    <!-- 切换栏 -->
+    <view class="chat-handle" bindtap="onToggleChatExpand">
+      <text>{{chatExpanded ? '▼ 收起聊天' : '▲ 展开聊天'}}</text>
     </view>
-    <block wx:for="{{messages}}" wx:key="id">
-      <view class="msg-item {{item.sender === 'user' ? 'user' : 'echo'}}" id="msg-{{item.id}}">
-        <view class="bubble">
-          <text>{{item.content}}</text>
-        </view>
+
+    <!-- 对话列表 -->
+    <scroll-view class="chat-list" scroll-y scroll-into-view="{{lastMsgId}}" scroll-with-animation>
+      <view class="intro-msg" wx:if="{{messages.length === 0}}">
+        <text>嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？</text>
       </view>
-    </block>
-    <view class="list-bottom" id="bottom"></view>
-  </scroll-view>
+      <block wx:for="{{messages}}" wx:key="id">
+        <view class="msg-item {{item.sender === 'user' ? 'user' : 'echo'}}" id="msg-{{item.id}}">
+          <view class="bubble">
+            <text>{{item.content}}</text>
+          </view>
+        </view>
+      </block>
+      <view class="list-bottom" id="bottom"></view>
+    </scroll-view>
 
-  <!-- 输入区域 -->
-  <view class="input-area"><!--用户只要由输入，删除，粘贴等操作就触发bindinput的事件，调用onInput函数，确认调用onSend函数，最后confirm-type是定义键盘上的发送事件，例如Enter键-->
-    <input class="input" value="{{inputText}}" placeholder="说点什么..." bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
-    <button class="send-btn" size="mini" bindtap="onSend">发送</button> <!--按钮样式-->
+    <!-- 输入区域 -->
+    <view class="input-area">
+      <input class="input" value="{{inputText}}" placeholder="说点什么..." bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
+      <button class="send-btn" size="mini" bindtap="onSend">发送</button>
+    </view>
+
+    <!-- 清除上下文 -->
+    <view class="clear-btn" bindtap="onClearContext">清除上下文</view>
   </view>
-
-  <!-- 清除上下文按钮（常驻或悬浮） -->
-  <view class="clear-btn" bindtap="onClearContext">清除上下文</view>
 </view>

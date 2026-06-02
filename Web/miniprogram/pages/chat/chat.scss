@@ -1,4 +1,4 @@
-// 颜色变量（未来可抽成全局主题）
+// 颜色变量定义（必须放在使用之前）
 $echo-primary: #FF9A9E;
 $echo-bg: #FFF5F5;
 $user-primary: #A1C4FD;
@@ -9,23 +9,25 @@ $user-bg: #F0F8FF;
   flex-direction: column;
   height: 100vh;
   background: #fff;
+  overflow: hidden;// 防止整体溢出
 }
 
 .character-area {
-  height: 40vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #fce4ec, #f8bbd0);
-  position: relative;
+  overflow: hidden;
+  transition: flex 0.3s;
+  min-height: 0;  // 关键：允许 flex 压缩
+}
 
-  .character-hint {
-    margin-top: 10px;
-    color: #888;
-    font-size: 26rpx;
-    animation: pulse 1.5s infinite;
-  }
+.character-hint {
+  margin-top: 10px;
+  color: #888;
+  font-size: 26rpx;
+  animation: pulse 1.5s infinite;
 }
 
 @keyframes pulse {
@@ -34,8 +36,28 @@ $user-bg: #F0F8FF;
   100% { opacity: 0.6; }
 }
 
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  transition: flex 0.3s;
+  border-top: 1px solid #eee;
+  background: #fff;
+  min-height: 0;              // 关键：允许被压缩
+  overflow: hidden;           // 内部溢出裁剪
+}
+
+.chat-handle {
+  text-align: center;
+  padding: 10rpx 0;
+  font-size: 24rpx;
+  color: #999;
+  background: #fafafa;
+  border-bottom: 1rpx solid #eee;
+}
+
 .chat-list {
   flex: 1;
+  min-height: 0;              // 关键：允许滚动容器在 flex 中压缩
   padding: 20rpx;
   overflow-y: auto;
 
@@ -54,16 +76,15 @@ $user-bg: #F0F8FF;
     margin-bottom: 30rpx;
 
     &.user {
-      justify-content: flex-end; //靠右
+      justify-content: flex-end;
       .bubble {
         background: $user-primary;
         color: #fff;
-        margin-right: 30rpx;   // 新增：右侧留出 30rpx 空间
       }
     }
 
     &.echo {
-      justify-content: flex-start; //靠左
+      justify-content: flex-start;
       .bubble {
         background: $echo-bg;
         color: #333;

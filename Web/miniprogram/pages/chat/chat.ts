@@ -22,6 +22,7 @@ Page({
     isRecording: false,      // 是否正在录音
     recordStartTime: 0,      // 录音开始时间戳（用于防抖）
     shouldUploadVoice: false,   // 默认不上传
+    chatExpanded: false, //扩展聊天框
   },
 
   onLoad() {
@@ -49,6 +50,12 @@ Page({
     
     recorderManager = wx.getRecorderManager(); //获取全局唯一的录音管理器实例
     this.initRecorderEvents();
+  },
+
+  onToggleChatExpand() {
+    this.setData({
+      chatExpanded: !this.data.chatExpanded
+    });
   },
 
   initRecorderEvents() {

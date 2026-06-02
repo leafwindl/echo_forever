@@ -1,5 +1,4 @@
 <view class="character-container">
-  <!-- 先用静态图片占位，后续换成 Canvas 或 Spine 动画 -->
-  <image class="character-img" src="/assets/images/echo.jpg" mode="aspectFit" />
   <view class="name-tag">Echo</view>
+  <image src="/assets/images/echo_idle.apng" mode="widthFix"  style="width: 100%;" />
 </view>
