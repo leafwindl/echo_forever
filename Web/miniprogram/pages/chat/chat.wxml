@@ -1,7 +1,9 @@
 <view class="page">
   <!-- 2D 动漫人物区域 -->
-  <view class="character-area" style="flex: {{chatExpanded ? 3 : 7}};">
+  <view class="character-area {{chatExpanded ? 'character-area-expanded' : ''}}" style="flex: {{chatExpanded ? 3 : 7}};">
     <character id="mycharacter"
+      chat-expanded="{{chatExpanded}}"
+      sit-crop="{{sitCrop}}"
       bindlongpress="onStartRecord"
       bindtouchend="onStopRecord"
       bindtouchcancel="onCancelRecord">

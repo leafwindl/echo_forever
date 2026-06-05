@@ -1,4 +1,23 @@
-<view class="character-container">
-  <view class="name-tag">Echo</view>
-  <image src="/assets/images/echo_idle.apng" mode="widthFix"  style="width: 100%;" />
+<view class="character-container {{chatExpanded ? 'chat-expanded' : ''}}">
+  <block wx:if="{{chatExpanded}}">
+    <view
+      class="sit-crop"
+      style="width: {{sitCrop.cropWidth}}; height: {{sitCrop.cropHeight}}; margin-left: {{sitCrop.cropOffsetX}}; margin-bottom: {{sitCrop.cropOffsetY}};"
+    >
+      <image
+        class="character-image sit-image"
+        src="/assets/images/idle_sit.apng"
+        mode="widthFix"
+        style="width: {{sitCrop.imageWidth}}; left: {{sitCrop.imageLeft}}; top: {{sitCrop.imageTop}};"
+      />
+    </view>
+  </block>
+  <block wx:else>
+    <view class="name-tag">Echo</view>
+    <image
+      class="character-image idle-image"
+      src="/assets/images/echo_idle.apng"
+      mode="widthFix"
+    />
+  </block>
 </view>

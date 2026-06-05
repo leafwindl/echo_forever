@@ -23,6 +23,10 @@ $user-bg: #F0F8FF;
   min-height: 0;  // 关键：允许 flex 压缩
 }
 
+.character-area-expanded {
+  justify-content: flex-end;
+}
+
 .character-hint {
   margin-top: 10px;
   color: #888;

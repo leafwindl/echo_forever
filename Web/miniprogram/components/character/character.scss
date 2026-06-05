@@ -9,6 +9,27 @@
   align-items: center;
 }
 
+.character-container.chat-expanded {
+  width: 100%;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.character-image {
+  width: 100%;
+  display: block;
+}
+
+.sit-crop {
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sit-image {
+  position: absolute;
+}
+
 .name-tag {
   margin-top: 20rpx;
   font-size: 28rpx;
