@@ -30,7 +30,7 @@
 
 ## 2. 核心架构
 
-![alt text](image.png)
+![framework](/assets/image.png)
 
 **通信方式**
 
