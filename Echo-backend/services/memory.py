@@ -51,12 +51,14 @@ def init_db():
                 user_id TEXT NOT NULL,
                 title TEXT,
                 summary TEXT DEFAULT '',
+                summary_message_id INTEGER DEFAULT 0,
                 status TEXT DEFAULT 'active',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        _add_column_if_missing(cursor, "conversations", "summary_message_id", "INTEGER DEFAULT 0")
 
         # 原始消息表：继续兼容 v0.1 的聊天历史，同时预留会话和消息类型字段。
         cursor.execute(
@@ -143,6 +145,7 @@ def upsert_user(
 
 def ensure_conversation(user_id: str, conversation_id: Optional[str] = None, title: Optional[str] = None) -> str:
     """确保会话存在；调用方没传 conversation_id 时，创建一个新的会话 ID。"""
+    upsert_user(user_id=user_id)
     resolved_id = conversation_id or f"conv_{uuid.uuid4().hex}"
     with _connect() as conn:
         cursor = conn.cursor()
@@ -155,6 +158,87 @@ def ensure_conversation(user_id: str, conversation_id: Optional[str] = None, tit
         )
         conn.commit()
     return resolved_id
+
+
+def get_or_create_active_conversation(user_id: str) -> str:
+    """获取用户当前 active 会话；不存在时自动创建一个。"""
+    upsert_user(user_id=user_id)
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT conversation_id
+            FROM conversations
+            WHERE user_id = ? AND status = 'active'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        row = cursor.fetchone()
+
+    if row:
+        conversation_id = row[0]
+    else:
+        conversation_id = ensure_conversation(user_id)
+
+    # 兼容历史数据：v0.2 早期消息可能没有 conversation_id。
+    # 首次进入会话体系时，把这些旧消息挂到当前 active 会话下，避免短期历史突然断掉。
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE chat_messages
+            SET conversation_id = ?
+            WHERE user_id = ? AND conversation_id IS NULL
+            """,
+            (conversation_id, user_id),
+        )
+        conn.commit()
+
+    return conversation_id
+
+
+def get_conversation_summary(user_id: str, conversation_id: str) -> Dict[str, object]:
+    """读取会话摘要和摘要已经覆盖到的消息 ID。"""
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT summary, COALESCE(summary_message_id, 0)
+            FROM conversations
+            WHERE user_id = ? AND conversation_id = ?
+            """,
+            (user_id, conversation_id),
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        return {"summary": "", "summary_message_id": 0}
+
+    return {"summary": row[0] or "", "summary_message_id": int(row[1] or 0)}
+
+
+def update_conversation_summary(
+    user_id: str,
+    conversation_id: str,
+    summary: str,
+    summary_message_id: int,
+):
+    """更新会话滚动摘要。"""
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE conversations
+            SET summary = ?,
+                summary_message_id = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND conversation_id = ?
+            """,
+            (summary, summary_message_id, user_id, conversation_id),
+        )
+        conn.commit()
 
 
 def add_message(
@@ -176,6 +260,15 @@ def add_message(
             """,
             (user_id, conversation_id, role, content, message_type),
         )
+        if conversation_id:
+            cursor.execute(
+                """
+                UPDATE conversations
+                SET updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = ? AND conversation_id = ?
+                """,
+                (user_id, conversation_id),
+            )
         conn.commit()
         return int(cursor.lastrowid)
 
@@ -184,6 +277,7 @@ def get_history(
     user_id: str,
     limit: int = 20,
     conversation_id: Optional[str] = None,
+    after_message_id: int = 0,
 ) -> List[Dict[str, str]]:
     """读取最近 N 条历史消息，并按时间正序返回给大模型。"""
     with _connect() as conn:
@@ -193,28 +287,59 @@ def get_history(
                 """
                 SELECT role, content
                 FROM chat_messages
-                WHERE user_id = ? AND conversation_id = ?
+                WHERE user_id = ? AND conversation_id = ? AND id > ?
                 ORDER BY id DESC
                 LIMIT ?
                 """,
-                (user_id, conversation_id, limit),
+                (user_id, conversation_id, after_message_id, limit),
             )
         else:
             cursor.execute(
                 """
                 SELECT role, content
                 FROM chat_messages
-                WHERE user_id = ?
+                WHERE user_id = ? AND id > ?
                 ORDER BY id DESC
                 LIMIT ?
                 """,
-                (user_id, limit),
+                (user_id, after_message_id, limit),
             )
         rows = cursor.fetchall()
 
     # SQL 查询为了性能先取倒序的最新 N 条，这里反转回自然对话顺序。
     rows.reverse()
     return [{"role": row[0], "content": row[1]} for row in rows]
+
+
+def get_conversation_messages(
+    user_id: str,
+    conversation_id: str,
+    after_message_id: int = 0,
+) -> List[Dict[str, object]]:
+    """按时间正序读取一个会话的所有原始消息，供摘要服务使用。"""
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, role, content, message_type, timestamp
+            FROM chat_messages
+            WHERE user_id = ? AND conversation_id = ? AND id > ?
+            ORDER BY id ASC
+            """,
+            (user_id, conversation_id, after_message_id),
+        )
+        rows = cursor.fetchall()
+
+    return [
+        {
+            "id": int(row[0]),
+            "role": row[1],
+            "content": row[2],
+            "message_type": row[3],
+            "timestamp": row[4],
+        }
+        for row in rows
+    ]
 
 
 def add_user_memory(
