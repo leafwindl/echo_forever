@@ -5,6 +5,7 @@ from typing import Optional
 from llm_client import request_llm
 from services.conversation_summary import maybe_update_conversation_summary
 from services.context_builder import build_chat_context
+from services.memory_extractor import schedule_memory_extraction
 from services.memory import add_message, ensure_conversation, get_or_create_active_conversation
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,11 @@ class ChatTurnResult:
     assistant_message_id: int
     conversation_id: str
     summary_updated: bool = False
+    memory_created: int = 0
+    memory_updated: int = 0
+    memory_deactivated: int = 0
+    memory_extraction_scheduled: bool = False
+    memory_extraction_gate_reason: str = ""
 
 
 async def generate_chat_reply(
@@ -58,7 +64,7 @@ async def generate_chat_reply(
     )
 
     # Context Builder 专门负责“给模型看什么”，Chat Service 只负责对话流程编排。
-    context = build_chat_context(clean_user_id, clean_message, conversation_id=resolved_conversation_id)
+    context = await build_chat_context(clean_user_id, clean_message, conversation_id=resolved_conversation_id)
     reply = await request_llm(context.messages)
     logger.info("LLM reply generated for user_id=%s", clean_user_id)
 
@@ -84,6 +90,14 @@ async def generate_chat_reply(
     except Exception:
         logger.exception("Conversation summary update failed for conversation_id=%s", resolved_conversation_id)
 
+    # 长期记忆抽取只做调度，不等待结果；真正落库在后台任务里完成。
+    memory_gate = schedule_memory_extraction(
+        user_id=clean_user_id,
+        user_message=clean_message,
+        assistant_reply=reply,
+        source_message_id=user_message_id,
+    )
+
     return ChatTurnResult(
         reply=reply,
         user_message=clean_message,
@@ -91,4 +105,6 @@ async def generate_chat_reply(
         assistant_message_id=assistant_message_id,
         conversation_id=resolved_conversation_id,
         summary_updated=summary_updated,
+        memory_extraction_scheduled=memory_gate.should_extract,
+        memory_extraction_gate_reason=memory_gate.reason,
     )

@@ -1,4 +1,4 @@
-import { login, sendMessage } from '../../utils/api'; // 导入两个异步函数
+import { login, sendMessage, USER_ID_STORAGE_KEY } from '../../utils/api'; // 导入两个异步函数
 import { BASE_URL } from '../../utils/api';
 
 // 定义消息对象的结构：每个消息由唯一数字ID、发送者、文本内容
@@ -58,17 +58,20 @@ Page({
           const result = await login(res.code, clientId);  //将code传给自定义login函数（api.ts），返回user_id
           // 只有当login函数成功后才会进行这一步
           this.setData({ userId: result.user_id }); //将user.id存入user ID的页面数据中。this指向当前页面的实例（Page对象）
+          wx.setStorageSync(USER_ID_STORAGE_KEY, result.user_id);
           // 登录成功后发一条 Echo 开场白（可以从后端获取，这里先固定）
           this.addMessage('echo', '嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？');
         } catch (e) {
           console.error('登录失败', e);
           // 降级：使用本地稳定匿名 ID，避免所有失败登录用户共用同一个身份
           this.setData({ userId: clientId });
+          wx.setStorageSync(USER_ID_STORAGE_KEY, clientId);
           this.addMessage('echo', '嗨，我是 Echo，很高兴认识你～');
         }
       },
       fail: () => {
         this.setData({ userId: clientId });
+        wx.setStorageSync(USER_ID_STORAGE_KEY, clientId);
         this.addMessage('echo', '嗨，我是 Echo，很高兴认识你～');
       }
     });
@@ -155,6 +158,10 @@ Page({
     // 临时清空前端消息列表（后端上下文还会保留）
     this.setData({ messages: [] });
     wx.showToast({ title: '上下文已清除', icon: 'none' });
+  },
+
+  onOpenMemoryPage() {
+    wx.navigateTo({ url: '/pages/memory/memory' });
   },
 
   async onStartRecord() {

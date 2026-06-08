@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Query, status
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
@@ -14,9 +14,10 @@ import os
 from services.tencent_asr import recognize_audio
 from services.minimax_tts import text_to_speech
 from services.audio_storage import save_audio_file
-from services.memory import init_db
+from services.memory import clear_user_memories, delete_user_memory, get_user_memory, init_db, list_user_memories
 from services.auth import AuthError, login_with_wechat_code
 from services.chat import ChatValidationError, generate_chat_reply
+from services.vector_store import backfill_user_memory_embeddings, clear_memory_embeddings, delete_memory_embedding
 
 import shutil
 import uuid
@@ -48,6 +49,39 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+
+class MemoryItem(BaseModel):
+    memory_id: str
+    memory_type: str
+    content: str
+    source_message_id: Optional[int] = None
+    confidence: float
+    importance: int
+    status: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    expires_at: Optional[str] = None
+
+class MemoryListResponse(BaseModel):
+    memories: list[MemoryItem]
+    count: int
+
+class MemoryClearRequest(BaseModel):
+    user_id: str
+
+class MemoryDeleteResponse(BaseModel):
+    memory_id: str
+    status: str
+
+class MemoryClearResponse(BaseModel):
+    cleared_count: int
+
+class MemoryBackfillEmbeddingsRequest(BaseModel):
+    user_id: str
+    limit: int = 100
+
+class MemoryBackfillEmbeddingsResponse(BaseModel):
+    backfilled_count: int
 
 class LoginRequest(BaseModel):
     code: str
@@ -103,6 +137,89 @@ async def chat_send(request: ChatRequest):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="内部服务器错误")
 
     return ChatResponse(reply=result.reply)
+
+
+@app.get("/memory/list", response_model=MemoryListResponse)
+async def memory_list(user_id: str, memory_status: str = Query("active", alias="status"), limit: int = 50):
+    """查看当前用户的长期记忆；默认只返回 active 记忆。"""
+    clean_user_id = user_id.strip()
+    if not clean_user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing user_id")
+
+    clean_status = memory_status.strip().lower()
+    if clean_status == "all":
+        memory_status = None
+    elif clean_status in {"active", "inactive", "deleted"}:
+        memory_status = clean_status
+    else:
+        raise HTTPException(status_code=400, detail="Invalid memory status")
+
+    safe_limit = max(1, min(limit, 200))
+    memories = list_user_memories(clean_user_id, status=memory_status, limit=safe_limit)
+    return MemoryListResponse(
+        memories=[MemoryItem(**memory) for memory in memories],
+        count=len(memories),
+    )
+
+
+@app.delete("/memory/{memory_id}", response_model=MemoryDeleteResponse)
+async def memory_delete(memory_id: str, user_id: str):
+    """软删除单条长期记忆；删除后不会再进入 Context Builder。"""
+    clean_user_id = user_id.strip()
+    clean_memory_id = memory_id.strip()
+    if not clean_user_id:
+        raise HTTPException(status_code=400, detail="Missing user_id")
+    if not clean_memory_id:
+        raise HTTPException(status_code=400, detail="Missing memory_id")
+
+    existing_memory = get_user_memory(clean_user_id, clean_memory_id)
+    if not existing_memory:
+        raise HTTPException(status_code=404, detail="Memory not found")
+
+    if not delete_user_memory(clean_user_id, clean_memory_id):
+        raise HTTPException(status_code=500, detail="Failed to delete memory")
+    try:
+        # 记忆被用户删除后，同步移除向量，确保后续检索不会再命中。
+        delete_memory_embedding(clean_user_id, clean_memory_id)
+    except Exception:
+        logger.exception("Failed to delete memory embedding for memory_id=%s", clean_memory_id)
+
+    return MemoryDeleteResponse(memory_id=clean_memory_id, status="deleted")
+
+
+@app.post("/memory/clear", response_model=MemoryClearResponse)
+async def memory_clear(request: MemoryClearRequest):
+    """清空当前用户长期记忆；不会删除聊天原始记录和会话摘要。"""
+    clean_user_id = request.user_id.strip()
+    if not clean_user_id:
+        raise HTTPException(status_code=400, detail="Missing user_id")
+
+    cleared_count = clear_user_memories(clean_user_id)
+    try:
+        clear_memory_embeddings(clean_user_id)
+    except Exception:
+        logger.exception("Failed to clear memory embeddings for user_id=%s", clean_user_id)
+    return MemoryClearResponse(cleared_count=cleared_count)
+
+
+@app.post("/memory/backfill-embeddings", response_model=MemoryBackfillEmbeddingsResponse)
+async def memory_backfill_embeddings(request: MemoryBackfillEmbeddingsRequest):
+    """为旧阶段已经存在的 active 长期记忆补齐 embedding。"""
+    clean_user_id = request.user_id.strip()
+    if not clean_user_id:
+        raise HTTPException(status_code=400, detail="Missing user_id")
+
+    safe_limit = max(1, min(request.limit, 500))
+    try:
+        backfilled_count = await backfill_user_memory_embeddings(clean_user_id, limit=safe_limit)
+    except ValueError as e:
+        # 常见原因：还没有配置 EMBEDDING_API_KEY / EMBEDDING_BASE_URL。
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception:
+        logger.exception("Failed to backfill memory embeddings for user_id=%s", clean_user_id)
+        raise HTTPException(status_code=500, detail="Failed to backfill memory embeddings")
+
+    return MemoryBackfillEmbeddingsResponse(backfilled_count=backfilled_count)
 
 
 @app.post("/voice/asr")

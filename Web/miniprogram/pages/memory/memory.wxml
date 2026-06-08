@@ -1,0 +1,49 @@
+<view class="page">
+  <view class="top-bar">
+    <view class="title-group">
+      <text class="title">长期记忆</text>
+      <text class="count">{{memories.length}} 条</text>
+    </view>
+    <view class="top-actions">
+      <button class="icon-btn" size="mini" bindtap="onRefresh">刷新</button>
+      <button class="danger-btn" size="mini" bindtap="onClearMemories" loading="{{isClearing}}" disabled="{{isClearing || activeTab !== 'active' || memories.length === 0}}">清空</button>
+    </view>
+  </view>
+
+  <view class="tabs">
+    <view class="tab {{activeTab === 'active' ? 'active' : ''}}" data-tab="active" bindtap="onSwitchTab">使用中</view>
+    <view class="tab {{activeTab === 'deleted' ? 'active' : ''}}" data-tab="deleted" bindtap="onSwitchTab">已删除</view>
+  </view>
+
+  <view class="status-line" wx:if="{{isLoading}}">加载中...</view>
+  <view class="status-line error" wx:elif="{{errorText}}">{{errorText}}</view>
+
+  <scroll-view class="memory-list" scroll-y wx:else>
+    <view class="empty" wx:if="{{memories.length === 0}}">
+      <text>{{activeTab === 'active' ? '暂无使用中的长期记忆' : '暂无已删除的长期记忆'}}</text>
+    </view>
+
+    <block wx:for="{{memories}}" wx:key="memory_id">
+      <view class="memory-item">
+        <view class="memory-main">
+          <view class="memory-meta">
+            <text class="type">{{item.memory_type}}</text>
+            <text class="importance">重要度 {{item.importance}}</text>
+          </view>
+          <text class="content">{{item.content}}</text>
+          <view class="memory-foot">
+            <text>置信度 {{item.confidence}}</text>
+            <text>{{item.updated_at}}</text>
+          </view>
+        </view>
+        <button
+          wx:if="{{activeTab === 'active'}}"
+          class="delete-btn"
+          size="mini"
+          data-id="{{item.memory_id}}"
+          bindtap="onDeleteMemory"
+        >删除</button>
+      </view>
+    </block>
+  </scroll-view>
+</view>

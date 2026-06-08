@@ -1,15 +1,25 @@
 import httpx
 import logging
+from typing import Optional
+
 from config import settings
 
 logger = logging.getLogger(__name__)
 # 构造异步函数
-async def request_llm(messages: list[dict]) -> str:
+async def request_llm(
+    messages: list[dict],
+    model: Optional[str] = None,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+) -> str:
     """
     处理大模型请求，并返回回复文本
     
     Args:
         messages: 当前对话的消息列表（包含系统Prompt和历史消息）
+        model: 可选模型覆盖，用于记忆抽取、摘要等低成本任务
+        temperature: 可选温度覆盖
+        max_tokens: 可选输出长度覆盖
         
     Returns:
         str: AI的回复内容
@@ -22,10 +32,10 @@ async def request_llm(messages: list[dict]) -> str:
     }
     # 构造请求体
     payload = {
-        "model": settings.LLM_MODEL or "gpt-4o",
+        "model": model or settings.LLM_MODEL or "gpt-4o",
         "messages": messages,
-        "temperature": settings.temperature,
-        "max_tokens": settings.max_tokens, # 限制回复最大token长度
+        "temperature": settings.temperature if temperature is None else temperature,
+        "max_tokens": settings.max_tokens if max_tokens is None else max_tokens, # 限制回复最大token长度
     }
     # 发送请求与处理响应
     try:

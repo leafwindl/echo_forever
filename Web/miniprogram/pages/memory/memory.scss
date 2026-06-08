@@ -1,0 +1,206 @@
+$echo-primary: #FF9A9E;
+$danger: #E04F5F;
+$text-main: #2F3033;
+$text-soft: #7A7F87;
+$line: #ECEEF2;
+$bg: #F7F8FA;
+
+.page {
+  min-height: 100vh;
+  background: $bg;
+  display: flex;
+  flex-direction: column;
+  color: $text-main;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 28rpx 18rpx;
+  background: #fff;
+  border-bottom: 1rpx solid $line;
+}
+
+.title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+  min-width: 0;
+}
+
+.title {
+  font-size: 36rpx;
+  font-weight: 600;
+  line-height: 48rpx;
+}
+
+.count {
+  color: $text-soft;
+  font-size: 24rpx;
+  line-height: 32rpx;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.icon-btn,
+.danger-btn {
+  margin: 0;
+  min-width: 96rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 20rpx;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+}
+
+.icon-btn {
+  color: $text-main;
+  background: #F1F3F6;
+}
+
+.danger-btn {
+  color: #fff;
+  background: $danger;
+}
+
+.danger-btn[disabled] {
+  color: #fff;
+  background: #D8DCE2;
+}
+
+.tabs {
+  display: flex;
+  padding: 18rpx 28rpx;
+  background: #fff;
+  border-bottom: 1rpx solid $line;
+}
+
+.tab {
+  flex: 1;
+  height: 64rpx;
+  line-height: 64rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: $text-soft;
+  background: #F3F4F6;
+}
+
+.tab:first-child {
+  border-radius: 12rpx 0 0 12rpx;
+}
+
+.tab:last-child {
+  border-radius: 0 12rpx 12rpx 0;
+}
+
+.tab.active {
+  color: #fff;
+  background: $echo-primary;
+}
+
+.status-line {
+  padding: 48rpx 28rpx;
+  color: $text-soft;
+  font-size: 28rpx;
+  text-align: center;
+}
+
+.status-line.error {
+  color: $danger;
+}
+
+.memory-list {
+  flex: 1;
+  min-height: 0;
+  padding: 22rpx 24rpx 40rpx;
+  box-sizing: border-box;
+}
+
+.empty {
+  margin-top: 120rpx;
+  color: $text-soft;
+  font-size: 28rpx;
+  text-align: center;
+}
+
+.memory-item {
+  display: flex;
+  align-items: stretch;
+  gap: 18rpx;
+  padding: 22rpx;
+  margin-bottom: 18rpx;
+  background: #fff;
+  border: 1rpx solid $line;
+  border-radius: 12rpx;
+  box-sizing: border-box;
+}
+
+.memory-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.memory-meta {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 14rpx;
+}
+
+.type {
+  padding: 4rpx 12rpx;
+  color: $echo-primary;
+  background: #FFF0F1;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  line-height: 30rpx;
+}
+
+.importance {
+  color: $text-soft;
+  font-size: 22rpx;
+  line-height: 30rpx;
+}
+
+.content {
+  display: block;
+  color: $text-main;
+  font-size: 29rpx;
+  line-height: 44rpx;
+  word-break: break-all;
+}
+
+.memory-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 16rpx;
+  color: #A0A5AD;
+  font-size: 22rpx;
+  line-height: 30rpx;
+}
+
+.memory-foot text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-btn {
+  align-self: center;
+  margin: 0;
+  width: 92rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0;
+  color: $danger;
+  background: #FFF1F2;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+}

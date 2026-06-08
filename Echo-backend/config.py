@@ -11,6 +11,14 @@ class Settings(BaseSettings):
     temperature: float = 0.8
     max_tokens: int = 500
     timeout: int = 30
+    memory_extraction_model: str = os.getenv("MEMORY_EXTRACTION_MODEL", "")
+    memory_extraction_temperature: float = float(os.getenv("MEMORY_EXTRACTION_TEMPERATURE", "0.1"))
+    memory_extraction_max_tokens: int = int(os.getenv("MEMORY_EXTRACTION_MAX_TOKENS", "400"))
+    embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "")
+    embedding_base_url: str = os.getenv("EMBEDDING_BASE_URL", "https://api.openai.com/v1")
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    memory_vector_top_k: int = int(os.getenv("MEMORY_VECTOR_TOP_K", "5"))
+    memory_vector_score_threshold: float = float(os.getenv("MEMORY_VECTOR_SCORE_THRESHOLD", "0.25"))
 
     # ASR服务
     tencent_secret_id: str = os.getenv("TENCENT_SECRET_ID", "")

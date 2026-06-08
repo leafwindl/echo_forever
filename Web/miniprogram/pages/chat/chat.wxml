@@ -39,7 +39,9 @@
       <button class="send-btn" size="mini" bindtap="onSend">发送</button>
     </view>
 
-    <!-- 清除上下文 -->
-    <view class="clear-btn" bindtap="onClearContext">清除上下文</view>
+    <view class="chat-actions">
+      <view class="action-btn" bindtap="onClearContext">清除上下文</view>
+      <view class="action-btn primary" bindtap="onOpenMemoryPage">记忆管理</view>
+    </view>
   </view>
 </view>

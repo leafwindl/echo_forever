@@ -116,6 +116,34 @@ def init_db():
             ON user_memories(user_id, status)
             """
         )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_user_memories_user_status_type
+            ON user_memories(user_id, status, memory_type)
+            """
+        )
+
+        # 长期记忆向量表：v0.2 MVP 直接把 embedding JSON 存在 SQLite。
+        # 后续迁移 Chroma 或 pgvector 时，只需要替换 vector_store 适配层。
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_embeddings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                memory_id TEXT NOT NULL UNIQUE,
+                user_id TEXT,
+                embedding_model TEXT NOT NULL,
+                embedding TEXT,
+                vector_store_id TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        _add_column_if_missing(cursor, "memory_embeddings", "user_id", "TEXT")
+        _add_column_if_missing(cursor, "memory_embeddings", "embedding", "TEXT")
+        _add_column_if_missing(cursor, "memory_embeddings", "updated_at", "DATETIME")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_memory_embeddings_memory_id ON memory_embeddings(memory_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_memory_embeddings_user_id ON memory_embeddings(user_id)")
         conn.commit()
 
 
@@ -342,6 +370,87 @@ def get_conversation_messages(
     ]
 
 
+def list_user_memories(
+    user_id: str,
+    status: Optional[str] = "active",
+    limit: int = 20,
+) -> List[Dict[str, object]]:
+    """读取用户长期记忆，默认只返回 active 记忆，按重要性和更新时间排序。"""
+    query = """
+        SELECT
+            memory_id, user_id, memory_type, content, source_message_id,
+            confidence, importance, status, created_at, updated_at, expires_at
+        FROM user_memories
+        WHERE user_id = ?
+    """
+    params: list[object] = [user_id]
+
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+
+    query += " ORDER BY importance DESC, updated_at DESC, id DESC"
+    if limit > 0:
+        query += " LIMIT ?"
+        params.append(limit)
+
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+    return [
+        {
+            "memory_id": row[0],
+            "user_id": row[1],
+            "memory_type": row[2],
+            "content": row[3],
+            "source_message_id": row[4],
+            "confidence": float(row[5] or 0),
+            "importance": int(row[6] or 0),
+            "status": row[7],
+            "created_at": row[8],
+            "updated_at": row[9],
+            "expires_at": row[10],
+        }
+        for row in rows
+    ]
+
+
+def get_user_memory(user_id: str, memory_id: str) -> Optional[Dict[str, object]]:
+    """按 memory_id 读取单条长期记忆，并始终校验 user_id，避免跨用户访问。"""
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                memory_id, user_id, memory_type, content, source_message_id,
+                confidence, importance, status, created_at, updated_at, expires_at
+            FROM user_memories
+            WHERE user_id = ? AND memory_id = ?
+            """,
+            (user_id, memory_id),
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        return None
+
+    return {
+        "memory_id": row[0],
+        "user_id": row[1],
+        "memory_type": row[2],
+        "content": row[3],
+        "source_message_id": row[4],
+        "confidence": float(row[5] or 0),
+        "importance": int(row[6] or 0),
+        "status": row[7],
+        "created_at": row[8],
+        "updated_at": row[9],
+        "expires_at": row[10],
+    }
+
+
 def add_user_memory(
     user_id: str,
     memory_type: str,
@@ -350,7 +459,12 @@ def add_user_memory(
     confidence: float = 0.8,
     importance: int = 3,
 ) -> str:
-    """写入一条结构化长期记忆；记忆抽取和去重逻辑会在后续阶段接入。"""
+    """写入一条结构化长期记忆；调用方需要先完成是否值得记住的判断。"""
+    upsert_user(user_id=user_id)
+    clean_content = content.strip()
+    if not clean_content:
+        raise ValueError("Memory content cannot be empty")
+
     memory_id = f"mem_{uuid.uuid4().hex}"
     with _connect() as conn:
         cursor = conn.cursor()
@@ -362,7 +476,98 @@ def add_user_memory(
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (memory_id, user_id, memory_type, content, source_message_id, confidence, importance),
+            (memory_id, user_id, memory_type, clean_content, source_message_id, confidence, importance),
         )
         conn.commit()
     return memory_id
+
+
+def update_user_memory(
+    user_id: str,
+    memory_id: str,
+    memory_type: Optional[str] = None,
+    content: Optional[str] = None,
+    source_message_id: Optional[int] = None,
+    confidence: Optional[float] = None,
+    importance: Optional[int] = None,
+    status: Optional[str] = None,
+) -> bool:
+    """更新单条长期记忆；所有更新都带 user_id 条件，避免误改其他用户数据。"""
+    assignments = ["updated_at = CURRENT_TIMESTAMP"]
+    params: list[object] = []
+
+    if memory_type is not None:
+        assignments.append("memory_type = ?")
+        params.append(memory_type)
+    if content is not None:
+        clean_content = content.strip()
+        if not clean_content:
+            return False
+        assignments.append("content = ?")
+        params.append(clean_content)
+    if source_message_id is not None:
+        assignments.append("source_message_id = ?")
+        params.append(source_message_id)
+    if confidence is not None:
+        assignments.append("confidence = ?")
+        params.append(confidence)
+    if importance is not None:
+        assignments.append("importance = ?")
+        params.append(importance)
+    if status is not None:
+        assignments.append("status = ?")
+        params.append(status)
+
+    params.extend([user_id, memory_id])
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            UPDATE user_memories
+            SET {", ".join(assignments)}
+            WHERE user_id = ? AND memory_id = ?
+            """,
+            params,
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def touch_user_memory(
+    user_id: str,
+    memory_id: str,
+    source_message_id: Optional[int] = None,
+) -> bool:
+    """内容重复时只刷新更新时间，说明这条记忆最近又被用户确认过。"""
+    return update_user_memory(
+        user_id=user_id,
+        memory_id=memory_id,
+        source_message_id=source_message_id,
+    )
+
+
+def deactivate_user_memory(user_id: str, memory_id: str) -> bool:
+    """把长期记忆标记为 inactive；真正删除接口会在记忆管理阶段再开放。"""
+    return update_user_memory(user_id=user_id, memory_id=memory_id, status="inactive")
+
+
+def delete_user_memory(user_id: str, memory_id: str) -> bool:
+    """用户主动删除单条长期记忆；使用软删除，避免误删后无法排查。"""
+    return update_user_memory(user_id=user_id, memory_id=memory_id, status="deleted")
+
+
+def clear_user_memories(user_id: str) -> int:
+    """清空用户长期记忆；只标记为 deleted，不删除聊天原始记录。"""
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE user_memories
+            SET status = 'deleted',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND (status IS NULL OR status != 'deleted')
+            """,
+            (user_id,),
+        )
+        conn.commit()
+        return cursor.rowcount
