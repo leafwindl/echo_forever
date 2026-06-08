@@ -1,11 +1,9 @@
 import logging
-from typing import Dict, List, Optional
+from typing import Optional
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
-from config import settings
-from llm_client import request_llm
 from dotenv import load_dotenv
 
 from fastapi.staticfiles import StaticFiles
@@ -16,8 +14,9 @@ import os
 from services.tencent_asr import recognize_audio
 from services.minimax_tts import text_to_speech
 from services.audio_storage import save_audio_file
-from services.memory import init_db, add_message, get_history
+from services.memory import init_db
 from services.auth import AuthError, login_with_wechat_code
+from services.chat import ChatValidationError, generate_chat_reply
 
 import shutil
 import uuid
@@ -28,10 +27,6 @@ load_dotenv()
 # 日志配置
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# 保持最多多少轮对话（1轮 = 用户1条 + AI 1条）
-MAX_ROUNDS = 10
-MAX_HISTORY_MESSAGES = MAX_ROUNDS * 2
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,37 +85,24 @@ async def login(request: LoginRequest):
 
 @app.post("/chat/send", response_model=ChatResponse)
 async def chat_send(request: ChatRequest):
-    """发送消息并获取 AI 回复"""
-    # 获取前端发送过来的消息
-    user_id = request.user_id
-    user_message = request.message.strip()
-    # 空消息校验
-    if not user_message:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="空消息")
-
-    # 获取用户持久化的历史记录（短期记忆）
-    history = get_history(user_id, limit=MAX_HISTORY_MESSAGES)
-    
-    # 构造“本次”请求的完整消息列表（包含系统提示词+历史对话+当前用户消息），注意系统提示词是每次都会包含进去的
-    messages = [{"role": "system", "content": settings.system_prompt}]
-    # extend是将history的历史记录都追加在系统提示词的后面
-    messages.extend(history)
-    # 追加当前用户发来的消息
-    messages.append({"role": "user", "content": user_message})
-    
+    """发送文本消息并获取 AI 回复。"""
     try:
-        reply_content = await request_llm(messages)
+        # 第二阶段开始，文本和语音共用 Chat Service，避免两套对话逻辑各自漂移。
+        result = await generate_chat_reply(
+            user_id=request.user_id,
+            message=request.message,
+            user_message_type="text",
+            assistant_message_type="text",
+        )
+    except ChatValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.exception("Text chat failed")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="内部服务器错误")
-        
-    # 持久化本次对话到数据库
-    add_message(user_id, "user", user_message)
-    add_message(user_id, "assistant", reply_content)
-        
-    return ChatResponse(reply=reply_content)
+
+    return ChatResponse(reply=result.reply)
 
 
 @app.post("/voice/asr")
@@ -163,32 +145,25 @@ async def voice_reply(request: VoiceReplyRequest):
     """
     接收用户的文字，调用 LLM 和 TTS，返回 AI 的文字和语音。
     """
-    user_id = request.user_id
-    user_text = request.message.strip()
-    
-    # 获取用户持久化的历史记录（短期记忆）
-    history = get_history(user_id, limit=MAX_HISTORY_MESSAGES)
-    
-    messages = [{"role": "system", "content": settings.system_prompt}]
-    messages.extend(history)
-    messages.append({"role": "user", "content": user_text})
-
     try:
-        reply_text = await request_llm(messages)
-        logger.info(f"LLM reply for voice: {reply_text}")
+        # 语音链路只负责 ASR/TTS 外壳，中间的对话生成和落库统一交给 Chat Service。
+        result = await generate_chat_reply(
+            user_id=request.user_id,
+            message=request.message,
+            user_message_type="voice_asr",
+            assistant_message_type="voice_reply",
+        )
 
         # 调用 TTS
-        audio_bytes = await text_to_speech(reply_text)
+        audio_bytes = await text_to_speech(result.reply)
         audio_url = await save_audio_file(audio_bytes)
 
-        # 持久化本次对话到数据库
-        add_message(user_id, "user", user_text)
-        add_message(user_id, "assistant", reply_text)
-
         return {
-            "reply": reply_text,
+            "reply": result.reply,
             "audio_url": audio_url
         }
+    except ChatValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.exception("Voice reply failed")
         raise HTTPException(status_code=500, detail="Voice reply failed")
