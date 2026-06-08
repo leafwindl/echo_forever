@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
@@ -17,6 +17,7 @@ from services.tencent_asr import recognize_audio
 from services.minimax_tts import text_to_speech
 from services.audio_storage import save_audio_file
 from services.memory import init_db, add_message, get_history
+from services.auth import AuthError, login_with_wechat_code
 
 import shutil
 import uuid
@@ -55,6 +56,8 @@ class ChatResponse(BaseModel):
 
 class LoginRequest(BaseModel):
     code: str
+    # 本地开发兜底身份：微信密钥未配置时，后端用它生成稳定 dev 用户，避免所有人共用一个测试 ID。
+    client_id: Optional[str] = None
 
 class LoginResponse(BaseModel):
     user_id: str
@@ -67,7 +70,7 @@ async def health_check():
 @app.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """
-    登录接口（当前为阶段一，返回固定测试 user_id）
+    登录接口：真实环境用微信 code 换 openid，本地开发用 client_id 生成稳定 dev 用户。
     
     真实实现逻辑注释：
     1. 前端调用 wx.login() 获取 code。
@@ -76,7 +79,14 @@ async def login(request: LoginRequest):
     3. 获取响应包中的 openid。
     4. 可以查询数据库，若该 openid 不存在则新建用户记录；最后将 openid（或关联的内部用户 ID） 作为 user_id 返回给前端。
     """
-    return LoginResponse(user_id="test_user_001")
+    try:
+        # login_with_wechat_code 内部会处理两种路径：
+        # 1. 配置了 WECHAT_APPID/WECHAT_SECRET：走微信 code2session。
+        # 2. 未配置微信密钥：使用前端本地 client_id 生成 dev_ 开头的稳定用户。
+        user_id = await login_with_wechat_code(request.code, request.client_id)
+    except AuthError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    return LoginResponse(user_id=user_id)
 
 @app.post("/chat/send", response_model=ChatResponse)
 async def chat_send(request: ChatRequest):

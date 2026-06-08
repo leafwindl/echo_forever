@@ -9,6 +9,19 @@ interface Message {
 }
 
 let recorderManager: WechatMiniprogram.RecorderManager; //指定变量的类型
+const CLIENT_ID_STORAGE_KEY = 'echo_client_id';
+
+function getOrCreateClientId(): string {
+  // 本地稳定匿名 ID：微信登录失败或后端缺少微信密钥时，用它隔离不同设备的记忆。
+  const stored = wx.getStorageSync(CLIENT_ID_STORAGE_KEY);
+  if (typeof stored === 'string' && stored) {
+    return stored;
+  }
+
+  const clientId = `anon_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  wx.setStorageSync(CLIENT_ID_STORAGE_KEY, clientId);
+  return clientId;
+}
 
 // 小程序的页面通过Page()构造器定义，接收一个包含数据、生命周期、事件处理函数的对象。也就是核心处理逻辑
 Page({
@@ -35,24 +48,27 @@ Page({
   },
 
   onLoad() {
+    // 每个小程序客户端只生成一次，后续从本地缓存读取。
+    const clientId = getOrCreateClientId();
+
     // 微信登录获取 user_id
     wx.login({ 
       success: async (res) => { //从微信官方获取一次性code，async声明异步函数
         try {
-          const result = await login(res.code);  //将code传给自定义login函数（api.ts），返回user_id
+          const result = await login(res.code, clientId);  //将code传给自定义login函数（api.ts），返回user_id
           // 只有当login函数成功后才会进行这一步
           this.setData({ userId: result.user_id }); //将user.id存入user ID的页面数据中。this指向当前页面的实例（Page对象）
           // 登录成功后发一条 Echo 开场白（可以从后端获取，这里先固定）
           this.addMessage('echo', '嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？');
         } catch (e) {
           console.error('登录失败', e);
-          // 降级：使用临时 ID，保证可以聊天
-          this.setData({ userId: 'guest' });
+          // 降级：使用本地稳定匿名 ID，避免所有失败登录用户共用同一个身份
+          this.setData({ userId: clientId });
           this.addMessage('echo', '嗨，我是 Echo，很高兴认识你～');
         }
       },
       fail: () => {
-        this.setData({ userId: 'guest' });
+        this.setData({ userId: clientId });
         this.addMessage('echo', '嗨，我是 Echo，很高兴认识你～');
       }
     });
@@ -225,7 +241,7 @@ Page({
             url: `${BASE_URL}/voice/reply`,
             method: 'POST',
             data: {
-              user_id: this.data.userId || 'test_user_001',
+              user_id: this.data.userId || getOrCreateClientId(),
               message: userText
             },
             success: (replyRes: any) => {
