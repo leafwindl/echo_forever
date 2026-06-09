@@ -1,0 +1,54 @@
+import logging
+from typing import Optional, Protocol, cast
+
+import httpx
+
+from providers.registry import get_provider
+from shared.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class EmbeddingProvider(Protocol):
+    async def create_embedding(self, text: str, model: Optional[str] = None) -> list[float]:
+        ...
+
+
+class OpenAICompatibleEmbeddingProvider:
+    async def create_embedding(self, text: str, model: Optional[str] = None) -> list[float]:
+        clean_text = text.strip()
+        if not clean_text:
+            raise ValueError("Embedding input cannot be empty")
+        if not settings.embedding_api_key:
+            raise ValueError("Embedding service is not configured")
+
+        url = f"{settings.embedding_base_url.rstrip('/')}/embeddings"
+        headers = {
+            "Authorization": f"Bearer {settings.embedding_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model or settings.embedding_model,
+            "input": clean_text,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=settings.timeout) as client:
+                response = await client.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                embedding = data["data"][0]["embedding"]
+        except httpx.HTTPStatusError as exc:
+            logger.error("HTTPStatusError from embedding API: %s", exc.response.text)
+            raise ValueError(f"Embedding 服务响应错误: {exc.response.status_code}") from exc
+        except Exception as exc:
+            logger.error("Error requesting embedding: %s", exc)
+            raise ValueError("调用 Embedding 服务失败") from exc
+
+        if not isinstance(embedding, list):
+            raise ValueError("Embedding response format is invalid")
+        return [float(value) for value in embedding]
+
+
+def get_embedding_provider() -> EmbeddingProvider:
+    return cast(EmbeddingProvider, get_provider("embedding", OpenAICompatibleEmbeddingProvider))

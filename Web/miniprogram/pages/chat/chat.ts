@@ -225,7 +225,10 @@ Page({
       url: `${BASE_URL}/voice/asr`,
       filePath: filePath,
       name: 'audio',
-      header: { 'Content-Type': 'multipart/form-data' },
+      header: {
+        'Content-Type': 'multipart/form-data',
+        'ngrok-skip-browser-warning': 'true',
+      },
       success: (res) => {
         wx.hideLoading();
         if (res.statusCode === 200) {
@@ -247,6 +250,7 @@ Page({
           wx.request({
             url: `${BASE_URL}/voice/reply`,
             method: 'POST',
+            header: { 'ngrok-skip-browser-warning': 'true' },
             data: {
               user_id: this.data.userId || getOrCreateClientId(),
               message: userText
@@ -288,12 +292,28 @@ Page({
 
   // 播放音频
   playVoice(url: string) {
-    const innerAudio = wx.createInnerAudioContext();
-    innerAudio.src = url;
-    innerAudio.autoplay = true;
-    innerAudio.onError((err) => {
-      console.error('播放失败', err);
-      wx.showToast({ title: '播放失败', icon: 'none' });
+    wx.downloadFile({
+      url,
+      header: { 'ngrok-skip-browser-warning': 'true' },
+      success: (res) => {
+        if (res.statusCode !== 200) {
+          console.error('音频下载失败', res);
+          wx.showToast({ title: '音频下载失败', icon: 'none' });
+          return;
+        }
+
+        const innerAudio = wx.createInnerAudioContext();
+        innerAudio.src = res.tempFilePath;
+        innerAudio.onError((err) => {
+          console.error('播放失败', err);
+          wx.showToast({ title: '播放失败', icon: 'none' });
+        });
+        innerAudio.play();
+      },
+      fail: (err) => {
+        console.error('音频下载失败', err);
+        wx.showToast({ title: '音频下载失败', icon: 'none' });
+      }
     });
   }
 });
