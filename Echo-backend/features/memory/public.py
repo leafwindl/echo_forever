@@ -26,21 +26,25 @@ from features.memory.infrastructure.vector_index import (
 
 
 def list_memories(user_id: str, memory_status: str = "active", limit: int = 50) -> MemoryListResult:
+    """稳定的模块入口：供界面或管理能力读取记忆，不暴露应用层细节。"""
     service = get_memory_management_service()
     return service.list_memories(user_id=user_id, memory_status=memory_status, limit=limit)
 
 
 def delete_memory(user_id: str, memory_id: str) -> MemoryDeleteResult:
+    """稳定的模块入口：删除用户自己的长期记忆。"""
     service = get_memory_management_service()
     return service.delete_memory(user_id=user_id, memory_id=memory_id)
 
 
 def clear_memories(user_id: str) -> MemoryClearResult:
+    """稳定的模块入口：清空长期记忆，但保留聊天历史。"""
     service = get_memory_management_service()
     return service.clear_memories(user_id=user_id)
 
 
 async def backfill_memory_embeddings(user_id: str, limit: int = 100) -> MemoryBackfillResult:
+    """稳定的模块入口：让已有记忆补齐向量并参与检索。"""
     service = get_memory_management_service()
     return await service.backfill_memory_embeddings(user_id=user_id, limit=limit)
 
@@ -51,6 +55,7 @@ def schedule_memory_extraction(
     assistant_reply: str,
     source_message_id: int | None = None,
 ) -> MemoryGateResult:
+    """稳定的模块入口：供 Chat 在一轮对话完成后调度记忆抽取。"""
     service = get_memory_extraction_service()
     return service.schedule_memory_extraction(
         user_id=user_id,
@@ -61,6 +66,7 @@ def schedule_memory_extraction(
 
 
 def resume_pending_memory_extraction_jobs(limit: int = 20) -> int:
+    """稳定的模块入口：供应用启动时恢复持久化后台任务。"""
     service = get_memory_extraction_service()
     return service.resume_pending_memory_extraction_jobs(limit=limit)
 

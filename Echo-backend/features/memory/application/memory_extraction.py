@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryExtractionService:
-    """Application service for scheduling and executing memory extraction jobs."""
+    """协调长期记忆抽取，避免聊天回复被记忆处理阻塞。"""
 
     def __init__(
         self,
@@ -54,6 +54,11 @@ class MemoryExtractionService:
         assistant_reply: str,
         source_message_id: Optional[int] = None,
     ) -> MemoryExtractionResult:
+        """从一轮完整对话中抽取记忆，并以安全方式落库。
+
+        记忆抽取是体验增强能力，不应该因为模型输出格式异常影响聊天主链路，
+        因此非法输出会计入 ignored，而不是让整轮任务中断。
+        """
         active_memories = self.memory_repository.list_active_memories(
             user_id,
             limit=self.config.max_existing_memories,
@@ -100,6 +105,7 @@ class MemoryExtractionService:
         active_memories: list,
         result: MemoryExtractionResult,
     ):
+        """在领域归一化之后，应用一条模型提出的记忆操作。"""
         action = str(item.get("action", "ignore")).strip().lower()
         target_memory_id = str(item.get("target_memory_id") or item.get("memory_id") or "").strip()
         memory_type = str(item.get("memory_type", "")).strip().lower()
@@ -175,11 +181,13 @@ class MemoryExtractionService:
         result.created += 1
 
     def _resolve_target_memory(self, user_id: str, target_memory_id: str):
+        """目标 ID 缺失时返回空值，让模型输出保持尽力而为。"""
         if not target_memory_id:
             return None
         return self.memory_repository.get_memory(user_id, target_memory_id)
 
     async def _safe_upsert_memory_embedding(self, user_id: str, memory_id: str, content: str):
+        """跳过 embedding 失败，因为向量检索只是可选增强能力。"""
         try:
             await self.embedding_repository.upsert_memory_embedding(user_id, memory_id, content)
         except ValueError as exc:
@@ -188,6 +196,7 @@ class MemoryExtractionService:
             logger.exception("Memory embedding upsert failed for user_id=%s memory_id=%s", user_id, memory_id)
 
     def _safe_delete_memory_embedding(self, user_id: str, memory_id: str):
+        """删除记忆时要尽量清理旧向量，但不应因此让主操作失败。"""
         try:
             self.embedding_repository.delete_memory_embedding(user_id, memory_id)
         except Exception:
@@ -200,6 +209,7 @@ class MemoryExtractionService:
         assistant_reply: str,
         source_message_id: Optional[int] = None,
     ) -> MemoryGateResult:
+        """只有当前对话包含记忆信号时，才创建可持久化的抽取任务。"""
         gate_result = should_extract_memory(user_message)
         if not gate_result.should_extract:
             logger.info("Memory extraction skipped for user_id=%s reason=%s", user_id, gate_result.reason)
@@ -224,6 +234,7 @@ class MemoryExtractionService:
         return MemoryGateResult(True, gate_result.reason, job_id=job_id)
 
     async def _run_memory_extraction_job(self, job_id: str):
+        """执行已认领的任务；重试策略由任务仓储负责维护。"""
         if not self.job_repository.claim_job(job_id):
             logger.info("Memory extraction job skipped because it is not runnable: job_id=%s", job_id)
             return
@@ -257,6 +268,7 @@ class MemoryExtractionService:
             logger.exception("Memory extraction job failed for user_id=%s job_id=%s", user_id, job_id)
 
     def _schedule_memory_extraction_job(self, job_id: str) -> bool:
+        """有运行中的事件循环时立即执行，否则保留为 pending 等待恢复。"""
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -269,6 +281,7 @@ class MemoryExtractionService:
         return True
 
     def resume_pending_memory_extraction_jobs(self, limit: Optional[int] = None) -> int:
+        """服务重启后恢复中断任务，避免已创建的记忆任务丢失。"""
         self.job_repository.reset_running_jobs()
         scheduled_count = 0
         safe_limit = limit or self.config.max_resumed_jobs

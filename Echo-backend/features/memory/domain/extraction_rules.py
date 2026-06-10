@@ -67,6 +67,7 @@ MEMORY_TRIGGER_KEYWORDS = (
 
 
 def should_extract_memory(user_message: str) -> MemoryGateResult:
+    """在调用 LLM 前先做轻量判断，避免每轮对话都消耗抽取成本。"""
     text = user_message.strip()
     if not text:
         return MemoryGateResult(False, "empty_message")
@@ -80,10 +81,12 @@ def should_extract_memory(user_message: str) -> MemoryGateResult:
 
 
 def normalize_memory_content(content: str) -> str:
+    """仅用于重复检测的归一化，不改变用户最终看到的记忆内容。"""
     return "".join(content.strip().lower().split())
 
 
 def coerce_confidence(value: object) -> float:
+    """限制模型置信度范围，因为 LLM 输出只是建议，不是可信输入。"""
     try:
         confidence = float(value)
     except (TypeError, ValueError):
@@ -92,6 +95,7 @@ def coerce_confidence(value: object) -> float:
 
 
 def coerce_importance(value: object) -> int:
+    """限制重要性范围，避免 prompt 漂移产生越界领域值。"""
     try:
         importance = int(value)
     except (TypeError, ValueError):
@@ -100,6 +104,7 @@ def coerce_importance(value: object) -> int:
 
 
 def format_existing_memories(memories: List[Memory]) -> str:
+    """把已有记忆提供给模型，促使它更新旧记忆而不是重复创建。"""
     if not memories:
         return "无"
 
@@ -120,6 +125,7 @@ def build_extraction_messages(
     assistant_reply: str,
     existing_memories: List[Memory],
 ) -> list[dict]:
+    """构建只允许 JSON 输出的提示词，让应用层能稳定解析操作。"""
     prompt = f"""
 请从当前这一轮对话中判断是否有值得长期记住的用户信息。
 
@@ -164,6 +170,7 @@ def build_extraction_messages(
 
 
 def strip_json_text(raw_text: str) -> str:
+    """兼容 Markdown 代码块，因为模型即使被要求输出 JSON 也可能包一层围栏。"""
     text = raw_text.strip()
     if text.startswith("```"):
         lines = text.splitlines()
@@ -181,6 +188,7 @@ def strip_json_text(raw_text: str) -> str:
 
 
 def parse_memory_extraction(raw_text: str) -> List[Dict[str, object]]:
+    """只返回字典形式的操作；格式错误的载荷由调用方处理。"""
     payload = json.loads(strip_json_text(raw_text))
     memories = payload.get("memories", [])
     if not isinstance(memories, list):
@@ -193,6 +201,7 @@ def find_duplicate_memory(
     memory_type: str,
     content: str,
 ) -> Optional[Memory]:
+    """创建新记忆前先阻止明显重复的内容。"""
     normalized_content = normalize_memory_content(content)
     for memory in active_memories:
         if memory.memory_type != memory_type:

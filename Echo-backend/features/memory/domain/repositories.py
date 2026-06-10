@@ -4,6 +4,8 @@ from features.memory.domain.entities import Memory
 
 
 class MemoryRepository(Protocol):
+    """长期记忆的持久化契约。"""
+
     def list_memories(self, user_id: str, status: Optional[str], limit: int) -> List[Memory]:
         ...
 
@@ -55,6 +57,8 @@ class MemoryRepository(Protocol):
 
 
 class MemoryEmbeddingRepository(Protocol):
+    """保持记忆向量与记忆记录一致的契约。"""
+
     async def upsert_memory_embedding(self, user_id: str, memory_id: str, content: str) -> bool:
         ...
 
@@ -63,6 +67,8 @@ class MemoryEmbeddingRepository(Protocol):
 
 
 class MemoryVectorIndex(Protocol):
+    """向量索引管理操作的契约。"""
+
     def delete_memory_embedding(self, user_id: str, memory_id: str) -> bool:
         ...
 
@@ -74,6 +80,8 @@ class MemoryVectorIndex(Protocol):
 
 
 class MemoryExtractionJobRepository(Protocol):
+    """记忆抽取后台任务的持久化契约。"""
+
     def create_extraction_job(self, payload: Dict[str, object]) -> str:
         ...
 
@@ -97,6 +105,8 @@ class MemoryExtractionJobRepository(Protocol):
 
 
 class MemoryExtractionLLM(Protocol):
+    """请求 LLM 返回结构化记忆操作的 Provider 契约。"""
+
     async def request_memory_extraction(
         self,
         messages: list[dict],

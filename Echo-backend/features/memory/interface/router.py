@@ -29,6 +29,7 @@ router = APIRouter(prefix="/memory", tags=["memory"])
 
 
 def _memory_item_from_domain(memory: Memory) -> MemoryItem:
+    """将领域记忆对象转换为稳定的 HTTP 响应结构。"""
     return MemoryItem(
         memory_id=memory.memory_id,
         memory_type=memory.memory_type,
