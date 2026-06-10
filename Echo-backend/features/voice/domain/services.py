@@ -5,6 +5,9 @@ class VoiceAudioStorage(Protocol):
     def save_upload(self, audio_bytes: bytes, suffix: str = ".mp3") -> str:
         ...
 
+    def delete_upload(self, audio_path: str) -> None:
+        ...
+
     async def save_generated_audio(self, audio_bytes: bytes) -> str:
         ...
 

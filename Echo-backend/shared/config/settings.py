@@ -61,6 +61,22 @@ class Settings(BaseSettings):
         default="http://localhost:8000",
         validation_alias="PUBLIC_BASE_URL",
     )
+    voice_generated_retention_seconds: int = Field(
+        default=86400,
+        validation_alias="VOICE_GENERATED_RETENTION_SECONDS",
+    )
+    voice_upload_retention_seconds: int = Field(
+        default=300,
+        validation_alias="VOICE_UPLOAD_RETENTION_SECONDS",
+    )
+    voice_cleanup_interval_seconds: int = Field(
+        default=3600,
+        validation_alias="VOICE_CLEANUP_INTERVAL_SECONDS",
+    )
+    voice_cleanup_batch_size: int = Field(
+        default=500,
+        validation_alias="VOICE_CLEANUP_BATCH_SIZE",
+    )
 
     system_prompt: str = (
         "你叫Echo，一位温柔、细腻的AI伙伴。\n"

@@ -28,7 +28,13 @@ class RecognizeVoice:
             raise ValueError("Voice audio cannot be empty")
 
         audio_path = self.audio_storage.save_upload(audio_bytes, suffix=".mp3")
-        user_text = await self.recognizer.recognize(audio_path)
+        try:
+            user_text = await self.recognizer.recognize(audio_path)
+        finally:
+            try:
+                self.audio_storage.delete_upload(audio_path)
+            except Exception:
+                logger.warning("Failed to cleanup voice upload: %s", audio_path, exc_info=True)
         logger.info("Only ASR result: %s", user_text)
         return VoiceRecognitionResult(user_text=user_text)
 
