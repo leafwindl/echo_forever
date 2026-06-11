@@ -41,9 +41,9 @@ Page({
       cropHeight: '500rpx',    // 裁剪窗口高度
       cropOffsetX: '0rpx',     // 裁剪窗口整体左右偏移
       cropOffsetY: '0rpx',     // 裁剪窗口距离真实聊天框的垂直偏移
-      imageWidth: '800rpx',   // APNG 缩放大小
-      imageLeft: '-25rpx',    // APNG 在裁剪窗口内的左右位置
-      imageTop: '-50rpx',     // APNG 在裁剪窗口内的上下位置
+      imageWidth: '800rpx',   // 动画缩放大小
+      imageLeft: '-25rpx',    // 动画在裁剪窗口内的左右位置
+      imageTop: '-50rpx',     // 动画在裁剪窗口内的上下位置
     },
   },
 

@@ -1,8 +1,30 @@
+type AnimationName = 'idle' | 'sit';
+
+type CharacterAnimation = {
+  src: string;
+};
+
+const ANIMATIONS: Record<AnimationName, CharacterAnimation> = {
+  idle: {
+    src: '/assets/images/echo_idle.webp',
+  },
+  sit: {
+    src: '/assets/images/idle_sit.webp',
+  },
+};
+
 Component({
+  data: {
+    activeAnimationSrc: ANIMATIONS.idle.src,
+  },
+
   properties: {
     chatExpanded: {
       type: Boolean,
       value: false,
+      observer() {
+        this.updateActiveAnimation();
+      },
     },
     sitCrop: {
       type: Object,
@@ -17,7 +39,22 @@ Component({
       },
     },
   },
+
+  lifetimes: {
+    attached() {
+      this.updateActiveAnimation();
+    },
+  },
+
   methods: {
-    // 可添加动画控制方法
+    getActiveAnimationName(): AnimationName {
+      return this.data.chatExpanded ? 'sit' : 'idle';
+    },
+
+    updateActiveAnimation() {
+      this.setData({
+        activeAnimationSrc: ANIMATIONS[this.getActiveAnimationName()].src,
+      });
+    },
   },
 });

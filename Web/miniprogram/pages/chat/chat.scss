@@ -21,6 +21,7 @@ $user-bg: #F0F8FF;
   overflow: hidden;
   transition: flex 0.3s;
   min-height: 0;  // 关键：允许 flex 压缩
+  margin-bottom: -20px;
 }
 
 .character-area-expanded {
@@ -44,7 +45,7 @@ $user-bg: #F0F8FF;
   display: flex;
   flex-direction: column;
   transition: flex 0.3s;
-  border-top: 1px solid #eee;
+  z-index: 2; 
   background: #fff;
   min-height: 0;              // 关键：允许被压缩
   overflow: hidden;           // 内部溢出裁剪
