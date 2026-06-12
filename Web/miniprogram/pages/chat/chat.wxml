@@ -15,7 +15,7 @@
   <view class="chat-container" style="flex: {{chatExpanded ? 7 : 3}};">
     <!-- 切换栏 -->
     <view class="chat-handle" bindtap="onToggleChatExpand">
-      <text>{{chatExpanded ? '▼ 收起聊天' : '▲ 展开聊天'}}</text>
+      <text class="chat-handle-text">{{chatExpanded ? '▼ 收起聊天' : '▲ 展开聊天'}}</text>
     </view>
 
     <!-- 对话列表 -->

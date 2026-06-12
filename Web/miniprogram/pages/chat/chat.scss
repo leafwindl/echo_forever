@@ -5,6 +5,7 @@ $user-primary: #A1C4FD;
 $user-bg: #F0F8FF;
 
 .page {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -13,6 +14,8 @@ $user-bg: #F0F8FF;
 }
 
 .character-area {
+  position: relative;
+  z-index: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -21,14 +24,27 @@ $user-bg: #F0F8FF;
   overflow: hidden;
   transition: flex 0.3s;
   min-height: 0;  // 关键：允许 flex 压缩
-  margin-bottom: -20px;
+  margin-bottom: 0px;
 }
 
 .character-area-expanded {
   justify-content: flex-end;
 }
 
+.character-area character {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
 .character-hint {
+  position: relative;
+  z-index: 3;
   margin-top: 10px;
   color: #888;
   font-size: 26rpx;
@@ -42,25 +58,38 @@ $user-bg: #F0F8FF;
 }
 
 .chat-container {
+  position: relative;
   display: flex;
   flex-direction: column;
   transition: flex 0.3s;
-  z-index: 2; 
+  z-index: 100;
   background: #fff;
   min-height: 0;              // 关键：允许被压缩
   overflow: hidden;           // 内部溢出裁剪
 }
 
 .chat-handle {
+  position: relative;
+  z-index: 120;
+  flex-shrink: 0;
+  height: 56rpx;
+  line-height: 56rpx;
   text-align: center;
-  padding: 10rpx 0;
+  padding: 0;
   font-size: 24rpx;
   color: #999;
   background: #fafafa;
   border-bottom: 1rpx solid #eee;
 }
 
+.chat-handle-text {
+  height: 56rpx;
+  line-height: 56rpx;
+}
+
 .chat-list {
+  position: relative;
+  z-index: 110;
   flex: 1;
   min-height: 0;              // 关键：允许滚动容器在 flex 中压缩
   padding: 20rpx;
@@ -108,6 +137,8 @@ $user-bg: #F0F8FF;
 }
 
 .input-area {
+  position: relative;
+  z-index: 110;
   display: flex;
   align-items: center;
   padding: 20rpx;
@@ -134,6 +165,8 @@ $user-bg: #F0F8FF;
 }
 
 .chat-actions {
+  position: relative;
+  z-index: 110;
   display: flex;
   justify-content: center;
   gap: 36rpx;

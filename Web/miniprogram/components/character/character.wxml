@@ -8,18 +8,16 @@
         class="character-image sit-image"
         src="{{activeAnimationSrc}}"
         mode="widthFix"
-        webp="{{true}}"
         style="width: {{sitCrop.imageWidth}}; left: {{sitCrop.imageLeft}}; top: {{sitCrop.imageTop}};"
       />
     </view>
   </block>
   <block wx:else>
     <view class="name-tag">Echo</view>
-    <image
-      class="character-image idle-image"
-      src="{{activeAnimationSrc}}"
-      mode="widthFix"
-      webp="{{true}}"
+    <canvas
+      id="idleSpineCanvas"
+      type="2d"
+      class="spine-canvas idle-spine-canvas"
     />
   </block>
 </view>
