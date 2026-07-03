@@ -201,7 +201,7 @@ EMBEDDING_MODEL=text-embedding-3-small
 | 后端框架      | Python (FastAPI) | 异步高效，易于对接 AI 库             |
 | 数据库       | SQLite   | SQLite存持久化数据 |
 | 大模型 API   | OpenAI 兼容 API（可配置 DeepSeekV4-flash / GPT 系列等） | 初期直接使用 API，避免训练成本          |
-| 部署        | 本地服务器 + ngrok / 正式 HTTPS 域名 | 先完成真机联调，再迁移生产环境                    |
+| 部署        | 本地开发地址 / 预发布 HTTPS 域名 / 正式 HTTPS 域名 | 通过小程序环境配置切换，避免业务代码硬编码地址                    |
 
 ---
 
@@ -417,7 +417,7 @@ Echo 的核心 Vibe 不是“工具型助理”，而是“稳定、温柔、会
 
 **目标**：让 Demo 在真机上稳定跑通，并具备可复现部署步骤。
 
-- 对齐后端 `.env`、小程序 `BASE_URL`、ngrok/HTTPS 域名。
+- 对齐后端 `.env`、小程序环境配置、预发布/正式 HTTPS 域名。
 - 验证登录、文本对话、记忆页、删除记忆、语音回复。
 - 更新 README 中的 AI 调用逻辑、Prompt、部署步骤和验收清单。
 - 检查隐私说明、环境变量说明和生产迁移风险。
@@ -478,19 +478,29 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 浏览器访问 `http://127.0.0.1:8000/`，看到 `{"status":"ok"}` 即后端启动成功。
 
-### 7.2 暴露 HTTPS 地址给小程序
+### 7.2 配置小程序访问地址
 
-微信小程序真机不能直接访问开发机的 `localhost`，本地 Demo 推荐使用 ngrok：
+小程序前端的后端地址集中在 `Web/miniprogram/utils/env.ts` 的 `ENVIRONMENT_CONFIGS` 中，按微信环境自动选择：
 
-```powershell
-ngrok http 8000
+```ts
+develop // 开发版
+trial   // 体验版
+release // 正式版
 ```
 
-得到 `https://<your-domain>.ngrok-free.app` 后：
+配置规则：
 
-1. 将 `Web/miniprogram/utils/api.ts` 中的 `BASE_URL` 改为该 HTTPS 地址。
-2. 如果要播放后端生成的语音文件，将 `Echo-backend/.env` 中的 `PUBLIC_BASE_URL` 也设置为同一个 HTTPS 地址。
-3. 重启后端，使新的 `PUBLIC_BASE_URL` 生效。
+1. 本地开发可将 `develop.apiBaseUrl` 指向 `http://127.0.0.1:8000` 或临时调试 HTTPS 地址。
+2. 体验版发布前，将 `trial.apiBaseUrl` 改为预发布服务器 HTTPS 域名。
+3. 正式版发布前，将 `release.apiBaseUrl` 改为正式服务器 HTTPS 域名。
+4. 语音播放依赖后端返回的 `audio_url`，因此 `Echo-backend/.env` 中的 `PUBLIC_BASE_URL` 必须与当前环境的公网 HTTPS 域名一致。
+5. 修改 `PUBLIC_BASE_URL` 后需要重启后端。
+
+正式真机和上线版本必须在微信公众平台配置合法域名：
+
+- `request` 合法域名：后端 API 域名。
+- `uploadFile` 合法域名：同一个后端 API 域名。
+- `downloadFile` 合法域名：用于访问后端返回的语音文件域名。
 
 ### 7.3 启动微信小程序
 
@@ -507,3 +517,14 @@ ngrok http 8000
 - 删除该记忆后，记忆页刷新不再显示。
 - 语音上传能返回 ASR 文本，`/voice/reply` 能返回 `reply` 和 `audio_url`。
 - 服务重启后，SQLite 中已有的历史和长期记忆仍可读取。
+
+## 8. 上线前待办
+
+当前已完成生产环境配置化：前端 API 地址按 `develop/trial/release` 环境切换，业务代码不再写死临时域名。正式上线前仍需完成：
+
+1. 租用服务器并配置 HTTPS 域名。
+2. 在微信公众平台配置 `request`、`uploadFile`、`downloadFile` 合法域名。
+3. 在预发布环境实现正式鉴权：`/login` 返回服务端 session token，后续接口使用 `Authorization: Bearer <token>`，生产环境不再信任前端传入的 `user_id`。
+4. 补充基础内容安全与风控：输入长度、请求频率、第三方 API 调用成本保护和危险内容兜底。
+5. 补齐隐私政策、用户协议、录音用途说明和长期记忆说明。
+6. 制定数据库备份和恢复策略；用户增长后评估从 SQLite 迁移到托管数据库。

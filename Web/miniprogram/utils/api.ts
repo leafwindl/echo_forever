@@ -1,5 +1,7 @@
 // utils/api.ts
-export const BASE_URL = 'https://impotent-jersey-hurler.ngrok-free.dev'
+import { appConfig } from './env';
+
+export const BASE_URL = appConfig.apiBaseUrl;
 export const USER_ID_STORAGE_KEY = 'echo_user_id';
 
 export type MemoryStatus = 'active' | 'inactive' | 'deleted' | 'all';
@@ -81,7 +83,6 @@ export function listMemories(userId: string, status: MemoryStatus = 'active', li
     wx.request({
       url: `${BASE_URL}/memory/list`,
       method: 'GET',
-      header: { 'ngrok-skip-browser-warning': 'true' },
       data: { user_id: userId, status, limit },
       success: (res: any) => {
         const data = normalizeResponseData(res.data);
@@ -104,7 +105,6 @@ export function deleteMemory(userId: string, memoryId: string): Promise<void> {
     wx.request({
       url: `${BASE_URL}/memory/${encodeURIComponent(memoryId)}?user_id=${encodeURIComponent(userId)}`,
       method: 'DELETE',
-      header: { 'ngrok-skip-browser-warning': 'true' },
       success: (res: any) => {
         const data = normalizeResponseData(res.data);
         if (res.statusCode === 200 && data && data.status === 'deleted') {
@@ -125,7 +125,6 @@ export function clearMemories(userId: string): Promise<{ cleared_count: number }
       method: 'POST',
       header: {
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
       },
       data: { user_id: userId },
       success: (res: any) => {

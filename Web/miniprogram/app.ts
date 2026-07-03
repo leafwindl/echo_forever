@@ -10,12 +10,6 @@ App<IAppOption>({
     logs.unshift(Date.now()) //将时间戳放在头部
     wx.setStorageSync('logs', logs) // 将更新后的数据写回本地存储
 
-    // 登录，实现身份识别
-    wx.login({
-      success: res => {
-        console.log(res.code)
-        // 发送 res.code 到后台换取 openId, sessionKey, unionId。这里需要补全
-      },
-    })
+    // 具体登录流程由聊天页发起，避免在全局启动阶段重复请求微信 code。
   },
 })

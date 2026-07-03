@@ -36,6 +36,8 @@ TENCENT_SECRET_KEY=
 PUBLIC_BASE_URL=http://localhost:8000
 ```
 
+生产或预发布环境需要将 `PUBLIC_BASE_URL` 配置为当前后端公网 HTTPS 域名。该值会用于拼接语音文件访问地址，必须与小程序 `develop/trial/release` 环境中的 API 域名保持一致。
+
 ## 3. 数据库
 
 SQLite 默认数据库文件位于仓库根目录：

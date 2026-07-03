@@ -227,7 +227,6 @@ Page({
       name: 'audio',
       header: {
         'Content-Type': 'multipart/form-data',
-        'ngrok-skip-browser-warning': 'true',
       },
       success: (res) => {
         wx.hideLoading();
@@ -250,7 +249,7 @@ Page({
           wx.request({
             url: `${BASE_URL}/voice/reply`,
             method: 'POST',
-            header: { 'ngrok-skip-browser-warning': 'true' },
+            header: { 'Content-Type': 'application/json' },
             data: {
               user_id: this.data.userId || getOrCreateClientId(),
               message: userText
@@ -294,7 +293,6 @@ Page({
   playVoice(url: string) {
     wx.downloadFile({
       url,
-      header: { 'ngrok-skip-browser-warning': 'true' },
       success: (res) => {
         if (res.statusCode !== 200) {
           console.error('音频下载失败', res);
