@@ -9,10 +9,10 @@ const ENVIRONMENT_CONFIGS: Record<MiniProgramEnvironment, AppEnvironmentConfig> 
     apiBaseUrl: 'http://127.0.0.1:8000',
   },
   trial: {
-    apiBaseUrl: 'https://staging-api.example.com',
+    apiBaseUrl: 'https://api.echoaiforever.cn',
   },
   release: {
-    apiBaseUrl: 'https://api.example.com',
+    apiBaseUrl: 'https://api.echoaiforever.cn',
   },
 };
 
