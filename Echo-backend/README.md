@@ -120,7 +120,22 @@ config.py
 llm_client.py
 ```
 
-## 7. 开发约束
+## 7. Docker Compose 部署
+
+项目根目录已提供轻量后端容器部署：
+
+```bash
+docker compose up -d --build
+docker compose logs -f echo-backend
+```
+
+容器会将 SQLite 数据库挂载到项目根目录 `data/`，将语音静态文件挂载到 `Echo-backend/static/`。详细部署和迁移说明见：
+
+```text
+doc/deploy/后端 Docker Compose 部署说明.md
+```
+
+## 8. 开发约束
 
 - 新业务优先放入对应 `features/<module>`。
 - Application 只能依赖 Domain 抽象，不直接依赖 DB、provider、FastAPI 或配置。

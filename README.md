@@ -518,6 +518,16 @@ release // 正式版
 - 语音上传能返回 ASR 文本，`/voice/reply` 能返回 `reply` 和 `audio_url`。
 - 服务重启后，SQLite 中已有的历史和长期记忆仍可读取。
 
+### 7.5 Docker Compose 后端部署
+
+后端已提供轻量 Docker Compose 部署文件：
+
+- `Dockerfile`
+- `docker-compose.yml`
+- `.dockerignore`
+
+详细步骤见 `doc/deploy/后端 Docker Compose 部署说明.md`。
+
 ## 8. 上线前待办
 
 当前已完成生产环境配置化：前端 API 地址按 `develop/trial/release` 环境切换，业务代码不再写死临时域名。正式上线前仍需完成：

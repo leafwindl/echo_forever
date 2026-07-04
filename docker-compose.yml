@@ -1,0 +1,33 @@
+services:
+  echo-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: echo-backend
+    env_file:
+      - Echo-backend/.env
+    environment:
+      ECHO_DB_PATH: /app/data/echo_memory.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./Echo-backend/static:/app/Echo-backend/static
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
