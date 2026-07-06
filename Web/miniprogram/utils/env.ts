@@ -6,7 +6,7 @@ interface AppEnvironmentConfig {
 
 const ENVIRONMENT_CONFIGS: Record<MiniProgramEnvironment, AppEnvironmentConfig> = {
   develop: {
-    apiBaseUrl: 'http://127.0.0.1:8000',
+    apiBaseUrl: 'https://api.echoaiforever.cn',
   },
   trial: {
     apiBaseUrl: 'https://api.echoaiforever.cn',
