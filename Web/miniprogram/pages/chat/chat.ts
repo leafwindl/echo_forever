@@ -267,7 +267,12 @@ Page({
                 // ★ 播报 AI 的语音
                 if (replyData.audio_url) {
                   this.playVoice(replyData.audio_url);
+                } else {
+                  wx.showToast({ title: '语音暂不可用', icon: 'none' });
                 }
+              } else {
+                console.error('获取AI回复失败', replyRes);
+                this.addMessage('echo', '（抱歉，我暂时有点卡，请稍后再试）');
               }
             },
             fail: (err) => {

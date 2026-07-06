@@ -48,6 +48,11 @@ class FakeSynthesizer:
         return f"audio:{text}".encode("utf-8")
 
 
+class FailingSynthesizer:
+    async def synthesize(self, text):
+        raise RuntimeError(f"synthesize failed:{text}")
+
+
 class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
     async def test_recognize_voice_saves_upload_and_calls_recognizer(self):
         storage = FakeAudioStorage()
@@ -87,6 +92,20 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reply, "reply:user_a:hello")
         self.assertEqual(result.audio_url, "http://example.test/audio.mp3")
         self.assertEqual(storage.generated_audio, [b"audio:reply:user_a:hello"])
+
+    async def test_generate_voice_reply_returns_text_when_tts_fails(self):
+        storage = FakeAudioStorage()
+        use_case = GenerateVoiceReply(
+            chat_responder=FakeChatResponder(),
+            synthesizer=FailingSynthesizer(),
+            audio_storage=storage,
+        )
+
+        result = await use_case.execute("user_a", "hello")
+
+        self.assertEqual(result.reply, "reply:user_a:hello")
+        self.assertIsNone(result.audio_url)
+        self.assertEqual(storage.generated_audio, [])
 
     async def test_cleanup_expired_audio_files_deletes_only_expired_mp3_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:

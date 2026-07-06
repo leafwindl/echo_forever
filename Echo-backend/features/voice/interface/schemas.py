@@ -12,4 +12,4 @@ class VoiceReplyRequest(BaseModel):
 
 class VoiceReplyResponse(BaseModel):
     reply: str
-    audio_url: str
+    audio_url: str | None = None

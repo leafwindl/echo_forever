@@ -52,6 +52,11 @@ class GenerateVoiceReply:
 
     async def execute(self, user_id: str, message: str) -> VoiceReplyResult:
         reply = await self.chat_responder.reply(user_id, message)
-        audio_bytes = await self.synthesizer.synthesize(reply)
-        audio_url = await self.audio_storage.save_generated_audio(audio_bytes)
+        try:
+            audio_bytes = await self.synthesizer.synthesize(reply)
+            audio_url = await self.audio_storage.save_generated_audio(audio_bytes)
+        except Exception:
+            # TTS 依赖外部服务，失败时保留文字回复，避免语音链路拖垮主对话。
+            logger.exception("Voice synthesis failed; returning text reply only")
+            audio_url = None
         return VoiceReplyResult(reply=reply, audio_url=audio_url)

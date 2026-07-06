@@ -17,4 +17,4 @@ class VoiceRecognitionResult:
 @dataclass(frozen=True)
 class VoiceReplyResult:
     reply: str
-    audio_url: str
+    audio_url: str | None = None
