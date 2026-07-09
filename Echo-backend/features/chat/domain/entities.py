@@ -6,6 +6,10 @@ class ChatValidationError(ValueError):
     """Raised when a chat use case receives invalid input."""
 
 
+class ChatRequestInProgressError(RuntimeError):
+    """Raised when the same user already has a chat request in progress."""
+
+
 @dataclass(frozen=True)
 class ChatContext:
     messages: List[Dict[str, str]]

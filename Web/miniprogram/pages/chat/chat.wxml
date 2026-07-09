@@ -36,16 +36,17 @@
 
     <!-- 输入区域 -->
     <view class="input-area">
-      <button class="mode-btn" bindtap="onToggleInputMode">{{inputMode === 'text' ? '语音' : '键盘'}}</button>
+      <button class="mode-btn {{isSending ? 'disabled' : ''}}" disabled="{{isSending}}" bindtap="onToggleInputMode">{{inputMode === 'text' ? '语音' : '键盘'}}</button>
 
       <block wx:if="{{inputMode === 'text'}}">
-        <input class="input" value="{{inputText}}" placeholder="说点什么..." bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
-        <button class="send-btn" size="mini" bindtap="onSend">发送</button>
+        <input class="input" value="{{inputText}}" disabled="{{isSending}}" placeholder="说点什么..." bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
+        <button class="send-btn {{isSending ? 'disabled' : ''}}" size="mini" disabled="{{isSending}}" bindtap="onSend">{{isSending ? '等待' : '发送'}}</button>
       </block>
 
       <block wx:else>
         <button
-          class="hold-voice-btn {{isRecording ? 'recording' : ''}}"
+          class="hold-voice-btn {{isRecording ? 'recording' : ''}} {{isSending ? 'disabled' : ''}}"
+          disabled="{{isSending}}"
           bindtouchstart="onStartRecord"
           bindtouchend="onStopRecord"
           bindtouchcancel="onCancelRecord"
@@ -54,7 +55,7 @@
         </button>
       </block>
 
-      <button class="voice-reply-btn {{voiceReplyEnabled ? 'active' : ''}}" bindtap="onToggleVoiceReply">音</button>
+      <button class="voice-reply-btn {{voiceReplyEnabled ? 'active' : ''}} {{isSending ? 'disabled' : ''}}" disabled="{{isSending}}" bindtap="onToggleVoiceReply">音</button>
     </view>
 
     <view class="chat-actions">

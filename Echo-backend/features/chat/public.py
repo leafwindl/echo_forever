@@ -1,6 +1,11 @@
 from typing import Optional
 
-from features.chat.domain.entities import ChatReplyDeliveryResult, ChatTurnResult, ChatValidationError
+from features.chat.domain.entities import (
+    ChatReplyDeliveryResult,
+    ChatRequestInProgressError,
+    ChatTurnResult,
+    ChatValidationError,
+)
 from features.chat.infrastructure.container import (
     get_generate_chat_reply_use_case,
     get_send_chat_message_use_case,
@@ -41,6 +46,7 @@ async def send_chat_message(
 
 __all__ = [
     "ChatReplyDeliveryResult",
+    "ChatRequestInProgressError",
     "ChatTurnResult",
     "ChatValidationError",
     "generate_chat_reply",

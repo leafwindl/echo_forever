@@ -9,3 +9,11 @@ class UserIdentityRepository(Protocol):
 class WeChatSessionClient(Protocol):
     async def exchange_code_for_openid(self, code: str) -> str:
         ...
+
+
+class AccessTokenService(Protocol):
+    def issue_token(self, user_id: str) -> str:
+        ...
+
+    def verify_token(self, token: str) -> str:
+        ...

@@ -34,7 +34,7 @@ class RecognizeVoice:
                 self.audio_storage.delete_upload(audio_path)
             except Exception:
                 logger.warning("Failed to cleanup voice upload: %s", audio_path, exc_info=True)
-        logger.info("Only ASR result: %s", user_text)
+        logger.info("Voice ASR completed text_length=%s", len(user_text))
         return VoiceRecognitionResult(user_text=user_text)
 
 

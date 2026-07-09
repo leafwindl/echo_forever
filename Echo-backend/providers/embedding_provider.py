@@ -39,11 +39,15 @@ class OpenAICompatibleEmbeddingProvider:
                 data = response.json()
                 embedding = data["data"][0]["embedding"]
         except httpx.HTTPStatusError as exc:
-            logger.error("HTTPStatusError from embedding API: %s", exc.response.text)
-            raise ValueError(f"Embedding 服务响应错误: {exc.response.status_code}") from exc
+            logger.error(
+                "HTTPStatusError from embedding API status=%s response_length=%s",
+                exc.response.status_code,
+                len(exc.response.text or ""),
+            )
+            raise ValueError(f"Embedding service responded with status {exc.response.status_code}") from exc
         except Exception as exc:
             logger.error("Error requesting embedding: %s", exc)
-            raise ValueError("调用 Embedding 服务失败") from exc
+            raise ValueError("Failed to request embedding service") from exc
 
         if not isinstance(embedding, list):
             raise ValueError("Embedding response format is invalid")

@@ -1,4 +1,4 @@
-import { BASE_URL } from '../../utils/api';
+import { BASE_URL, getAuthHeader } from '../../utils/api';
 
 interface VoiceASRResponse {
   user_text?: string;
@@ -10,9 +10,7 @@ export function recognizeVoice(filePath: string): Promise<string> {
       url: `${BASE_URL}/voice/asr`,
       filePath,
       name: 'audio',
-      header: {
-        'Content-Type': 'multipart/form-data',
-      },
+      header: getAuthHeader(),
       success: (res) => {
         if (res.statusCode !== 200) {
           reject(res);

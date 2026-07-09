@@ -74,7 +74,11 @@ class MemoryExtractionService:
         try:
             extracted_memories = parse_memory_extraction(raw_result)
         except json.JSONDecodeError:
-            logger.warning("Memory extraction returned invalid JSON for user_id=%s: %s", user_id, raw_result)
+            logger.warning(
+                "Memory extraction returned invalid JSON for user_id=%s output_length=%s",
+                user_id,
+                len(raw_result),
+            )
             return MemoryExtractionResult(ignored=1)
 
         result = MemoryExtractionResult()

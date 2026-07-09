@@ -7,6 +7,7 @@ from features.chat.infrastructure.adapters import (
     ChatConversationRepositoryAdapter,
     ChatLLMAdapter,
     ConversationSummaryUpdaterAdapter,
+    InMemoryChatRequestGuard,
     MemoryExtractionSchedulerAdapter,
     VoiceReplySynthesizerAdapter,
 )
@@ -34,6 +35,7 @@ def get_send_chat_message_use_case() -> SendChatMessage:
         _send_chat_message_use_case = SendChatMessage(
             chat_reply_generator=get_generate_chat_reply_use_case(),
             voice_reply_synthesizer=VoiceReplySynthesizerAdapter(),
+            request_guard=InMemoryChatRequestGuard(),
         )
     return _send_chat_message_use_case
 

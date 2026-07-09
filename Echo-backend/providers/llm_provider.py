@@ -47,11 +47,15 @@ class OpenAICompatibleLLMProvider:
                 data = response.json()
                 return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as exc:
-            logger.error("HTTPStatusError from LLM: %s", exc.response.text)
-            raise ValueError(f"大模型响应错误: {exc.response.status_code}") from exc
+            logger.error(
+                "HTTPStatusError from LLM status=%s response_length=%s",
+                exc.response.status_code,
+                len(exc.response.text or ""),
+            )
+            raise ValueError(f"LLM service responded with status {exc.response.status_code}") from exc
         except Exception as exc:
             logger.error("Error requesting LLM: %s", exc)
-            raise ValueError("调用大模型服务失败") from exc
+            raise ValueError("Failed to request LLM service") from exc
 
 
 def get_llm_provider() -> LLMProvider:

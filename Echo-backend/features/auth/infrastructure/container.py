@@ -3,6 +3,7 @@ from typing import Optional
 from features.auth.application.login import LoginWithWeChatCode
 from features.auth.infrastructure.adapters import HttpWeChatSessionClient, UserIdentityRepositoryAdapter
 from shared.config import settings
+from shared.security import TokenService
 
 _login_with_wechat_code_use_case: Optional[LoginWithWeChatCode] = None
 
@@ -13,7 +14,12 @@ def get_login_with_wechat_code_use_case() -> LoginWithWeChatCode:
         _login_with_wechat_code_use_case = LoginWithWeChatCode(
             user_repository=UserIdentityRepositoryAdapter(),
             wechat_session_client=HttpWeChatSessionClient(),
+            access_token_service=TokenService(
+                secret=settings.auth_token_secret,
+                expires_in=settings.auth_token_expires_seconds,
+            ),
             wechat_configured=bool(settings.wechat_appid and settings.wechat_secret),
+            token_expires_in=settings.auth_token_expires_seconds,
         )
     return _login_with_wechat_code_use_case
 

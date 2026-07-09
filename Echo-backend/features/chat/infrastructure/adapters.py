@@ -1,3 +1,4 @@
+import threading
 from typing import Optional
 
 from features.chat.domain.entities import ChatContext, MemoryExtractionScheduleResult
@@ -5,6 +6,7 @@ from features.chat.domain.repositories import ChatConversationRepository
 from features.chat.domain.services import (
     ChatContextProvider,
     ChatLLM,
+    ChatRequestGuard,
     ChatVoiceReplySynthesizer,
     ConversationSummaryUpdater,
     MemoryExtractionScheduler,
@@ -15,6 +17,37 @@ from features.memory.public import schedule_memory_extraction
 from providers.llm_provider import get_llm_provider
 from repositories.conversation_repository import ensure_conversation, get_or_create_active_conversation
 from repositories.message_repository import add_chat_turn
+from shared.config import settings
+
+
+class InMemoryChatRequestGuard(ChatRequestGuard):
+    _lock = threading.Lock()
+    _active_user_ids: set[str] = set()
+
+    def try_acquire(self, user_id: str) -> bool:
+        if not settings.enable_chat_request_serialization:
+            return True
+
+        clean_user_id = user_id.strip()
+        if not clean_user_id:
+            return True
+
+        with self._lock:
+            if clean_user_id in self._active_user_ids:
+                return False
+            self._active_user_ids.add(clean_user_id)
+            return True
+
+    def release(self, user_id: str) -> None:
+        if not settings.enable_chat_request_serialization:
+            return
+
+        clean_user_id = user_id.strip()
+        if not clean_user_id:
+            return
+
+        with self._lock:
+            self._active_user_ids.discard(clean_user_id)
 
 
 class ChatConversationRepositoryAdapter(ChatConversationRepository):

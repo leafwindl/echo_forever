@@ -1,17 +1,21 @@
 import logging
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from features.voice.interface.schemas import VoiceASRResponse
 from features.voice.public import UnsupportedVoiceFormatError, recognize_voice
+from shared.interface.dependencies import CurrentUser, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/voice", tags=["voice"])
 
 
 @router.post("/asr", response_model=VoiceASRResponse)
-async def voice_asr(audio: UploadFile = File(...)):
-    """仅执行语音识别 (ASR)，返回用户说的话。"""
+async def voice_asr(
+    audio: UploadFile = File(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    del current_user
     try:
         result = await recognize_voice(
             audio_bytes=await audio.read(),

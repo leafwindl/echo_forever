@@ -12,6 +12,7 @@ ENV/
 *.sqlite3
 /data/*
 !/data/README.md
+data/backups/
 
 # IDE
 .idea/

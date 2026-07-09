@@ -18,3 +18,8 @@ export interface SitCrop {
   imageLeft: string;
   imageTop: string;
 }
+
+export interface RequestInProgressError {
+  isRequestInProgress?: boolean;
+  detail?: string;
+}

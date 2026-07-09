@@ -9,7 +9,7 @@ import {
 import { appConfig } from '../../utils/env';
 import { playVoice } from './chat.audio';
 import { createMessage, replaceMessageContent } from './chat.messages';
-import type { ChatMode, Message, SitCrop } from './chat.types';
+import type { ChatMode, Message, RequestInProgressError, SitCrop } from './chat.types';
 import { recognizeVoice } from './chat.voice';
 
 let recorderManager: WechatMiniprogram.RecorderManager;
@@ -25,6 +25,7 @@ interface ChatPageData {
   inputText: string;
   inputMode: ChatMode;
   voiceReplyEnabled: boolean;
+  isSending: boolean;
   lastMsgId: string;
   msgIdCounter: number;
   userId: string;
@@ -63,6 +64,7 @@ Page({
     inputText: '',
     inputMode: 'text' as ChatMode,
     voiceReplyEnabled: getInitialVoiceReplyEnabled(),
+    isSending: false,
     lastMsgId: '',
     msgIdCounter: 0,
     userId: '',
@@ -124,6 +126,8 @@ Page({
   },
 
   onToggleInputMode() {
+    if (this.data.isSending) return;
+
     this.setData({
       inputMode: this.data.inputMode === 'text' ? 'voice' : 'text',
     });
@@ -166,6 +170,8 @@ Page({
   },
 
   onSend() {
+    if (this.data.isSending) return;
+
     const text = this.data.inputText.trim();
     if (!text) return;
 
@@ -174,7 +180,10 @@ Page({
   },
 
   async sendChatMessage(text: string, inputMode: ChatMode) {
+    if (this.data.isSending) return;
+
     const userId = this.data.userId || getOrCreateClientId();
+    this.setData({ isSending: true });
     this.addMessage('user', text);
     const pendingMessageId = this.addTypingMessage();
 
@@ -190,7 +199,15 @@ Page({
       }
     } catch (error) {
       console.error('发送消息失败', error);
-      this.updateMessage(pendingMessageId, TEMPORARY_ERROR_MESSAGE);
+      const requestError = error as RequestInProgressError;
+      this.updateMessage(
+        pendingMessageId,
+        requestError.isRequestInProgress
+          ? (requestError.detail || '上一条消息还在处理中，请稍后再试。')
+          : TEMPORARY_ERROR_MESSAGE,
+      );
+    } finally {
+      this.setData({ isSending: false });
     }
   },
 
@@ -299,6 +316,8 @@ Page({
   },
 
   async onStartRecord() {
+    if (this.data.isSending) return;
+
     const auth = await this.checkRecordAuth();
     if (!auth) return;
 

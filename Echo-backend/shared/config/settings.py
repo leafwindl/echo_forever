@@ -82,6 +82,19 @@ class Settings(BaseSettings):
         validation_alias="ENABLE_ADMIN_DEBUG_API",
     )
     admin_debug_token: str = Field(default="", validation_alias="ADMIN_DEBUG_TOKEN")
+    auth_token_secret: str = Field(default="", validation_alias="AUTH_TOKEN_SECRET")
+    auth_token_expires_seconds: int = Field(
+        default=2592000,
+        validation_alias="AUTH_TOKEN_EXPIRES_SECONDS",
+    )
+    enable_legacy_user_id_auth: bool = Field(
+        default=True,
+        validation_alias="ENABLE_LEGACY_USER_ID_AUTH",
+    )
+    enable_chat_request_serialization: bool = Field(
+        default=True,
+        validation_alias="ENABLE_CHAT_REQUEST_SERIALIZATION",
+    )
 
     system_prompt: str = (
         "你叫Echo，一位温柔、细腻的AI伙伴。\n"

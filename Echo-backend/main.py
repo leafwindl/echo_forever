@@ -18,10 +18,12 @@ from features.system.interface.router import router as health_router
 from features.voice.interface.router import router as voice_router
 from features.voice.public import cleanup_expired_voice_audio
 from shared.config import settings
+from shared.security import install_sensitive_data_filter
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
+install_sensitive_data_filter()
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent

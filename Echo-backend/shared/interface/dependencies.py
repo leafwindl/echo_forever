@@ -3,6 +3,9 @@ from typing import Optional
 
 from fastapi import Header, HTTPException, Request, status
 
+from shared.config import settings
+from shared.security import TokenError, TokenService
+
 
 @dataclass(frozen=True)
 class CurrentUser:
@@ -15,13 +18,38 @@ def _clean_user_id(value: object) -> str:
     return str(value).strip()
 
 
+def _token_service() -> TokenService:
+    return TokenService(
+        secret=settings.auth_token_secret,
+        expires_in=settings.auth_token_expires_seconds,
+    )
+
+
+def resolve_current_user_from_token(authorization: Optional[str]) -> Optional[CurrentUser]:
+    clean_authorization = _clean_user_id(authorization)
+    if not clean_authorization:
+        return None
+    scheme, _, token = clean_authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authorization header")
+
+    try:
+        user_id = _token_service().verify_token(token)
+    except TokenError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    return CurrentUser(user_id=user_id)
+
+
 def resolve_current_user(
     *,
     header_user_id: Optional[str] = None,
     query_user_id: Optional[str] = None,
     body_user_id: Optional[str] = None,
 ) -> CurrentUser:
-    """Resolve the request user from legacy inputs until token auth is introduced."""
+    """Resolve the request user from legacy inputs while compatibility is enabled."""
+    if not settings.enable_legacy_user_id_auth:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing access token")
+
     candidates = [
         _clean_user_id(header_user_id),
         _clean_user_id(query_user_id),
@@ -39,8 +67,13 @@ def resolve_current_user(
 
 async def get_current_user(
     request: Request,
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
     x_echo_user_id: Optional[str] = Header(default=None, alias="X-Echo-User-Id"),
 ) -> CurrentUser:
+    token_user = resolve_current_user_from_token(authorization)
+    if token_user:
+        return token_user
+
     body_user_id = None
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         content_type = request.headers.get("content-type", "")

@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from features.chat.interface.schemas import ChatRequest, ChatResponse
-from features.chat.public import ChatValidationError, send_chat_message
+from features.chat.public import ChatRequestInProgressError, ChatValidationError, send_chat_message
 from shared.interface.dependencies import CurrentUser, get_current_user
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,8 @@ async def chat_send(request: ChatRequest, current_user: CurrentUser = Depends(ge
         )
     except ChatValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except ChatRequestInProgressError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
     except Exception as e:

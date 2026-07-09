@@ -37,3 +37,11 @@ class MemoryExtractionScheduler(Protocol):
 class ChatVoiceReplySynthesizer(Protocol):
     async def synthesize_reply(self, reply: str) -> str:
         ...
+
+
+class ChatRequestGuard(Protocol):
+    def try_acquire(self, user_id: str) -> bool:
+        ...
+
+    def release(self, user_id: str) -> None:
+        ...

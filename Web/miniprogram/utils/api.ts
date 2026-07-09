@@ -1,10 +1,11 @@
-// utils/api.ts
 import { appConfig } from './env';
 
 export const BASE_URL = appConfig.apiBaseUrl;
 export const USER_ID_STORAGE_KEY = 'echo_user_id';
+export const ACCESS_TOKEN_STORAGE_KEY = 'echo_access_token';
 
 export type MemoryStatus = 'active' | 'inactive' | 'deleted' | 'all';
+export type ChatInputType = 'text' | 'voice';
 
 export interface MemoryItem {
   memory_id: string;
@@ -18,8 +19,6 @@ export interface MemoryItem {
   updated_at?: string;
   expires_at?: string;
 }
-
-export type ChatInputType = 'text' | 'voice';
 
 export interface SendMessageOptions {
   inputType?: ChatInputType;
@@ -41,38 +40,65 @@ export interface ClearChatContextResponse {
   resetConversations: number;
 }
 
+export interface LoginResponse {
+  user_id: string;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
 interface MemoryListResponse {
   memories: MemoryItem[];
   count: number;
 }
 
 function normalizeResponseData(data: any): any {
-  // 某些代理或调试环境可能把 JSON 当字符串返回，先尝试解析一次。
-  if (typeof data === 'string') {
-    try {
-      return JSON.parse(data);
-    } catch (e) {
-      return data;
-    }
+  if (typeof data !== 'string') return data;
+
+  try {
+    return JSON.parse(data);
+  } catch (error) {
+    void error;
+    return data;
   }
-  return data;
 }
 
-// 前后端通信接口封装层
-export function login(code: string, clientId: string): Promise<{ user_id: string }> { //将微信登陆获取的code发送给后端获取openid
-  // Promise是用于处理异步操作的对象，代表未来会完成的任务。
-  return new Promise((resolve, reject) => { 
+export function getStoredAccessToken(): string {
+  const token = wx.getStorageSync(ACCESS_TOKEN_STORAGE_KEY);
+  return typeof token === 'string' ? token : '';
+}
+
+export function getAuthHeader(): Record<string, string> {
+  const token = getStoredAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function getJsonHeader(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    ...getAuthHeader(),
+  };
+}
+
+function persistLoginSession(data: LoginResponse): void {
+  wx.setStorageSync(USER_ID_STORAGE_KEY, data.user_id);
+  wx.setStorageSync(ACCESS_TOKEN_STORAGE_KEY, data.access_token);
+}
+
+export function login(code: string, clientId: string): Promise<LoginResponse> {
+  return new Promise((resolve, reject) => {
     wx.request({
       url: `${BASE_URL}/login`,
       method: 'POST',
-      header: { 'Content-Type': 'application/json' }, //请求头
-      // client_id 是本地开发兜底身份：后端没有微信密钥时，用它生成稳定 dev 用户。
+      header: { 'Content-Type': 'application/json' },
       data: { code, client_id: clientId },
-      success: (res: any) => { //请求成功时的回调函数
-        if (res.statusCode === 200 && res.data.user_id) {
-          resolve(res.data);
+      success: (res: any) => {
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200 && data && data.user_id && data.access_token) {
+          persistLoginSession(data);
+          resolve(data);
         } else {
-          reject(res.data);
+          reject(data);
         }
       },
       fail: (err) => reject(err),
@@ -80,7 +106,6 @@ export function login(code: string, clientId: string): Promise<{ user_id: string
   });
 }
 
-// 发送消息给后端。文本输入和语音识别后的文本都走这个统一聊天契约。
 export function sendMessage(
   userId: string,
   message: string,
@@ -90,7 +115,7 @@ export function sendMessage(
     wx.request({
       url: `${BASE_URL}/chat/send`,
       method: 'POST',
-      header: { 'Content-Type': 'application/json' },
+      header: getJsonHeader(),
       data: {
         user_id: userId,
         message,
@@ -104,6 +129,8 @@ export function sendMessage(
             reply: data.reply,
             audioUrl: data.audio_url || null,
           });
+        } else if (res.statusCode === 409) {
+          reject({ ...data, isRequestInProgress: true });
         } else {
           reject(data);
         }
@@ -113,11 +140,16 @@ export function sendMessage(
   });
 }
 
-export function listMemories(userId: string, status: MemoryStatus = 'active', limit = 100): Promise<MemoryListResponse> {
+export function listMemories(
+  userId: string,
+  status: MemoryStatus = 'active',
+  limit = 100,
+): Promise<MemoryListResponse> {
   return new Promise((resolve, reject) => {
     wx.request({
       url: `${BASE_URL}/memory/list`,
       method: 'GET',
+      header: getJsonHeader(),
       data: { user_id: userId, status, limit },
       success: (res: any) => {
         const data = normalizeResponseData(res.data);
@@ -140,6 +172,7 @@ export function deleteMemory(userId: string, memoryId: string): Promise<void> {
     wx.request({
       url: `${BASE_URL}/memory/${encodeURIComponent(memoryId)}?user_id=${encodeURIComponent(userId)}`,
       method: 'DELETE',
+      header: getJsonHeader(),
       success: (res: any) => {
         const data = normalizeResponseData(res.data);
         if (res.statusCode === 200 && data && data.status === 'deleted') {
@@ -158,9 +191,7 @@ export function clearMemories(userId: string): Promise<{ cleared_count: number }
     wx.request({
       url: `${BASE_URL}/memory/clear`,
       method: 'POST',
-      header: {
-        'Content-Type': 'application/json',
-      },
+      header: getJsonHeader(),
       data: { user_id: userId },
       success: (res: any) => {
         const data = normalizeResponseData(res.data);
@@ -177,7 +208,7 @@ export function clearMemories(userId: string): Promise<{ cleared_count: number }
 
 function getAdminDebugHeader(): Record<string, string> {
   return {
-    'Content-Type': 'application/json',
+    ...getJsonHeader(),
     'X-Admin-Debug-Token': appConfig.adminDebugToken,
   };
 }
