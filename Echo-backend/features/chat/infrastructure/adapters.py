@@ -5,6 +5,7 @@ from features.chat.domain.repositories import ChatConversationRepository
 from features.chat.domain.services import (
     ChatContextProvider,
     ChatLLM,
+    ChatVoiceReplySynthesizer,
     ConversationSummaryUpdater,
     MemoryExtractionScheduler,
 )
@@ -89,3 +90,11 @@ class MemoryExtractionSchedulerAdapter(MemoryExtractionScheduler):
             reason=result.reason,
             job_id=result.job_id,
         )
+
+
+class VoiceReplySynthesizerAdapter(ChatVoiceReplySynthesizer):
+    async def synthesize_reply(self, reply: str) -> str:
+        from features.voice.public import synthesize_voice_reply
+
+        result = await synthesize_voice_reply(reply)
+        return result.audio_url

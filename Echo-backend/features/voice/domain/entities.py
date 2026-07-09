@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 
 SUPPORTED_VOICE_CONTENT_TYPES = frozenset({"audio/mpeg", "audio/mp3"})
-VOICE_USER_MESSAGE_TYPE = "voice_asr"
-VOICE_ASSISTANT_MESSAGE_TYPE = "voice_reply"
 
 
 class UnsupportedVoiceFormatError(ValueError):
@@ -15,6 +13,5 @@ class VoiceRecognitionResult:
 
 
 @dataclass(frozen=True)
-class VoiceReplyResult:
-    reply: str
-    audio_url: str | None = None
+class VoiceSynthesisResult:
+    audio_url: str

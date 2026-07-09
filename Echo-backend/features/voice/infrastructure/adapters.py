@@ -1,8 +1,5 @@
-from features.chat.public import generate_chat_reply
-from features.voice.domain.entities import VOICE_ASSISTANT_MESSAGE_TYPE, VOICE_USER_MESSAGE_TYPE
 from features.voice.domain.services import (
     VoiceAudioStorage,
-    VoiceChatResponder,
     VoiceRecognizer,
     VoiceSynthesizer,
 )
@@ -39,14 +36,3 @@ class EdgeVoiceSynthesizer(VoiceSynthesizer):
     async def synthesize(self, text: str) -> bytes:
         provider = get_tts_provider()
         return await provider.text_to_speech(text, DEFAULT_EDGE_TTS_VOICE_ID)
-
-
-class ChatVoiceResponder(VoiceChatResponder):
-    async def reply(self, user_id: str, message: str) -> str:
-        result = await generate_chat_reply(
-            user_id=user_id,
-            message=message,
-            user_message_type=VOICE_USER_MESSAGE_TYPE,
-            assistant_message_type=VOICE_ASSISTANT_MESSAGE_TYPE,
-        )
-        return result.reply

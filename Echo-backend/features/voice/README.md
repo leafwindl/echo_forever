@@ -2,7 +2,7 @@
 
 ## 1. 业务目标
 
-负责语音输入和语音回复能力，包括上传音频保存、ASR 识别、调用 Chat 生成回复、TTS 合成，以及生成可访问的音频 URL。
+负责语音能力，包括上传音频保存、ASR 识别、TTS 合成，以及生成可访问的音频 URL。聊天主流程由 Chat 模块统一编排。
 
 ## 2. 核心业务流程
 
@@ -16,15 +16,13 @@
 6. 无论识别成功或失败，都清理本次上传的临时音频。
 7. 返回识别出的用户文本。
 
-### 语音回复流程
+### TTS 合成流程
 
-1. 接收用户文本和当前用户身份。
-2. 将文本交给 Chat 模块生成 AI 回复。
-3. Chat 模块负责上下文构建、LLM 调用、消息落库、摘要更新和记忆调度。
-4. Voice 模块拿到 AI 文本回复后，调用 TTS provider 合成音频。
-5. 将生成音频保存到可公开访问的生成目录。
-6. 基于公开访问地址生成音频 URL。
-7. 返回 AI 文本回复和音频 URL。
+1. 接收 Chat 模块传入的 AI 文本回复。
+2. 调用 TTS provider 合成音频。
+3. 将生成音频保存到可公开访问的生成目录。
+4. 基于公开访问地址生成音频 URL。
+5. 返回音频 URL。
 
 ### 文件清理流程
 
@@ -40,9 +38,12 @@
 
 - `POST /voice/asr`
   - Response: `VoiceASRResponse`
-- `POST /voice/reply`
-  - Request: `VoiceReplyRequest`
-  - Response: `VoiceReplyResponse`
+
+### 模块公开能力
+
+- `recognize_voice(audio_bytes, content_type)`：识别上传音频。
+- `synthesize_voice_reply(text)`：将 Chat 模块传入的回复文本合成为音频 URL。
+- `cleanup_expired_voice_audio()`：清理过期语音文件。
 
 ### 发布的事件
 
@@ -51,7 +52,7 @@
 
 ### 依赖的其它模块接口
 
-- Chat 模块：根据语音识别后的文本生成 AI 回复。
+- Chat 模块：统一编排聊天主流程，并在需要时调用 Voice 的 TTS 能力。
 - ASR Provider：将音频识别为文本。
 - TTS Provider：将 AI 文本回复合成为音频。
 - 配置服务：读取公开访问地址、ASR 密钥和默认音色。
@@ -77,7 +78,7 @@
 ## 6. 注意事项
 
 - 当前 ASR 只接受 MP3 content type。
-- 语音回复中的对话落库仍由 Chat 模块统一处理。
+- 对话落库、上下文、记忆调度统一由 Chat 模块处理。
 - 上传音频保存在 `Echo-backend/static/voices/uploads/`，识别结束后会立即删除。
 - 生成音频保存在 `Echo-backend/static/voices/generated/`，返回 URL 依赖 `PUBLIC_BASE_URL`。
 - 历史版本遗留在 `Echo-backend/static/voices/` 根目录下的 MP3 也会按生成音频保留时间清理。

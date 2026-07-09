@@ -1,15 +1,18 @@
 from typing import Optional
 
 from features.chat.application.generate_reply import GenerateChatReply
+from features.chat.application.send_message import SendChatMessage
 from features.chat.infrastructure.adapters import (
     ChatContextProviderAdapter,
     ChatConversationRepositoryAdapter,
     ChatLLMAdapter,
     ConversationSummaryUpdaterAdapter,
     MemoryExtractionSchedulerAdapter,
+    VoiceReplySynthesizerAdapter,
 )
 
 _generate_chat_reply_use_case: Optional[GenerateChatReply] = None
+_send_chat_message_use_case: Optional[SendChatMessage] = None
 
 
 def get_generate_chat_reply_use_case() -> GenerateChatReply:
@@ -25,6 +28,17 @@ def get_generate_chat_reply_use_case() -> GenerateChatReply:
     return _generate_chat_reply_use_case
 
 
+def get_send_chat_message_use_case() -> SendChatMessage:
+    global _send_chat_message_use_case
+    if _send_chat_message_use_case is None:
+        _send_chat_message_use_case = SendChatMessage(
+            chat_reply_generator=get_generate_chat_reply_use_case(),
+            voice_reply_synthesizer=VoiceReplySynthesizerAdapter(),
+        )
+    return _send_chat_message_use_case
+
+
 def reset_generate_chat_reply_use_case_for_tests():
-    global _generate_chat_reply_use_case
+    global _generate_chat_reply_use_case, _send_chat_message_use_case
     _generate_chat_reply_use_case = None
+    _send_chat_message_use_case = None

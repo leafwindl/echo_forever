@@ -4,11 +4,10 @@ from features.voice.domain.entities import (
     SUPPORTED_VOICE_CONTENT_TYPES,
     UnsupportedVoiceFormatError,
     VoiceRecognitionResult,
-    VoiceReplyResult,
+    VoiceSynthesisResult,
 )
 from features.voice.domain.services import (
     VoiceAudioStorage,
-    VoiceChatResponder,
     VoiceRecognizer,
     VoiceSynthesizer,
 )
@@ -39,24 +38,20 @@ class RecognizeVoice:
         return VoiceRecognitionResult(user_text=user_text)
 
 
-class GenerateVoiceReply:
+class SynthesizeVoiceReply:
     def __init__(
         self,
-        chat_responder: VoiceChatResponder,
         synthesizer: VoiceSynthesizer,
         audio_storage: VoiceAudioStorage,
     ):
-        self.chat_responder = chat_responder
         self.synthesizer = synthesizer
         self.audio_storage = audio_storage
 
-    async def execute(self, user_id: str, message: str) -> VoiceReplyResult:
-        reply = await self.chat_responder.reply(user_id, message)
-        try:
-            audio_bytes = await self.synthesizer.synthesize(reply)
-            audio_url = await self.audio_storage.save_generated_audio(audio_bytes)
-        except Exception:
-            # TTS 依赖外部服务，失败时保留文字回复，避免语音链路拖垮主对话。
-            logger.exception("Voice synthesis failed; returning text reply only")
-            audio_url = None
-        return VoiceReplyResult(reply=reply, audio_url=audio_url)
+    async def execute(self, text: str) -> VoiceSynthesisResult:
+        clean_text = text.strip()
+        if not clean_text:
+            raise ValueError("Voice synthesis text cannot be empty")
+
+        audio_bytes = await self.synthesizer.synthesize(clean_text)
+        audio_url = await self.audio_storage.save_generated_audio(audio_bytes)
+        return VoiceSynthesisResult(audio_url=audio_url)

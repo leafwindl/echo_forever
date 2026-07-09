@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.voice.application.use_cases import GenerateVoiceReply, RecognizeVoice
+from features.voice.application.use_cases import RecognizeVoice, SynthesizeVoiceReply
 from features.voice.domain.entities import UnsupportedVoiceFormatError
 from features.voice.infrastructure.audio_storage import cleanup_expired_audio_files_in_dir
 
@@ -36,11 +36,6 @@ class FakeRecognizer:
 class FailingRecognizer:
     async def recognize(self, audio_path):
         raise RuntimeError(f"recognize failed:{audio_path}")
-
-
-class FakeChatResponder:
-    async def reply(self, user_id, message):
-        return f"reply:{user_id}:{message}"
 
 
 class FakeSynthesizer:
@@ -79,33 +74,26 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(UnsupportedVoiceFormatError):
             await use_case.execute(b"wav-bytes", "audio/wav")
 
-    async def test_generate_voice_reply_uses_chat_tts_and_storage(self):
+    async def test_synthesize_voice_reply_stores_generated_audio(self):
         storage = FakeAudioStorage()
-        use_case = GenerateVoiceReply(
-            chat_responder=FakeChatResponder(),
+        use_case = SynthesizeVoiceReply(
             synthesizer=FakeSynthesizer(),
             audio_storage=storage,
         )
 
-        result = await use_case.execute("user_a", "hello")
+        result = await use_case.execute("hello")
 
-        self.assertEqual(result.reply, "reply:user_a:hello")
         self.assertEqual(result.audio_url, "http://example.test/audio.mp3")
-        self.assertEqual(storage.generated_audio, [b"audio:reply:user_a:hello"])
+        self.assertEqual(storage.generated_audio, [b"audio:hello"])
 
-    async def test_generate_voice_reply_returns_text_when_tts_fails(self):
-        storage = FakeAudioStorage()
-        use_case = GenerateVoiceReply(
-            chat_responder=FakeChatResponder(),
-            synthesizer=FailingSynthesizer(),
-            audio_storage=storage,
+    async def test_synthesize_voice_reply_rejects_empty_text(self):
+        use_case = SynthesizeVoiceReply(
+            synthesizer=FakeSynthesizer(),
+            audio_storage=FakeAudioStorage(),
         )
 
-        result = await use_case.execute("user_a", "hello")
-
-        self.assertEqual(result.reply, "reply:user_a:hello")
-        self.assertIsNone(result.audio_url)
-        self.assertEqual(storage.generated_audio, [])
+        with self.assertRaises(ValueError):
+            await use_case.execute("   ")
 
     async def test_cleanup_expired_audio_files_deletes_only_expired_mp3_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:

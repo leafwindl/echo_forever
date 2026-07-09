@@ -3,10 +3,7 @@
   <view class="character-area {{chatExpanded ? 'character-area-expanded' : ''}}" style="flex: {{chatExpanded ? 3 : 7}};">
     <character id="mycharacter"
       chat-expanded="{{chatExpanded}}"
-      sit-crop="{{sitCrop}}"
-      bindlongpress="onStartRecord"
-      bindtouchend="onStopRecord"
-      bindtouchcancel="onCancelRecord">
+      sit-crop="{{sitCrop}}">
     </character>
   </view>
 
@@ -39,8 +36,25 @@
 
     <!-- 输入区域 -->
     <view class="input-area">
-      <input class="input" value="{{inputText}}" placeholder="说点什么..." bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
-      <button class="send-btn" size="mini" bindtap="onSend">发送</button>
+      <button class="mode-btn" bindtap="onToggleInputMode">{{inputMode === 'text' ? '语音' : '键盘'}}</button>
+
+      <block wx:if="{{inputMode === 'text'}}">
+        <input class="input" value="{{inputText}}" placeholder="说点什么..." bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
+        <button class="send-btn" size="mini" bindtap="onSend">发送</button>
+      </block>
+
+      <block wx:else>
+        <button
+          class="hold-voice-btn {{isRecording ? 'recording' : ''}}"
+          bindtouchstart="onStartRecord"
+          bindtouchend="onStopRecord"
+          bindtouchcancel="onCancelRecord"
+        >
+          {{isRecording ? '松开 发送' : '按住 说话'}}
+        </button>
+      </block>
+
+      <button class="voice-reply-btn {{voiceReplyEnabled ? 'active' : ''}}" bindtap="onToggleVoiceReply">音</button>
     </view>
 
     <view class="chat-actions">

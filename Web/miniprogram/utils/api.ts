@@ -19,6 +19,18 @@ export interface MemoryItem {
   expires_at?: string;
 }
 
+export type ChatInputType = 'text' | 'voice';
+
+export interface SendMessageOptions {
+  inputType?: ChatInputType;
+  voiceReplyEnabled?: boolean;
+}
+
+export interface ChatSendResponse {
+  reply: string;
+  audioUrl?: string | null;
+}
+
 interface MemoryListResponse {
   memories: MemoryItem[];
   count: number;
@@ -58,19 +70,32 @@ export function login(code: string, clientId: string): Promise<{ user_id: string
   });
 }
 
-//发送消息给后端
-export function sendMessage(userId: string, message: string): Promise<string> {
+// 发送消息给后端。文本输入和语音识别后的文本都走这个统一聊天契约。
+export function sendMessage(
+  userId: string,
+  message: string,
+  options: SendMessageOptions = {},
+): Promise<ChatSendResponse> {
   return new Promise((resolve, reject) => {
     wx.request({
       url: `${BASE_URL}/chat/send`,
       method: 'POST',
       header: { 'Content-Type': 'application/json' },
-      data: { user_id: userId, message },
+      data: {
+        user_id: userId,
+        message,
+        input_type: options.inputType || 'text',
+        voice_reply_enabled: Boolean(options.voiceReplyEnabled),
+      },
       success: (res: any) => {
-        if (res.statusCode === 200 && res.data.reply) {
-          resolve(res.data.reply);
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200 && data && data.reply) {
+          resolve({
+            reply: data.reply,
+            audioUrl: data.audio_url || null,
+          });
         } else {
-          reject(res.data);
+          reject(data);
         }
       },
       fail: (err) => reject(err),

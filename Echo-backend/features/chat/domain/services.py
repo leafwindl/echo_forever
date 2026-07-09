@@ -32,3 +32,8 @@ class MemoryExtractionScheduler(Protocol):
         source_message_id: int,
     ) -> MemoryExtractionScheduleResult:
         ...
+
+
+class ChatVoiceReplySynthesizer(Protocol):
+    async def synthesize_reply(self, reply: str) -> str:
+        ...

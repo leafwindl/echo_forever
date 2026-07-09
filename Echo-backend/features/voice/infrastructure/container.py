@@ -1,15 +1,14 @@
 from typing import Optional
 
-from features.voice.application.use_cases import GenerateVoiceReply, RecognizeVoice
+from features.voice.application.use_cases import RecognizeVoice, SynthesizeVoiceReply
 from features.voice.infrastructure.adapters import (
-    ChatVoiceResponder,
     EdgeVoiceSynthesizer,
     LocalVoiceAudioStorage,
     TencentVoiceRecognizer,
 )
 
 _recognize_voice_use_case: Optional[RecognizeVoice] = None
-_generate_voice_reply_use_case: Optional[GenerateVoiceReply] = None
+_synthesize_voice_reply_use_case: Optional[SynthesizeVoiceReply] = None
 
 
 def get_recognize_voice_use_case() -> RecognizeVoice:
@@ -22,18 +21,17 @@ def get_recognize_voice_use_case() -> RecognizeVoice:
     return _recognize_voice_use_case
 
 
-def get_generate_voice_reply_use_case() -> GenerateVoiceReply:
-    global _generate_voice_reply_use_case
-    if _generate_voice_reply_use_case is None:
-        _generate_voice_reply_use_case = GenerateVoiceReply(
-            chat_responder=ChatVoiceResponder(),
+def get_synthesize_voice_reply_use_case() -> SynthesizeVoiceReply:
+    global _synthesize_voice_reply_use_case
+    if _synthesize_voice_reply_use_case is None:
+        _synthesize_voice_reply_use_case = SynthesizeVoiceReply(
             synthesizer=EdgeVoiceSynthesizer(),
             audio_storage=LocalVoiceAudioStorage(),
         )
-    return _generate_voice_reply_use_case
+    return _synthesize_voice_reply_use_case
 
 
 def reset_voice_use_cases_for_tests():
-    global _recognize_voice_use_case, _generate_voice_reply_use_case
+    global _recognize_voice_use_case, _synthesize_voice_reply_use_case
     _recognize_voice_use_case = None
-    _generate_voice_reply_use_case = None
+    _synthesize_voice_reply_use_case = None

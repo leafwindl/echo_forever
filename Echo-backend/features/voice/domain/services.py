@@ -20,8 +20,3 @@ class VoiceRecognizer(Protocol):
 class VoiceSynthesizer(Protocol):
     async def synthesize(self, text: str) -> bytes:
         ...
-
-
-class VoiceChatResponder(Protocol):
-    async def reply(self, user_id: str, message: str) -> str:
-        ...

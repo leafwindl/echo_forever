@@ -22,6 +22,7 @@ ENV/
 .env
 *.pem
 *.key
+node_modules/
 
 # Audio & binary files
 static/voices/*.mp3

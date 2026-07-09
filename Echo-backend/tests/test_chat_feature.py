@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.chat.application.generate_reply import GenerateChatReply
+from features.chat.application.send_message import SendChatMessage
 from features.chat.domain.entities import ChatContext, ChatValidationError, MemoryExtractionScheduleResult
 
 
@@ -67,6 +68,20 @@ class FakeMemoryScheduler:
         )
 
 
+class FakeVoiceReplySynthesizer:
+    def __init__(self):
+        self.received_replies = []
+
+    async def synthesize_reply(self, reply):
+        self.received_replies.append(reply)
+        return "http://example.test/voice.mp3"
+
+
+class FailingVoiceReplySynthesizer:
+    async def synthesize_reply(self, reply):
+        raise RuntimeError(f"tts failed:{reply}")
+
+
 class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
     def build_use_case(self):
         repository = FakeConversationRepository()
@@ -102,6 +117,43 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ChatValidationError):
             await use_case.execute(user_id="user_a", message="   ")
+
+    async def test_send_chat_message_can_return_voice_reply_url(self):
+        chat_reply_generator, repository = self.build_use_case()
+        voice_synthesizer = FakeVoiceReplySynthesizer()
+        use_case = SendChatMessage(
+            chat_reply_generator=chat_reply_generator,
+            voice_reply_synthesizer=voice_synthesizer,
+        )
+
+        result = await use_case.execute(
+            user_id="user_a",
+            message="你好",
+            input_type="voice",
+            voice_reply_enabled=True,
+        )
+
+        self.assertEqual(result.reply, "你好，小安。")
+        self.assertEqual(result.audio_url, "http://example.test/voice.mp3")
+        self.assertEqual(voice_synthesizer.received_replies, ["你好，小安。"])
+        self.assertEqual(repository.persisted_turns[0]["user_message_type"], "voice_asr")
+        self.assertEqual(repository.persisted_turns[0]["assistant_message_type"], "voice_reply")
+
+    async def test_send_chat_message_keeps_text_reply_when_voice_synthesis_fails(self):
+        chat_reply_generator, _ = self.build_use_case()
+        use_case = SendChatMessage(
+            chat_reply_generator=chat_reply_generator,
+            voice_reply_synthesizer=FailingVoiceReplySynthesizer(),
+        )
+
+        result = await use_case.execute(
+            user_id="user_a",
+            message="你好",
+            voice_reply_enabled=True,
+        )
+
+        self.assertEqual(result.reply, "你好，小安。")
+        self.assertIsNone(result.audio_url)
 
 
 if __name__ == "__main__":

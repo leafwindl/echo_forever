@@ -36,3 +36,9 @@ class ChatTurnResult:
     memory_extraction_scheduled: bool = False
     memory_extraction_gate_reason: str = ""
     memory_extraction_job_id: str = ""
+
+
+@dataclass(frozen=True)
+class ChatReplyDeliveryResult:
+    reply: str
+    audio_url: str | None = None

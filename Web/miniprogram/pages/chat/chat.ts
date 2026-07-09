@@ -1,19 +1,34 @@
-import { login, sendMessage, USER_ID_STORAGE_KEY } from '../../utils/api'; // 导入两个异步函数
-import { BASE_URL } from '../../utils/api';
+import { login, sendMessage, USER_ID_STORAGE_KEY } from '../../utils/api';
+import { playVoice } from './chat.audio';
+import { createMessage, replaceMessageContent } from './chat.messages';
+import type { ChatMode, Message, SitCrop } from './chat.types';
+import { recognizeVoice } from './chat.voice';
 
-// 定义消息对象的结构：每个消息由唯一数字ID、发送者、文本内容
-interface Message {
-  id: number;
-  sender: 'user' | 'echo';
-  content: string;
-  isTyping?: boolean;
+let recorderManager: WechatMiniprogram.RecorderManager;
+
+const CLIENT_ID_STORAGE_KEY = 'echo_client_id';
+const VOICE_REPLY_STORAGE_KEY = 'echo_voice_reply_enabled';
+const DEFAULT_ECHO_MESSAGE = '嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？';
+const FALLBACK_ECHO_MESSAGE = '嗨，我是 Echo，很高兴认识你～';
+const TEMPORARY_ERROR_MESSAGE = '（抱歉，我暂时有点卡，请稍后再试）';
+
+interface ChatPageData {
+  messages: Message[];
+  inputText: string;
+  inputMode: ChatMode;
+  voiceReplyEnabled: boolean;
+  lastMsgId: string;
+  msgIdCounter: number;
+  userId: string;
+  isRecording: boolean;
+  recordStartTime: number;
+  shouldUploadVoice: boolean;
+  chatExpanded: boolean;
+  sitCrop: SitCrop;
 }
 
-let recorderManager: WechatMiniprogram.RecorderManager; //指定变量的类型
-const CLIENT_ID_STORAGE_KEY = 'echo_client_id';
-
 function getOrCreateClientId(): string {
-  // 本地稳定匿名 ID：微信登录失败或后端缺少微信密钥时，用它隔离不同设备的记忆。
+  // 本地稳定匿名 ID 用于登录失败兜底，避免不同设备共用同一份记忆。
   const stored = wx.getStorageSync(CLIENT_ID_STORAGE_KEY);
   if (typeof stored === 'string' && stored) {
     return stored;
@@ -24,131 +39,150 @@ function getOrCreateClientId(): string {
   return clientId;
 }
 
-// 小程序的页面通过Page()构造器定义，接收一个包含数据、生命周期、事件处理函数的对象。也就是核心处理逻辑
+function getInitialVoiceReplyEnabled(): boolean {
+  const stored = wx.getStorageSync(VOICE_REPLY_STORAGE_KEY);
+  return stored === true;
+}
+
 Page({
   data: {
-    messages: [] as Message[], // 存储显示的消息列表
-    inputText: '',  //当前输入框的文本
-    lastMsgId: '', // 滚动定位最新的消息的DOM ID
-    msgIdCounter: 0, // 自增计数器，为消息生成唯一ID
-    userId: '', //登陆成功后后端返回的用户ID
-    isRecording: false,      // 是否正在录音
-    recordStartTime: 0,      // 录音开始时间戳（用于防抖）
-    shouldUploadVoice: false,   // 默认不上传
-    chatExpanded: false, //扩展聊天框
+    messages: [] as Message[],
+    inputText: '',
+    inputMode: 'text' as ChatMode,
+    voiceReplyEnabled: getInitialVoiceReplyEnabled(),
+    lastMsgId: '',
+    msgIdCounter: 0,
+    userId: '',
+    isRecording: false,
+    recordStartTime: 0,
+    shouldUploadVoice: false,
+    chatExpanded: false,
     sitCrop: {
-      cropWidth: '750rpx',     // 裁剪窗口宽度
-      cropHeight: '500rpx',    // 裁剪窗口高度
-      cropOffsetX: '0rpx',     // 裁剪窗口整体左右偏移
-      cropOffsetY: '0rpx',     // 裁剪窗口距离真实聊天框的垂直偏移
-      imageWidth: '800rpx',   // 动画缩放大小
-      imageLeft: '-25rpx',    // 动画在裁剪窗口内的左右位置
-      imageTop: '-50rpx',     // 动画在裁剪窗口内的上下位置
+      cropWidth: '750rpx',
+      cropHeight: '500rpx',
+      cropOffsetX: '0rpx',
+      cropOffsetY: '0rpx',
+      imageWidth: '800rpx',
+      imageLeft: '-25rpx',
+      imageTop: '-50rpx',
     },
-  },
+  } as ChatPageData,
 
   onLoad() {
-    // 每个小程序客户端只生成一次，后续从本地缓存读取。
     const clientId = getOrCreateClientId();
+    this.loginWithWechat(clientId);
 
-    // 微信登录获取 user_id
-    wx.login({ 
-      success: async (res) => { //从微信官方获取一次性code，async声明异步函数
+    recorderManager = wx.getRecorderManager();
+    this.initRecorderEvents();
+  },
+
+  loginWithWechat(clientId: string) {
+    wx.login({
+      success: async (res) => {
         try {
-          const result = await login(res.code, clientId);  //将code传给自定义login函数（api.ts），返回user_id
-          // 只有当login函数成功后才会进行这一步
-          this.setData({ userId: result.user_id }); //将user.id存入user ID的页面数据中。this指向当前页面的实例（Page对象）
+          const result = await login(res.code, clientId);
+          this.setData({ userId: result.user_id });
           wx.setStorageSync(USER_ID_STORAGE_KEY, result.user_id);
-          // 登录成功后发一条 Echo 开场白（可以从后端获取，这里先固定）
-          this.addMessage('echo', '嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？');
-        } catch (e) {
-          console.error('登录失败', e);
-          // 降级：使用本地稳定匿名 ID，避免所有失败登录用户共用同一个身份
-          this.setData({ userId: clientId });
-          wx.setStorageSync(USER_ID_STORAGE_KEY, clientId);
-          this.addMessage('echo', '嗨，我是 Echo，很高兴认识你～');
+          this.addMessage('echo', DEFAULT_ECHO_MESSAGE);
+        } catch (error) {
+          console.error('登录失败', error);
+          this.useFallbackUser(clientId);
         }
       },
-      fail: () => {
-        this.setData({ userId: clientId });
-        wx.setStorageSync(USER_ID_STORAGE_KEY, clientId);
-        this.addMessage('echo', '嗨，我是 Echo，很高兴认识你～');
-      }
+      fail: () => this.useFallbackUser(clientId),
     });
-    
-    recorderManager = wx.getRecorderManager(); //获取全局唯一的录音管理器实例
-    this.initRecorderEvents();
+  },
+
+  useFallbackUser(clientId: string) {
+    this.setData({ userId: clientId });
+    wx.setStorageSync(USER_ID_STORAGE_KEY, clientId);
+    this.addMessage('echo', FALLBACK_ECHO_MESSAGE);
   },
 
   onToggleChatExpand() {
     this.setData({
-      chatExpanded: !this.data.chatExpanded
+      chatExpanded: !this.data.chatExpanded,
     });
   },
 
+  onToggleInputMode() {
+    this.setData({
+      inputMode: this.data.inputMode === 'text' ? 'voice' : 'text',
+    });
+  },
+
+  onToggleVoiceReply() {
+    const nextVoiceReplyEnabled = !this.data.voiceReplyEnabled;
+    this.setData({ voiceReplyEnabled: nextVoiceReplyEnabled });
+    wx.setStorageSync(VOICE_REPLY_STORAGE_KEY, nextVoiceReplyEnabled);
+  },
+
   initRecorderEvents() {
-    // 监听录音开始
-    recorderManager.onStart(() => { // 这个箭头函数只会在录音开始的时候被调用，只是一个监听器，当被触发后会按照箭头函数内执行
-      console.log('录音开始');
+    recorderManager.onStart(() => {
       this.setData({ isRecording: true });
       wx.showToast({ title: '录音中... 松开结束', icon: 'none', duration: 60000 });
     });
 
-    // 监听录音结束，拿到临时文件路径
     recorderManager.onStop((res) => {
-      console.log('录音结束', res);
-      const should = this.data.shouldUploadVoice;
+      const shouldUploadVoice = this.data.shouldUploadVoice;
       this.setData({ isRecording: false, shouldUploadVoice: false });
       wx.hideToast();
-      if (should && res.tempFilePath) {
-        this.uploadVoice(res.tempFilePath);
-      } else {
+
+      if (shouldUploadVoice && res.tempFilePath) {
+        this.handleVoiceFile(res.tempFilePath);
+      } else if (shouldUploadVoice) {
         wx.showToast({ title: '录音失败', icon: 'none' });
       }
     });
 
-    // 监听录音错误
     recorderManager.onError((err) => {
       console.error('录音错误', err);
-      this.setData({ isRecording: false });
+      this.setData({ isRecording: false, shouldUploadVoice: false });
       wx.hideToast();
       wx.showToast({ title: '录音失败，请重试', icon: 'none' });
     });
   },
 
-  onInput(e: WechatMiniprogram.Input) { //事件绑定到输入框中
-    this.setData({ inputText: e.detail.value }); //实时更新输入框的内容：形成打一个字然后出现在输入框上的效果
+  onInput(e: WechatMiniprogram.Input) {
+    this.setData({ inputText: e.detail.value });
   },
 
-  onSend() { //绑定到发送按钮的事件
-    const text = this.data.inputText.trim(); //去除首尾空格
-    if (!text || !this.data.userId) return;
+  onSend() {
+    const text = this.data.inputText.trim();
+    if (!text) return;
 
-    // 对话框中显示用户消息
-    this.addMessage('user', text);
     this.setData({ inputText: '' });
-
-    // 调用真实后端
-    const pendingMessageId = this.addTypingMessage();
-    sendMessage(this.data.userId, text) //异步请求后端AI回复
-      .then((reply: string) => {
-        this.updateMessage(pendingMessageId, reply); //返回回复内容文本
-      })
-      .catch((err) => {
-        console.error('发送消息失败', err);
-        this.updateMessage(pendingMessageId, '（抱歉，我暂时有点卡，请稍后再试）');
-      });
+    this.sendChatMessage(text, 'text');
   },
 
-  // 添加一条消息到列表
+  async sendChatMessage(text: string, inputMode: ChatMode) {
+    const userId = this.data.userId || getOrCreateClientId();
+    this.addMessage('user', text);
+    const pendingMessageId = this.addTypingMessage();
+
+    try {
+      const response = await sendMessage(userId, text, {
+        inputType: inputMode,
+        voiceReplyEnabled: this.data.voiceReplyEnabled,
+      });
+      this.updateMessage(pendingMessageId, response.reply || '（我刚刚没组织好语言，可以再说一次吗？）');
+
+      if (this.data.voiceReplyEnabled && response.audioUrl) {
+        playVoice(response.audioUrl);
+      }
+    } catch (error) {
+      console.error('发送消息失败', error);
+      this.updateMessage(pendingMessageId, TEMPORARY_ERROR_MESSAGE);
+    }
+  },
+
   addMessage(sender: 'user' | 'echo', content: string, isTyping = false): number {
-    const id = this.data.msgIdCounter + 1; //自增ID，记录每句话的ID数量
-    const newMsg: Message = { id, sender, content, isTyping }; // 创建新消息对象，id、发送者、文本内容
-    const messages = [...this.data.messages, newMsg]; // 拼接到消息后面
-    this.setData({ //通过SetData更新
+    const id = this.data.msgIdCounter + 1;
+    const messages = [...this.data.messages, createMessage(id, sender, content, isTyping)];
+    this.setData({
       messages,
       msgIdCounter: id,
-      lastMsgId: `msg-${id}`, //（值设为 msg-${id}，配合 scroll-into-view 自动滚动到底部）
+      lastMsgId: `msg-${id}`,
     });
     return id;
   },
@@ -158,22 +192,13 @@ Page({
   },
 
   updateMessage(messageId: number, content: string) {
-    const messages = this.data.messages.map((message: Message) => {
-      if (message.id !== messageId) return message;
-      return {
-        ...message,
-        content,
-        isTyping: false,
-      };
-    });
     this.setData({
-      messages,
+      messages: replaceMessageContent(this.data.messages, messageId, content),
       lastMsgId: `msg-${messageId}`,
     });
   },
 
   onClearContext() {
-    // 临时清空前端消息列表（后端上下文还会保留）
     this.setData({ messages: [] });
     wx.showToast({ title: '上下文已清除', icon: 'none' });
   },
@@ -183,19 +208,19 @@ Page({
   },
 
   async onStartRecord() {
-    // 检查录音权限
     const auth = await this.checkRecordAuth();
     if (!auth) return;
 
-    this.setData({ shouldUploadVoice: true });
-  
-    // 开始录音配置（PCM 格式，16kHz 单声道，适合 ASR），
-    recorderManager.start({ //这个是一个触发信号，成功后会执行OnStart的箭头函数
-      duration: 60000,          // 最长 60 秒
+    this.setData({
+      shouldUploadVoice: true,
+      recordStartTime: Date.now(),
+    });
+
+    recorderManager.start({
+      duration: 60000,
       sampleRate: 16000,
       numberOfChannels: 1,
-      format: 'mp3',            // 或者 'mp3'，根据后端需求
-      // frameSize: 5              // 每录制5KB的音频数就触发一次回调，拿到小段“分片数据”，以满足后续流式的效果
+      format: 'mp3',
     });
   },
 
@@ -206,134 +231,52 @@ Page({
 
   onCancelRecord() {
     if (!this.data.isRecording) return;
-    this.setData({ shouldUploadVoice: false }); 
-    recorderManager.stop();      // 取消上传
+    this.setData({ shouldUploadVoice: false });
+    recorderManager.stop();
   },
 
   checkRecordAuth(): Promise<boolean> {
     return new Promise((resolve) => {
-      wx.getSetting({ // 获取当前授权状态
+      wx.getSetting({
         success: (res) => {
-          if (res.authSetting['scope.record']) { // 判断录音权限
+          if (res.authSetting['scope.record']) {
             resolve(true);
-          } else {
-            wx.authorize({ //请求录音权限
-              scope: 'scope.record',
-              success: () => resolve(true),
-              fail: () => {
-                wx.showModal({
-                  title: '提示',
-                  content: '需要录音权限，请在设置中开启',
-                  success: () => wx.openSetting()
-                });
-                resolve(false);
-              }
-            });
+            return;
           }
-        }
+
+          wx.authorize({
+            scope: 'scope.record',
+            success: () => resolve(true),
+            fail: () => {
+              wx.showModal({
+                title: '提示',
+                content: '需要录音权限，请在设置中开启',
+                success: () => wx.openSetting(),
+              });
+              resolve(false);
+            },
+          });
+        },
       });
     });
   },
 
-  uploadVoice(filePath: string) {
+  async handleVoiceFile(filePath: string) {
     wx.showLoading({ title: '识别中...' });
+    try {
+      const userText = (await recognizeVoice(filePath)).trim();
+      wx.hideLoading();
 
-    // 第 1 步：仅上传给 /voice/asr 进行语音识别
-    wx.uploadFile({
-      url: `${BASE_URL}/voice/asr`,
-      filePath: filePath,
-      name: 'audio',
-      header: {
-        'Content-Type': 'multipart/form-data',
-      },
-      success: (res) => {
-        wx.hideLoading();
-        if (res.statusCode === 200) {
-          const asrData = JSON.parse(res.data);
-          const userText = asrData.user_text;
-
-          if (!userText) {
-            wx.showToast({ title: '未听清，请重试', icon: 'none' });
-            return;
-          }
-
-          // ★ 立刻将用户的语音内容展示在屏幕上！
-          this.addMessage('user', userText);
-
-          const pendingMessageId = this.addTypingMessage();
-
-          // 第 2 步：拿着识别出的话去请求 /voice/reply 获取回复和音频
-          wx.request({
-            url: `${BASE_URL}/voice/reply`,
-            method: 'POST',
-            header: { 'Content-Type': 'application/json' },
-            data: {
-              user_id: this.data.userId || getOrCreateClientId(),
-              message: userText
-            },
-            success: (replyRes: any) => {
-              if (replyRes.statusCode === 200) {
-                const replyData = replyRes.data;
-                
-                // ★ AI 文字回复上屏！
-                if (replyData.reply) {
-                  this.updateMessage(pendingMessageId, replyData.reply);
-                } else {
-                  this.updateMessage(pendingMessageId, '（我刚刚没组织好语言，可以再说一次吗？）');
-                }
-
-                // ★ 播报 AI 的语音
-                if (replyData.audio_url) {
-                  this.playVoice(replyData.audio_url);
-                } else {
-                  wx.showToast({ title: '语音暂不可用', icon: 'none' });
-                }
-              } else {
-                console.error('获取AI回复失败', replyRes);
-                this.updateMessage(pendingMessageId, '（抱歉，我暂时有点卡，请稍后再试）');
-              }
-            },
-            fail: (err) => {
-              console.error('获取AI回复失败', err);
-              this.updateMessage(pendingMessageId, '（抱歉，我暂时有点卡，请稍后再试）');
-            }
-          });
-
-        } else {
-          wx.showToast({ title: '语音识别失败', icon: 'none' });
-        }
-      },
-      fail: (err) => {
-        wx.hideLoading();
-        console.error('上传录音失败', err);
-        wx.showToast({ title: '网络错误', icon: 'none' });
+      if (!userText) {
+        wx.showToast({ title: '未听清，请重试', icon: 'none' });
+        return;
       }
-    });
+
+      await this.sendChatMessage(userText, 'voice');
+    } catch (error) {
+      wx.hideLoading();
+      console.error('语音识别失败', error);
+      wx.showToast({ title: '语音识别失败', icon: 'none' });
+    }
   },
-
-  // 播放音频
-  playVoice(url: string) {
-    wx.downloadFile({
-      url,
-      success: (res) => {
-        if (res.statusCode !== 200) {
-          console.error('音频下载失败', res);
-          wx.showToast({ title: '音频下载失败', icon: 'none' });
-          return;
-        }
-
-        const innerAudio = wx.createInnerAudioContext();
-        innerAudio.src = res.tempFilePath;
-        innerAudio.onError((err) => {
-          console.error('播放失败', err);
-          wx.showToast({ title: '播放失败', icon: 'none' });
-        });
-        innerAudio.play();
-      },
-      fail: (err) => {
-        console.error('音频下载失败', err);
-        wx.showToast({ title: '音频下载失败', icon: 'none' });
-      }
-    });
-  }
 });
