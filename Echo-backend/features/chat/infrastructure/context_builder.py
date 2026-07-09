@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from features.admin.public import get_effective_system_prompt
 from features.memory.public import list_memory_embedding_records, retrieve_relevant_memories
 from repositories.conversation_repository import get_conversation_summary
 from repositories.memory_repository import list_user_memories
@@ -82,7 +83,8 @@ async def build_chat_context(
         after_message_id=summary_message_id,
     )
 
-    messages: List[Dict[str, str]] = [{"role": "system", "content": settings.system_prompt}]
+    system_prompt = get_effective_system_prompt().content
+    messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
     if long_term_memories:
         messages.append({
             "role": "system",

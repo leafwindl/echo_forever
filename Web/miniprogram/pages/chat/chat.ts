@@ -1,4 +1,12 @@
-import { login, sendMessage, USER_ID_STORAGE_KEY } from '../../utils/api';
+import {
+  clearAdminChatContext,
+  getRuntimeSystemPrompt,
+  login,
+  sendMessage,
+  updateRuntimeSystemPrompt,
+  USER_ID_STORAGE_KEY,
+} from '../../utils/api';
+import { appConfig } from '../../utils/env';
 import { playVoice } from './chat.audio';
 import { createMessage, replaceMessageContent } from './chat.messages';
 import type { ChatMode, Message, SitCrop } from './chat.types';
@@ -24,6 +32,11 @@ interface ChatPageData {
   recordStartTime: number;
   shouldUploadVoice: boolean;
   chatExpanded: boolean;
+  adminDebugEnabled: boolean;
+  adminDebugVisible: boolean;
+  adminPromptText: string;
+  adminPromptSource: string;
+  adminPromptLoading: boolean;
   sitCrop: SitCrop;
 }
 
@@ -57,6 +70,11 @@ Page({
     recordStartTime: 0,
     shouldUploadVoice: false,
     chatExpanded: false,
+    adminDebugEnabled: appConfig.adminDebugEnabled,
+    adminDebugVisible: false,
+    adminPromptText: '',
+    adminPromptSource: '',
+    adminPromptLoading: false,
     sitCrop: {
       cropWidth: '750rpx',
       cropHeight: '500rpx',
@@ -205,6 +223,79 @@ Page({
 
   onOpenMemoryPage() {
     wx.navigateTo({ url: '/pages/memory/memory' });
+  },
+
+  async onOpenAdminDebug() {
+    if (!appConfig.adminDebugToken) {
+      wx.showToast({ title: '调试 token 未配置', icon: 'none' });
+      return;
+    }
+
+    this.setData({
+      adminDebugVisible: true,
+      adminPromptLoading: true,
+    });
+    try {
+      const result = await getRuntimeSystemPrompt();
+      this.setData({
+        adminPromptText: result.prompt,
+        adminPromptSource: result.source,
+      });
+    } catch (error) {
+      console.error('加载提示词失败', error);
+      wx.showToast({ title: '加载提示词失败', icon: 'none' });
+    } finally {
+      this.setData({ adminPromptLoading: false });
+    }
+  },
+
+  onCloseAdminDebug() {
+    this.setData({ adminDebugVisible: false });
+  },
+
+  onAdminPromptInput(e: WechatMiniprogram.TextareaInput) {
+    this.setData({ adminPromptText: e.detail.value });
+  },
+
+  async onSaveAdminPrompt() {
+    const prompt = this.data.adminPromptText.trim();
+    if (!prompt) {
+      wx.showToast({ title: '提示词不能为空', icon: 'none' });
+      return;
+    }
+
+    this.setData({ adminPromptLoading: true });
+    try {
+      const result = await updateRuntimeSystemPrompt(prompt);
+      this.setData({
+        adminPromptText: result.prompt,
+        adminPromptSource: result.source,
+      });
+      wx.showToast({ title: '提示词已保存', icon: 'none' });
+    } catch (error) {
+      console.error('保存提示词失败', error);
+      wx.showToast({ title: '保存提示词失败', icon: 'none' });
+    } finally {
+      this.setData({ adminPromptLoading: false });
+    }
+  },
+
+  async onClearAdminChatContext() {
+    const userId = this.data.userId || getOrCreateClientId();
+    this.setData({ adminPromptLoading: true });
+    try {
+      const result = await clearAdminChatContext(userId);
+      this.setData({ messages: [] });
+      wx.showToast({
+        title: `已清空${result.deletedMessages}条消息`,
+        icon: 'none',
+      });
+    } catch (error) {
+      console.error('清空聊天上下文失败', error);
+      wx.showToast({ title: '清空失败', icon: 'none' });
+    } finally {
+      this.setData({ adminPromptLoading: false });
+    }
   },
 
   async onStartRecord() {

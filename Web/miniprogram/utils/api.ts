@@ -31,6 +31,16 @@ export interface ChatSendResponse {
   audioUrl?: string | null;
 }
 
+export interface RuntimePromptResponse {
+  prompt: string;
+  source: string;
+}
+
+export interface ClearChatContextResponse {
+  deletedMessages: number;
+  resetConversations: number;
+}
+
 interface MemoryListResponse {
   memories: MemoryItem[];
   count: number;
@@ -156,6 +166,81 @@ export function clearMemories(userId: string): Promise<{ cleared_count: number }
         const data = normalizeResponseData(res.data);
         if (res.statusCode === 200 && data && typeof data.cleared_count === 'number') {
           resolve(data);
+        } else {
+          reject(data);
+        }
+      },
+      fail: (err) => reject(err),
+    });
+  });
+}
+
+function getAdminDebugHeader(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    'X-Admin-Debug-Token': appConfig.adminDebugToken,
+  };
+}
+
+export function getRuntimeSystemPrompt(): Promise<RuntimePromptResponse> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}/admin/debug/prompt`,
+      method: 'GET',
+      header: getAdminDebugHeader(),
+      success: (res: any) => {
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200 && data && typeof data.prompt === 'string') {
+          resolve({
+            prompt: data.prompt,
+            source: String(data.source || ''),
+          });
+        } else {
+          reject(data);
+        }
+      },
+      fail: (err) => reject(err),
+    });
+  });
+}
+
+export function updateRuntimeSystemPrompt(prompt: string): Promise<RuntimePromptResponse> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}/admin/debug/prompt`,
+      method: 'PUT',
+      header: getAdminDebugHeader(),
+      data: { prompt },
+      success: (res: any) => {
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200 && data && typeof data.prompt === 'string') {
+          resolve({
+            prompt: data.prompt,
+            source: String(data.source || ''),
+          });
+        } else {
+          reject(data);
+        }
+      },
+      fail: (err) => reject(err),
+    });
+  });
+}
+
+export function clearAdminChatContext(userId: string): Promise<ClearChatContextResponse> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}/admin/debug/chat/clear`,
+      method: 'POST',
+      header: getAdminDebugHeader(),
+      data: { user_id: userId },
+      success: (res: any) => {
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200 && data) {
+          resolve({
+            deletedMessages: Number(data.deleted_messages || 0),
+            resetConversations: Number(data.reset_conversations || 0),
+          });
         } else {
           reject(data);
         }

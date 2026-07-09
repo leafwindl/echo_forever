@@ -122,6 +122,16 @@ def init_db():
             """
         )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS runtime_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_openid ON users(openid)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)")
@@ -153,3 +163,4 @@ def init_db():
             ON background_jobs(status, job_type, id)
             """
         )
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_runtime_settings_key ON runtime_settings(key)")

@@ -60,6 +60,30 @@
     <view class="chat-actions">
       <view class="action-btn" bindtap="onClearContext">清除上下文</view>
       <view class="action-btn primary" bindtap="onOpenMemoryPage">记忆管理</view>
+      <view class="action-btn debug" wx:if="{{adminDebugEnabled}}" bindtap="onOpenAdminDebug">提示词调试</view>
+    </view>
+  </view>
+
+  <view class="admin-mask" wx:if="{{adminDebugVisible}}">
+    <view class="admin-panel">
+      <view class="admin-panel-header">
+        <text class="admin-title">提示词调试</text>
+        <text class="admin-close" bindtap="onCloseAdminDebug">关闭</text>
+      </view>
+
+      <view class="admin-source">当前来源：{{adminPromptSource || '加载中'}}</view>
+      <textarea
+        class="admin-textarea"
+        value="{{adminPromptText}}"
+        placeholder="输入新的系统提示词"
+        bindinput="onAdminPromptInput"
+        maxlength="-1"
+      />
+
+      <view class="admin-actions">
+        <button class="admin-secondary-btn" loading="{{adminPromptLoading}}" bindtap="onClearAdminChatContext">清空聊天</button>
+        <button class="admin-primary-btn" loading="{{adminPromptLoading}}" bindtap="onSaveAdminPrompt">保存提示词</button>
+      </view>
     </view>
   </view>
 </view>

@@ -77,6 +77,11 @@ class Settings(BaseSettings):
         default=500,
         validation_alias="VOICE_CLEANUP_BATCH_SIZE",
     )
+    enable_admin_debug_api: bool = Field(
+        default=False,
+        validation_alias="ENABLE_ADMIN_DEBUG_API",
+    )
+    admin_debug_token: str = Field(default="", validation_alias="ADMIN_DEBUG_TOKEN")
 
     system_prompt: str = (
         "你叫Echo，一位温柔、细腻的AI伙伴。\n"
