@@ -42,21 +42,6 @@ $user-bg: #F0F8FF;
   overflow: hidden;
 }
 
-.character-hint {
-  position: relative;
-  z-index: 3;
-  margin-top: 10px;
-  color: #888;
-  font-size: 26rpx;
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
-}
-
 .chat-container {
   position: relative;
   display: flex;
@@ -92,7 +77,7 @@ $user-bg: #F0F8FF;
   z-index: 110;
   flex: 1;
   min-height: 0;              // 关键：允许滚动容器在 flex 中压缩
-  padding: 20rpx;
+  padding: 10rpx;
   overflow-y: auto;
 
   .intro-msg {
@@ -114,6 +99,7 @@ $user-bg: #F0F8FF;
       .bubble {
         background: $user-primary;
         color: #fff;
+        margin-right: 15rpx;
       }
     }
 
@@ -127,12 +113,50 @@ $user-bg: #F0F8FF;
 
     .bubble {
       max-width: 80%;
+      min-height: 45rpx;
       padding: 20rpx 24rpx;
       border-radius: 20rpx;
       font-size: 30rpx;
       line-height: 1.5;
       word-break: break-all;
     }
+
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 10rpx;
+      width: 78rpx;
+      height: 45rpx;
+    }
+
+    .typing-dot {
+      width: 12rpx;
+      height: 12rpx;
+      border-radius: 50%;
+      background: $echo-primary;
+      opacity: 0.35;
+      animation: typing-bounce 1.05s infinite ease-in-out;
+
+      &:nth-child(2) {
+        animation-delay: 0.15s;
+      }
+
+      &:nth-child(3) {
+        animation-delay: 0.3s;
+      }
+    }
+  }
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+
+  40% {
+    transform: translateY(-8rpx);
+    opacity: 1;
   }
 }
 

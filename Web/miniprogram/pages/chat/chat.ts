@@ -6,6 +6,7 @@ interface Message {
   id: number;
   sender: 'user' | 'echo';
   content: string;
+  isTyping?: boolean;
 }
 
 let recorderManager: WechatMiniprogram.RecorderManager; //指定变量的类型
@@ -28,7 +29,6 @@ Page({
   data: {
     messages: [] as Message[], // 存储显示的消息列表
     inputText: '',  //当前输入框的文本
-    isThinking: false, // 是否显示AI正在输入的状态
     lastMsgId: '', // 滚动定位最新的消息的DOM ID
     msgIdCounter: 0, // 自增计数器，为消息生成唯一ID
     userId: '', //登陆成功后后端返回的用户ID
@@ -129,28 +129,46 @@ Page({
     this.setData({ inputText: '' });
 
     // 调用真实后端
-    this.setData({ isThinking: true }); //触发界面显示“对方正在输入”
+    const pendingMessageId = this.addTypingMessage();
     sendMessage(this.data.userId, text) //异步请求后端AI回复
       .then((reply: string) => {
-        this.addMessage('echo', reply); //返回回复内容文本
-        this.setData({ isThinking: false }); //关闭思考
+        this.updateMessage(pendingMessageId, reply); //返回回复内容文本
       })
       .catch((err) => {
         console.error('发送消息失败', err);
-        this.addMessage('echo', '（抱歉，我暂时有点卡，请稍后再试）');
-        this.setData({ isThinking: false });
+        this.updateMessage(pendingMessageId, '（抱歉，我暂时有点卡，请稍后再试）');
       });
   },
 
   // 添加一条消息到列表
-  addMessage(sender: 'user' | 'echo', content: string) {
+  addMessage(sender: 'user' | 'echo', content: string, isTyping = false): number {
     const id = this.data.msgIdCounter + 1; //自增ID，记录每句话的ID数量
-    const newMsg: Message = { id, sender, content }; // 创建新消息对象，id、发送者、文本内容
+    const newMsg: Message = { id, sender, content, isTyping }; // 创建新消息对象，id、发送者、文本内容
     const messages = [...this.data.messages, newMsg]; // 拼接到消息后面
     this.setData({ //通过SetData更新
       messages,
       msgIdCounter: id,
       lastMsgId: `msg-${id}`, //（值设为 msg-${id}，配合 scroll-into-view 自动滚动到底部）
+    });
+    return id;
+  },
+
+  addTypingMessage(): number {
+    return this.addMessage('echo', '', true);
+  },
+
+  updateMessage(messageId: number, content: string) {
+    const messages = this.data.messages.map((message: Message) => {
+      if (message.id !== messageId) return message;
+      return {
+        ...message,
+        content,
+        isTyping: false,
+      };
+    });
+    this.setData({
+      messages,
+      lastMsgId: `msg-${messageId}`,
     });
   },
 
@@ -242,8 +260,7 @@ Page({
           // ★ 立刻将用户的语音内容展示在屏幕上！
           this.addMessage('user', userText);
 
-          // 显示 AI 正在思考的状态
-          this.setData({ isThinking: true });
+          const pendingMessageId = this.addTypingMessage();
 
           // 第 2 步：拿着识别出的话去请求 /voice/reply 获取回复和音频
           wx.request({
@@ -255,13 +272,14 @@ Page({
               message: userText
             },
             success: (replyRes: any) => {
-              this.setData({ isThinking: false });
               if (replyRes.statusCode === 200) {
                 const replyData = replyRes.data;
                 
                 // ★ AI 文字回复上屏！
                 if (replyData.reply) {
-                  this.addMessage('echo', replyData.reply);
+                  this.updateMessage(pendingMessageId, replyData.reply);
+                } else {
+                  this.updateMessage(pendingMessageId, '（我刚刚没组织好语言，可以再说一次吗？）');
                 }
 
                 // ★ 播报 AI 的语音
@@ -272,13 +290,12 @@ Page({
                 }
               } else {
                 console.error('获取AI回复失败', replyRes);
-                this.addMessage('echo', '（抱歉，我暂时有点卡，请稍后再试）');
+                this.updateMessage(pendingMessageId, '（抱歉，我暂时有点卡，请稍后再试）');
               }
             },
             fail: (err) => {
-              this.setData({ isThinking: false });
               console.error('获取AI回复失败', err);
-              this.addMessage('echo', '（抱歉，我暂时有点卡，请稍后再试）');
+              this.updateMessage(pendingMessageId, '（抱歉，我暂时有点卡，请稍后再试）');
             }
           });
 

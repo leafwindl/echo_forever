@@ -13,11 +13,12 @@
     </view>
   </block>
   <block wx:else>
-    <view class="name-tag">Echo</view>
-    <canvas
-      id="idleSpineCanvas"
-      type="2d"
-      class="spine-canvas idle-spine-canvas"
-    />
+    <view class="idle-frame">
+      <image
+        class="character-image idle-image"
+        src="{{activeAnimationSrc}}"
+        mode="widthFix"
+      />
+    </view>
   </block>
 </view>
