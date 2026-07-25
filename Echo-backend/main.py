@@ -14,6 +14,7 @@ from features.auth.interface.router import router as auth_router
 from features.chat.interface.router import router as chat_router
 from features.memory.interface.router import router as memory_router
 from features.memory.public import resume_pending_memory_extraction_jobs
+from features.persona.interface.router import router as persona_router
 from features.system.interface.router import router as health_router
 from features.voice.interface.router import router as voice_router
 from features.voice.public import cleanup_expired_voice_audio
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI):
     logger.info("Echo Backend 启动中...")
     init_db()
     logger.info("Database provider: %s", settings.db_provider)
+    logger.info("Prompt version: %s", settings.prompt_version)
     resumed_count = resume_pending_memory_extraction_jobs()
     if resumed_count:
         logger.info("Resumed %s pending memory extraction jobs", resumed_count)
@@ -119,6 +121,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(chat_router)
     app.include_router(memory_router)
+    app.include_router(persona_router)
     app.include_router(voice_router)
     if settings.enable_admin_debug_api:
         app.include_router(admin_debug_router)

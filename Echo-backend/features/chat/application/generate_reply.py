@@ -1,6 +1,10 @@
 import logging
-from typing import Optional
 
+from features.chat.domain.dialogue_style import (
+    NATURAL_DIALOGUE_RETRY_INSTRUCTION,
+    find_dialogue_style_violations,
+    sanitize_dialogue_reply,
+)
 from features.chat.domain.entities import ChatTurnResult, ChatValidationError
 from features.chat.domain.repositories import ChatConversationRepository
 from features.chat.domain.services import (
@@ -34,7 +38,7 @@ class GenerateChatReply:
         self,
         user_id: str,
         message: str,
-        conversation_id: Optional[str] = None,
+        conversation_id: str | None = None,
         user_message_type: str = "text",
         assistant_message_type: str = "text",
     ) -> ChatTurnResult:
@@ -58,6 +62,29 @@ class GenerateChatReply:
             resolved_conversation_id,
         )
         reply = await self.llm.generate_reply(context.messages)
+        style_violations = find_dialogue_style_violations(reply)
+        if style_violations:
+            logger.warning(
+                "Dialogue style retry requested violation_types=%s",
+                ",".join(style_violations),
+            )
+            try:
+                reply = await self.llm.generate_reply(
+                    [
+                        *context.messages,
+                        {"role": "system", "content": NATURAL_DIALOGUE_RETRY_INSTRUCTION},
+                    ]
+                )
+            except Exception:
+                logger.warning("Dialogue style retry failed", exc_info=True)
+
+            remaining_violations = find_dialogue_style_violations(reply)
+            if remaining_violations:
+                logger.warning(
+                    "Dialogue style fallback applied violation_types=%s",
+                    ",".join(remaining_violations),
+                )
+                reply = sanitize_dialogue_reply(reply)
         logger.info("LLM reply generated for user_id=%s", clean_user_id)
 
         user_message_id, assistant_message_id = self.conversation_repository.add_chat_turn(

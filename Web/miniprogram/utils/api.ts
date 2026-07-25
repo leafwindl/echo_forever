@@ -6,6 +6,36 @@ export const ACCESS_TOKEN_STORAGE_KEY = 'echo_access_token';
 
 export type MemoryStatus = 'active' | 'inactive' | 'deleted' | 'all';
 export type ChatInputType = 'text' | 'voice';
+export type PersonaReplyStyle = 'natural' | 'concise' | 'lively';
+export type PersonaReplyLength = 'short' | 'balanced' | 'detailed';
+export type PersonaSupportMode = 'comfort' | 'advice' | 'balanced';
+export type PersonaProactivity = 'quiet' | 'balanced' | 'active';
+
+export interface UserPersona {
+  preferred_name?: string | null;
+  reply_style: PersonaReplyStyle;
+  reply_length: PersonaReplyLength;
+  support_mode: PersonaSupportMode;
+  proactivity: PersonaProactivity;
+  avoid_topics: string[];
+  about_user?: string | null;
+  enabled: boolean;
+  schema_version: number;
+  is_customized: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface PersonaUpdateInput {
+  preferred_name?: string | null;
+  reply_style: PersonaReplyStyle;
+  reply_length: PersonaReplyLength;
+  support_mode: PersonaSupportMode;
+  proactivity: PersonaProactivity;
+  avoid_topics: string[];
+  about_user?: string | null;
+  enabled: boolean;
+}
 
 export interface MemoryItem {
   memory_id: string;
@@ -233,6 +263,44 @@ export function clearMemories(userId: string): Promise<{ cleared_count: number }
       fail: (err) => reject(err),
     });
   });
+}
+
+function requestPersona(
+  method: 'GET' | 'PUT' | 'POST',
+  path: string,
+  data: PersonaUpdateInput | Record<string, never>,
+): Promise<UserPersona> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}${path}`,
+      method,
+      header: getJsonHeader(),
+      data,
+      success: (res: any) => {
+        const responseData = normalizeResponseData(res.data);
+        if (res.statusCode === 200 && responseData && typeof responseData.enabled === 'boolean') {
+          resolve(responseData as UserPersona);
+        } else if (res.statusCode === 401) {
+          reject({ ...responseData, isUnauthorized: true });
+        } else {
+          reject(responseData);
+        }
+      },
+      fail: (err) => reject(err),
+    });
+  });
+}
+
+export function getPersona(): Promise<UserPersona> {
+  return requestPersona('GET', '/persona/me', {});
+}
+
+export function updatePersona(input: PersonaUpdateInput): Promise<UserPersona> {
+  return requestPersona('PUT', '/persona/me', input);
+}
+
+export function resetPersona(): Promise<UserPersona> {
+  return requestPersona('POST', '/persona/me/reset', {});
 }
 
 function getAdminDebugHeader(): Record<string, string> {

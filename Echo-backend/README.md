@@ -34,6 +34,10 @@ http://localhost:8000
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 LLM_MODEL=gpt-4o
+PROMPT_VERSION=echo-v0.3.0
+PERSONA_PROMPT_MAX_TOKENS=400
+MEMORY_PROMPT_MAX_TOKENS=800
+SUMMARY_PROMPT_MAX_TOKENS=800
 EMBEDDING_API_KEY=
 EMBEDDING_BASE_URL=https://api.openai.com/v1
 EMBEDDING_MODEL=text-embedding-3-small
@@ -120,6 +124,7 @@ Echo-backend/
     auth/
     chat/
     memory/
+    persona/
     voice/
     system/
 ```
@@ -141,6 +146,7 @@ feature/
 - `features/auth`：登录与用户身份创建。
 - `features/chat`：文本对话、上下文构建、会话摘要、记忆调度。
 - `features/memory`：长期记忆抽取、管理、向量索引。
+- `features/persona`：用户显式交流偏好、独立持久化与安全 API。
 - `features/voice`：ASR、语音回复、TTS、音频文件存储。
 - `features/system`：健康检查等系统级接口。
 
@@ -149,6 +155,7 @@ feature/
 ```bash
 python -B scripts/check_architecture.py
 python -B -m unittest discover -s Echo-backend/tests
+npx tsc --noEmit -p Web/tsconfig.json
 ```
 
 架构检查会阻止旧兼容入口回流，例如：

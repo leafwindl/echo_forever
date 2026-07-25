@@ -68,6 +68,22 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             expires_at TIMESTAMPTZ
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS user_personas (
+            user_id TEXT PRIMARY KEY,
+            preferred_name VARCHAR(40),
+            reply_style VARCHAR(32) NOT NULL DEFAULT 'natural',
+            reply_length VARCHAR(32) NOT NULL DEFAULT 'balanced',
+            support_mode VARCHAR(32) NOT NULL DEFAULT 'balanced',
+            proactivity VARCHAR(32) NOT NULL DEFAULT 'balanced',
+            avoid_topics JSONB NOT NULL DEFAULT '[]'::jsonb,
+            about_user VARCHAR(300),
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            schema_version INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
         f"""
         CREATE TABLE IF NOT EXISTS memory_embeddings (
             id BIGSERIAL PRIMARY KEY,
@@ -145,6 +161,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         ON user_memories(user_id, status, memory_type)
         """,
         "CREATE INDEX IF NOT EXISTS idx_user_memories_source_message_id ON user_memories(source_message_id)",
+        "CREATE INDEX IF NOT EXISTS idx_user_personas_updated_at ON user_personas(updated_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_memory_embeddings_memory_id ON memory_embeddings(memory_id)",
         "CREATE INDEX IF NOT EXISTS idx_memory_embeddings_user_id ON memory_embeddings(user_id)",
         """

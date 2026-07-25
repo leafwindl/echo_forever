@@ -59,6 +59,16 @@ class FakeLLM:
         return "hello from echo"
 
 
+class SequenceLLM:
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    async def generate_reply(self, messages):
+        self.calls.append(messages)
+        return self.replies.pop(0)
+
+
 class FakeSummaryUpdater:
     async def maybe_update_summary(self, user_id, conversation_id):
         return True
@@ -145,6 +155,40 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ChatValidationError):
             await use_case.execute(user_id="user_a", message="   ")
+
+    async def test_generate_chat_reply_retries_stage_direction_once(self):
+        repository = FakeConversationRepository()
+        llm = SequenceLLM(["（轻轻抱住你）别难过。", "听起来你真的很难受，我在这里听你说。"])
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            llm=llm,
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+        )
+
+        result = await use_case.execute(user_id="user_a", message="我今天很难过")
+
+        self.assertEqual("听起来你真的很难受，我在这里听你说。", result.reply)
+        self.assertEqual(2, len(llm.calls))
+        self.assertIn("只输出直接对用户说的话", llm.calls[1][-1]["content"])
+        self.assertEqual(result.reply, repository.persisted_turns[0]["assistant_reply"])
+
+    async def test_generate_chat_reply_sanitizes_second_style_violation(self):
+        repository = FakeConversationRepository()
+        llm = SequenceLLM(["*拍拍你* 会好起来的。", "Echo：［轻轻点头］我会认真听。"])
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            llm=llm,
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+        )
+
+        result = await use_case.execute(user_id="user_a", message="陪我说说话")
+
+        self.assertEqual("我会认真听。", result.reply)
+        self.assertEqual(2, len(llm.calls))
 
     async def test_send_chat_message_can_return_voice_reply_url(self):
         voice_synthesizer = FakeVoiceReplySynthesizer()

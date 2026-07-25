@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Annotated
 
 from fastapi import Header, HTTPException, Request, status
 
@@ -25,13 +25,16 @@ def _token_service() -> TokenService:
     )
 
 
-def resolve_current_user_from_token(authorization: Optional[str]) -> Optional[CurrentUser]:
+def resolve_current_user_from_token(authorization: str | None) -> CurrentUser | None:
     clean_authorization = _clean_user_id(authorization)
     if not clean_authorization:
         return None
     scheme, _, token = clean_authorization.partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authorization header")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization header",
+        )
 
     try:
         user_id = _token_service().verify_token(token)
@@ -40,11 +43,21 @@ def resolve_current_user_from_token(authorization: Optional[str]) -> Optional[Cu
     return CurrentUser(user_id=user_id)
 
 
+async def get_bearer_current_user(
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+) -> CurrentUser:
+    """Require Bearer authentication even when legacy development auth is enabled."""
+    current_user = resolve_current_user_from_token(authorization)
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing access token")
+    return current_user
+
+
 def resolve_current_user(
     *,
-    header_user_id: Optional[str] = None,
-    query_user_id: Optional[str] = None,
-    body_user_id: Optional[str] = None,
+    header_user_id: str | None = None,
+    query_user_id: str | None = None,
+    body_user_id: str | None = None,
 ) -> CurrentUser:
     """Resolve the request user from legacy inputs while compatibility is enabled."""
     if not settings.enable_legacy_user_id_auth:
@@ -60,15 +73,18 @@ def resolve_current_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing user_id")
 
     if len(set(candidates)) > 1:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Conflicting user identity")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conflicting user identity",
+        )
 
     return CurrentUser(user_id=candidates[0])
 
 
 async def get_current_user(
     request: Request,
-    authorization: Optional[str] = Header(default=None, alias="Authorization"),
-    x_echo_user_id: Optional[str] = Header(default=None, alias="X-Echo-User-Id"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+    x_echo_user_id: str | None = Header(default=None, alias="X-Echo-User-Id"),
 ) -> CurrentUser:
     token_user = resolve_current_user_from_token(authorization)
     if token_user:

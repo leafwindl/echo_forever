@@ -1,7 +1,8 @@
 { 
   "pages": [  
     "pages/chat/chat",
-    "pages/memory/memory"
+    "pages/memory/memory",
+    "pages/persona/persona"
   ],
   "window": {
     "navigationBarTitleText": "Echo AI 伴侣",

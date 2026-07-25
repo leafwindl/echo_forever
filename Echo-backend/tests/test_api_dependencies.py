@@ -7,7 +7,11 @@ from fastapi import HTTPException
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from shared.config import settings
-from shared.interface.dependencies import resolve_current_user, resolve_current_user_from_token
+from shared.interface.dependencies import (
+    get_bearer_current_user,
+    resolve_current_user,
+    resolve_current_user_from_token,
+)
 from shared.security import TokenService
 
 
@@ -65,6 +69,19 @@ class ResolveCurrentUserTests(unittest.TestCase):
 
         with self.assertRaises(HTTPException) as error:
             resolve_current_user(body_user_id="user_a")
+
+        self.assertEqual(error.exception.status_code, 401)
+
+
+class BearerOnlyCurrentUserTests(unittest.IsolatedAsyncioTestCase):
+    async def test_rejects_missing_token_even_when_legacy_auth_is_enabled(self):
+        original_value = settings.enable_legacy_user_id_auth
+        settings.enable_legacy_user_id_auth = True
+        try:
+            with self.assertRaises(HTTPException) as error:
+                await get_bearer_current_user(None)
+        finally:
+            settings.enable_legacy_user_id_auth = original_value
 
         self.assertEqual(error.exception.status_code, 401)
 

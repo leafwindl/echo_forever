@@ -1,0 +1,238 @@
+$echo-primary: #FF9A9E;
+$danger: #E04F5F;
+$text-main: #2F3033;
+$text-soft: #7A7F87;
+$line: #ECEEF2;
+$bg: #F7F8FA;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  color: $text-main;
+  background: $bg;
+}
+
+.status-card {
+  margin: 80rpx 28rpx;
+  padding: 36rpx;
+  color: $text-soft;
+  text-align: center;
+  background: #fff;
+  border-radius: 18rpx;
+}
+
+.status-card.error {
+  color: $danger;
+}
+
+.retry-btn {
+  display: block;
+  margin: 24rpx auto 0;
+  color: #fff;
+  background: $echo-primary;
+}
+
+.form {
+  flex: 1;
+  min-height: 0;
+  padding: 24rpx 24rpx 0;
+  box-sizing: border-box;
+}
+
+.intro-card,
+.section {
+  margin-bottom: 20rpx;
+  padding: 26rpx;
+  background: #fff;
+  border: 1rpx solid $line;
+  border-radius: 18rpx;
+  box-sizing: border-box;
+}
+
+.intro-card {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.intro-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.intro-title {
+  font-size: 31rpx;
+  font-weight: 600;
+}
+
+.intro-text,
+.hint,
+.privacy-note {
+  color: $text-soft;
+  font-size: 24rpx;
+  line-height: 36rpx;
+}
+
+.section-title {
+  display: block;
+  margin-bottom: 18rpx;
+  font-size: 29rpx;
+  font-weight: 600;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.section-count {
+  color: #A0A5AD;
+  font-size: 23rpx;
+}
+
+.text-input,
+.topic-input,
+.about-input {
+  width: 100%;
+  padding: 20rpx;
+  color: $text-main;
+  background: #F5F6F8;
+  border-radius: 12rpx;
+  box-sizing: border-box;
+  font-size: 27rpx;
+}
+
+.text-input,
+.topic-input {
+  height: 76rpx;
+}
+
+.about-input {
+  height: 220rpx;
+  line-height: 40rpx;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  min-height: 72rpx;
+  margin-top: 12rpx;
+  padding: 14rpx 18rpx;
+  background: #F7F8FA;
+  border: 2rpx solid transparent;
+  border-radius: 12rpx;
+  box-sizing: border-box;
+}
+
+.choice.selected {
+  background: #FFF1F2;
+  border-color: $echo-primary;
+}
+
+.choice-label {
+  flex: 0 0 104rpx;
+  color: $text-main;
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
+.choice-description {
+  flex: 1;
+  color: $text-soft;
+  font-size: 24rpx;
+  line-height: 34rpx;
+}
+
+.topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.topic {
+  padding: 10rpx 18rpx;
+  color: $text-soft;
+  background: #F2F3F5;
+  border: 1rpx solid transparent;
+  border-radius: 26rpx;
+  font-size: 24rpx;
+}
+
+.topic.selected {
+  color: #C64B58;
+  background: #FFF0F1;
+  border-color: #FFC9CE;
+}
+
+.topic-input-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  margin: 18rpx 0 12rpx;
+}
+
+.topic-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-topic-btn {
+  flex: 0 0 104rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  margin: 0;
+  padding: 0;
+  color: #fff;
+  background: $echo-primary;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+}
+
+.privacy-note {
+  padding: 4rpx 18rpx 24rpx;
+  text-align: center;
+}
+
+.bottom-space {
+  height: 150rpx;
+}
+
+.bottom-actions {
+  position: fixed;
+  z-index: 20;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  gap: 18rpx;
+  padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1rpx solid $line;
+}
+
+.reset-btn,
+.save-btn {
+  height: 78rpx;
+  line-height: 78rpx;
+  margin: 0;
+  border-radius: 39rpx;
+  font-size: 27rpx;
+}
+
+.reset-btn {
+  flex: 1;
+  color: $danger;
+  background: #FFF1F2;
+}
+
+.save-btn {
+  flex: 2;
+  color: #fff;
+  background: $echo-primary;
+}

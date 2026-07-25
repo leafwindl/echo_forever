@@ -24,6 +24,14 @@ class PostgresSchemaTests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS voice_files", schema_text)
         self.assertIn("storage_provider TEXT NOT NULL", schema_text)
 
+    def test_schema_contains_user_persona_settings(self):
+        schema_text = build_postgres_schema_text(vector_dimension=1024)
+
+        self.assertIn("CREATE TABLE IF NOT EXISTS user_personas", schema_text)
+        self.assertIn("user_id TEXT PRIMARY KEY", schema_text)
+        self.assertIn("avoid_topics JSONB NOT NULL", schema_text)
+        self.assertIn("schema_version INTEGER NOT NULL DEFAULT 1", schema_text)
+
 
 if __name__ == "__main__":
     unittest.main()

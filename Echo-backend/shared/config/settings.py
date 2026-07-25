@@ -20,6 +20,25 @@ class Settings(BaseSettings):
     temperature: float = Field(default=0.8, validation_alias="TEMPERATURE")
     max_tokens: int = Field(default=500, validation_alias="MAX_TOKENS")
     timeout: int = Field(default=30, validation_alias="TIMEOUT")
+    prompt_version: str = Field(default="echo-v0.3.0", validation_alias="PROMPT_VERSION")
+    persona_prompt_max_tokens: int = Field(
+        default=400,
+        validation_alias="PERSONA_PROMPT_MAX_TOKENS",
+        ge=100,
+        le=2000,
+    )
+    memory_prompt_max_tokens: int = Field(
+        default=800,
+        validation_alias="MEMORY_PROMPT_MAX_TOKENS",
+        ge=100,
+        le=4000,
+    )
+    summary_prompt_max_tokens: int = Field(
+        default=800,
+        validation_alias="SUMMARY_PROMPT_MAX_TOKENS",
+        ge=100,
+        le=4000,
+    )
     app_version: str = Field(default="dev", validation_alias="APP_VERSION")
     build_revision: str = Field(default="unknown", validation_alias="BUILD_REVISION")
     enable_api_docs: bool = Field(default=False, validation_alias="ENABLE_API_DOCS")

@@ -304,6 +304,14 @@ Page({
     wx.navigateTo({ url: '/pages/memory/memory' });
   },
 
+  onOpenPersonaPage() {
+    if (!this.data.userId) {
+      wx.showToast({ title: '请先完成登录', icon: 'none' });
+      return;
+    }
+    wx.navigateTo({ url: '/pages/persona/persona' });
+  },
+
   async onOpenAdminDebug() {
     if (!appConfig.adminDebugToken) {
       wx.showToast({ title: '调试 token 未配置', icon: 'none' });

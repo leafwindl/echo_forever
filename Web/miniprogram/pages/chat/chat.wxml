@@ -70,6 +70,7 @@
 
     <view class="chat-actions">
       <view class="action-btn" bindtap="onClearContext">清除上下文</view>
+      <view class="action-btn primary" bindtap="onOpenPersonaPage">个性化设置</view>
       <view class="action-btn primary" bindtap="onOpenMemoryPage">记忆管理</view>
       <view class="action-btn debug" wx:if="{{adminDebugEnabled}}" bindtap="onOpenAdminDebug">提示词调试</view>
     </view>
