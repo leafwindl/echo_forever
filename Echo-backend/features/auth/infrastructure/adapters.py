@@ -5,7 +5,7 @@ import httpx
 
 from features.auth.domain.entities import AuthError
 from features.auth.domain.services import UserIdentityRepository, WeChatSessionClient
-from repositories.user_repository import upsert_user
+from features.auth.infrastructure.repository_provider import get_repository_module
 from shared.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ WECHAT_CODE2SESSION_URL = "https://api.weixin.qq.com/sns/jscode2session"
 
 class UserIdentityRepositoryAdapter(UserIdentityRepository):
     def upsert_user(self, user_id: str, openid: Optional[str] = None) -> None:
-        upsert_user(user_id=user_id, openid=openid)
+        get_repository_module().upsert_user(user_id=user_id, openid=openid)
 
 
 class HttpWeChatSessionClient(WeChatSessionClient):

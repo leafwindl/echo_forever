@@ -85,7 +85,7 @@ bootstrap/
 - 禁止跨 feature import 对方内部实现。
 - 跨模块协作必须通过 Application API、Domain 接口、事件契约或 OpenAPI。
 
-当前仓库中的 `api/`、`repositories/`、`providers/` 属于过渡结构。新增业务不应继续扩大纯技术目录；旧代码逐步迁移到 feature-first。
+当前仓库中的 `api/`、`repositories/` 等旧技术型入口已收口删除；新增业务不应恢复这类跨业务全局目录。`providers/` 暂作为第三方模型与语音能力的基础设施注册入口保留。
 
 ### 1.3 Domain 模型优先
 
@@ -117,7 +117,7 @@ Domain 对象必须是 Plain Object：
 必须：
 
 - Domain 定义 `UserRepository`、`MemoryRepository`、`LLMProvider` 等 Protocol。
-- Infrastructure 实现 `UserRepositorySQLite`、`UserRepositoryMySQL` 等具体类。
+- Infrastructure 实现 `UserRepositoryPostgreSQL`、`UserRepositoryMySQL` 等具体类。
 - Application 通过构造函数接收接口实现。
 - 具体实现只在 Bootstrap/Container 中装配。
 

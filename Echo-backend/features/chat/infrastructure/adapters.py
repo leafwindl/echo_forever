@@ -13,10 +13,9 @@ from features.chat.domain.services import (
 )
 from features.chat.infrastructure.context_builder import build_chat_context
 from features.chat.infrastructure.conversation_summary import maybe_update_conversation_summary
+from features.chat.infrastructure.repository_provider import get_repository_module
 from features.memory.public import schedule_memory_extraction
 from providers.llm_provider import get_llm_provider
-from repositories.conversation_repository import ensure_conversation, get_or_create_active_conversation
-from repositories.message_repository import add_chat_turn
 from shared.config import settings
 
 
@@ -52,10 +51,10 @@ class InMemoryChatRequestGuard(ChatRequestGuard):
 
 class ChatConversationRepositoryAdapter(ChatConversationRepository):
     def ensure_conversation(self, user_id: str, conversation_id: Optional[str]) -> str:
-        return ensure_conversation(user_id, conversation_id)
+        return get_repository_module().ensure_conversation(user_id, conversation_id)
 
     def get_or_create_active_conversation(self, user_id: str) -> str:
-        return get_or_create_active_conversation(user_id)
+        return get_repository_module().get_or_create_active_conversation(user_id)
 
     def add_chat_turn(
         self,
@@ -66,7 +65,7 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
         user_message_type: str,
         assistant_message_type: str,
     ) -> tuple[int, int]:
-        return add_chat_turn(
+        return get_repository_module().add_chat_turn(
             user_id=user_id,
             conversation_id=conversation_id,
             user_message=user_message,

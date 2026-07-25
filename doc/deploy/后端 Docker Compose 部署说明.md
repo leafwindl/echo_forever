@@ -12,7 +12,7 @@
   -> https://api.xxx.cn               # 域名和 HTTPS 完成后的正式入口
   -> Nginx                            # 后续负责 HTTPS 和反向代理
   -> Docker Compose / FastAPI
-  -> SQLite + static voice files
+  -> PostgreSQL + pgvector + static voice files
 ```
 
 ## 2. 服务器目录建议
@@ -21,7 +21,7 @@
 
 ```text
 /opt/echo/app       # 项目代码
-/opt/echo/data      # SQLite 数据库
+/opt/echo/data      # 旧 SQLite 迁移输入和临时数据
 /opt/echo/logs      # 预留日志目录
 /opt/echo/static    # 预留静态文件目录
 ```
@@ -33,7 +33,7 @@
 ./Echo-backend/static  -> /app/Echo-backend/static
 ```
 
-因此迁移服务器时，至少要保留 `data/` 和 `Echo-backend/static/`。
+因此迁移服务器时，旧库迁移前要保留 `data/`，语音静态文件仍需保留 `Echo-backend/static/`。
 
 ## 3. 准备配置
 
@@ -55,7 +55,14 @@ PUBLIC_BASE_URL=http://服务器公网IP:8000
 PUBLIC_BASE_URL=https://api.xxx.cn
 ```
 
-`ECHO_DB_PATH` 已由 `docker-compose.yml` 覆盖为 `/app/data/echo_memory.db`，通常不需要在 `.env` 中重复配置。
+Docker Compose 会覆盖数据库运行配置：
+
+```dotenv
+DB_PROVIDER=postgres
+DATABASE_URL=postgresql://echo:echo_dev_password@echo-postgres:5432/echo
+```
+
+旧 SQLite 文件只在执行迁移脚本时作为输入使用。
 
 同时确认 `.env` 中已经配置：
 
@@ -139,19 +146,29 @@ docker compose restart echo-backend
 
 ## 6. 数据备份
 
-当前 MVP 使用 SQLite，核心数据在：
+当前默认使用 PostgreSQL，数据保存在 Docker volume：
 
 ```text
-data/echo_memory.db
+echo-postgres-data
 ```
 
-建议至少每天备份一次：
+旧 SQLite 数据迁移到 PostgreSQL：
 
 ```bash
-cp data/echo_memory.db data/backup/echo_memory_$(date +%Y%m%d_%H%M%S).db
+python -B scripts/migrate_sqlite_to_postgres.py \
+  --sqlite-path data/echo_memory.db \
+  --database-url postgresql://echo:echo_dev_password@127.0.0.1:5432/echo
 ```
 
-生产公开前建议补充更稳的备份策略，后续用户增长后再迁移到托管数据库。
+PostgreSQL 自动备份已由 `echo-postgres-backup` 服务实现，默认每日备份并保留 7 天：
+
+```bash
+docker compose up -d echo-postgres-backup
+docker compose logs -f echo-postgres-backup
+ls -lah data/backups/postgres
+```
+
+手工备份和恢复命令见 `doc/deploy/上线安全与运维说明.md`。生产环境还应把备份同步到 COS，避免服务器磁盘故障时在线库和本地备份同时丢失。
 
 ## 7. 域名完成后的调整
 
@@ -185,8 +202,10 @@ HTTPS 证书配置完成后，再开启 443。
 
 ## 8. 上线前仍需完成
 
-- 正式鉴权：登录后签发 token，生产环境不再信任前端传入的 `user_id`。
-- 基础风控：输入长度、语音大小、请求频率、第三方 API 成本保护。
-- 隐私合规：隐私政策、用户协议、录音用途说明、长期记忆说明。
-- 监控告警：错误日志、第三方 API 失败率、接口耗时、磁盘占用。
-- 存储升级：用户增长后将音频文件迁移到腾讯云 COS，将 SQLite 迁移到托管数据库。
+- 鉴权复核：体验版必须保持 `ENABLE_LEGACY_USER_ID_AUTH=false`。
+- 风控复核：应用配额已实现；服务器仍需应用 Nginx 请求体限制，并在第三方服务商控制台配置预算告警。
+- 隐私合规：在微信后台配置隐私保护指引、用户协议、录音用途和长期记忆说明。
+- 监控告警：当前已有最小请求日志和数据库就绪检查；仍需配置外部告警、磁盘监控和第三方 API 失败率统计。
+- 存储升级：用户增长后将音频文件迁移到腾讯云 COS，将自建 PostgreSQL 迁移到托管数据库。
+
+基础体验版发布前逐项执行 `doc/deploy/小程序基础体验版发布清单.md`。

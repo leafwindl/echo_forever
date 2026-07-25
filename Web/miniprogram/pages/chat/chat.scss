@@ -72,6 +72,30 @@ $user-bg: #F0F8FF;
   line-height: 56rpx;
 }
 
+.login-status {
+  position: relative;
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  padding: 12rpx 20rpx;
+  color: #8a5a5d;
+  background: #fff1f2;
+  font-size: 24rpx;
+}
+
+.login-retry-btn {
+  height: 52rpx;
+  line-height: 52rpx;
+  margin: 0;
+  padding: 0 22rpx;
+  color: #fff;
+  background: $echo-primary;
+  border-radius: 26rpx;
+  font-size: 22rpx;
+}
+
 .chat-list {
   position: relative;
   z-index: 110;

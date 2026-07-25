@@ -1,11 +1,11 @@
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
-    code: str
-    client_id: Optional[str] = None
+    code: str = Field(min_length=1, max_length=256)
+    client_id: Optional[str] = Field(default=None, max_length=128)
 
 
 class LoginResponse(BaseModel):

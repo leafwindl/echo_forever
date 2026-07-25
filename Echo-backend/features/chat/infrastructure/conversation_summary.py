@@ -2,13 +2,10 @@ import logging
 from typing import Dict, List
 
 from providers.llm_provider import get_llm_provider
-from repositories.conversation_repository import get_conversation_summary, update_conversation_summary
-from repositories.message_repository import get_conversation_messages
+from features.chat.infrastructure.repository_provider import get_repository_module
+from shared.config import settings
 
 logger = logging.getLogger(__name__)
-
-SUMMARY_TRIGGER_MESSAGES = 24
-SUMMARY_KEEP_RECENT_MESSAGES = 12
 
 
 def _format_messages_for_summary(messages: List[Dict[str, object]]) -> str:
@@ -41,20 +38,28 @@ def _build_summary_messages(existing_summary: str, messages_to_summarize: List[D
 
 
 async def maybe_update_conversation_summary(user_id: str, conversation_id: str) -> bool:
-    summary_state = get_conversation_summary(user_id, conversation_id)
+    repositories = get_repository_module()
+    summary_state = repositories.get_conversation_summary(user_id, conversation_id)
     existing_summary = str(summary_state["summary"])
     summary_message_id = int(summary_state["summary_message_id"])
 
-    unsummarized_messages = get_conversation_messages(
+    unsummarized_messages = repositories.get_conversation_messages(
         user_id,
         conversation_id,
         after_message_id=summary_message_id,
     )
 
-    if len(unsummarized_messages) <= SUMMARY_TRIGGER_MESSAGES:
+    trigger_messages = max(settings.conversation_summary_trigger_messages, 1)
+    keep_recent_messages = max(settings.conversation_summary_keep_recent_messages, 0)
+
+    if len(unsummarized_messages) <= trigger_messages:
         return False
 
-    messages_to_summarize = unsummarized_messages[:-SUMMARY_KEEP_RECENT_MESSAGES]
+    messages_to_summarize = (
+        unsummarized_messages[:-keep_recent_messages]
+        if keep_recent_messages
+        else unsummarized_messages
+    )
     if not messages_to_summarize:
         return False
 
@@ -67,7 +72,7 @@ async def maybe_update_conversation_summary(user_id: str, conversation_id: str) 
         logger.warning("Conversation summary returned empty content for conversation_id=%s", conversation_id)
         return False
 
-    update_conversation_summary(
+    repositories.update_conversation_summary(
         user_id=user_id,
         conversation_id=conversation_id,
         summary=updated_summary,

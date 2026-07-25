@@ -2,9 +2,12 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from features.chat.interface.schemas import ChatRequest, ChatResponse
+from features.admin.public import AdminValidationError, clear_user_chat_context
+from features.chat.interface.schemas import ChatRequest, ChatResponse, ClearChatResponse
 from features.chat.public import ChatRequestInProgressError, ChatValidationError, send_chat_message
+from shared.config import settings
 from shared.interface.dependencies import CurrentUser, get_current_user
+from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -13,6 +16,28 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 @router.post("/send", response_model=ChatResponse)
 async def chat_send(request: ChatRequest, current_user: CurrentUser = Depends(get_current_user)):
     """发送用户消息并获取 AI 回复，按需附带语音回复。"""
+    try:
+        request_limiter.consume(
+            [
+                RateLimitRule(
+                    key=f"chat:user:{current_user.user_id}",
+                    requests=settings.chat_rate_limit_requests,
+                    window_seconds=settings.chat_rate_limit_window_seconds,
+                    daily_requests=settings.chat_daily_request_limit,
+                ),
+                RateLimitRule(
+                    key="chat:global",
+                    daily_requests=settings.global_daily_chat_request_limit,
+                ),
+            ]
+        )
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="消息发送过于频繁，请稍后再试",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+
     try:
         result = await send_chat_message(
             user_id=current_user.user_id,
@@ -24,10 +49,27 @@ async def chat_send(request: ChatRequest, current_user: CurrentUser = Depends(ge
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except ChatRequestInProgressError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
     except Exception as e:
         logger.exception("Text chat failed")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="内部服务器错误") from e
 
     return ChatResponse(reply=result.reply, audio_url=result.audio_url)
+
+
+@router.post("/clear", response_model=ClearChatResponse)
+async def chat_clear(current_user: CurrentUser = Depends(get_current_user)):
+    """清除当前登录用户的聊天记录和会话摘要，不影响长期记忆。"""
+    try:
+        result = clear_user_chat_context(current_user.user_id)
+    except AdminValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Failed to clear chat context for user_id=%s", current_user.user_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="清除聊天上下文失败",
+        ) from exc
+    return ClearChatResponse(
+        deleted_messages=result.deleted_messages,
+        reset_conversations=result.reset_conversations,
+    )

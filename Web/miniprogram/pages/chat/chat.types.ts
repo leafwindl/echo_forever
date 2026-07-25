@@ -21,5 +21,7 @@ export interface SitCrop {
 
 export interface RequestInProgressError {
   isRequestInProgress?: boolean;
+  isRateLimited?: boolean;
+  isUnauthorized?: boolean;
   detail?: string;
 }

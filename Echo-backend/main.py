@@ -1,13 +1,13 @@
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
-from db.connection import get_db_path
 from db.schema import init_db
 from features.admin.interface.router import router as admin_debug_router
 from features.auth.interface.router import router as auth_router
@@ -58,7 +58,7 @@ async def run_voice_audio_cleanup_loop() -> None:
 async def lifespan(app: FastAPI):
     logger.info("Echo Backend 启动中...")
     init_db()
-    logger.info("SQLite database path: %s", get_db_path())
+    logger.info("Database provider: %s", settings.db_provider)
     resumed_count = resume_pending_memory_extraction_jobs()
     if resumed_count:
         logger.info("Resumed %s pending memory extraction jobs", resumed_count)
@@ -79,7 +79,41 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Echo AI Backend", lifespan=lifespan)
+    app = FastAPI(
+        title="Echo AI Backend",
+        lifespan=lifespan,
+        docs_url="/docs" if settings.enable_api_docs else None,
+        redoc_url="/redoc" if settings.enable_api_docs else None,
+        openapi_url="/openapi.json" if settings.enable_api_docs else None,
+    )
+
+    @app.middleware("http")
+    async def log_http_request(request: Request, call_next):
+        started_at = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = (time.perf_counter() - started_at) * 1000
+            logger.exception(
+                "HTTP request failed method=%s path=%s duration_ms=%.1f",
+                request.method,
+                request.url.path,
+                duration_ms,
+            )
+            raise
+
+        duration_ms = (time.perf_counter() - started_at) * 1000
+        log_level = logging.WARNING if response.status_code >= 500 else logging.INFO
+        logger.log(
+            log_level,
+            "HTTP request method=%s path=%s status=%s duration_ms=%.1f",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+        response.headers["X-Echo-Version"] = settings.app_version
+        return response
 
     app.include_router(health_router)
     app.include_router(auth_router)

@@ -1,5 +1,7 @@
 import {
   clearAdminChatContext,
+  clearChatContext,
+  ACCESS_TOKEN_STORAGE_KEY,
   getRuntimeSystemPrompt,
   login,
   sendMessage,
@@ -17,7 +19,6 @@ let recorderManager: WechatMiniprogram.RecorderManager;
 const CLIENT_ID_STORAGE_KEY = 'echo_client_id';
 const VOICE_REPLY_STORAGE_KEY = 'echo_voice_reply_enabled';
 const DEFAULT_ECHO_MESSAGE = '嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？';
-const FALLBACK_ECHO_MESSAGE = '嗨，我是 Echo，很高兴认识你～';
 const TEMPORARY_ERROR_MESSAGE = '（抱歉，我暂时有点卡，请稍后再试）';
 
 interface ChatPageData {
@@ -25,6 +26,8 @@ interface ChatPageData {
   inputText: string;
   inputMode: ChatMode;
   voiceReplyEnabled: boolean;
+  isLoggingIn: boolean;
+  loginErrorText: string;
   isSending: boolean;
   lastMsgId: string;
   msgIdCounter: number;
@@ -64,6 +67,8 @@ Page({
     inputText: '',
     inputMode: 'text' as ChatMode,
     voiceReplyEnabled: getInitialVoiceReplyEnabled(),
+    isLoggingIn: true,
+    loginErrorText: '',
     isSending: false,
     lastMsgId: '',
     msgIdCounter: 0,
@@ -97,26 +102,44 @@ Page({
   },
 
   loginWithWechat(clientId: string) {
+    this.setData({ isLoggingIn: true, loginErrorText: '', userId: '' });
     wx.login({
       success: async (res) => {
+        if (!res.code) {
+          this.handleLoginFailure('微信未返回登录凭证');
+          return;
+        }
         try {
           const result = await login(res.code, clientId);
-          this.setData({ userId: result.user_id });
+          this.setData({
+            userId: result.user_id,
+            isLoggingIn: false,
+            loginErrorText: '',
+          });
           wx.setStorageSync(USER_ID_STORAGE_KEY, result.user_id);
           this.addMessage('echo', DEFAULT_ECHO_MESSAGE);
         } catch (error) {
           console.error('登录失败', error);
-          this.useFallbackUser(clientId);
+          this.handleLoginFailure('登录失败，请检查网络后重试');
         }
       },
-      fail: () => this.useFallbackUser(clientId),
+      fail: () => this.handleLoginFailure('微信登录失败，请稍后重试'),
     });
   },
 
-  useFallbackUser(clientId: string) {
-    this.setData({ userId: clientId });
-    wx.setStorageSync(USER_ID_STORAGE_KEY, clientId);
-    this.addMessage('echo', FALLBACK_ECHO_MESSAGE);
+  handleLoginFailure(message: string) {
+    wx.removeStorageSync(USER_ID_STORAGE_KEY);
+    wx.removeStorageSync(ACCESS_TOKEN_STORAGE_KEY);
+    this.setData({
+      userId: '',
+      isLoggingIn: false,
+      loginErrorText: message,
+    });
+  },
+
+  onRetryLogin() {
+    if (this.data.isLoggingIn) return;
+    this.loginWithWechat(getOrCreateClientId());
   },
 
   onToggleChatExpand() {
@@ -182,7 +205,11 @@ Page({
   async sendChatMessage(text: string, inputMode: ChatMode) {
     if (this.data.isSending) return;
 
-    const userId = this.data.userId || getOrCreateClientId();
+    const userId = this.data.userId;
+    if (!userId) {
+      wx.showToast({ title: '请先完成登录', icon: 'none' });
+      return;
+    }
     this.setData({ isSending: true });
     this.addMessage('user', text);
     const pendingMessageId = this.addTypingMessage();
@@ -200,9 +227,14 @@ Page({
     } catch (error) {
       console.error('发送消息失败', error);
       const requestError = error as RequestInProgressError;
+      if (requestError.isUnauthorized) {
+        this.handleLoginFailure('登录已失效，请重新登录');
+      }
       this.updateMessage(
         pendingMessageId,
-        requestError.isRequestInProgress
+        requestError.isUnauthorized
+          ? '（登录已失效，请重新登录后再试）'
+          : requestError.isRequestInProgress || requestError.isRateLimited
           ? (requestError.detail || '上一条消息还在处理中，请稍后再试。')
           : TEMPORARY_ERROR_MESSAGE,
       );
@@ -234,11 +266,41 @@ Page({
   },
 
   onClearContext() {
-    this.setData({ messages: [] });
-    wx.showToast({ title: '上下文已清除', icon: 'none' });
+    if (!this.data.userId || this.data.isSending) return;
+
+    wx.showModal({
+      title: '清除聊天上下文',
+      content: '将删除服务器中的聊天记录和会话摘要，但不会删除长期记忆。',
+      confirmText: '清除',
+      confirmColor: '#E04F5F',
+      success: async (modalResult) => {
+        if (!modalResult.confirm) return;
+        wx.showLoading({ title: '清除中...' });
+        try {
+          const result = await clearChatContext();
+          wx.hideLoading();
+          this.setData({ messages: [] });
+          wx.showToast({
+            title: `已清除${result.deletedMessages}条消息`,
+            icon: 'none',
+          });
+        } catch (error) {
+          const requestError = error as RequestInProgressError;
+          if (requestError.isUnauthorized) {
+            this.handleLoginFailure('登录已失效，请重新登录');
+          }
+          wx.hideLoading();
+          wx.showToast({ title: '清除失败，请重试', icon: 'none' });
+        }
+      },
+    });
   },
 
   onOpenMemoryPage() {
+    if (!this.data.userId) {
+      wx.showToast({ title: '请先完成登录', icon: 'none' });
+      return;
+    }
     wx.navigateTo({ url: '/pages/memory/memory' });
   },
 
@@ -298,7 +360,8 @@ Page({
   },
 
   async onClearAdminChatContext() {
-    const userId = this.data.userId || getOrCreateClientId();
+    const userId = this.data.userId;
+    if (!userId) return;
     this.setData({ adminPromptLoading: true });
     try {
       const result = await clearAdminChatContext(userId);
@@ -317,6 +380,10 @@ Page({
 
   async onStartRecord() {
     if (this.data.isSending) return;
+    if (!this.data.userId) {
+      wx.showToast({ title: '请先完成登录', icon: 'none' });
+      return;
+    }
 
     const auth = await this.checkRecordAuth();
     if (!auth) return;
@@ -386,7 +453,16 @@ Page({
     } catch (error) {
       wx.hideLoading();
       console.error('语音识别失败', error);
-      wx.showToast({ title: '语音识别失败', icon: 'none' });
+      const requestError = error as RequestInProgressError & {
+        isUploadTooLarge?: boolean;
+      };
+      if (requestError.isUnauthorized) {
+        this.handleLoginFailure('登录已失效，请重新登录');
+      }
+      wx.showToast({
+        title: requestError.detail || '语音识别失败',
+        icon: 'none',
+      });
     }
   },
 });

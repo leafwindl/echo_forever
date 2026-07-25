@@ -8,14 +8,14 @@ interface AppEnvironmentConfig {
 
 const ENVIRONMENT_CONFIGS: Record<MiniProgramEnvironment, AppEnvironmentConfig> = {
   develop: {
-    apiBaseUrl: 'https://api.echoaiforever.cn',
-    adminDebugEnabled: true,
-    adminDebugToken: 'change-me',
+    apiBaseUrl: 'http://127.0.0.1:8000',
+    adminDebugEnabled: false,
+    adminDebugToken: '',
   },
   trial: {
     apiBaseUrl: 'https://api.echoaiforever.cn',
-    adminDebugEnabled: true,
-    adminDebugToken: 'change-me',
+    adminDebugEnabled: false,
+    adminDebugToken: '',
   },
   release: {
     apiBaseUrl: 'https://api.echoaiforever.cn',

@@ -1,0 +1,39 @@
+# Place limit_req_zone inside the nginx http context (conf.d is normally included there).
+limit_req_zone $binary_remote_addr zone=echo_api_per_ip:10m rate=30r/m;
+
+server {
+    listen 80;
+    server_name api.echoaiforever.cn;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.echoaiforever.cn;
+
+    # Replace these paths with the certificate paths on the server.
+    ssl_certificate /etc/letsencrypt/live/api.echoaiforever.cn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.echoaiforever.cn/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+
+    # Multipart encoding adds a small amount of overhead to the 10 MiB application limit.
+    client_max_body_size 11m;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    location / {
+        limit_req zone=echo_api_per_ip burst=20 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 90s;
+        proxy_send_timeout 90s;
+    }
+}

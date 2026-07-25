@@ -9,8 +9,14 @@ REMOVED_COMPAT_PATHS = (
     BACKEND_ROOT / "services",
     BACKEND_ROOT / "api",
     BACKEND_ROOT / "schemas",
+    BACKEND_ROOT / "repositories",
     BACKEND_ROOT / "config.py",
     BACKEND_ROOT / "llm_client.py",
+    BACKEND_ROOT / "db" / "sqlite_connection.py",
+    BACKEND_ROOT / "db" / "sqlite_schema.py",
+    BACKEND_ROOT / "features" / "auth" / "infrastructure" / "sqlite_repositories.py",
+    BACKEND_ROOT / "features" / "chat" / "infrastructure" / "sqlite_repositories.py",
+    BACKEND_ROOT / "features" / "memory" / "infrastructure" / "sqlite_repositories.py",
 )
 
 DOMAIN_BLOCKED_PREFIXES = (

@@ -14,6 +14,16 @@
       <text class="chat-handle-text">{{chatExpanded ? '▼ 收起聊天' : '▲ 展开聊天'}}</text>
     </view>
 
+    <view class="login-status" wx:if="{{isLoggingIn || loginErrorText}}">
+      <text>{{isLoggingIn ? '正在安全登录…' : loginErrorText}}</text>
+      <button
+        wx:if="{{!isLoggingIn}}"
+        class="login-retry-btn"
+        size="mini"
+        bindtap="onRetryLogin"
+      >重新登录</button>
+    </view>
+
     <!-- 对话列表 -->
     <scroll-view class="chat-list" scroll-y scroll-into-view="{{lastMsgId}}" scroll-with-animation>
       <view class="intro-msg" wx:if="{{messages.length === 0}}">
@@ -36,17 +46,17 @@
 
     <!-- 输入区域 -->
     <view class="input-area">
-      <button class="mode-btn {{isSending ? 'disabled' : ''}}" disabled="{{isSending}}" bindtap="onToggleInputMode">{{inputMode === 'text' ? '语音' : '键盘'}}</button>
+      <button class="mode-btn {{isSending || !userId ? 'disabled' : ''}}" disabled="{{isSending || !userId}}" bindtap="onToggleInputMode">{{inputMode === 'text' ? '语音' : '键盘'}}</button>
 
       <block wx:if="{{inputMode === 'text'}}">
-        <input class="input" value="{{inputText}}" disabled="{{isSending}}" placeholder="说点什么..." bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
-        <button class="send-btn {{isSending ? 'disabled' : ''}}" size="mini" disabled="{{isSending}}" bindtap="onSend">{{isSending ? '等待' : '发送'}}</button>
+        <input class="input" value="{{inputText}}" disabled="{{isSending || !userId}}" maxlength="2000" placeholder="{{userId ? '说点什么...' : '请先完成登录'}}" bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
+        <button class="send-btn {{isSending || !userId ? 'disabled' : ''}}" size="mini" disabled="{{isSending || !userId}}" bindtap="onSend">{{isSending ? '等待' : '发送'}}</button>
       </block>
 
       <block wx:else>
         <button
-          class="hold-voice-btn {{isRecording ? 'recording' : ''}} {{isSending ? 'disabled' : ''}}"
-          disabled="{{isSending}}"
+          class="hold-voice-btn {{isRecording ? 'recording' : ''}} {{isSending || !userId ? 'disabled' : ''}}"
+          disabled="{{isSending || !userId}}"
           bindtouchstart="onStartRecord"
           bindtouchend="onStopRecord"
           bindtouchcancel="onCancelRecord"
@@ -55,7 +65,7 @@
         </button>
       </block>
 
-      <button class="voice-reply-btn {{voiceReplyEnabled ? 'active' : ''}} {{isSending ? 'disabled' : ''}}" disabled="{{isSending}}" bindtap="onToggleVoiceReply">音</button>
+      <button class="voice-reply-btn {{voiceReplyEnabled ? 'active' : ''}} {{isSending || !userId ? 'disabled' : ''}}" disabled="{{isSending || !userId}}" bindtap="onToggleVoiceReply">音</button>
     </view>
 
     <view class="chat-actions">

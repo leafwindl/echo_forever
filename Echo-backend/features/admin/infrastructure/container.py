@@ -2,8 +2,8 @@ from typing import Optional
 
 from features.admin.application.debug_admin import ClearUserChatContext, ManageRuntimePrompt
 from features.admin.infrastructure.adapters import (
-    SQLiteChatContextAdminRepository,
-    SQLiteRuntimeSettingsRepository,
+    PostgresChatContextAdminRepository,
+    PostgresRuntimeSettingsRepository,
 )
 from shared.config import settings
 
@@ -15,7 +15,7 @@ def get_runtime_prompt_use_case() -> ManageRuntimePrompt:
     global _runtime_prompt_use_case
     if _runtime_prompt_use_case is None:
         _runtime_prompt_use_case = ManageRuntimePrompt(
-            runtime_settings=SQLiteRuntimeSettingsRepository(),
+            runtime_settings=PostgresRuntimeSettingsRepository(),
             default_system_prompt=settings.system_prompt,
         )
     return _runtime_prompt_use_case
@@ -25,7 +25,7 @@ def get_clear_chat_context_use_case() -> ClearUserChatContext:
     global _clear_chat_context_use_case
     if _clear_chat_context_use_case is None:
         _clear_chat_context_use_case = ClearUserChatContext(
-            chat_context_repository=SQLiteChatContextAdminRepository(),
+            chat_context_repository=PostgresChatContextAdminRepository(),
         )
     return _clear_chat_context_use_case
 

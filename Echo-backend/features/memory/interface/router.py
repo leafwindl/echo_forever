@@ -1,10 +1,6 @@
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from features.memory.interface.schemas import (
-    MemoryBackfillEmbeddingsRequest,
-    MemoryBackfillEmbeddingsResponse,
     MemoryClearRequest,
     MemoryClearResponse,
     MemoryDeleteResponse,
@@ -17,14 +13,12 @@ from features.memory.public import (
     MemoryNotFoundError,
     MemoryOperationError,
     MemoryValidationError,
-    backfill_memory_embeddings,
     clear_memories,
     delete_memory,
     list_memories,
 )
 from shared.interface.dependencies import CurrentUser, get_current_user
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/memory", tags=["memory"])
 
 
@@ -90,23 +84,3 @@ async def memory_clear(
     del request
     result = clear_memories(current_user.user_id)
     return MemoryClearResponse(cleared_count=result.cleared_count)
-
-
-@router.post("/backfill-embeddings", response_model=MemoryBackfillEmbeddingsResponse)
-async def memory_backfill_embeddings(
-    request: MemoryBackfillEmbeddingsRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-):
-    """为旧阶段已经存在的 active 长期记忆补齐 embedding。"""
-    try:
-        result = await backfill_memory_embeddings(current_user.user_id, limit=request.limit)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)) from e
-    except Exception as e:
-        logger.exception("Failed to backfill memory embeddings for user_id=%s", current_user.user_id)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to backfill memory embeddings",
-        ) from e
-
-    return MemoryBackfillEmbeddingsResponse(backfilled_count=result.backfilled_count)

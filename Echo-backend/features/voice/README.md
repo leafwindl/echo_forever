@@ -70,6 +70,11 @@
 - `TENCENT_SECRET_KEY`
 - `MINIMAX_TTS_VOICE_ID`
 - `PUBLIC_BASE_URL`
+- `VOICE_UPLOAD_MAX_BYTES`
+- `VOICE_RATE_LIMIT_REQUESTS`
+- `VOICE_RATE_LIMIT_WINDOW_SECONDS`
+- `VOICE_DAILY_REQUEST_LIMIT`
+- `GLOBAL_DAILY_VOICE_REQUEST_LIMIT`
 - `VOICE_GENERATED_RETENTION_SECONDS`
 - `VOICE_UPLOAD_RETENTION_SECONDS`
 - `VOICE_CLEANUP_INTERVAL_SECONDS`
@@ -78,6 +83,7 @@
 ## 6. 注意事项
 
 - 当前 ASR 只接受 MP3 content type。
+- Interface 层按配置限制上传大小；公网 Nginx 还需配置请求体上限。
 - 对话落库、上下文、记忆调度统一由 Chat 模块处理。
 - 上传音频保存在 `Echo-backend/static/voices/uploads/`，识别结束后会立即删除。
 - 生成音频保存在 `Echo-backend/static/voices/generated/`，返回 URL 依赖 `PUBLIC_BASE_URL`。

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from features.memory.domain.entities import MEMORY_EXTRACTION_JOB_TYPE, Memory, MemoryImportance
@@ -8,13 +9,20 @@ from features.memory.domain.repositories import (
     MemoryRepository,
     MemoryVectorIndex,
 )
+from features.memory.infrastructure import vector_index
+from features.memory.infrastructure.repository_provider import get_repository_module
 from providers.embedding_provider import get_embedding_provider
 from providers.llm_provider import get_llm_provider
-from repositories import job_repository
-from repositories import memory_repository
-from repositories import vector_repository
-from features.memory.infrastructure import vector_index
 from shared.config import settings
+
+
+def _optional_datetime_to_iso(value: object) -> Optional[str]:
+    """统一数据库时间类型，避免具体驱动类型泄漏到领域层。"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
 
 
 def _memory_from_record(record: Dict[str, object]) -> Memory:
@@ -28,18 +36,18 @@ def _memory_from_record(record: Dict[str, object]) -> Memory:
         confidence=float(record.get("confidence") or 0),
         importance=MemoryImportance(int(record.get("importance") or 1)),
         status=str(record["status"]),
-        created_at=record.get("created_at"),
-        updated_at=record.get("updated_at"),
-        expires_at=record.get("expires_at"),
+        created_at=_optional_datetime_to_iso(record.get("created_at")),
+        updated_at=_optional_datetime_to_iso(record.get("updated_at")),
+        expires_at=_optional_datetime_to_iso(record.get("expires_at")),
     )
 
 
 class MemoryRepositoryAdapter(MemoryRepository):
-    """基于 SQLite 仓储实现 MemoryRepository 协议。"""
+    """基于 PostgreSQL 仓储实现 MemoryRepository 协议。"""
 
     def list_memories(self, user_id: str, status: Optional[str], limit: int) -> List[Memory]:
         """按用户读取有限数量的记忆，避免跨用户访问。"""
-        records = memory_repository.list_user_memories(user_id, status=status, limit=limit)
+        records = get_repository_module().list_user_memories(user_id, status=status, limit=limit)
         return [_memory_from_record(record) for record in records]
 
     def list_active_memories(self, user_id: str, limit: int) -> List[Memory]:
@@ -48,7 +56,7 @@ class MemoryRepositoryAdapter(MemoryRepository):
 
     def get_memory(self, user_id: str, memory_id: str) -> Optional[Memory]:
         """按用户和记忆 ID 查询，在仓储层继续约束所有权。"""
-        record = memory_repository.get_user_memory(user_id, memory_id)
+        record = get_repository_module().get_user_memory(user_id, memory_id)
         return _memory_from_record(record) if record else None
 
     def add_memory(
@@ -61,7 +69,7 @@ class MemoryRepositoryAdapter(MemoryRepository):
         importance: int,
     ) -> str:
         """在应用层校验通过后，持久化新的长期事实。"""
-        return memory_repository.add_user_memory(
+        return get_repository_module().add_user_memory(
             user_id=user_id,
             memory_type=memory_type,
             content=content,
@@ -81,7 +89,7 @@ class MemoryRepositoryAdapter(MemoryRepository):
         importance: int,
     ) -> bool:
         """更新时重新置为 active，让用户的新表达覆盖旧状态。"""
-        return memory_repository.update_user_memory(
+        return get_repository_module().update_user_memory(
             user_id=user_id,
             memory_id=memory_id,
             memory_type=memory_type,
@@ -99,7 +107,7 @@ class MemoryRepositoryAdapter(MemoryRepository):
         source_message_id: Optional[int],
     ) -> bool:
         """模型识别为已有记忆时，只刷新元数据而不重复创建。"""
-        return memory_repository.touch_user_memory(
+        return get_repository_module().touch_user_memory(
             user_id=user_id,
             memory_id=memory_id,
             source_message_id=source_message_id,
@@ -107,15 +115,15 @@ class MemoryRepositoryAdapter(MemoryRepository):
 
     def deactivate_memory(self, user_id: str, memory_id: str) -> bool:
         """用户纠正或撤销信息时，将记忆标记为 inactive。"""
-        return memory_repository.deactivate_user_memory(user_id, memory_id)
+        return get_repository_module().deactivate_user_memory(user_id, memory_id)
 
     def delete_memory(self, user_id: str, memory_id: str) -> bool:
         """面向用户删除操作时，对记忆做软删除。"""
-        return memory_repository.delete_user_memory(user_id, memory_id)
+        return get_repository_module().delete_user_memory(user_id, memory_id)
 
     def clear_memories(self, user_id: str) -> int:
         """软删除单个用户的全部记忆，不影响聊天历史。"""
-        return memory_repository.clear_user_memories(user_id)
+        return get_repository_module().clear_user_memories(user_id)
 
 
 class MemoryEmbeddingRepositoryAdapter(MemoryEmbeddingRepository):
@@ -129,7 +137,7 @@ class MemoryEmbeddingRepositoryAdapter(MemoryEmbeddingRepository):
 
         embedding_provider = get_embedding_provider()
         embedding = await embedding_provider.create_embedding(clean_content, model=settings.embedding_model)
-        vector_repository.upsert_memory_embedding_record(
+        get_repository_module().upsert_memory_embedding_record(
             user_id=user_id,
             memory_id=memory_id,
             embedding_model=settings.embedding_model,
@@ -139,7 +147,7 @@ class MemoryEmbeddingRepositoryAdapter(MemoryEmbeddingRepository):
 
     def delete_memory_embedding(self, user_id: str, memory_id: str) -> bool:
         """源记忆不应再被召回时，删除对应向量。"""
-        return vector_repository.delete_memory_embedding_record(user_id, memory_id)
+        return get_repository_module().delete_memory_embedding_record(user_id, memory_id)
 
 
 class MemoryVectorIndexAdapter(MemoryVectorIndex):
@@ -163,31 +171,31 @@ class MemoryExtractionJobRepositoryAdapter(MemoryExtractionJobRepository):
 
     def create_extraction_job(self, payload: Dict[str, object]) -> str:
         """先持久化任务载荷，再尝试后台执行。"""
-        return job_repository.create_job(MEMORY_EXTRACTION_JOB_TYPE, payload)
+        return get_repository_module().create_job(MEMORY_EXTRACTION_JOB_TYPE, payload)
 
     def claim_job(self, job_id: str) -> bool:
         """认领任务可以避免多个 worker 重复处理同一个抽取任务。"""
-        return job_repository.claim_job(job_id)
+        return get_repository_module().claim_job(job_id)
 
     def get_job(self, job_id: str) -> Optional[Dict[str, object]]:
         """认领后再读取任务，确保执行使用的是持久化状态。"""
-        return job_repository.get_job(job_id)
+        return get_repository_module().get_job(job_id)
 
     def complete_job(self, job_id: str) -> bool:
         """标记成功，便于观测并避免重启后重复执行。"""
-        return job_repository.complete_job(job_id)
+        return get_repository_module().complete_job(job_id)
 
     def fail_job(self, job_id: str, error: str) -> bool:
         """记录失败原因，避免重试状态和排错信息丢失。"""
-        return job_repository.fail_job(job_id, error)
+        return get_repository_module().fail_job(job_id, error)
 
     def list_runnable_jobs(self, limit: int) -> List[Dict[str, object]]:
         """限制启动恢复数量，避免启动阶段被历史任务拖慢。"""
-        return job_repository.list_runnable_jobs(MEMORY_EXTRACTION_JOB_TYPE, limit=limit)
+        return get_repository_module().list_runnable_jobs(MEMORY_EXTRACTION_JOB_TYPE, limit=limit)
 
     def reset_running_jobs(self) -> int:
         """恢复上一次进程异常退出时遗留的 running 任务。"""
-        return job_repository.reset_running_jobs(MEMORY_EXTRACTION_JOB_TYPE)
+        return get_repository_module().reset_running_jobs(MEMORY_EXTRACTION_JOB_TYPE)
 
 
 class MemoryExtractionLLMAdapter(MemoryExtractionLLM):

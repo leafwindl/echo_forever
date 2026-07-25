@@ -40,6 +40,31 @@ export interface ClearChatContextResponse {
   resetConversations: number;
 }
 
+export function clearChatContext(): Promise<ClearChatContextResponse> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}/chat/clear`,
+      method: 'POST',
+      header: getJsonHeader(),
+      data: {},
+      success: (res: any) => {
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200 && data) {
+          resolve({
+            deletedMessages: Number(data.deleted_messages || 0),
+            resetConversations: Number(data.reset_conversations || 0),
+          });
+        } else if (res.statusCode === 401) {
+          reject({ ...data, isUnauthorized: true });
+        } else {
+          reject(data);
+        }
+      },
+      fail: (err) => reject(err),
+    });
+  });
+}
+
 export interface LoginResponse {
   user_id: string;
   access_token: string;
@@ -131,6 +156,10 @@ export function sendMessage(
           });
         } else if (res.statusCode === 409) {
           reject({ ...data, isRequestInProgress: true });
+        } else if (res.statusCode === 429) {
+          reject({ ...data, isRateLimited: true });
+        } else if (res.statusCode === 401) {
+          reject({ ...data, isUnauthorized: true });
         } else {
           reject(data);
         }

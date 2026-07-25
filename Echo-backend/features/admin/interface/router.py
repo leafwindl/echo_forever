@@ -1,3 +1,5 @@
+import hmac
+
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from features.admin.interface.schemas import (
@@ -15,6 +17,7 @@ from features.admin.public import (
 from shared.config import settings
 
 router = APIRouter(prefix="/admin/debug", tags=["admin-debug"])
+INSECURE_ADMIN_TOKENS = {"change-me", "changeme", "admin", "test"}
 
 
 def verify_admin_debug_access(
@@ -22,9 +25,14 @@ def verify_admin_debug_access(
 ) -> None:
     if not settings.enable_admin_debug_api:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    if not settings.admin_debug_token:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin debug token is not configured")
-    if x_admin_debug_token != settings.admin_debug_token:
+    configured_token = settings.admin_debug_token.strip()
+    if len(configured_token) < 32 or configured_token.lower() in INSECURE_ADMIN_TOKENS:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin debug API is not securely configured",
+        )
+    provided_token = x_admin_debug_token or ""
+    if not hmac.compare_digest(provided_token, configured_token):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin debug token")
 
 

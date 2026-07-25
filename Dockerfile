@@ -11,6 +11,7 @@ RUN python -m pip install --upgrade pip \
     && python -m pip install -r /app/Echo-backend/requirements.txt
 
 COPY Echo-backend /app/Echo-backend
+COPY scripts /app/scripts
 
 WORKDIR /app/Echo-backend
 

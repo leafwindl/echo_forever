@@ -20,6 +20,28 @@ class Settings(BaseSettings):
     temperature: float = Field(default=0.8, validation_alias="TEMPERATURE")
     max_tokens: int = Field(default=500, validation_alias="MAX_TOKENS")
     timeout: int = Field(default=30, validation_alias="TIMEOUT")
+    app_version: str = Field(default="dev", validation_alias="APP_VERSION")
+    build_revision: str = Field(default="unknown", validation_alias="BUILD_REVISION")
+    enable_api_docs: bool = Field(default=False, validation_alias="ENABLE_API_DOCS")
+    db_provider: str = Field(default="postgres", validation_alias="DB_PROVIDER")
+    database_url: str = Field(default="", validation_alias="DATABASE_URL")
+    db_pool_size: int = Field(default=5, validation_alias="DB_POOL_SIZE")
+    db_pool_timeout_seconds: int = Field(
+        default=30,
+        validation_alias="DB_POOL_TIMEOUT_SECONDS",
+    )
+    embedding_vector_dimension: int = Field(
+        default=1024,
+        validation_alias="EMBEDDING_VECTOR_DIMENSION",
+    )
+    conversation_summary_trigger_messages: int = Field(
+        default=24,
+        validation_alias="CONVERSATION_SUMMARY_TRIGGER_MESSAGES",
+    )
+    conversation_summary_keep_recent_messages: int = Field(
+        default=12,
+        validation_alias="CONVERSATION_SUMMARY_KEEP_RECENT_MESSAGES",
+    )
 
     memory_extraction_model: str = Field(default="", validation_alias="MEMORY_EXTRACTION_MODEL")
     memory_extraction_temperature: float = Field(
@@ -88,12 +110,84 @@ class Settings(BaseSettings):
         validation_alias="AUTH_TOKEN_EXPIRES_SECONDS",
     )
     enable_legacy_user_id_auth: bool = Field(
-        default=True,
+        default=False,
         validation_alias="ENABLE_LEGACY_USER_ID_AUTH",
     )
     enable_chat_request_serialization: bool = Field(
         default=True,
         validation_alias="ENABLE_CHAT_REQUEST_SERIALIZATION",
+    )
+    chat_message_max_chars: int = Field(
+        default=2000,
+        validation_alias="CHAT_MESSAGE_MAX_CHARS",
+        ge=1,
+        le=10000,
+    )
+    chat_rate_limit_requests: int = Field(
+        default=10,
+        validation_alias="CHAT_RATE_LIMIT_REQUESTS",
+        ge=1,
+    )
+    chat_rate_limit_window_seconds: int = Field(
+        default=60,
+        validation_alias="CHAT_RATE_LIMIT_WINDOW_SECONDS",
+        ge=1,
+    )
+    chat_daily_request_limit: int = Field(
+        default=100,
+        validation_alias="CHAT_DAILY_REQUEST_LIMIT",
+        ge=1,
+    )
+    global_daily_chat_request_limit: int = Field(
+        default=1000,
+        validation_alias="GLOBAL_DAILY_CHAT_REQUEST_LIMIT",
+        ge=1,
+    )
+    login_rate_limit_requests: int = Field(
+        default=10,
+        validation_alias="LOGIN_RATE_LIMIT_REQUESTS",
+        ge=1,
+    )
+    login_rate_limit_window_seconds: int = Field(
+        default=60,
+        validation_alias="LOGIN_RATE_LIMIT_WINDOW_SECONDS",
+        ge=1,
+    )
+    login_daily_request_limit: int = Field(
+        default=100,
+        validation_alias="LOGIN_DAILY_REQUEST_LIMIT",
+        ge=1,
+    )
+    global_daily_login_request_limit: int = Field(
+        default=1000,
+        validation_alias="GLOBAL_DAILY_LOGIN_REQUEST_LIMIT",
+        ge=1,
+    )
+    voice_upload_max_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        validation_alias="VOICE_UPLOAD_MAX_BYTES",
+        ge=1024,
+        le=100 * 1024 * 1024,
+    )
+    voice_rate_limit_requests: int = Field(
+        default=5,
+        validation_alias="VOICE_RATE_LIMIT_REQUESTS",
+        ge=1,
+    )
+    voice_rate_limit_window_seconds: int = Field(
+        default=60,
+        validation_alias="VOICE_RATE_LIMIT_WINDOW_SECONDS",
+        ge=1,
+    )
+    voice_daily_request_limit: int = Field(
+        default=30,
+        validation_alias="VOICE_DAILY_REQUEST_LIMIT",
+        ge=1,
+    )
+    global_daily_voice_request_limit: int = Field(
+        default=300,
+        validation_alias="GLOBAL_DAILY_VOICE_REQUEST_LIMIT",
+        ge=1,
     )
 
     system_prompt: str = (
