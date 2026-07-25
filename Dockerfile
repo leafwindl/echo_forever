@@ -7,8 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY Echo-backend/requirements.txt /app/Echo-backend/requirements.txt
-RUN python -m pip install --upgrade pip \
-    && python -m pip install -r /app/Echo-backend/requirements.txt
+ARG PIP_INDEX_URL=https://pypi.org/simple
+RUN python -m pip install --upgrade pip --index-url "${PIP_INDEX_URL}" \
+    && python -m pip install --index-url "${PIP_INDEX_URL}" -r /app/Echo-backend/requirements.txt
 
 COPY Echo-backend /app/Echo-backend
 COPY scripts /app/scripts

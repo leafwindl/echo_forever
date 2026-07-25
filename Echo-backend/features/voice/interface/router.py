@@ -25,7 +25,7 @@ async def read_upload_with_limit(audio: UploadFile, max_bytes: int) -> bytes:
         total_bytes += len(chunk)
         if total_bytes > max_bytes:
             raise HTTPException(
-                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail="语音文件过大",
             )
         chunks.append(chunk)
