@@ -13,7 +13,10 @@ from features.voice.application.use_cases import (
 from features.voice.domain.entities import SynthesizedVoiceAudio, UnsupportedVoiceFormatError
 from features.voice.domain.segmentation import split_text_for_speech
 from features.voice.infrastructure.audio_storage import cleanup_expired_audio_files_in_dir
-from features.voice.infrastructure.streaming_asr import FunASRTranscriptAccumulator
+from features.voice.infrastructure.streaming_asr import (
+    FunASRTranscriptAccumulator,
+    TencentASRTranscriptAccumulator,
+)
 
 
 class FakeAudioStorage:
@@ -190,6 +193,26 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(corrected.is_final)
         self.assertEqual(next_online.text, "你好。今")
         self.assertEqual(final.text, "你好。今天很好。")
+        self.assertTrue(final.is_final)
+
+    def test_tencent_accumulator_replaces_partial_and_keeps_stable_segments(self):
+        accumulator = TencentASRTranscriptAccumulator()
+
+        first_partial = accumulator.apply(
+            {"result": {"index": 0, "slice_type": 1, "voice_text_str": "你号"}}
+        )
+        first_stable = accumulator.apply(
+            {"result": {"index": 0, "slice_type": 2, "voice_text_str": "你好。"}}
+        )
+        second_partial = accumulator.apply(
+            {"result": {"index": 1, "slice_type": 1, "voice_text_str": "今天"}}
+        )
+        final = accumulator.apply({"final": 1})
+
+        self.assertEqual(first_partial.text, "你号")
+        self.assertEqual(first_stable.text, "你好。")
+        self.assertEqual(second_partial.text, "你好。今天")
+        self.assertEqual(final.text, "你好。今天")
         self.assertTrue(final.is_final)
 
     async def test_cleanup_expired_audio_files_deletes_expired_supported_audio_files(self):

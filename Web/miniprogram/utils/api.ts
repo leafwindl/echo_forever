@@ -61,6 +61,102 @@ export interface ChatSendResponse {
   audioUrls: string[];
 }
 
+export interface ChatStreamCallbacks {
+  onDelta?(delta: string): void;
+  onAudio?(audioUrl: string): void;
+}
+
+interface ChatSSEPayload {
+  text?: string;
+  url?: string;
+  reply?: string;
+  audio_url?: string | null;
+  audio_urls?: string[];
+  detail?: string;
+  code?: string;
+}
+
+interface ChunkedRequestTask extends WechatMiniprogram.RequestTask {
+  onChunkReceived(callback: (result: { data: ArrayBuffer }) => void): void;
+}
+
+class Utf8StreamDecoder {
+  private remaining = 0;
+  private codePoint = 0;
+
+  decode(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let output = '';
+    for (const byte of bytes) {
+      if (this.remaining === 0) {
+        if (byte < 0x80) {
+          output += String.fromCharCode(byte);
+        } else if ((byte & 0xe0) === 0xc0) {
+          this.remaining = 1;
+          this.codePoint = byte & 0x1f;
+        } else if ((byte & 0xf0) === 0xe0) {
+          this.remaining = 2;
+          this.codePoint = byte & 0x0f;
+        } else if ((byte & 0xf8) === 0xf0) {
+          this.remaining = 3;
+          this.codePoint = byte & 0x07;
+        } else {
+          output += '\ufffd';
+        }
+        continue;
+      }
+
+      if ((byte & 0xc0) !== 0x80) {
+        output += '\ufffd';
+        this.remaining = 0;
+        this.codePoint = 0;
+        if (byte < 0x80) output += String.fromCharCode(byte);
+        continue;
+      }
+      this.codePoint = (this.codePoint << 6) | (byte & 0x3f);
+      this.remaining -= 1;
+      if (this.remaining === 0) {
+        output += String.fromCodePoint(this.codePoint);
+        this.codePoint = 0;
+      }
+    }
+    return output;
+  }
+}
+
+class SSEChunkParser {
+  private buffer = '';
+
+  constructor(private readonly onEvent: (event: string, data: ChatSSEPayload) => void) {}
+
+  push(chunk: string): void {
+    this.buffer += chunk;
+    let boundaryIndex = this.buffer.indexOf('\n\n');
+    while (boundaryIndex >= 0) {
+      const rawEvent = this.buffer.slice(0, boundaryIndex);
+      this.buffer = this.buffer.slice(boundaryIndex + 2);
+      this.parseEvent(rawEvent);
+      boundaryIndex = this.buffer.indexOf('\n\n');
+    }
+  }
+
+  private parseEvent(rawEvent: string): void {
+    let eventName = 'message';
+    const dataLines: string[] = [];
+    for (const rawLine of rawEvent.split('\n')) {
+      const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+      if (line.startsWith('event:')) eventName = line.slice(6).trim();
+      if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+    }
+    if (!dataLines.length) return;
+    try {
+      this.onEvent(eventName, JSON.parse(dataLines.join('\n')) as ChatSSEPayload);
+    } catch (error) {
+      console.warn('忽略无法解析的流式消息', error);
+    }
+  }
+}
+
 export interface RuntimePromptResponse {
   prompt: string;
   source: string;
@@ -201,6 +297,101 @@ export function sendMessage(
         }
       },
       fail: (err) => reject(err),
+    });
+  });
+}
+
+export function sendMessageStream(
+  userId: string,
+  message: string,
+  options: SendMessageOptions = {},
+  callbacks: ChatStreamCallbacks = {},
+): Promise<ChatSendResponse> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let finalReply = '';
+    const streamedAudioUrls: string[] = [];
+    const decoder = new Utf8StreamDecoder();
+
+    const settleResolve = (result: ChatSendResponse) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    const settleReject = (error: any) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+
+    const parser = new SSEChunkParser((event, data) => {
+      if (event === 'delta' && data.text) {
+        finalReply += data.text;
+        callbacks.onDelta?.(data.text);
+        return;
+      }
+      if (event === 'audio' && data.url) {
+        streamedAudioUrls.push(data.url);
+        callbacks.onAudio?.(data.url);
+        return;
+      }
+      if (event === 'error') {
+        settleReject({
+          ...data,
+          isRequestInProgress: data.code === 'request_in_progress',
+        });
+        return;
+      }
+      if (event === 'done') {
+        const audioUrls = Array.isArray(data.audio_urls)
+          ? data.audio_urls.filter((url): url is string => typeof url === 'string' && Boolean(url))
+          : streamedAudioUrls;
+        settleResolve({
+          reply: data.reply || finalReply,
+          audioUrl: data.audio_url || audioUrls[0] || null,
+          audioUrls,
+        });
+      }
+    });
+
+    const requestTask = (wx.request as any)({
+      url: `${BASE_URL}/chat/stream`,
+      method: 'POST',
+      header: {
+        ...getJsonHeader(),
+        Accept: 'text/event-stream',
+      },
+      data: {
+        user_id: userId,
+        message,
+        input_type: options.inputType || 'text',
+        voice_reply_enabled: Boolean(options.phoneMode),
+      },
+      enableChunked: true,
+      responseType: 'arraybuffer',
+      timeout: 90000,
+      success: (res: any) => {
+        if (settled) return;
+        if (res.statusCode === 401) {
+          settleReject({ isUnauthorized: true, detail: '登录已失效' });
+        } else if (res.statusCode === 429) {
+          settleReject({ isRateLimited: true, detail: '消息发送过于频繁，请稍后再试' });
+        } else if (res.statusCode !== 200) {
+          settleReject(normalizeResponseData(res.data));
+        } else {
+          settleReject({ detail: '流式回复提前结束' });
+        }
+      },
+      fail: (error: any) => settleReject(error),
+    }) as ChunkedRequestTask;
+
+    if (typeof requestTask.onChunkReceived !== 'function') {
+      requestTask.abort();
+      settleReject({ detail: '当前微信版本不支持流式回复', isStreamingUnsupported: true });
+      return;
+    }
+    requestTask.onChunkReceived((result) => {
+      parser.push(decoder.decode(result.data));
     });
   });
 }

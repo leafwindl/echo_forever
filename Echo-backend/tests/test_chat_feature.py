@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.chat.application.generate_reply import GenerateChatReply
-from features.chat.application.send_message import SendChatMessage
+from features.chat.application.send_message import SendChatMessage, StreamingSpeechSegmenter
 from features.chat.domain.entities import (
     ChatContext,
     ChatRequestInProgressError,
@@ -59,6 +59,10 @@ class FakeLLM:
     async def generate_reply(self, messages):
         return "hello from echo"
 
+    async def stream_reply(self, messages):
+        for delta in ("hello ", "from echo"):
+            yield delta
+
 
 class SequenceLLM:
     def __init__(self, replies):
@@ -102,6 +106,10 @@ class FakeVoiceReplySynthesizer:
     async def synthesize_reply(self, reply):
         self.received_replies.append(reply)
         return "http://example.test/voice.mp3"
+
+    async def start_streaming_segment(self, text):
+        self.received_replies.append(text)
+        return "http://example.test/voice-stream.mp3"
 
 
 class FailingVoiceReplySynthesizer:
@@ -161,6 +169,23 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.memory_extraction_scheduled)
         self.assertEqual(result.memory_extraction_job_id, "job_fake")
         self.assertEqual(repository.persisted_turns[0]["user_message"], "remember my name")
+
+    async def test_generate_chat_reply_streams_and_persists_complete_turn(self):
+        use_case, repository = self.build_generate_use_case()
+        deltas = []
+
+        async def on_delta(delta):
+            deltas.append(delta)
+
+        result = await use_case.execute_stream(
+            user_id="user_a",
+            message="hello",
+            on_delta=on_delta,
+        )
+
+        self.assertEqual(deltas, ["hello ", "from echo"])
+        self.assertEqual(result.reply, "hello from echo")
+        self.assertEqual(repository.persisted_turns[0]["assistant_reply"], "hello from echo")
 
     async def test_generate_chat_reply_rejects_empty_message(self):
         use_case, _ = self.build_generate_use_case()
@@ -271,6 +296,38 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(request_guard.try_calls, ["user_a"])
         self.assertEqual(request_guard.release_calls, ["user_a"])
+
+    async def test_send_chat_message_streams_text_and_audio_segments(self):
+        voice_synthesizer = FakeVoiceReplySynthesizer()
+        use_case, _ = self.build_send_use_case(voice_synthesizer=voice_synthesizer)
+        deltas = []
+        audio_urls = []
+
+        async def on_delta(delta):
+            deltas.append(delta)
+
+        async def on_audio(audio_url):
+            audio_urls.append(audio_url)
+
+        result = await use_case.execute_stream(
+            user_id="user_a",
+            message="hello",
+            input_type="voice",
+            voice_reply_enabled=True,
+            on_text_delta=on_delta,
+            on_audio_ready=on_audio,
+        )
+
+        self.assertEqual(deltas, ["hello ", "from echo"])
+        self.assertEqual(voice_synthesizer.received_replies, ["hello from echo"])
+        self.assertEqual(audio_urls, ["http://example.test/voice-stream.mp3"])
+        self.assertEqual(result.audio_urls, ("http://example.test/voice-stream.mp3",))
+
+    def test_streaming_speech_segmenter_emits_sentence_before_completion(self):
+        segmenter = StreamingSpeechSegmenter(max_chars=12, total_max_chars=100)
+
+        self.assertEqual(segmenter.push("第一句话。第二"), ("第一句话。",))
+        self.assertEqual(segmenter.finish(), ("第二",))
 
 
 if __name__ == "__main__":

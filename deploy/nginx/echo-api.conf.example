@@ -39,6 +39,21 @@ server {
         proxy_send_timeout 90s;
     }
 
+    location ~ ^/(chat/stream|voice/tts/stream/) {
+        limit_req zone=echo_api_per_ip burst=20 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_read_timeout 90s;
+        proxy_send_timeout 90s;
+    }
+
     location / {
         limit_req zone=echo_api_per_ip burst=20 nodelay;
         proxy_pass http://127.0.0.1:8000;

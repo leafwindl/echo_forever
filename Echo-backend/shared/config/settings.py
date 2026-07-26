@@ -115,6 +115,41 @@ class Settings(BaseSettings):
         ge=1024,
         le=100 * 1024 * 1024,
     )
+    dashscope_api_key: str = Field(default="", validation_alias="DASHSCOPE_API_KEY")
+    dashscope_workspace_id: str = Field(
+        default="",
+        validation_alias="DASHSCOPE_WORKSPACE_ID",
+    )
+    cosyvoice_model: str = Field(
+        default="cosyvoice-v3.5-flash",
+        validation_alias="COSYVOICE_MODEL",
+    )
+    cosyvoice_websocket_url: str = Field(
+        default="",
+        validation_alias="COSYVOICE_WEBSOCKET_URL",
+    )
+    cosyvoice_instruction: str = Field(
+        default="用温柔、自然、亲近的语气说话，语速稍慢，像在陪伴用户聊天。",
+        validation_alias="COSYVOICE_INSTRUCTION",
+    )
+    cosyvoice_volume: int = Field(
+        default=50,
+        validation_alias="COSYVOICE_VOLUME",
+        ge=0,
+        le=100,
+    )
+    cosyvoice_pitch_rate: float = Field(
+        default=1.0,
+        validation_alias="COSYVOICE_PITCH_RATE",
+        ge=0.5,
+        le=2.0,
+    )
+    cosyvoice_timeout_seconds: int = Field(
+        default=30,
+        validation_alias="COSYVOICE_TIMEOUT_SECONDS",
+        ge=5,
+        le=120,
+    )
     melotts_base_url: str = Field(
         default="http://127.0.0.1:9000",
         validation_alias="MELOTTS_BASE_URL",
@@ -128,6 +163,20 @@ class Settings(BaseSettings):
     voice_streaming_asr_enabled: bool = Field(
         default=False,
         validation_alias="VOICE_STREAMING_ASR_ENABLED",
+    )
+    voice_streaming_asr_provider: str = Field(
+        default="tencent",
+        validation_alias="VOICE_STREAMING_ASR_PROVIDER",
+    )
+    tencent_asr_engine_model_type: str = Field(
+        default="16k_zh",
+        validation_alias="TENCENT_ASR_ENGINE_MODEL_TYPE",
+    )
+    tencent_asr_final_timeout_seconds: int = Field(
+        default=10,
+        validation_alias="TENCENT_ASR_FINAL_TIMEOUT_SECONDS",
+        ge=1,
+        le=60,
     )
     funasr_ws_url: str = Field(
         default="ws://127.0.0.1:10095",

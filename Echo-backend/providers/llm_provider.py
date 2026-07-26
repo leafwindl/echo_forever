@@ -1,4 +1,6 @@
 import logging
+import json
+from collections.abc import AsyncIterator
 from typing import Optional, Protocol, cast
 
 import httpx
@@ -19,15 +21,24 @@ class LLMProvider(Protocol):
     ) -> str:
         ...
 
-
-class OpenAICompatibleLLMProvider:
-    async def chat_completion(
+    def chat_completion_stream(
         self,
         messages: list[dict],
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-    ) -> str:
+    ) -> AsyncIterator[str]:
+        ...
+
+
+class OpenAICompatibleLLMProvider:
+    @staticmethod
+    def _request_options(
+        messages: list[dict],
+        model: Optional[str],
+        temperature: Optional[float],
+        max_tokens: Optional[int],
+    ) -> tuple[str, dict[str, str], dict]:
         url = f"{settings.openai_base_url.rstrip('/')}/chat/completions"
         headers = {
             "Authorization": f"Bearer {settings.openai_api_key}",
@@ -39,6 +50,21 @@ class OpenAICompatibleLLMProvider:
             "temperature": settings.temperature if temperature is None else temperature,
             "max_tokens": settings.max_tokens if max_tokens is None else max_tokens,
         }
+        return url, headers, payload
+
+    async def chat_completion(
+        self,
+        messages: list[dict],
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        url, headers, payload = self._request_options(
+            messages,
+            model,
+            temperature,
+            max_tokens,
+        )
 
         try:
             async with httpx.AsyncClient(timeout=settings.timeout) as client:
@@ -56,6 +82,51 @@ class OpenAICompatibleLLMProvider:
         except Exception as exc:
             logger.error("Error requesting LLM: %s", exc)
             raise ValueError("Failed to request LLM service") from exc
+
+    async def chat_completion_stream(
+        self,
+        messages: list[dict],
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> AsyncIterator[str]:
+        url, headers, payload = self._request_options(
+            messages,
+            model,
+            temperature,
+            max_tokens,
+        )
+        payload["stream"] = True
+
+        try:
+            async with httpx.AsyncClient(timeout=settings.timeout) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        raw_data = line[5:].strip()
+                        if not raw_data or raw_data == "[DONE]":
+                            continue
+                        event = json.loads(raw_data)
+                        choices = event.get("choices") or []
+                        if not choices:
+                            continue
+                        content = (choices[0].get("delta") or {}).get("content")
+                        if content:
+                            yield str(content)
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "HTTPStatusError from streaming LLM status=%s content_length=%s",
+                exc.response.status_code,
+                exc.response.headers.get("content-length", "unknown"),
+            )
+            raise ValueError(
+                f"LLM service responded with status {exc.response.status_code}"
+            ) from exc
+        except Exception as exc:
+            logger.error("Error requesting streaming LLM: %s", exc)
+            raise ValueError("Failed to stream LLM service") from exc
 
 
 def get_llm_provider() -> LLMProvider:

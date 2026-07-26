@@ -2,8 +2,9 @@ type AudioContext = ReturnType<typeof wx.createInnerAudioContext>;
 
 let activeAudioContext: AudioContext | null = null;
 let cancelActivePlayback: (() => void) | null = null;
+let cancelActiveStreamPlayback: (() => void) | null = null;
 
-export function stopVoice(): void {
+function stopCurrentVoice(): void {
   const cancelPlayback = cancelActivePlayback;
   cancelActivePlayback = null;
   cancelPlayback?.();
@@ -12,6 +13,13 @@ export function stopVoice(): void {
   activeAudioContext = null;
   audioContext?.stop();
   audioContext?.destroy();
+}
+
+export function stopVoice(): void {
+  const cancelStream = cancelActiveStreamPlayback;
+  cancelActiveStreamPlayback = null;
+  cancelStream?.();
+  stopCurrentVoice();
 }
 
 function downloadVoiceFile(url: string): Promise<string> {
@@ -35,7 +43,7 @@ function downloadVoiceFile(url: string): Promise<string> {
 }
 
 function playDownloadedVoice(filePath: string): Promise<void> {
-  stopVoice();
+  stopCurrentVoice();
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -92,4 +100,71 @@ export async function playVoiceSegments(
     nextDownload = index + 1 < urls.length ? downloadVoiceFile(urls[index + 1]) : null;
     await playDownloadedVoice(filePath);
   }
+}
+
+export interface VoiceStreamPlayer {
+  enqueue(url: string): void;
+  finish(): Promise<void>;
+  cancel(): void;
+}
+
+export function createVoiceStreamPlayer(
+  shouldContinue: () => boolean,
+): VoiceStreamPlayer {
+  stopVoice();
+  const queue: string[] = [];
+  let completed = false;
+  let canceled = false;
+  let wake: (() => void) | null = null;
+
+  const notify = () => {
+    const pendingWake = wake;
+    wake = null;
+    pendingWake?.();
+  };
+
+  const cancel = () => {
+    if (canceled) return;
+    canceled = true;
+    queue.length = 0;
+    notify();
+    stopCurrentVoice();
+  };
+  cancelActiveStreamPlayback = cancel;
+
+  const playback = (async () => {
+    while (!canceled) {
+      const url = queue.shift();
+      if (!url) {
+        if (completed) return;
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+        continue;
+      }
+      if (!shouldContinue()) {
+        cancel();
+        return;
+      }
+      await playDownloadedVoice(url);
+    }
+  })().finally(() => {
+    if (cancelActiveStreamPlayback === cancel) {
+      cancelActiveStreamPlayback = null;
+    }
+  });
+
+  return {
+    enqueue(url: string) {
+      if (!url || completed || canceled) return;
+      queue.push(url);
+      notify();
+    },
+    finish() {
+      completed = true;
+      notify();
+      return playback;
+    },
+    cancel,
+  };
 }

@@ -53,7 +53,8 @@ Voice 模块为电话模式提供流式 ASR、TTS 分段合成、音频存储与
 
 - 腾讯 ASR：现有整段识别降级服务。
 - FunASR：独立 Docker 服务，只负责实时/2-pass ASR。
-- EdgeTTS：默认 TTS provider，保证未启用本地模型时功能可用。
+- CosyVoice v3.5 Flash：当前 TTS provider，通过北京地域 WebSocket 双向流式输出 MP3。
+- EdgeTTS：无云端凭据时可手动切换的开发 provider。
 - MeloTTS：独立 Python 3.9 Docker 服务，避免其模型依赖污染主后端 Python 3.11 环境。
 - FFmpeg：安装在主后端容器，只负责 MP3 到 PCM 的流式解码。
 
@@ -62,12 +63,21 @@ Voice 模块为电话模式提供流式 ASR、TTS 分段合成、音频存储与
 ## 5. 关键配置
 
 ```dotenv
-TTS_PROVIDER=edge
-TTS_VOICE_ID=zh-CN-XiaoxiaoNeural
+TTS_PROVIDER=cosyvoice
+# v3.5 Flash 不提供系统音色，需填入声音复刻或声音设计生成的音色 ID。
+TTS_VOICE_ID=
 TTS_SPEED=1.0
 TTS_SEGMENT_MAX_CHARS=80
 TTS_REPLY_MAX_CHARS=600
 TTS_AUDIO_MAX_BYTES=10485760
+DASHSCOPE_API_KEY=
+DASHSCOPE_WORKSPACE_ID=
+COSYVOICE_MODEL=cosyvoice-v3.5-flash
+COSYVOICE_WEBSOCKET_URL=
+COSYVOICE_INSTRUCTION=用温柔、自然、亲近的语气说话，语速稍慢，像在陪伴用户聊天。
+COSYVOICE_VOLUME=50
+COSYVOICE_PITCH_RATE=1.0
+COSYVOICE_TIMEOUT_SECONDS=30
 MELOTTS_BASE_URL=http://127.0.0.1:9000
 MELOTTS_TIMEOUT_SECONDS=60
 
@@ -78,7 +88,7 @@ FUNASR_FINAL_TIMEOUT_SECONDS=15
 FFMPEG_BINARY=ffmpeg
 ```
 
-Docker Compose 会把主后端的 MeloTTS/FunASR 地址覆盖为同一网络内的服务名。启用 MeloTTS 时还需把 `TTS_VOICE_ID` 改为 `ZH`。
+`DASHSCOPE_API_KEY`、`DASHSCOPE_WORKSPACE_ID` 和自定义 `TTS_VOICE_ID` 必须属于北京地域及同一业务空间。未配置时语音合成会明确失败，但不影响文字回复。Docker Compose 会把主后端的 MeloTTS/FunASR 地址覆盖为同一网络内的服务名。启用 MeloTTS 时还需把 `TTS_VOICE_ID` 改为 `ZH`。
 
 ## 6. 文件与安全
 

@@ -97,6 +97,11 @@ class ChatLLMAdapter(ChatLLM):
         provider = get_llm_provider()
         return await provider.chat_completion(messages=messages)
 
+    async def stream_reply(self, messages: list[dict]):
+        provider = get_llm_provider()
+        async for delta in provider.chat_completion_stream(messages=messages):
+            yield delta
+
 
 class ConversationSummaryUpdaterAdapter(ConversationSummaryUpdater):
     async def maybe_update_summary(self, user_id: str, conversation_id: str) -> bool:
@@ -130,3 +135,8 @@ class VoiceReplySynthesizerAdapter(ChatVoiceReplySynthesizer):
 
         result = await synthesize_voice_reply(reply)
         return result.audio_urls
+
+    async def start_streaming_segment(self, text: str) -> str:
+        from features.voice.public import start_streaming_voice_segment
+
+        return await start_streaming_voice_segment(text)

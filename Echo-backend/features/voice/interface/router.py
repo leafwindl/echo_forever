@@ -14,6 +14,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
+from fastapi.responses import StreamingResponse
 from shared.config import settings
 from shared.interface.dependencies import (
     CurrentUser,
@@ -25,6 +26,7 @@ from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 from features.voice.interface.schemas import VoiceASRResponse
 from features.voice.public import (
     UnsupportedVoiceFormatError,
+    open_streaming_voice_audio,
     open_streaming_voice_recognition,
     recognize_voice,
 )
@@ -100,6 +102,25 @@ async def voice_asr(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="语音识别失败",
         ) from exc
+
+
+@router.get("/tts/stream/{stream_id}")
+async def voice_tts_stream(stream_id: str):
+    try:
+        audio_stream = open_streaming_voice_audio(stream_id)
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="语音流已过期",
+        ) from exc
+    return StreamingResponse(
+        audio_stream,
+        media_type="audio/mpeg",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.websocket("/asr/stream")

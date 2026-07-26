@@ -4,12 +4,12 @@ import {
   ACCESS_TOKEN_STORAGE_KEY,
   getRuntimeSystemPrompt,
   login,
-  sendMessage,
+  sendMessageStream,
   updateRuntimeSystemPrompt,
   USER_ID_STORAGE_KEY,
 } from '../../utils/api';
 import { appConfig } from '../../utils/env';
-import { playVoiceSegments, stopVoice } from './chat.audio';
+import { createVoiceStreamPlayer, stopVoice } from './chat.audio';
 import { createMessage, replaceMessageContent } from './chat.messages';
 import type { ChatInputType } from '../../utils/api';
 import type { Message, RequestInProgressError, SitCrop } from './chat.types';
@@ -29,6 +29,7 @@ interface ChatPageController {
 interface EchoRecorderManager extends WechatMiniprogram.RecorderManager {
   __echoEventsBound?: boolean;
   __echoActivePage?: ChatPageController | null;
+  __echoActiveVoiceStream?: ActiveVoiceStream | null;
 }
 
 let recorderManager: EchoRecorderManager;
@@ -41,7 +42,6 @@ interface ActiveVoiceStream {
   canceled: boolean;
 }
 
-let activeVoiceStream: ActiveVoiceStream | null = null;
 const STREAM_FRAME_BUFFER_MAX_BYTES = 1024 * 1024;
 
 function cancelVoiceStreamState(state: ActiveVoiceStream): void {
@@ -133,6 +133,10 @@ Page({
     this.loginWithWechat(clientId);
 
     recorderManager = wx.getRecorderManager() as EchoRecorderManager;
+    if (recorderManager.__echoActiveVoiceStream) {
+      cancelVoiceStreamState(recorderManager.__echoActiveVoiceStream);
+    }
+    recorderManager.__echoActiveVoiceStream = null;
     recorderManager.__echoActivePage = this as unknown as ChatPageController;
     this.initRecorderEvents();
   },
@@ -258,8 +262,8 @@ Page({
       const page = recorderManager.__echoActivePage;
       if (!page) return;
       const shouldUploadVoice = page.data.shouldUploadVoice;
-      const streamState = activeVoiceStream;
-      activeVoiceStream = null;
+      const streamState = recorderManager.__echoActiveVoiceStream || null;
+      recorderManager.__echoActiveVoiceStream = null;
       page.setData({ isRecording: false, isRecordPressActive: false, shouldUploadVoice: false });
       wx.hideToast();
 
@@ -290,7 +294,7 @@ Page({
     });
 
     recorderManager.onFrameRecorded((res) => {
-      const streamState = activeVoiceStream;
+      const streamState = recorderManager.__echoActiveVoiceStream;
       if (!streamState || streamState.canceled) return;
       if (streamState.session) {
         streamState.session.sendFrame(res.frameBuffer);
@@ -335,12 +339,45 @@ Page({
     }
     this.addMessage('user', text);
     const pendingMessageId = this.addTypingMessage();
+    const voicePlayer = phoneReplyEnabled
+      ? createVoiceStreamPlayer(() => this.data.phoneMode)
+      : null;
+    const enqueuedAudioUrls = new Set<string>();
+    let streamedReply = '';
+    let renderTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushStreamedReply = () => {
+      renderTimer = null;
+      if (streamedReply) this.updateMessage(pendingMessageId, streamedReply);
+    };
 
     try {
-      const response = await sendMessage(userId, text, {
-        inputType,
-        phoneMode: phoneReplyEnabled,
-      });
+      const response = await sendMessageStream(
+        userId,
+        text,
+        {
+          inputType,
+          phoneMode: phoneReplyEnabled,
+        },
+        {
+          onDelta: (delta) => {
+            streamedReply += delta;
+            if (renderTimer === null) {
+              renderTimer = setTimeout(flushStreamedReply, 32);
+            }
+          },
+          onAudio: (audioUrl) => {
+            if (!voicePlayer || !this.data.phoneMode || enqueuedAudioUrls.has(audioUrl)) return;
+            enqueuedAudioUrls.add(audioUrl);
+            this.setPhoneStatus('speaking');
+            voicePlayer.enqueue(audioUrl);
+          },
+        },
+      );
+      if (renderTimer !== null) {
+        clearTimeout(renderTimer);
+        renderTimer = null;
+      }
       this.updateMessage(pendingMessageId, response.reply || '（我刚刚没组织好语言，可以再说一次吗？）');
 
       const audioUrls = response.audioUrls.length
@@ -348,10 +385,15 @@ Page({
         : response.audioUrl
         ? [response.audioUrl]
         : [];
-      if (phoneReplyEnabled && this.data.phoneMode && audioUrls.length) {
-        this.setPhoneStatus('speaking');
+      if (voicePlayer && this.data.phoneMode) {
+        for (const audioUrl of audioUrls) {
+          if (enqueuedAudioUrls.has(audioUrl)) continue;
+          enqueuedAudioUrls.add(audioUrl);
+          this.setPhoneStatus('speaking');
+          voicePlayer.enqueue(audioUrl);
+        }
         try {
-          await playVoiceSegments(audioUrls, () => this.data.phoneMode);
+          await voicePlayer.finish();
         } catch (error) {
           console.error('电话模式播放失败', error);
           if (this.data.phoneMode) {
@@ -364,6 +406,7 @@ Page({
         }
       }
     } catch (error) {
+      voicePlayer?.cancel();
       console.error('发送消息失败', error);
       const requestError = error as RequestInProgressError;
       if (requestError.isUnauthorized) {
@@ -378,6 +421,7 @@ Page({
           : TEMPORARY_ERROR_MESSAGE,
       );
     } finally {
+      if (renderTimer !== null) clearTimeout(renderTimer);
       if (phoneReplyEnabled && this.data.phoneMode && this.data.phoneStatus !== 'idle') {
         this.setPhoneStatus('idle');
       }
@@ -557,7 +601,7 @@ Page({
       bufferedBytes: 0,
       canceled: false,
     };
-    activeVoiceStream = streamState;
+    recorderManager.__echoActiveVoiceStream = streamState;
     void streamState.opening
       .then((session) => {
         if (streamState.canceled) {
@@ -606,8 +650,8 @@ Page({
   },
 
   cancelStreamingVoiceSession() {
-    const streamState = activeVoiceStream;
-    activeVoiceStream = null;
+    const streamState = recorderManager.__echoActiveVoiceStream || null;
+    recorderManager.__echoActiveVoiceStream = null;
     if (streamState) cancelVoiceStreamState(streamState);
   },
 

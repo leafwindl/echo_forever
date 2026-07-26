@@ -1,5 +1,7 @@
 from typing import Optional
 
+from shared.config import settings
+
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.application.send_message import SendChatMessage
 from features.chat.infrastructure.adapters import (
@@ -37,6 +39,8 @@ def get_send_chat_message_use_case() -> SendChatMessage:
             chat_reply_generator=get_generate_chat_reply_use_case(),
             voice_reply_synthesizer=VoiceReplySynthesizerAdapter(),
             request_guard=InMemoryChatRequestGuard(),
+            streaming_voice_segment_max_chars=min(settings.tts_segment_max_chars, 24),
+            voice_reply_max_chars=settings.tts_reply_max_chars,
         )
     return _send_chat_message_use_case
 
