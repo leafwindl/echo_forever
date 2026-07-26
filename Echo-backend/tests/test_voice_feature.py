@@ -11,7 +11,7 @@ from features.voice.application.use_cases import (
     SynthesizeVoiceReply,
 )
 from features.voice.domain.entities import SynthesizedVoiceAudio, UnsupportedVoiceFormatError
-from features.voice.domain.segmentation import split_text_for_speech
+from features.voice.domain.segmentation import sanitize_text_for_speech, split_text_for_speech
 from features.voice.infrastructure.audio_storage import cleanup_expired_audio_files_in_dir
 from features.voice.infrastructure.streaming_asr import (
     FunASRTranscriptAccumulator,
@@ -175,6 +175,18 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(segments)
         self.assertTrue(all(len(segment) <= 4 for segment in segments))
         self.assertLessEqual(sum(len(segment) for segment in segments), 14)
+
+    def test_sanitize_text_for_speech_removes_visual_only_unicode(self):
+        self.assertEqual(
+            sanitize_text_for_speech("我在听。🌿\u200d✨"),
+            "我在听。",
+        )
+
+    def test_split_text_for_speech_omits_emoji_only_segment(self):
+        self.assertEqual(
+            split_text_for_speech("第一句话。🌿", max_chars=80, total_max_chars=100),
+            ("第一句话。",),
+        )
 
     def test_funasr_accumulator_does_not_finish_on_intermediate_offline_segment(self):
         accumulator = FunASRTranscriptAccumulator()

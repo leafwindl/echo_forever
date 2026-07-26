@@ -1,12 +1,27 @@
 import re
+import unicodedata
 
 SENTENCE_BOUNDARY_PATTERN = re.compile(r"(?<=[。！？!?；;\n])")
 SOFT_BOUNDARY_PATTERN = re.compile(r"(?<=[，、,:：])")
+UNSPOKEN_UNICODE_CATEGORIES = {"Cf", "Cs", "Co", "Cn", "Sk", "So"}
+VARIATION_SELECTORS = {"\ufe0e", "\ufe0f"}
+
+
+def sanitize_text_for_speech(text: str) -> str:
+    """Remove visual-only Unicode characters that speech APIs cannot synthesize."""
+    sanitized = "".join(
+        " "
+        if char in VARIATION_SELECTORS
+        or unicodedata.category(char) in UNSPOKEN_UNICODE_CATEGORIES
+        else char
+        for char in text
+    )
+    return " ".join(sanitized.split())
 
 
 def split_text_for_speech(text: str, max_chars: int, total_max_chars: int) -> tuple[str, ...]:
     """Split a reply at natural pauses while enforcing hard synthesis limits."""
-    clean_text = " ".join(text.strip().split())[:total_max_chars]
+    clean_text = sanitize_text_for_speech(text)[:total_max_chars]
     if not clean_text:
         return ()
 

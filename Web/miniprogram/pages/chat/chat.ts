@@ -4,12 +4,12 @@ import {
   ACCESS_TOKEN_STORAGE_KEY,
   getRuntimeSystemPrompt,
   login,
-  sendMessageStream,
+  sendMessage,
   updateRuntimeSystemPrompt,
   USER_ID_STORAGE_KEY,
 } from '../../utils/api';
 import { appConfig } from '../../utils/env';
-import { createVoiceStreamPlayer, stopVoice } from './chat.audio';
+import { playVoiceSegments, stopVoice } from './chat.audio';
 import { createMessage, replaceMessageContent } from './chat.messages';
 import type { ChatInputType } from '../../utils/api';
 import type { Message, RequestInProgressError, SitCrop } from './chat.types';
@@ -339,45 +339,12 @@ Page({
     }
     this.addMessage('user', text);
     const pendingMessageId = this.addTypingMessage();
-    const voicePlayer = phoneReplyEnabled
-      ? createVoiceStreamPlayer(() => this.data.phoneMode)
-      : null;
-    const enqueuedAudioUrls = new Set<string>();
-    let streamedReply = '';
-    let renderTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const flushStreamedReply = () => {
-      renderTimer = null;
-      if (streamedReply) this.updateMessage(pendingMessageId, streamedReply);
-    };
 
     try {
-      const response = await sendMessageStream(
-        userId,
-        text,
-        {
-          inputType,
-          phoneMode: phoneReplyEnabled,
-        },
-        {
-          onDelta: (delta) => {
-            streamedReply += delta;
-            if (renderTimer === null) {
-              renderTimer = setTimeout(flushStreamedReply, 32);
-            }
-          },
-          onAudio: (audioUrl) => {
-            if (!voicePlayer || !this.data.phoneMode || enqueuedAudioUrls.has(audioUrl)) return;
-            enqueuedAudioUrls.add(audioUrl);
-            this.setPhoneStatus('speaking');
-            voicePlayer.enqueue(audioUrl);
-          },
-        },
-      );
-      if (renderTimer !== null) {
-        clearTimeout(renderTimer);
-        renderTimer = null;
-      }
+      const response = await sendMessage(userId, text, {
+        inputType,
+        phoneMode: phoneReplyEnabled,
+      });
       this.updateMessage(pendingMessageId, response.reply || '（我刚刚没组织好语言，可以再说一次吗？）');
 
       const audioUrls = response.audioUrls.length
@@ -385,15 +352,10 @@ Page({
         : response.audioUrl
         ? [response.audioUrl]
         : [];
-      if (voicePlayer && this.data.phoneMode) {
-        for (const audioUrl of audioUrls) {
-          if (enqueuedAudioUrls.has(audioUrl)) continue;
-          enqueuedAudioUrls.add(audioUrl);
-          this.setPhoneStatus('speaking');
-          voicePlayer.enqueue(audioUrl);
-        }
+      if (phoneReplyEnabled && this.data.phoneMode && audioUrls.length) {
+        this.setPhoneStatus('speaking');
         try {
-          await voicePlayer.finish();
+          await playVoiceSegments(audioUrls, () => this.data.phoneMode);
         } catch (error) {
           console.error('电话模式播放失败', error);
           if (this.data.phoneMode) {
@@ -406,7 +368,6 @@ Page({
         }
       }
     } catch (error) {
-      voicePlayer?.cancel();
       console.error('发送消息失败', error);
       const requestError = error as RequestInProgressError;
       if (requestError.isUnauthorized) {
@@ -421,7 +382,6 @@ Page({
           : TEMPORARY_ERROR_MESSAGE,
       );
     } finally {
-      if (renderTimer !== null) clearTimeout(renderTimer);
       if (phoneReplyEnabled && this.data.phoneMode && this.data.phoneStatus !== 'idle') {
         this.setPhoneStatus('idle');
       }
