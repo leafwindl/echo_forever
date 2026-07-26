@@ -29,6 +29,13 @@ export function openVoiceStream(
     let finishRequested = false;
     let finishResolve: ((text: string) => void) | null = null;
     let finishReject: ((error: Error) => void) | null = null;
+    let finishTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const clearFinishTimeout = () => {
+      if (finishTimeout === null) return;
+      clearTimeout(finishTimeout);
+      finishTimeout = null;
+    };
 
     const readyTimeout = setTimeout(() => {
       if (ready) return;
@@ -50,12 +57,28 @@ export function openVoiceStream(
         return new Promise<string>((resolveFinal, rejectFinal) => {
           finishResolve = resolveFinal;
           finishReject = rejectFinal;
-          socket.send({ data: JSON.stringify({ event: 'stop' }) });
+          finishTimeout = setTimeout(() => {
+            finishTimeout = null;
+            finishReject?.(new Error('流式语音识别结果超时'));
+            finishResolve = null;
+            finishReject = null;
+            socket.close({ code: 1000 });
+          }, 12000);
+          socket.send({
+            data: JSON.stringify({ event: 'stop' }),
+            fail: () => {
+              clearFinishTimeout();
+              finishReject?.(new Error('流式语音停止指令发送失败'));
+              finishResolve = null;
+              finishReject = null;
+            },
+          });
         });
       },
       cancel() {
         if (closed) return;
         closed = true;
+        clearFinishTimeout();
         if (ready) {
           socket.send({ data: JSON.stringify({ event: 'cancel' }) });
         }
@@ -86,18 +109,21 @@ export function openVoiceStream(
       }
       if (message.type === 'final') {
         const finalText = (message.text || '').trim();
+        clearFinishTimeout();
         finishResolve?.(finalText);
         finishResolve = null;
         finishReject = null;
         return;
       }
       if (message.type === 'error') {
+        clearFinishTimeout();
         finishReject?.(new Error(message.detail || '流式语音识别失败'));
       }
     });
 
     socket.onError(() => {
       clearTimeout(readyTimeout);
+      clearFinishTimeout();
       const error = new Error('流式语音连接失败');
       if (!ready) {
         reject(error);
@@ -108,6 +134,7 @@ export function openVoiceStream(
 
     socket.onClose(() => {
       clearTimeout(readyTimeout);
+      clearFinishTimeout();
       closed = true;
       if (!ready) {
         reject(new Error('流式语音服务不可用'));

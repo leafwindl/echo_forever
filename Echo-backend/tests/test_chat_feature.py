@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import unittest
 from pathlib import Path
@@ -71,6 +72,17 @@ class SequenceLLM:
 
 class FakeSummaryUpdater:
     async def maybe_update_summary(self, user_id, conversation_id):
+        return True
+
+
+class BlockingSummaryUpdater:
+    def __init__(self):
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def maybe_update_summary(self, user_id, conversation_id):
+        self.started.set()
+        await self.release.wait()
         return True
 
 
@@ -155,6 +167,27 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ChatValidationError):
             await use_case.execute(user_id="user_a", message="   ")
+
+    async def test_generate_chat_reply_can_update_summary_in_background(self):
+        summary_updater = BlockingSummaryUpdater()
+        use_case = GenerateChatReply(
+            conversation_repository=FakeConversationRepository(),
+            context_provider=FakeContextProvider(),
+            llm=FakeLLM(),
+            summary_updater=summary_updater,
+            memory_scheduler=FakeMemoryScheduler(),
+            summary_update_in_background=True,
+        )
+
+        result = await asyncio.wait_for(
+            use_case.execute(user_id="user_a", message="hello"),
+            timeout=0.1,
+        )
+
+        self.assertFalse(result.summary_updated)
+        await asyncio.wait_for(summary_updater.started.wait(), timeout=0.1)
+        summary_updater.release.set()
+        await asyncio.sleep(0)
 
     async def test_generate_chat_reply_retries_stage_direction_once(self):
         repository = FakeConversationRepository()

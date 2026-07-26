@@ -57,6 +57,8 @@ async def run_voice_audio_cleanup_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Uvicorn installs its handlers after importing the app, so attach the filter again here.
+    install_sensitive_data_filter()
     logger.info("Echo Backend 启动中...")
     init_db()
     logger.info("Database provider: %s", settings.db_provider)

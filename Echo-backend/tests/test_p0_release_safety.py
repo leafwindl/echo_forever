@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import sys
 import unittest
 from pathlib import Path
@@ -18,6 +19,7 @@ from features.system.interface.router import readiness_check
 from features.voice.interface.router import read_upload_with_limit
 from shared.config import settings
 from shared.interface.dependencies import CurrentUser
+from shared.security.logging_filter import SensitiveDataFilter
 
 
 class AdminDebugSafetyTests(unittest.TestCase):
@@ -108,6 +110,29 @@ class ReadinessTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(body, {"status": "not_ready", "database": "unavailable"})
+
+
+class LoggingSafetyTests(unittest.TestCase):
+    def test_sensitive_query_values_in_url_objects_are_redacted(self):
+        class URLValue:
+            def __str__(self):
+                return "https://example.test/login?secret=private&js_code=temporary"
+
+        record = logging.LogRecord(
+            name="httpx",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg="HTTP Request: %s",
+            args=(URLValue(),),
+            exc_info=None,
+        )
+
+        SensitiveDataFilter().filter(record)
+
+        self.assertNotIn("private", record.getMessage())
+        self.assertNotIn("temporary", record.getMessage())
+        self.assertEqual(record.getMessage().count("[REDACTED]"), 2)
 
 
 if __name__ == "__main__":

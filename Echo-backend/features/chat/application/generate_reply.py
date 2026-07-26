@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import time
 
 from features.chat.domain.dialogue_style import (
     NATURAL_DIALOGUE_RETRY_INSTRUCTION,
@@ -27,12 +29,38 @@ class GenerateChatReply:
         llm: ChatLLM,
         summary_updater: ConversationSummaryUpdater,
         memory_scheduler: MemoryExtractionScheduler,
+        summary_update_in_background: bool = False,
     ):
         self.conversation_repository = conversation_repository
         self.context_provider = context_provider
         self.llm = llm
         self.summary_updater = summary_updater
         self.memory_scheduler = memory_scheduler
+        self.summary_update_in_background = summary_update_in_background
+        self._summary_tasks: set[asyncio.Task[bool]] = set()
+
+    async def _update_summary(self, user_id: str, conversation_id: str) -> bool:
+        started_at = time.perf_counter()
+        try:
+            updated = await self.summary_updater.maybe_update_summary(user_id, conversation_id)
+            logger.info(
+                "Conversation summary check completed updated=%s duration_ms=%.1f",
+                updated,
+                (time.perf_counter() - started_at) * 1000,
+            )
+            return updated
+        except Exception:
+            logger.exception(
+                "Conversation summary update failed for conversation_id=%s duration_ms=%.1f",
+                conversation_id,
+                (time.perf_counter() - started_at) * 1000,
+            )
+            return False
+
+    def _schedule_summary_update(self, user_id: str, conversation_id: str) -> None:
+        task = asyncio.create_task(self._update_summary(user_id, conversation_id))
+        self._summary_tasks.add(task)
+        task.add_done_callback(self._summary_tasks.discard)
 
     async def execute(
         self,
@@ -56,11 +84,17 @@ class GenerateChatReply:
             else self.conversation_repository.get_or_create_active_conversation(clean_user_id)
         )
 
+        context_started_at = time.perf_counter()
         context = await self.context_provider.build_context(
             clean_user_id,
             clean_message,
             resolved_conversation_id,
         )
+        logger.info(
+            "Chat context completed duration_ms=%.1f",
+            (time.perf_counter() - context_started_at) * 1000,
+        )
+        llm_started_at = time.perf_counter()
         reply = await self.llm.generate_reply(context.messages)
         style_violations = find_dialogue_style_violations(reply)
         if style_violations:
@@ -85,7 +119,12 @@ class GenerateChatReply:
                     ",".join(remaining_violations),
                 )
                 reply = sanitize_dialogue_reply(reply)
-        logger.info("LLM reply generated for user_id=%s", clean_user_id)
+        logger.info(
+            "LLM reply generated for user_id=%s text_length=%s duration_ms=%.1f",
+            clean_user_id,
+            len(reply),
+            (time.perf_counter() - llm_started_at) * 1000,
+        )
 
         user_message_id, assistant_message_id = self.conversation_repository.add_chat_turn(
             user_id=clean_user_id,
@@ -97,14 +136,11 @@ class GenerateChatReply:
         )
 
         summary_updated = False
-        try:
-            summary_updated = await self.summary_updater.maybe_update_summary(
+        if self.summary_update_in_background:
+            self._schedule_summary_update(clean_user_id, resolved_conversation_id)
+        else:
+            summary_updated = await self._update_summary(
                 clean_user_id,
-                resolved_conversation_id,
-            )
-        except Exception:
-            logger.exception(
-                "Conversation summary update failed for conversation_id=%s",
                 resolved_conversation_id,
             )
 

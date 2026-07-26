@@ -25,6 +25,7 @@ def get_generate_chat_reply_use_case() -> GenerateChatReply:
             llm=ChatLLMAdapter(),
             summary_updater=ConversationSummaryUpdaterAdapter(),
             memory_scheduler=MemoryExtractionSchedulerAdapter(),
+            summary_update_in_background=True,
         )
     return _generate_chat_reply_use_case
 

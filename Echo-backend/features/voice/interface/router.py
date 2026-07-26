@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 from typing import Annotated
 
 from fastapi import (
@@ -124,6 +125,9 @@ async def voice_asr_stream(websocket: WebSocket):
     session = None
     sender_task: asyncio.Task[None] | None = None
     total_audio_bytes = 0
+    audio_frame_count = 0
+    started_at = time.perf_counter()
+    ready_at = started_at
 
     async def send_recognition_updates() -> None:
         if session is None:
@@ -137,12 +141,22 @@ async def voice_asr_stream(websocket: WebSocket):
                 }
             )
             if update.is_final:
+                logger.info(
+                    "Streaming voice ASR final text_length=%s duration_ms=%.1f",
+                    len(update.text),
+                    (time.perf_counter() - started_at) * 1000,
+                )
                 return
 
     try:
         session = await open_streaming_voice_recognition()
         sender_task = asyncio.create_task(send_recognition_updates())
         await websocket.send_json({"type": "ready"})
+        ready_at = time.perf_counter()
+        logger.info(
+            "Streaming voice ASR ready setup_ms=%.1f",
+            (ready_at - started_at) * 1000,
+        )
 
         while True:
             message = await websocket.receive()
@@ -152,6 +166,7 @@ async def voice_asr_stream(websocket: WebSocket):
             audio_bytes = message.get("bytes")
             if audio_bytes is not None:
                 total_audio_bytes += len(audio_bytes)
+                audio_frame_count += 1
                 if total_audio_bytes > settings.voice_upload_max_bytes:
                     await websocket.send_json(
                         {"type": "error", "detail": "Voice audio exceeds configured size limit"}
@@ -170,6 +185,12 @@ async def voice_asr_stream(websocket: WebSocket):
                 continue
 
             if event == "stop":
+                logger.info(
+                    "Streaming voice ASR stop received frames=%s audio_bytes=%s capture_ms=%.1f",
+                    audio_frame_count,
+                    total_audio_bytes,
+                    (time.perf_counter() - ready_at) * 1000,
+                )
                 await session.finish()
                 if sender_task is not None:
                     await asyncio.wait_for(
@@ -177,6 +198,12 @@ async def voice_asr_stream(websocket: WebSocket):
                         timeout=settings.funasr_final_timeout_seconds + 2,
                     )
                 await websocket.close(code=1000)
+                logger.info(
+                    "Streaming voice ASR completed frames=%s audio_bytes=%s duration_ms=%.1f",
+                    audio_frame_count,
+                    total_audio_bytes,
+                    (time.perf_counter() - started_at) * 1000,
+                )
                 return
             if event == "cancel":
                 await websocket.close(code=1000)

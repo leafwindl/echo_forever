@@ -17,7 +17,21 @@ import { recognizeVoice } from './chat.voice';
 import { openVoiceStream } from './chat.voice-stream';
 import type { VoiceStreamSession } from './chat.voice-stream';
 
-let recorderManager: WechatMiniprogram.RecorderManager;
+interface ChatPageController {
+  data: ChatPageData;
+  setData(data: Partial<ChatPageData>): void;
+  cancelStreamingVoiceSession(): void;
+  setPhoneStatus(status: PhoneStatus): void;
+  handleStreamingVoice(streamState: ActiveVoiceStream, fallbackFilePath: string): Promise<void>;
+  handleVoiceFile(filePath: string): Promise<void>;
+}
+
+interface EchoRecorderManager extends WechatMiniprogram.RecorderManager {
+  __echoEventsBound?: boolean;
+  __echoActivePage?: ChatPageController | null;
+}
+
+let recorderManager: EchoRecorderManager;
 
 interface ActiveVoiceStream {
   opening: Promise<VoiceStreamSession>;
@@ -118,7 +132,8 @@ Page({
     const clientId = getOrCreateClientId();
     this.loginWithWechat(clientId);
 
-    recorderManager = wx.getRecorderManager();
+    recorderManager = wx.getRecorderManager() as EchoRecorderManager;
+    recorderManager.__echoActivePage = this as unknown as ChatPageController;
     this.initRecorderEvents();
   },
 
@@ -129,6 +144,9 @@ Page({
       recorderManager.stop();
     }
     stopVoice();
+    if (recorderManager?.__echoActivePage === (this as unknown as ChatPageController)) {
+      recorderManager.__echoActivePage = null;
+    }
   },
 
   loginWithWechat(clientId: string) {
@@ -219,45 +237,54 @@ Page({
   },
 
   initRecorderEvents() {
+    if (recorderManager.__echoEventsBound) return;
+    recorderManager.__echoEventsBound = true;
+
     recorderManager.onStart(() => {
-      this.setData({ isRecording: true });
-      if (!this.data.isRecordPressActive) {
-        this.setData({ shouldUploadVoice: false });
-        this.cancelStreamingVoiceSession();
+      const page = recorderManager.__echoActivePage;
+      if (!page) return;
+      page.setData({ isRecording: true });
+      if (!page.data.isRecordPressActive) {
+        page.setData({ shouldUploadVoice: false });
+        page.cancelStreamingVoiceSession();
         recorderManager.stop();
         return;
       }
-      this.setPhoneStatus('recording');
+      page.setPhoneStatus('recording');
       wx.vibrateShort({ type: 'light' });
     });
 
     recorderManager.onStop((res) => {
-      const shouldUploadVoice = this.data.shouldUploadVoice;
+      const page = recorderManager.__echoActivePage;
+      if (!page) return;
+      const shouldUploadVoice = page.data.shouldUploadVoice;
       const streamState = activeVoiceStream;
       activeVoiceStream = null;
-      this.setData({ isRecording: false, isRecordPressActive: false, shouldUploadVoice: false });
+      page.setData({ isRecording: false, isRecordPressActive: false, shouldUploadVoice: false });
       wx.hideToast();
 
       if (shouldUploadVoice && streamState) {
-        this.setPhoneStatus('recognizing');
-        void this.handleStreamingVoice(streamState, res.tempFilePath || '');
+        page.setPhoneStatus('recognizing');
+        void page.handleStreamingVoice(streamState, res.tempFilePath || '');
       } else if (shouldUploadVoice && res.tempFilePath) {
-        this.setPhoneStatus('recognizing');
-        void this.handleVoiceFile(res.tempFilePath);
+        page.setPhoneStatus('recognizing');
+        void page.handleVoiceFile(res.tempFilePath);
       } else if (shouldUploadVoice) {
-        this.setPhoneStatus('idle');
+        page.setPhoneStatus('idle');
         wx.showToast({ title: '录音失败', icon: 'none' });
       } else {
         if (streamState) cancelVoiceStreamState(streamState);
-        this.setPhoneStatus('idle');
+        page.setPhoneStatus('idle');
       }
     });
 
     recorderManager.onError((err) => {
-      this.cancelStreamingVoiceSession();
+      const page = recorderManager.__echoActivePage;
+      if (!page) return;
+      page.cancelStreamingVoiceSession();
       console.error('录音错误', err);
-      this.setData({ isRecording: false, isRecordPressActive: false, shouldUploadVoice: false });
-      this.setPhoneStatus('idle');
+      page.setData({ isRecording: false, isRecordPressActive: false, shouldUploadVoice: false });
+      page.setPhoneStatus('idle');
       wx.hideToast();
       wx.showToast({ title: '录音失败，请重试', icon: 'none' });
     });

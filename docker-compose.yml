@@ -62,10 +62,14 @@ services:
     build:
       context: .
       dockerfile: deploy/melotts/Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-http://mirrors.tuna.tsinghua.edu.cn/debian}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
     container_name: echo-melotts
     environment:
       MELOTTS_LANGUAGE: ZH
       MELOTTS_DEVICE: cpu
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
     volumes:
       - echo-melotts-models:/models
     restart: unless-stopped
@@ -98,7 +102,8 @@ services:
       FUNASR_VAD_MODEL: ${FUNASR_VAD_MODEL:-damo/speech_fsmn_vad_zh-cn-16k-common-onnx}
       FUNASR_PUNC_MODEL: ${FUNASR_PUNC_MODEL:-damo/punc_ct-transformer_zh-cn-common-vad_realtime-vocab272727-onnx}
       FUNASR_ITN_MODEL: ${FUNASR_ITN_MODEL:-thuduj12/fst_itn_zh}
-      FUNASR_LM_MODEL: ${FUNASR_LM_MODEL:-damo/speech_ngram_lm_zh-cn-ai-wesp-fst}
+      FUNASR_LM_MODEL: "${FUNASR_LM_MODEL:-}"
+      FUNASR_DECODER_THREADS: ${FUNASR_DECODER_THREADS:-2}
     volumes:
       - echo-funasr-models:/workspace/models
       - ./deploy/funasr/start.sh:/voice/start.sh:ro
