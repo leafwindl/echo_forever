@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Dict, List
 
 
 class ChatValidationError(ValueError):
@@ -12,10 +11,10 @@ class ChatRequestInProgressError(RuntimeError):
 
 @dataclass(frozen=True)
 class ChatContext:
-    messages: List[Dict[str, str]]
-    history_messages: List[Dict[str, str]]
+    messages: list[dict[str, str]]
+    history_messages: list[dict[str, str]]
     conversation_summary: str = ""
-    long_term_memories: List[Dict[str, object]] = field(default_factory=list)
+    long_term_memories: list[dict[str, object]] = field(default_factory=list)
     memory_retrieval_mode: str = "none"
 
 
@@ -45,4 +44,9 @@ class ChatTurnResult:
 @dataclass(frozen=True)
 class ChatReplyDeliveryResult:
     reply: str
-    audio_url: str | None = None
+    audio_urls: tuple[str, ...] = ()
+
+    @property
+    def audio_url(self) -> str | None:
+        """Backward-compatible first audio segment URL."""
+        return self.audio_urls[0] if self.audio_urls else None

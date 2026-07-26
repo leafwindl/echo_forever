@@ -52,12 +52,13 @@ export interface MemoryItem {
 
 export interface SendMessageOptions {
   inputType?: ChatInputType;
-  voiceReplyEnabled?: boolean;
+  phoneMode?: boolean;
 }
 
 export interface ChatSendResponse {
   reply: string;
   audioUrl?: string | null;
+  audioUrls: string[];
 }
 
 export interface RuntimePromptResponse {
@@ -175,7 +176,7 @@ export function sendMessage(
         user_id: userId,
         message,
         input_type: options.inputType || 'text',
-        voice_reply_enabled: Boolean(options.voiceReplyEnabled),
+        voice_reply_enabled: Boolean(options.phoneMode),
       },
       success: (res: any) => {
         const data = normalizeResponseData(res.data);
@@ -183,6 +184,11 @@ export function sendMessage(
           resolve({
             reply: data.reply,
             audioUrl: data.audio_url || null,
+            audioUrls: Array.isArray(data.audio_urls)
+              ? data.audio_urls.filter((url: unknown) => typeof url === 'string' && url)
+              : data.audio_url
+              ? [data.audio_url]
+              : [],
           });
         } else if (res.statusCode === 409) {
           reject({ ...data, isRequestInProgress: true });

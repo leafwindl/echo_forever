@@ -1,7 +1,6 @@
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
-
 from shared.config import settings
 
 
@@ -25,6 +24,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     audio_url: str | None = None
+    audio_urls: list[str] = Field(default_factory=list)
 
 
 class ClearChatResponse(BaseModel):

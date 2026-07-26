@@ -51,14 +51,21 @@ class SendChatMessage:
                 assistant_message_type=assistant_message_type,
             )
 
-            audio_url = None
+            audio_urls: tuple[str, ...] = ()
             if voice_reply_enabled:
                 try:
-                    audio_url = await self.voice_reply_synthesizer.synthesize_reply(chat_result.reply)
+                    synthesis_result = await self.voice_reply_synthesizer.synthesize_reply(
+                        chat_result.reply
+                    )
+                    audio_urls = (
+                        (synthesis_result,)
+                        if isinstance(synthesis_result, str)
+                        else tuple(synthesis_result)
+                    )
                 except Exception:
                     # TTS is an enhancement; text reply and persisted chat turn still stand.
                     logger.exception("Voice synthesis failed for chat response")
 
-            return ChatReplyDeliveryResult(reply=chat_result.reply, audio_url=audio_url)
+            return ChatReplyDeliveryResult(reply=chat_result.reply, audio_urls=audio_urls)
         finally:
             self.request_guard.release(clean_user_id)

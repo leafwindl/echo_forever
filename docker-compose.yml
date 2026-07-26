@@ -28,6 +28,8 @@ services:
     environment:
       DB_PROVIDER: postgres
       DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql://echo:echo_dev_password@echo-postgres:5432/echo}
+      MELOTTS_BASE_URL: http://echo-melotts:9000
+      FUNASR_WS_URL: ws://echo-funasr:10095
     depends_on:
       echo-postgres:
         condition: service_healthy
@@ -53,6 +55,59 @@ services:
       driver: json-file
       options:
         max-size: "10m"
+        max-file: "3"
+
+  echo-melotts:
+    profiles: ["voice-local"]
+    build:
+      context: .
+      dockerfile: deploy/melotts/Dockerfile
+    container_name: echo-melotts
+    environment:
+      MELOTTS_LANGUAGE: ZH
+      MELOTTS_DEVICE: cpu
+    volumes:
+      - echo-melotts-models:/models
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health/ready', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  echo-funasr:
+    profiles: ["voice-local"]
+    image: ${FUNASR_IMAGE:-registry.cn-hangzhou.aliyuncs.com/funasr_repo/funasr:funasr-runtime-sdk-online-cpu-0.1.13}
+    container_name: echo-funasr
+    environment:
+      FUNASR_MODEL_DIR: /workspace/models
+      FUNASR_OFFLINE_MODEL: ${FUNASR_OFFLINE_MODEL:-damo/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-onnx}
+      FUNASR_ONLINE_MODEL: ${FUNASR_ONLINE_MODEL:-damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx}
+      FUNASR_VAD_MODEL: ${FUNASR_VAD_MODEL:-damo/speech_fsmn_vad_zh-cn-16k-common-onnx}
+      FUNASR_PUNC_MODEL: ${FUNASR_PUNC_MODEL:-damo/punc_ct-transformer_zh-cn-common-vad_realtime-vocab272727-onnx}
+      FUNASR_ITN_MODEL: ${FUNASR_ITN_MODEL:-thuduj12/fst_itn_zh}
+      FUNASR_LM_MODEL: ${FUNASR_LM_MODEL:-damo/speech_ngram_lm_zh-cn-ai-wesp-fst}
+    volumes:
+      - echo-funasr-models:/workspace/models
+      - ./deploy/funasr/start.sh:/voice/start.sh:ro
+    command: ["/bin/bash", "/voice/start.sh"]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
         max-file: "3"
 
   echo-postgres-backup:
@@ -83,3 +138,5 @@ services:
 
 volumes:
   echo-postgres-data:
+  echo-melotts-models:
+  echo-funasr-models:

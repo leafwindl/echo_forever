@@ -91,6 +91,57 @@ class Settings(BaseSettings):
     tencent_secret_key: str = Field(default="", validation_alias="TENCENT_SECRET_KEY")
     tencent_app_id: int = Field(default=0, validation_alias="TENCENT_APP_ID")
 
+    tts_provider: str = Field(default="edge", validation_alias="TTS_PROVIDER")
+    tts_voice_id: str = Field(
+        default="zh-CN-XiaoxiaoNeural",
+        validation_alias="TTS_VOICE_ID",
+    )
+    tts_speed: float = Field(default=1.0, validation_alias="TTS_SPEED", ge=0.5, le=2.0)
+    tts_segment_max_chars: int = Field(
+        default=80,
+        validation_alias="TTS_SEGMENT_MAX_CHARS",
+        ge=20,
+        le=300,
+    )
+    tts_reply_max_chars: int = Field(
+        default=600,
+        validation_alias="TTS_REPLY_MAX_CHARS",
+        ge=20,
+        le=3000,
+    )
+    tts_audio_max_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        validation_alias="TTS_AUDIO_MAX_BYTES",
+        ge=1024,
+        le=100 * 1024 * 1024,
+    )
+    melotts_base_url: str = Field(
+        default="http://127.0.0.1:9000",
+        validation_alias="MELOTTS_BASE_URL",
+    )
+    melotts_timeout_seconds: int = Field(
+        default=60,
+        validation_alias="MELOTTS_TIMEOUT_SECONDS",
+        ge=1,
+        le=300,
+    )
+    voice_streaming_asr_enabled: bool = Field(
+        default=False,
+        validation_alias="VOICE_STREAMING_ASR_ENABLED",
+    )
+    funasr_ws_url: str = Field(
+        default="ws://127.0.0.1:10095",
+        validation_alias="FUNASR_WS_URL",
+    )
+    funasr_mode: str = Field(default="2pass", validation_alias="FUNASR_MODE")
+    funasr_final_timeout_seconds: int = Field(
+        default=15,
+        validation_alias="FUNASR_FINAL_TIMEOUT_SECONDS",
+        ge=1,
+        le=60,
+    )
+    ffmpeg_binary: str = Field(default="ffmpeg", validation_alias="FFMPEG_BINARY")
+
     minimax_api_key: str = Field(default="", validation_alias="MINIMAX_API_KEY")
     minimax_group_id: str = Field(default="", validation_alias="MINIMAX_GROUP_ID")
     minimax_tts_voice_id: str = Field(

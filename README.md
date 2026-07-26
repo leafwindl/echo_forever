@@ -176,11 +176,13 @@ text
 
 **语音链路**
 
-1. 前端上传 MP3 到 `POST /voice/asr`。
-2. 后端调用腾讯云 ASR 得到 `user_text`，让前端先把用户文本上屏。
-3. 前端把 `user_text` 发给 `POST /voice/reply`。
-4. 后端复用同一套 `Chat Service` 生成文字回复，再调用 MiniMax TTS 生成语音。
-5. 语音文件保存到 `static/voices`，通过 `PUBLIC_BASE_URL` 拼出可访问的 `audio_url` 返回给小程序。
+1. 电话模式通过 `WS /voice/asr/stream` 实时上传 MP3 帧；后端用 FFmpeg 转为 PCM，并转发到 FunASR 2-pass 服务。
+2. 流式链路不可用时，小程序自动把完整 MP3 上传到 `POST /voice/asr`，继续使用腾讯 ASR。
+3. 最终识别文本统一发送到 `POST /chat/send`，复用同一套人格、记忆和对话服务。
+4. 语音回复按语义分段，调用可配置的 EdgeTTS 或 MeloTTS provider，返回 `audio_urls`。
+5. 小程序顺序播放各段，并在播放当前段时预下载下一段；挂断会终止当前和后续播放。
+
+本地模型服务的部署与真机验收见 `doc/deploy/v0.3 电话模式语音服务部署与验收.md`。
 
 **OpenAI 兼容模型配置**
 

@@ -13,5 +13,22 @@ class VoiceRecognitionResult:
 
 
 @dataclass(frozen=True)
+class SynthesizedVoiceAudio:
+    audio_bytes: bytes
+    file_suffix: str
+    content_type: str
+
+
+@dataclass(frozen=True)
 class VoiceSynthesisResult:
-    audio_url: str
+    audio_urls: tuple[str, ...]
+
+    @property
+    def audio_url(self) -> str | None:
+        return self.audio_urls[0] if self.audio_urls else None
+
+
+@dataclass(frozen=True)
+class StreamingRecognitionUpdate:
+    text: str
+    is_final: bool = False

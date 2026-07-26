@@ -9,23 +9,48 @@ import {
   USER_ID_STORAGE_KEY,
 } from '../../utils/api';
 import { appConfig } from '../../utils/env';
-import { playVoice } from './chat.audio';
+import { playVoiceSegments, stopVoice } from './chat.audio';
 import { createMessage, replaceMessageContent } from './chat.messages';
-import type { ChatMode, Message, RequestInProgressError, SitCrop } from './chat.types';
+import type { ChatInputType } from '../../utils/api';
+import type { Message, RequestInProgressError, SitCrop } from './chat.types';
 import { recognizeVoice } from './chat.voice';
+import { openVoiceStream } from './chat.voice-stream';
+import type { VoiceStreamSession } from './chat.voice-stream';
 
 let recorderManager: WechatMiniprogram.RecorderManager;
 
+interface ActiveVoiceStream {
+  opening: Promise<VoiceStreamSession>;
+  session: VoiceStreamSession | null;
+  bufferedFrames: ArrayBuffer[];
+  bufferedBytes: number;
+  canceled: boolean;
+}
+
+let activeVoiceStream: ActiveVoiceStream | null = null;
+const STREAM_FRAME_BUFFER_MAX_BYTES = 1024 * 1024;
+
+function cancelVoiceStreamState(state: ActiveVoiceStream): void {
+  if (state.canceled) return;
+  state.canceled = true;
+  state.bufferedFrames = [];
+  state.bufferedBytes = 0;
+  state.session?.cancel();
+  void state.opening.then((session) => session.cancel()).catch(() => undefined);
+}
+
 const CLIENT_ID_STORAGE_KEY = 'echo_client_id';
-const VOICE_REPLY_STORAGE_KEY = 'echo_voice_reply_enabled';
 const DEFAULT_ECHO_MESSAGE = '嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？';
 const TEMPORARY_ERROR_MESSAGE = '（抱歉，我暂时有点卡，请稍后再试）';
+
+type PhoneStatus = 'idle' | 'recording' | 'recognizing' | 'thinking' | 'speaking';
 
 interface ChatPageData {
   messages: Message[];
   inputText: string;
-  inputMode: ChatMode;
-  voiceReplyEnabled: boolean;
+  phoneMode: boolean;
+  phoneStatus: PhoneStatus;
+  phoneStatusLabel: string;
   isLoggingIn: boolean;
   loginErrorText: string;
   isSending: boolean;
@@ -33,7 +58,7 @@ interface ChatPageData {
   msgIdCounter: number;
   userId: string;
   isRecording: boolean;
-  recordStartTime: number;
+  isRecordPressActive: boolean;
   shouldUploadVoice: boolean;
   chatExpanded: boolean;
   adminDebugEnabled: boolean;
@@ -56,17 +81,13 @@ function getOrCreateClientId(): string {
   return clientId;
 }
 
-function getInitialVoiceReplyEnabled(): boolean {
-  const stored = wx.getStorageSync(VOICE_REPLY_STORAGE_KEY);
-  return stored === true;
-}
-
 Page({
   data: {
     messages: [] as Message[],
     inputText: '',
-    inputMode: 'text' as ChatMode,
-    voiceReplyEnabled: getInitialVoiceReplyEnabled(),
+    phoneMode: false,
+    phoneStatus: 'idle' as PhoneStatus,
+    phoneStatusLabel: '按住说话',
     isLoggingIn: true,
     loginErrorText: '',
     isSending: false,
@@ -74,7 +95,7 @@ Page({
     msgIdCounter: 0,
     userId: '',
     isRecording: false,
-    recordStartTime: 0,
+    isRecordPressActive: false,
     shouldUploadVoice: false,
     chatExpanded: false,
     adminDebugEnabled: appConfig.adminDebugEnabled,
@@ -99,6 +120,15 @@ Page({
 
     recorderManager = wx.getRecorderManager();
     this.initRecorderEvents();
+  },
+
+  onUnload() {
+    this.cancelStreamingVoiceSession();
+    if (this.data.isRecording) {
+      this.setData({ shouldUploadVoice: false });
+      recorderManager.stop();
+    }
+    stopVoice();
   },
 
   loginWithWechat(clientId: string) {
@@ -148,43 +178,104 @@ Page({
     });
   },
 
-  onToggleInputMode() {
-    if (this.data.isSending) return;
+  onTogglePhoneMode() {
+    if (!this.data.phoneMode && this.data.isSending) return;
+    if (!this.data.userId) {
+      wx.showToast({ title: '请先完成登录', icon: 'none' });
+      return;
+    }
+
+    if (this.data.phoneMode) {
+      this.cancelStreamingVoiceSession();
+      if (this.data.isRecording) {
+        this.setData({ shouldUploadVoice: false, isRecordPressActive: false });
+        recorderManager.stop();
+      }
+      stopVoice();
+      this.setData({
+        phoneMode: false,
+        phoneStatus: 'idle',
+        phoneStatusLabel: '按住说话',
+      });
+      return;
+    }
 
     this.setData({
-      inputMode: this.data.inputMode === 'text' ? 'voice' : 'text',
+      phoneMode: true,
+      phoneStatus: 'idle',
+      phoneStatusLabel: '按住说话',
     });
   },
 
-  onToggleVoiceReply() {
-    const nextVoiceReplyEnabled = !this.data.voiceReplyEnabled;
-    this.setData({ voiceReplyEnabled: nextVoiceReplyEnabled });
-    wx.setStorageSync(VOICE_REPLY_STORAGE_KEY, nextVoiceReplyEnabled);
+  setPhoneStatus(status: PhoneStatus) {
+    const statusLabels: Record<PhoneStatus, string> = {
+      idle: '按住说话',
+      recording: '松开发送',
+      recognizing: '正在识别',
+      thinking: 'Echo 正在思考',
+      speaking: 'Echo 正在说话',
+    };
+    this.setData({ phoneStatus: status, phoneStatusLabel: statusLabels[status] });
   },
 
   initRecorderEvents() {
     recorderManager.onStart(() => {
       this.setData({ isRecording: true });
-      wx.showToast({ title: '录音中... 松开结束', icon: 'none', duration: 60000 });
+      if (!this.data.isRecordPressActive) {
+        this.setData({ shouldUploadVoice: false });
+        this.cancelStreamingVoiceSession();
+        recorderManager.stop();
+        return;
+      }
+      this.setPhoneStatus('recording');
+      wx.vibrateShort({ type: 'light' });
     });
 
     recorderManager.onStop((res) => {
       const shouldUploadVoice = this.data.shouldUploadVoice;
-      this.setData({ isRecording: false, shouldUploadVoice: false });
+      const streamState = activeVoiceStream;
+      activeVoiceStream = null;
+      this.setData({ isRecording: false, isRecordPressActive: false, shouldUploadVoice: false });
       wx.hideToast();
 
-      if (shouldUploadVoice && res.tempFilePath) {
-        this.handleVoiceFile(res.tempFilePath);
+      if (shouldUploadVoice && streamState) {
+        this.setPhoneStatus('recognizing');
+        void this.handleStreamingVoice(streamState, res.tempFilePath || '');
+      } else if (shouldUploadVoice && res.tempFilePath) {
+        this.setPhoneStatus('recognizing');
+        void this.handleVoiceFile(res.tempFilePath);
       } else if (shouldUploadVoice) {
+        this.setPhoneStatus('idle');
         wx.showToast({ title: '录音失败', icon: 'none' });
+      } else {
+        if (streamState) cancelVoiceStreamState(streamState);
+        this.setPhoneStatus('idle');
       }
     });
 
     recorderManager.onError((err) => {
+      this.cancelStreamingVoiceSession();
       console.error('录音错误', err);
-      this.setData({ isRecording: false, shouldUploadVoice: false });
+      this.setData({ isRecording: false, isRecordPressActive: false, shouldUploadVoice: false });
+      this.setPhoneStatus('idle');
       wx.hideToast();
       wx.showToast({ title: '录音失败，请重试', icon: 'none' });
+    });
+
+    recorderManager.onFrameRecorded((res) => {
+      const streamState = activeVoiceStream;
+      if (!streamState || streamState.canceled) return;
+      if (streamState.session) {
+        streamState.session.sendFrame(res.frameBuffer);
+        return;
+      }
+      if (
+        streamState.bufferedBytes + res.frameBuffer.byteLength <=
+        STREAM_FRAME_BUFFER_MAX_BYTES
+      ) {
+        streamState.bufferedFrames.push(res.frameBuffer);
+        streamState.bufferedBytes += res.frameBuffer.byteLength;
+      }
     });
   },
 
@@ -202,7 +293,7 @@ Page({
     this.sendChatMessage(text, 'text');
   },
 
-  async sendChatMessage(text: string, inputMode: ChatMode) {
+  async sendChatMessage(text: string, inputType: ChatInputType) {
     if (this.data.isSending) return;
 
     const userId = this.data.userId;
@@ -210,19 +301,40 @@ Page({
       wx.showToast({ title: '请先完成登录', icon: 'none' });
       return;
     }
+    const phoneReplyEnabled = this.data.phoneMode && inputType === 'voice';
     this.setData({ isSending: true });
+    if (phoneReplyEnabled) {
+      this.setPhoneStatus('thinking');
+    }
     this.addMessage('user', text);
     const pendingMessageId = this.addTypingMessage();
 
     try {
       const response = await sendMessage(userId, text, {
-        inputType: inputMode,
-        voiceReplyEnabled: this.data.voiceReplyEnabled,
+        inputType,
+        phoneMode: phoneReplyEnabled,
       });
       this.updateMessage(pendingMessageId, response.reply || '（我刚刚没组织好语言，可以再说一次吗？）');
 
-      if (this.data.voiceReplyEnabled && response.audioUrl) {
-        playVoice(response.audioUrl);
+      const audioUrls = response.audioUrls.length
+        ? response.audioUrls
+        : response.audioUrl
+        ? [response.audioUrl]
+        : [];
+      if (phoneReplyEnabled && this.data.phoneMode && audioUrls.length) {
+        this.setPhoneStatus('speaking');
+        try {
+          await playVoiceSegments(audioUrls, () => this.data.phoneMode);
+        } catch (error) {
+          console.error('电话模式播放失败', error);
+          if (this.data.phoneMode) {
+            wx.showToast({ title: '语音播放失败，仍可继续说话', icon: 'none' });
+          }
+        } finally {
+          if (this.data.phoneMode) {
+            this.setPhoneStatus('idle');
+          }
+        }
       }
     } catch (error) {
       console.error('发送消息失败', error);
@@ -239,6 +351,9 @@ Page({
           : TEMPORARY_ERROR_MESSAGE,
       );
     } finally {
+      if (phoneReplyEnabled && this.data.phoneMode && this.data.phoneStatus !== 'idle') {
+        this.setPhoneStatus('idle');
+      }
       this.setData({ isSending: false });
     }
   },
@@ -393,31 +508,80 @@ Page({
       return;
     }
 
+    this.setData({ isRecordPressActive: true });
     const auth = await this.checkRecordAuth();
-    if (!auth) return;
+    if (!auth || !this.data.phoneMode || !this.data.isRecordPressActive) {
+      this.setData({ isRecordPressActive: false });
+      return;
+    }
 
     this.setData({
       shouldUploadVoice: true,
-      recordStartTime: Date.now(),
     });
+
+    const streamOpening = openVoiceStream((partialText) => {
+      if (!partialText || !this.data.phoneMode || !this.data.isRecording) return;
+      this.setData({ phoneStatusLabel: `正在听：${partialText.slice(-18)}` });
+    });
+    const streamState: ActiveVoiceStream = {
+      opening: streamOpening,
+      session: null,
+      bufferedFrames: [],
+      bufferedBytes: 0,
+      canceled: false,
+    };
+    activeVoiceStream = streamState;
+    void streamState.opening
+      .then((session) => {
+        if (streamState.canceled) {
+          session.cancel();
+          return;
+        }
+        streamState.session = session;
+        for (const frame of streamState.bufferedFrames) {
+          session.sendFrame(frame);
+        }
+        streamState.bufferedFrames = [];
+        streamState.bufferedBytes = 0;
+      })
+      .catch((error) => {
+        // Keep the existing full-file Tencent ASR path as an automatic fallback.
+        console.warn('流式语音不可用，使用整段识别', error);
+        streamState.bufferedFrames = [];
+        streamState.bufferedBytes = 0;
+      });
 
     recorderManager.start({
       duration: 60000,
       sampleRate: 16000,
       numberOfChannels: 1,
       format: 'mp3',
+      frameSize: 4,
     });
   },
 
   onStopRecord() {
-    if (!this.data.isRecording) return;
+    this.setData({ isRecordPressActive: false });
+    if (!this.data.isRecording) {
+      this.setData({ shouldUploadVoice: false });
+      this.cancelStreamingVoiceSession();
+      return;
+    }
     recorderManager.stop();
   },
 
   onCancelRecord() {
-    if (!this.data.isRecording) return;
+    this.setData({ isRecordPressActive: false });
     this.setData({ shouldUploadVoice: false });
+    this.cancelStreamingVoiceSession();
+    if (!this.data.isRecording) return;
     recorderManager.stop();
+  },
+
+  cancelStreamingVoiceSession() {
+    const streamState = activeVoiceStream;
+    activeVoiceStream = null;
+    if (streamState) cancelVoiceStreamState(streamState);
   },
 
   checkRecordAuth(): Promise<boolean> {
@@ -442,25 +606,26 @@ Page({
             },
           });
         },
+        fail: () => resolve(false),
       });
     });
   },
 
   async handleVoiceFile(filePath: string) {
-    wx.showLoading({ title: '识别中...' });
     try {
       const userText = (await recognizeVoice(filePath)).trim();
-      wx.hideLoading();
 
       if (!userText) {
+        this.setPhoneStatus('idle');
         wx.showToast({ title: '未听清，请重试', icon: 'none' });
         return;
       }
 
+      if (!this.data.phoneMode) return;
       await this.sendChatMessage(userText, 'voice');
     } catch (error) {
-      wx.hideLoading();
       console.error('语音识别失败', error);
+      this.setPhoneStatus('idle');
       const requestError = error as RequestInProgressError & {
         isUploadTooLarge?: boolean;
       };
@@ -471,6 +636,28 @@ Page({
         title: requestError.detail || '语音识别失败',
         icon: 'none',
       });
+    }
+  },
+
+  async handleStreamingVoice(streamState: ActiveVoiceStream, fallbackFilePath: string) {
+    try {
+      const streamSession = streamState.session || (await streamState.opening);
+      if (streamState.canceled) return;
+      const userText = (await streamSession.finish()).trim();
+      if (!userText) {
+        throw new Error('未听清，请重说');
+      }
+      if (!this.data.phoneMode) return;
+      await this.sendChatMessage(userText, 'voice');
+    } catch (error) {
+      console.warn('流式识别失败，尝试整段识别', error);
+      cancelVoiceStreamState(streamState);
+      if (fallbackFilePath && this.data.phoneMode) {
+        await this.handleVoiceFile(fallbackFilePath);
+        return;
+      }
+      this.setPhoneStatus('idle');
+      wx.showToast({ title: '语音识别失败，请重试', icon: 'none' });
     }
   },
 });

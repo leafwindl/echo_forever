@@ -53,8 +53,8 @@ def save_upload_audio_file(audio_bytes: bytes, suffix: str = ".mp3") -> str:
     return str(filepath)
 
 
-async def save_audio_file(audio_bytes: bytes) -> str:
-    filename = f"{uuid.uuid4().hex}.mp3"
+async def save_audio_file(audio_bytes: bytes, suffix: str = ".mp3") -> str:
+    filename = f"{uuid.uuid4().hex}{_normalize_suffix(suffix)}"
     filepath = get_voice_generated_dir() / filename
     filepath.write_bytes(audio_bytes)
     return f"{settings.static_url_prefix}/static/voices/generated/{filename}"
@@ -125,7 +125,11 @@ def cleanup_expired_audio_files_in_dir(
     failed = 0
     released_bytes = 0
 
-    paths = directory.rglob("*.mp3") if include_nested else directory.glob("*.mp3")
+    paths = (
+        (path for pattern in ("*.mp3", "*.wav") for path in directory.rglob(pattern))
+        if include_nested
+        else (path for pattern in ("*.mp3", "*.wav") for path in directory.glob(pattern))
+    )
     candidates = []
     for filepath in paths:
         try:
@@ -169,8 +173,8 @@ def cleanup_expired_audio_files_in_dir(
 
 
 def _normalize_suffix(suffix: str) -> str:
-    normalized_suffix = suffix if suffix.startswith(".") else f".{suffix}"
-    if "/" in normalized_suffix or "\\" in normalized_suffix or normalized_suffix == ".":
+    normalized_suffix = (suffix if suffix.startswith(".") else f".{suffix}").lower()
+    if normalized_suffix not in {".mp3", ".wav"}:
         return ".mp3"
     return normalized_suffix
 

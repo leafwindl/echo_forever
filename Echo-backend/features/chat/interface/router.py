@@ -1,20 +1,24 @@
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from shared.config import settings
+from shared.interface.dependencies import CurrentUser, get_current_user
+from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
 from features.admin.public import AdminValidationError, clear_user_chat_context
 from features.chat.interface.schemas import ChatRequest, ChatResponse, ClearChatResponse
 from features.chat.public import ChatRequestInProgressError, ChatValidationError, send_chat_message
-from shared.config import settings
-from shared.interface.dependencies import CurrentUser, get_current_user
-from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 @router.post("/send", response_model=ChatResponse)
-async def chat_send(request: ChatRequest, current_user: CurrentUser = Depends(get_current_user)):
+async def chat_send(
+    request: ChatRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
     """发送用户消息并获取 AI 回复，按需附带语音回复。"""
     try:
         request_limiter.consume(
@@ -51,13 +55,20 @@ async def chat_send(request: ChatRequest, current_user: CurrentUser = Depends(ge
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except Exception as e:
         logger.exception("Text chat failed")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="内部服务器错误") from e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="内部服务器错误",
+        ) from e
 
-    return ChatResponse(reply=result.reply, audio_url=result.audio_url)
+    return ChatResponse(
+        reply=result.reply,
+        audio_url=result.audio_url,
+        audio_urls=list(result.audio_urls),
+    )
 
 
 @router.post("/clear", response_model=ClearChatResponse)
-async def chat_clear(current_user: CurrentUser = Depends(get_current_user)):
+async def chat_clear(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
     """清除当前登录用户的聊天记录和会话摘要，不影响长期记忆。"""
     try:
         result = clear_user_chat_context(current_user.user_id)

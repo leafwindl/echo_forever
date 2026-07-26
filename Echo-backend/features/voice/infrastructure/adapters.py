@@ -1,3 +1,8 @@
+from providers.asr_provider import get_asr_provider
+from providers.tts_provider import get_tts_provider
+from shared.config import settings
+
+from features.voice.domain.entities import SynthesizedVoiceAudio
 from features.voice.domain.services import (
     VoiceAudioStorage,
     VoiceRecognizer,
@@ -8,11 +13,6 @@ from features.voice.infrastructure.audio_storage import (
     save_audio_file,
     save_upload_audio_file,
 )
-from providers.asr_provider import get_asr_provider
-from providers.tts_provider import get_tts_provider
-from shared.config import settings
-
-DEFAULT_EDGE_TTS_VOICE_ID = settings.minimax_tts_voice_id
 
 
 class LocalVoiceAudioStorage(VoiceAudioStorage):
@@ -22,8 +22,8 @@ class LocalVoiceAudioStorage(VoiceAudioStorage):
     def delete_upload(self, audio_path: str) -> None:
         delete_upload_audio_file(audio_path)
 
-    async def save_generated_audio(self, audio_bytes: bytes) -> str:
-        return await save_audio_file(audio_bytes)
+    async def save_generated_audio(self, audio_bytes: bytes, suffix: str = ".mp3") -> str:
+        return await save_audio_file(audio_bytes, suffix=suffix)
 
 
 class TencentVoiceRecognizer(VoiceRecognizer):
@@ -32,7 +32,18 @@ class TencentVoiceRecognizer(VoiceRecognizer):
         return await provider.recognize(audio_path)
 
 
-class EdgeVoiceSynthesizer(VoiceSynthesizer):
-    async def synthesize(self, text: str) -> bytes:
+class ProviderVoiceSynthesizer(VoiceSynthesizer):
+    async def synthesize(self, text: str) -> SynthesizedVoiceAudio:
         provider = get_tts_provider()
-        return await provider.text_to_speech(text, DEFAULT_EDGE_TTS_VOICE_ID)
+        result = await provider.text_to_speech(text, settings.tts_voice_id)
+        if isinstance(result, bytes):
+            return SynthesizedVoiceAudio(
+                audio_bytes=result,
+                file_suffix=".mp3",
+                content_type="audio/mpeg",
+            )
+        return SynthesizedVoiceAudio(
+            audio_bytes=result.audio_bytes,
+            file_suffix=result.file_suffix,
+            content_type=result.content_type,
+        )

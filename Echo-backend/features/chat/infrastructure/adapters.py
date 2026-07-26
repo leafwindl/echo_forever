@@ -1,5 +1,7 @@
 import threading
-from typing import Optional
+
+from providers.llm_provider import get_llm_provider
+from shared.config import settings
 
 from features.chat.domain.entities import ChatContext, MemoryExtractionScheduleResult
 from features.chat.domain.repositories import ChatConversationRepository
@@ -15,8 +17,6 @@ from features.chat.infrastructure.context_builder import build_chat_context
 from features.chat.infrastructure.conversation_summary import maybe_update_conversation_summary
 from features.chat.infrastructure.repository_provider import get_repository_module
 from features.memory.public import schedule_memory_extraction
-from providers.llm_provider import get_llm_provider
-from shared.config import settings
 
 
 class InMemoryChatRequestGuard(ChatRequestGuard):
@@ -50,7 +50,7 @@ class InMemoryChatRequestGuard(ChatRequestGuard):
 
 
 class ChatConversationRepositoryAdapter(ChatConversationRepository):
-    def ensure_conversation(self, user_id: str, conversation_id: Optional[str]) -> str:
+    def ensure_conversation(self, user_id: str, conversation_id: str | None) -> str:
         return get_repository_module().ensure_conversation(user_id, conversation_id)
 
     def get_or_create_active_conversation(self, user_id: str) -> str:
@@ -125,8 +125,8 @@ class MemoryExtractionSchedulerAdapter(MemoryExtractionScheduler):
 
 
 class VoiceReplySynthesizerAdapter(ChatVoiceReplySynthesizer):
-    async def synthesize_reply(self, reply: str) -> str:
+    async def synthesize_reply(self, reply: str) -> tuple[str, ...]:
         from features.voice.public import synthesize_voice_reply
 
         result = await synthesize_voice_reply(reply)
-        return result.audio_url
+        return result.audio_urls

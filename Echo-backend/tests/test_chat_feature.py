@@ -203,6 +203,7 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.reply, "hello from echo")
         self.assertEqual(result.audio_url, "http://example.test/voice.mp3")
+        self.assertEqual(result.audio_urls, ("http://example.test/voice.mp3",))
         self.assertEqual(voice_synthesizer.received_replies, ["hello from echo"])
         self.assertEqual(repository.persisted_turns[0]["user_message_type"], "voice_asr")
         self.assertEqual(repository.persisted_turns[0]["assistant_message_type"], "voice_reply")

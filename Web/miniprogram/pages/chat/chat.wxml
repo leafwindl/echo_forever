@@ -45,27 +45,32 @@
     </scroll-view>
 
     <!-- 输入区域 -->
-    <view class="input-area">
-      <button class="mode-btn {{isSending || !userId ? 'disabled' : ''}}" disabled="{{isSending || !userId}}" bindtap="onToggleInputMode">{{inputMode === 'text' ? '语音' : '键盘'}}</button>
-
-      <block wx:if="{{inputMode === 'text'}}">
+    <view class="input-area {{phoneMode ? 'phone-input-area' : ''}}">
+      <block wx:if="{{!phoneMode}}">
         <input class="input" value="{{inputText}}" disabled="{{isSending || !userId}}" maxlength="2000" placeholder="{{userId ? '说点什么...' : '请先完成登录'}}" bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
         <button class="send-btn {{isSending || !userId ? 'disabled' : ''}}" size="mini" disabled="{{isSending || !userId}}" bindtap="onSend">{{isSending ? '等待' : '发送'}}</button>
       </block>
-
       <block wx:else>
-        <button
-          class="hold-voice-btn {{isRecording ? 'recording' : ''}} {{isSending || !userId ? 'disabled' : ''}}"
-          disabled="{{isSending || !userId}}"
-          bindtouchstart="onStartRecord"
-          bindtouchend="onStopRecord"
-          bindtouchcancel="onCancelRecord"
-        >
-          {{isRecording ? '松开 发送' : '按住 说话'}}
-        </button>
+        <view class="phone-panel">
+          <view class="phone-status {{phoneStatus}}">
+            <view class="phone-status-dot"></view>
+            <text>{{phoneStatusLabel}}</text>
+          </view>
+          <button
+            class="hold-voice-btn {{isRecording ? 'recording' : ''}} {{isSending || !userId ? 'disabled' : ''}}"
+            disabled="{{isSending || !userId}}"
+            bindtouchstart="onStartRecord"
+            bindtouchend="onStopRecord"
+            bindtouchcancel="onCancelRecord"
+          >
+            {{phoneStatus === 'recording' ? '松开发送' : '按住说话'}}
+          </button>
+        </view>
       </block>
 
-      <button class="voice-reply-btn {{voiceReplyEnabled ? 'active' : ''}} {{isSending || !userId ? 'disabled' : ''}}" disabled="{{isSending || !userId}}" bindtap="onToggleVoiceReply">音</button>
+      <button class="phone-mode-btn {{phoneMode ? 'active' : ''}} {{!userId ? 'disabled' : ''}}" disabled="{{!userId}}" bindtap="onTogglePhoneMode">
+        {{phoneMode ? '挂断' : '☎ 电话'}}
+      </button>
     </view>
 
     <view class="chat-actions">
