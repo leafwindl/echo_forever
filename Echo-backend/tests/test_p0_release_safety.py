@@ -12,7 +12,6 @@ from starlette.datastructures import UploadFile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.admin.interface.router import verify_admin_debug_access
 from features.chat.interface.router import chat_clear
 from features.chat.interface.schemas import ChatRequest
 from features.system.interface.router import readiness_check
@@ -20,43 +19,6 @@ from features.voice.interface.router import read_upload_with_limit
 from shared.config import settings
 from shared.interface.dependencies import CurrentUser
 from shared.security.logging_filter import SensitiveDataFilter
-
-
-class AdminDebugSafetyTests(unittest.TestCase):
-    def setUp(self):
-        self.original_enabled = settings.enable_admin_debug_api
-        self.original_token = settings.admin_debug_token
-
-    def tearDown(self):
-        settings.enable_admin_debug_api = self.original_enabled
-        settings.admin_debug_token = self.original_token
-
-    def test_disabled_admin_api_returns_not_found(self):
-        settings.enable_admin_debug_api = False
-
-        with self.assertRaises(HTTPException) as error:
-            verify_admin_debug_access("anything")
-
-        self.assertEqual(error.exception.status_code, 404)
-
-    def test_placeholder_admin_token_cannot_enable_api(self):
-        settings.enable_admin_debug_api = True
-        settings.admin_debug_token = "change-me"
-
-        with self.assertRaises(HTTPException) as error:
-            verify_admin_debug_access("change-me")
-
-        self.assertEqual(error.exception.status_code, 503)
-
-    def test_strong_admin_token_is_compared(self):
-        settings.enable_admin_debug_api = True
-        settings.admin_debug_token = "a" * 32
-
-        with self.assertRaises(HTTPException) as error:
-            verify_admin_debug_access("wrong")
-        self.assertEqual(error.exception.status_code, 403)
-
-        self.assertIsNone(verify_admin_debug_access("a" * 32))
 
 
 class RequestSafetyTests(unittest.IsolatedAsyncioTestCase):
@@ -86,7 +48,7 @@ class RequestSafetyTests(unittest.IsolatedAsyncioTestCase):
         finally:
             settings.chat_message_max_chars = original_limit
 
-    @patch("features.chat.interface.router.clear_user_chat_context")
+    @patch("features.chat.interface.router.clear_chat_context")
     async def test_user_can_clear_only_authenticated_chat_context(self, clear_context):
         clear_context.return_value.deleted_messages = 7
         clear_context.return_value.reset_conversations = 1

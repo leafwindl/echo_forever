@@ -6,18 +6,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-ARG APT_MIRROR=
-RUN set -eux; \
-    if [ -n "${APT_MIRROR}" ]; then \
-        sed -i \
-            -e "s|http://deb.debian.org/debian-security|${APT_MIRROR}-security|g" \
-            -e "s|http://deb.debian.org/debian|${APT_MIRROR}|g" \
-            /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
-    fi; \
-    apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY Echo-backend/requirements.txt /app/Echo-backend/requirements.txt
 ARG PIP_INDEX_URL=https://pypi.org/simple
 RUN python -m pip install --upgrade pip --index-url "${PIP_INDEX_URL}" \

@@ -4,7 +4,7 @@ from providers.llm_provider import get_llm_provider
 from shared.config import settings
 
 from features.chat.domain.entities import ChatContext, MemoryExtractionScheduleResult
-from features.chat.domain.repositories import ChatConversationRepository
+from features.chat.domain.repositories import ChatContextRepository, ChatConversationRepository
 from features.chat.domain.services import (
     ChatContextProvider,
     ChatLLM,
@@ -76,6 +76,12 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
             user_message_type=user_message_type,
             assistant_message_type=assistant_message_type,
         )
+
+
+
+class ChatContextRepositoryAdapter(ChatContextRepository):
+    def clear_context(self, user_id: str) -> tuple[int, int]:
+        return postgres_repositories.clear_context(user_id)
 
 
 class ChatContextProviderAdapter(ChatContextProvider):

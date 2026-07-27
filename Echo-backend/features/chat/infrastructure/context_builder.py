@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 
 from shared.config import settings
 
-from features.admin.public import get_effective_system_prompt
 from features.assistant_persona.public import get_assistant_persona
 from features.chat.infrastructure import postgres_repositories
 from features.chat.infrastructure.prompt_renderer import render_prompt_layers
@@ -121,7 +120,7 @@ async def build_chat_context(
         relationship = None
 
     messages: list[dict[str, str]] = render_prompt_layers(
-        product_identity=get_effective_system_prompt().content,
+        product_identity=settings.system_prompt,
         persona=persona,
         long_term_memories=long_term_memories,
         conversation_summary=summary_text,

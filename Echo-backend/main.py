@@ -8,8 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
-from db.schema import init_db
-from features.admin.interface.router import router as admin_debug_router
+from db.postgres_schema import init_db
 from features.auth.interface.router import router as auth_router
 from features.assistant_persona.public import get_assistant_persona
 from features.chat.interface.router import router as chat_router
@@ -130,9 +129,6 @@ def create_app() -> FastAPI:
     app.include_router(persona_router)
     app.include_router(relationship_router)
     app.include_router(voice_router)
-    if settings.enable_admin_debug_api:
-        app.include_router(admin_debug_router)
-
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     return app

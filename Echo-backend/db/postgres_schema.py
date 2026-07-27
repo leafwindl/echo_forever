@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from db.postgres_connection import transaction
 from shared.config import settings
 
 
@@ -88,12 +89,6 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
-        "ALTER TABLE user_personas ADD COLUMN IF NOT EXISTS relationship_pace VARCHAR(32) NOT NULL DEFAULT 'natural'",
-        "ALTER TABLE user_personas ADD COLUMN IF NOT EXISTS affection_style VARCHAR(32) NOT NULL DEFAULT 'contextual'",
-        "ALTER TABLE user_personas ADD COLUMN IF NOT EXISTS is_customized BOOLEAN NOT NULL DEFAULT TRUE",
-        "ALTER TABLE user_personas ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE",
-        "ALTER TABLE user_personas ALTER COLUMN schema_version SET DEFAULT 3",
-        "UPDATE user_personas SET schema_version = 3 WHERE schema_version < 3",
         """
         CREATE TABLE IF NOT EXISTS relationship_states (
             user_id TEXT PRIMARY KEY,
@@ -156,15 +151,6 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
-        CREATE TABLE IF NOT EXISTS runtime_settings (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL,
-            scope TEXT NOT NULL DEFAULT 'global',
-            updated_by TEXT,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """,
-        """
         CREATE TABLE IF NOT EXISTS voice_files (
             id BIGSERIAL PRIMARY KEY,
             file_id TEXT NOT NULL UNIQUE,
@@ -220,7 +206,6 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         ON background_jobs(status, job_type, id)
         """,
         "CREATE INDEX IF NOT EXISTS idx_background_jobs_type_created ON background_jobs(job_type, created_at)",
-        "CREATE INDEX IF NOT EXISTS idx_runtime_settings_scope_key ON runtime_settings(scope, key)",
         "CREATE INDEX IF NOT EXISTS idx_voice_files_user_created ON voice_files(user_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_voice_files_status_expires ON voice_files(status, expires_at)",
     ]
@@ -228,3 +213,11 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
 
 def build_postgres_schema_text(vector_dimension: int | None = None) -> str:
     return ";\n\n".join(statement.strip() for statement in build_postgres_schema_sql(vector_dimension)) + ";\n"
+
+
+def init_db() -> None:
+    """Initialize the PostgreSQL + pgvector schema."""
+    with transaction() as conn:
+        with conn.cursor() as cursor:
+            for statement in build_postgres_schema_sql():
+                cursor.execute(statement)

@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from features.chat.application.clear_context import ClearChatContext
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.application.send_message import SendChatMessage
 from features.chat.domain.dialogue_style import (
@@ -22,6 +23,7 @@ from features.chat.domain.entities import (
 class FakeConversationRepository:
     def __init__(self):
         self.persisted_turns = []
+        self.cleared_user_ids = []
 
     def ensure_conversation(self, user_id, conversation_id):
         return conversation_id or "conv_fake"
@@ -49,6 +51,10 @@ class FakeConversationRepository:
             }
         )
         return 10, 11
+
+    def clear_context(self, user_id):
+        self.cleared_user_ids.append(user_id)
+        return 4, 1
 
 
 class FakeContextProvider:
@@ -141,6 +147,14 @@ class FakeChatRequestGuard:
 
 
 class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
+    async def test_clear_chat_context_uses_clean_authenticated_user_id(self):
+        repository = FakeConversationRepository()
+        result = ClearChatContext(repository).execute(" user_a ")
+
+        self.assertEqual(repository.cleared_user_ids, ["user_a"])
+        self.assertEqual(result.deleted_messages, 4)
+        self.assertEqual(result.reset_conversations, 1)
+
     def build_generate_use_case(self):
         repository = FakeConversationRepository()
         relationship_recorder = FakeRelationshipRecorder()

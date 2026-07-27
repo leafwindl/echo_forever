@@ -13,10 +13,7 @@ from features.voice.application.use_cases import (
 from features.voice.domain.entities import SynthesizedVoiceAudio, UnsupportedVoiceFormatError
 from features.voice.domain.segmentation import sanitize_text_for_speech, split_text_for_speech
 from features.voice.infrastructure.audio_storage import cleanup_expired_audio_files_in_dir
-from features.voice.infrastructure.streaming_asr import (
-    FunASRTranscriptAccumulator,
-    TencentASRTranscriptAccumulator,
-)
+from features.voice.infrastructure.streaming_asr import TencentASRTranscriptAccumulator
 
 
 class FakeAudioStorage:
@@ -187,25 +184,6 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
             split_text_for_speech("第一句话。🌿", max_chars=80, total_max_chars=100),
             ("第一句话。",),
         )
-
-    def test_funasr_accumulator_does_not_finish_on_intermediate_offline_segment(self):
-        accumulator = FunASRTranscriptAccumulator()
-
-        online = accumulator.apply({"mode": "2pass-online", "text": "你号"})
-        corrected = accumulator.apply(
-            {"mode": "2pass-offline", "text": "你好。", "is_final": False}
-        )
-        next_online = accumulator.apply({"mode": "2pass-online", "text": "今"})
-        final = accumulator.apply(
-            {"mode": "2pass-offline", "text": "今天很好。", "is_final": True}
-        )
-
-        self.assertEqual(online.text, "你号")
-        self.assertEqual(corrected.text, "你好。")
-        self.assertFalse(corrected.is_final)
-        self.assertEqual(next_online.text, "你好。今")
-        self.assertEqual(final.text, "你好。今天很好。")
-        self.assertTrue(final.is_final)
 
     def test_tencent_accumulator_replaces_partial_and_keeps_stable_segments(self):
         accumulator = TencentASRTranscriptAccumulator()

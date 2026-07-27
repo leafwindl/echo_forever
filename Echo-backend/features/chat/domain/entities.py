@@ -47,3 +47,9 @@ class ChatTurnResult:
 class ChatReplyDeliveryResult:
     reply: str
     audio_urls: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ChatContextClearResult:
+    deleted_messages: int
+    reset_conversations: int

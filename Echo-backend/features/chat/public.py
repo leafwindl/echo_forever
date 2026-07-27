@@ -1,15 +1,21 @@
 from typing import Optional
 
 from features.chat.domain.entities import (
+    ChatContextClearResult,
     ChatReplyDeliveryResult,
     ChatRequestInProgressError,
     ChatTurnResult,
     ChatValidationError,
 )
 from features.chat.infrastructure.container import (
+    get_clear_chat_context_use_case,
     get_generate_chat_reply_use_case,
     get_send_chat_message_use_case,
 )
+
+
+def clear_chat_context(user_id: str) -> ChatContextClearResult:
+    return get_clear_chat_context_use_case().execute(user_id)
 
 
 async def generate_chat_reply(
@@ -45,10 +51,12 @@ async def send_chat_message(
 
 
 __all__ = [
+    "ChatContextClearResult",
     "ChatReplyDeliveryResult",
     "ChatRequestInProgressError",
     "ChatTurnResult",
     "ChatValidationError",
+    "clear_chat_context",
     "generate_chat_reply",
     "send_chat_message",
 ]

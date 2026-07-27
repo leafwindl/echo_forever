@@ -18,3 +18,8 @@ class ChatConversationRepository(Protocol):
         assistant_message_type: str,
     ) -> tuple[int, int]:
         ...
+
+
+class ChatContextRepository(Protocol):
+    def clear_context(self, user_id: str) -> tuple[int, int]:
+        ...

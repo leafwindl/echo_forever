@@ -8,7 +8,6 @@ from typing import Protocol, cast
 
 import dashscope
 import edge_tts
-import httpx
 from dashscope.audio.tts_v2 import AudioFormat, ResultCallback, SpeechSynthesizer
 from shared.config import settings
 
@@ -239,55 +238,10 @@ class CosyVoiceTTSProvider:
         )
 
 
-class MeloTTSProvider:
-    async def stream_text_to_speech(self, text: str, voice_id: str) -> AsyncIterator[bytes]:
-        result = await self.text_to_speech(text, voice_id)
-        yield result.audio_bytes
-
-    async def text_to_speech(self, text: str, voice_id: str) -> TTSOutput:
-        clean_text = text.strip()
-        if not clean_text:
-            raise ValueError("TTS text cannot be empty")
-
-        endpoint = f"{settings.melotts_base_url.rstrip('/')}/synthesize"
-        try:
-            async with (
-                httpx.AsyncClient(timeout=settings.melotts_timeout_seconds) as client,
-                client.stream(
-                    "POST",
-                    endpoint,
-                    json={
-                        "text": clean_text,
-                        "speaker": voice_id,
-                        "speed": settings.tts_speed,
-                    },
-                ) as response,
-            ):
-                response.raise_for_status()
-                audio_buffer = bytearray()
-                async for chunk in response.aiter_bytes():
-                    if len(audio_buffer) + len(chunk) > settings.tts_audio_max_bytes:
-                        raise ValueError("MeloTTS response exceeds configured audio size limit")
-                    audio_buffer.extend(chunk)
-        except httpx.HTTPError as exc:
-            raise ValueError(f"MeloTTS request failed: {exc}") from exc
-
-        audio_bytes = bytes(audio_buffer)
-        if not audio_bytes:
-            raise ValueError("MeloTTS returned empty audio")
-        return TTSOutput(
-            audio_bytes=audio_bytes,
-            file_suffix=".wav",
-            content_type="audio/wav",
-        )
-
-
 def get_tts_provider() -> TTSProvider:
     provider_name = settings.tts_provider.strip().lower()
     if provider_name == "edge":
         return cast(TTSProvider, get_provider("tts", EdgeTTSProvider))
     if provider_name in {"cosyvoice", "cosyvoice-v3.5-flash"}:
         return cast(TTSProvider, get_provider("tts", CosyVoiceTTSProvider))
-    if provider_name in {"melo", "melotts"}:
-        return cast(TTSProvider, get_provider("tts", MeloTTSProvider))
     raise ValueError(f"Unsupported TTS provider: {settings.tts_provider}")

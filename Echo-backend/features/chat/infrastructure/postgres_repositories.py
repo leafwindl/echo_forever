@@ -169,6 +169,27 @@ def add_chat_turn(
         return user_message_id, assistant_message_id
 
 
+def clear_context(user_id: str) -> tuple[int, int]:
+    with transaction() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM chat_messages WHERE user_id = %s", (user_id,))
+            deleted_messages = max(cursor.rowcount, 0)
+
+            cursor.execute(
+                """
+                UPDATE conversations
+                SET summary = '',
+                    summary_message_id = 0,
+                    updated_at = NOW()
+                WHERE user_id = %s
+                """,
+                (user_id,),
+            )
+            reset_conversations = max(cursor.rowcount, 0)
+
+    return deleted_messages, reset_conversations
+
+
 def get_history(
     user_id: str,
     limit: int = 20,

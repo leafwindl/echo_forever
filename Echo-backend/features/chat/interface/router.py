@@ -6,11 +6,11 @@ from shared.config import settings
 from shared.interface.dependencies import CurrentUser, get_current_user
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
-from features.admin.public import AdminValidationError, clear_user_chat_context
 from features.chat.interface.schemas import ChatRequest, ChatResponse, ClearChatResponse
 from features.chat.public import (
     ChatRequestInProgressError,
     ChatValidationError,
+    clear_chat_context,
     send_chat_message,
 )
 
@@ -77,8 +77,8 @@ async def chat_send(
 async def chat_clear(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
     """清除当前登录用户的聊天记录和会话摘要，不影响长期记忆。"""
     try:
-        result = clear_user_chat_context(current_user.user_id)
-    except AdminValidationError as exc:
+        result = clear_chat_context(current_user.user_id)
+    except ChatValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Failed to clear chat context for user_id=%s", current_user.user_id)

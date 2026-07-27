@@ -153,23 +153,9 @@ class Settings(BaseSettings):
         ge=5,
         le=120,
     )
-    melotts_base_url: str = Field(
-        default="http://127.0.0.1:9000",
-        validation_alias="MELOTTS_BASE_URL",
-    )
-    melotts_timeout_seconds: int = Field(
-        default=60,
-        validation_alias="MELOTTS_TIMEOUT_SECONDS",
-        ge=1,
-        le=300,
-    )
     voice_streaming_asr_enabled: bool = Field(
         default=False,
         validation_alias="VOICE_STREAMING_ASR_ENABLED",
-    )
-    voice_streaming_asr_provider: str = Field(
-        default="tencent",
-        validation_alias="VOICE_STREAMING_ASR_PROVIDER",
     )
     tencent_asr_engine_model_type: str = Field(
         default="16k_zh",
@@ -181,26 +167,6 @@ class Settings(BaseSettings):
         ge=1,
         le=60,
     )
-    funasr_ws_url: str = Field(
-        default="ws://127.0.0.1:10095",
-        validation_alias="FUNASR_WS_URL",
-    )
-    funasr_mode: str = Field(default="2pass", validation_alias="FUNASR_MODE")
-    funasr_final_timeout_seconds: int = Field(
-        default=15,
-        validation_alias="FUNASR_FINAL_TIMEOUT_SECONDS",
-        ge=1,
-        le=60,
-    )
-    ffmpeg_binary: str = Field(default="ffmpeg", validation_alias="FFMPEG_BINARY")
-
-    @property
-    def streaming_asr_final_timeout_seconds(self) -> int:
-        provider = self.voice_streaming_asr_provider.strip().lower()
-        if provider == "tencent":
-            return self.tencent_asr_final_timeout_seconds
-        return self.funasr_final_timeout_seconds
-
     static_url_prefix: str = Field(
         default="http://localhost:8000",
         validation_alias="PUBLIC_BASE_URL",
@@ -221,11 +187,6 @@ class Settings(BaseSettings):
         default=500,
         validation_alias="VOICE_CLEANUP_BATCH_SIZE",
     )
-    enable_admin_debug_api: bool = Field(
-        default=False,
-        validation_alias="ENABLE_ADMIN_DEBUG_API",
-    )
-    admin_debug_token: str = Field(default="", validation_alias="ADMIN_DEBUG_TOKEN")
     auth_token_secret: str = Field(default="", validation_alias="AUTH_TOKEN_SECRET")
     auth_token_expires_seconds: int = Field(
         default=2592000,

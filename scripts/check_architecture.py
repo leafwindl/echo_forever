@@ -15,6 +15,9 @@ REMOVED_COMPAT_PATHS = (
     BACKEND_ROOT / "db" / "sqlite_connection.py",
     BACKEND_ROOT / "db" / "sqlite_schema.py",
     BACKEND_ROOT / "db" / "connection.py",
+    BACKEND_ROOT / "db" / "schema.py",
+    BACKEND_ROOT / "db" / "migrations",
+    BACKEND_ROOT / "features" / "admin",
     BACKEND_ROOT / "features" / "auth" / "infrastructure" / "sqlite_repositories.py",
     BACKEND_ROOT / "features" / "chat" / "infrastructure" / "sqlite_repositories.py",
     BACKEND_ROOT / "features" / "memory" / "infrastructure" / "sqlite_repositories.py",
@@ -22,6 +25,8 @@ REMOVED_COMPAT_PATHS = (
     BACKEND_ROOT / "features" / "chat" / "infrastructure" / "repository_provider.py",
     BACKEND_ROOT / "features" / "memory" / "infrastructure" / "repository_provider.py",
     PROJECT_ROOT / "scripts" / "migrate_sqlite_to_postgres.py",
+    PROJECT_ROOT / "deploy" / "funasr",
+    PROJECT_ROOT / "deploy" / "melotts",
 )
 
 DOMAIN_BLOCKED_PREFIXES = (
@@ -114,8 +119,13 @@ def check_removed_compat_paths() -> list[str]:
     for path in REMOVED_COMPAT_PATHS:
         if path.is_file():
             errors.append(f"{path.relative_to(PROJECT_ROOT)}: removed compatibility file must not exist")
-        elif path.is_dir() and any(path.rglob("*.py")):
-            errors.append(f"{path.relative_to(PROJECT_ROOT)}: removed compatibility package must not contain Python files")
+        elif path.is_dir() and any(
+            candidate.is_file() and "__pycache__" not in candidate.parts
+            for candidate in path.rglob("*")
+        ):
+            errors.append(
+                f"{path.relative_to(PROJECT_ROOT)}: removed compatibility directory must be empty"
+            )
     return errors
 
 

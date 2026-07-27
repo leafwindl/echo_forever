@@ -195,7 +195,7 @@ async def voice_asr_stream(websocket: WebSocket):
                 if sender_task is not None:
                     await asyncio.wait_for(
                         sender_task,
-                        timeout=settings.streaming_asr_final_timeout_seconds + 2,
+                        timeout=settings.tencent_asr_final_timeout_seconds + 2,
                     )
                 await websocket.close(code=1000)
                 logger.info(

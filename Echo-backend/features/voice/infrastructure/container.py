@@ -10,7 +10,6 @@ from features.voice.infrastructure.adapters import (
     ProviderVoiceSynthesizer,
     TencentVoiceRecognizer,
 )
-from features.voice.infrastructure.streaming_asr import FunASRStreamingVoiceRecognizer
 from features.voice.infrastructure.streaming_asr import TencentASRStreamingVoiceRecognizer
 
 _recognize_voice_use_case: RecognizeVoice | None = None
@@ -43,15 +42,8 @@ def get_synthesize_voice_reply_use_case() -> SynthesizeVoiceReply:
 def get_open_streaming_voice_recognition_use_case() -> OpenStreamingVoiceRecognition:
     global _open_streaming_voice_recognition_use_case
     if _open_streaming_voice_recognition_use_case is None:
-        provider_name = settings.voice_streaming_asr_provider.strip().lower()
-        if provider_name == "tencent":
-            recognizer = TencentASRStreamingVoiceRecognizer()
-        elif provider_name == "funasr":
-            recognizer = FunASRStreamingVoiceRecognizer()
-        else:
-            raise ValueError(f"Unsupported streaming ASR provider: {provider_name}")
         _open_streaming_voice_recognition_use_case = OpenStreamingVoiceRecognition(
-            recognizer=recognizer
+            recognizer=TencentASRStreamingVoiceRecognizer()
         )
     return _open_streaming_voice_recognition_use_case
 

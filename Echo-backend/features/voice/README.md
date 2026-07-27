@@ -5,7 +5,7 @@ Voice 为独立电话页提供实时 ASR、完整录音降级识别、TTS 合成
 ## 电话链路
 
 1. 小程序通过 `WS /voice/asr/stream` 发送 MP3 录音帧，Bearer Token 位于 WebSocket Header。
-2. 当前 provider 由 `VOICE_STREAMING_ASR_PROVIDER` 选择；部署默认腾讯实时 ASR，FunASR 可作为自托管替代实现。
+2. 后端使用腾讯实时 ASR 返回识别片段。
 3. WebSocket 不可用时，小程序将完整 MP3 上传到 `POST /voice/asr`。
 4. 最终文本发送到 `POST /chat/send`，请求 `mode=call`。
 5. Chat 生成口语化完整回复，Voice 使用 CosyVoice v3.5 Flash 合成音频。
@@ -17,7 +17,6 @@ TTS provider 的 SDK 可以流式接收供应商音频，但 1.0 对客户端不
 
 ```dotenv
 VOICE_STREAMING_ASR_ENABLED=true
-VOICE_STREAMING_ASR_PROVIDER=tencent
 TENCENT_SECRET_ID=
 TENCENT_SECRET_KEY=
 TENCENT_APP_ID=0

@@ -1,9 +1,11 @@
 from typing import Optional
 
+from features.chat.application.clear_context import ClearChatContext
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.application.send_message import SendChatMessage
 from features.chat.infrastructure.adapters import (
     ChatContextProviderAdapter,
+    ChatContextRepositoryAdapter,
     ChatConversationRepositoryAdapter,
     ChatLLMAdapter,
     ConversationSummaryUpdaterAdapter,
@@ -15,6 +17,7 @@ from features.chat.infrastructure.adapters import (
 
 _generate_chat_reply_use_case: Optional[GenerateChatReply] = None
 _send_chat_message_use_case: Optional[SendChatMessage] = None
+_clear_chat_context_use_case: Optional[ClearChatContext] = None
 
 
 def get_generate_chat_reply_use_case() -> GenerateChatReply:
@@ -43,7 +46,18 @@ def get_send_chat_message_use_case() -> SendChatMessage:
     return _send_chat_message_use_case
 
 
+def get_clear_chat_context_use_case() -> ClearChatContext:
+    global _clear_chat_context_use_case
+    if _clear_chat_context_use_case is None:
+        _clear_chat_context_use_case = ClearChatContext(
+            context_repository=ChatContextRepositoryAdapter()
+        )
+    return _clear_chat_context_use_case
+
+
 def reset_generate_chat_reply_use_case_for_tests():
     global _generate_chat_reply_use_case, _send_chat_message_use_case
+    global _clear_chat_context_use_case
     _generate_chat_reply_use_case = None
     _send_chat_message_use_case = None
+    _clear_chat_context_use_case = None
