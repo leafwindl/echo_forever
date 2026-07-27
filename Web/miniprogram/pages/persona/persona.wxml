@@ -15,71 +15,105 @@
       <switch color="#4F8881" checked="{{enabled}}" bindchange="onEnabledChange" />
     </view>
 
+    <view class="group-header">
+      <image src="/assets/icons/user-round.svg" mode="aspectFit" />
+      <text>称呼</text>
+    </view>
     <view class="section">
       <text class="section-title">希望 Echo 怎么称呼你</text>
       <input class="text-input" maxlength="40" value="{{preferredName}}" placeholder="选填，例如：小叶" bindinput="onPreferredNameInput" />
     </view>
 
+    <view class="group-header">
+      <image src="/assets/icons/message-circle.svg" mode="aspectFit" />
+      <text>交流方式</text>
+    </view>
     <view class="section">
       <text class="section-title">表达风格</text>
-      <block wx:for="{{replyStyleOptions}}" wx:key="value">
-        <view class="choice {{replyStyle === item.value ? 'selected' : ''}}" data-field="replyStyle" data-value="{{item.value}}" bindtap="onSelectChoice">
-          <text class="choice-label">{{item.label}}</text>
-          <text class="choice-description">{{item.description}}</text>
-        </view>
-      </block>
+      <view class="choice-grid">
+        <block wx:for="{{replyStyleOptions}}" wx:key="value">
+          <view class="choice {{replyStyle === item.value ? 'selected' : ''}}" data-field="replyStyle" data-value="{{item.value}}" bindtap="onSelectChoice">
+            <view class="choice-check" wx:if="{{replyStyle === item.value}}"><image src="/assets/icons/check.svg" mode="aspectFit" /></view>
+            <text class="choice-label">{{item.label}}</text>
+            <text class="choice-description">{{item.description}}</text>
+          </view>
+        </block>
+      </view>
     </view>
 
     <view class="section">
       <text class="section-title">回复长度</text>
-      <block wx:for="{{replyLengthOptions}}" wx:key="value">
-        <view class="choice {{replyLength === item.value ? 'selected' : ''}}" data-field="replyLength" data-value="{{item.value}}" bindtap="onSelectChoice">
-          <text class="choice-label">{{item.label}}</text>
-          <text class="choice-description">{{item.description}}</text>
-        </view>
-      </block>
+      <view class="choice-grid">
+        <block wx:for="{{replyLengthOptions}}" wx:key="value">
+          <view class="choice {{replyLength === item.value ? 'selected' : ''}}" data-field="replyLength" data-value="{{item.value}}" bindtap="onSelectChoice">
+            <view class="choice-check" wx:if="{{replyLength === item.value}}"><image src="/assets/icons/check.svg" mode="aspectFit" /></view>
+            <text class="choice-label">{{item.label}}</text>
+            <text class="choice-description">{{item.description}}</text>
+          </view>
+        </block>
+      </view>
     </view>
 
     <view class="section">
       <text class="section-title">遇到烦恼时</text>
-      <block wx:for="{{supportModeOptions}}" wx:key="value">
-        <view class="choice {{supportMode === item.value ? 'selected' : ''}}" data-field="supportMode" data-value="{{item.value}}" bindtap="onSelectChoice">
-          <text class="choice-label">{{item.label}}</text>
-          <text class="choice-description">{{item.description}}</text>
-        </view>
-      </block>
+      <view class="choice-grid">
+        <block wx:for="{{supportModeOptions}}" wx:key="value">
+          <view class="choice {{supportMode === item.value ? 'selected' : ''}}" data-field="supportMode" data-value="{{item.value}}" bindtap="onSelectChoice">
+            <view class="choice-check" wx:if="{{supportMode === item.value}}"><image src="/assets/icons/check.svg" mode="aspectFit" /></view>
+            <text class="choice-label">{{item.label}}</text>
+            <text class="choice-description">{{item.description}}</text>
+          </view>
+        </block>
+      </view>
     </view>
 
     <view class="section">
       <text class="section-title">主动程度</text>
-      <block wx:for="{{proactivityOptions}}" wx:key="value">
-        <view class="choice {{proactivity === item.value ? 'selected' : ''}}" data-field="proactivity" data-value="{{item.value}}" bindtap="onSelectChoice">
-          <text class="choice-label">{{item.label}}</text>
-          <text class="choice-description">{{item.description}}</text>
-        </view>
-      </block>
+      <view class="choice-grid">
+        <block wx:for="{{proactivityOptions}}" wx:key="value">
+          <view class="choice {{proactivity === item.value ? 'selected' : ''}}" data-field="proactivity" data-value="{{item.value}}" bindtap="onSelectChoice">
+            <view class="choice-check" wx:if="{{proactivity === item.value}}"><image src="/assets/icons/check.svg" mode="aspectFit" /></view>
+            <text class="choice-label">{{item.label}}</text>
+            <text class="choice-description">{{item.description}}</text>
+          </view>
+        </block>
+      </view>
     </view>
 
+    <view class="group-header">
+      <image src="/assets/icons/heart-handshake.svg" mode="aspectFit" />
+      <text>关系节奏</text>
+    </view>
     <view class="section">
       <text class="section-title">关系发展节奏</text>
-      <block wx:for="{{relationshipPaceOptions}}" wx:key="value">
-        <view class="choice {{relationshipPace === item.value ? 'selected' : ''}}" data-field="relationshipPace" data-value="{{item.value}}" bindtap="onSelectChoice">
-          <text class="choice-label">{{item.label}}</text>
-          <text class="choice-description">{{item.description}}</text>
-        </view>
-      </block>
+      <view class="choice-grid">
+        <block wx:for="{{relationshipPaceOptions}}" wx:key="value">
+          <view class="choice {{relationshipPace === item.value ? 'selected' : ''}}" data-field="relationshipPace" data-value="{{item.value}}" bindtap="onSelectChoice">
+            <view class="choice-check" wx:if="{{relationshipPace === item.value}}"><image src="/assets/icons/check.svg" mode="aspectFit" /></view>
+            <text class="choice-label">{{item.label}}</text>
+            <text class="choice-description">{{item.description}}</text>
+          </view>
+        </block>
+      </view>
     </view>
 
     <view class="section">
       <text class="section-title">亲近表达</text>
-      <block wx:for="{{affectionStyleOptions}}" wx:key="value">
-        <view class="choice {{affectionStyle === item.value ? 'selected' : ''}}" data-field="affectionStyle" data-value="{{item.value}}" bindtap="onSelectChoice">
-          <text class="choice-label">{{item.label}}</text>
-          <text class="choice-description">{{item.description}}</text>
-        </view>
-      </block>
+      <view class="choice-grid">
+        <block wx:for="{{affectionStyleOptions}}" wx:key="value">
+          <view class="choice {{affectionStyle === item.value ? 'selected' : ''}}" data-field="affectionStyle" data-value="{{item.value}}" bindtap="onSelectChoice">
+            <view class="choice-check" wx:if="{{affectionStyle === item.value}}"><image src="/assets/icons/check.svg" mode="aspectFit" /></view>
+            <text class="choice-label">{{item.label}}</text>
+            <text class="choice-description">{{item.description}}</text>
+          </view>
+        </block>
+      </view>
     </view>
 
+    <view class="group-header">
+      <image src="/assets/icons/shield.svg" mode="aspectFit" />
+      <text>边界与背景</text>
+    </view>
     <view class="section">
       <view class="section-heading">
         <text class="section-title">避免主动展开的话题</text>

@@ -1,4 +1,21 @@
-/**app.wxss**/
+page {
+  color: #232b39;
+  background: #f5f6f8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button {
+  letter-spacing: 0;
+}
+
+button::after {
+  border: 0;
+}
+
+image {
+  display: block;
+}
+
 .container {
   height: 100%;
   display: flex;

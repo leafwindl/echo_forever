@@ -14,8 +14,8 @@ $teal: #4f8681;
 
 .brand-band {
   position: relative;
-  height: 330rpx;
-  flex: 0 0 330rpx;
+  height: 350rpx;
+  flex: 0 0 350rpx;
   overflow: hidden;
   background: #e8eef5;
   border-bottom: 1rpx solid #dce2ea;
@@ -26,8 +26,23 @@ $teal: #4f8681;
   z-index: 2;
   display: flex;
   width: 410rpx;
-  padding: 96rpx 0 0 44rpx;
+  padding: 54rpx 0 0 44rpx;
   flex-direction: column;
+}
+
+.brand-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-bottom: 16rpx;
+  color: #5f6d80;
+  font-size: 22rpx;
+  line-height: 30rpx;
+}
+
+.brand-kicker image {
+  width: 25rpx;
+  height: 25rpx;
 }
 
 .brand-name {
@@ -44,11 +59,25 @@ $teal: #4f8681;
   line-height: 40rpx;
 }
 
+.step-chip {
+  position: absolute;
+  z-index: 3;
+  top: 38rpx;
+  right: 34rpx;
+  padding: 7rpx 14rpx;
+  color: #5a687a;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1rpx solid rgba(38, 56, 79, 0.1);
+  border-radius: 8rpx;
+  font-size: 20rpx;
+  font-variant-numeric: tabular-nums;
+}
+
 .brand-character {
   position: absolute;
   right: 8rpx;
-  bottom: -300rpx;
-  width: 330rpx;
+  bottom: -294rpx;
+  width: 345rpx;
 }
 
 .loading-state,
@@ -106,11 +135,11 @@ $teal: #4f8681;
 }
 
 .form-inner {
-  padding: 10rpx 36rpx 0;
+  padding: 8rpx 36rpx 0;
 }
 
 .field {
-  padding: 34rpx 0;
+  padding: 36rpx 0;
   border-bottom: 1rpx solid $line;
 }
 
@@ -124,11 +153,58 @@ $teal: #4f8681;
   justify-content: space-between;
 }
 
+.field-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.field-title-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.field-icon {
+  display: flex;
+  width: 58rpx;
+  height: 58rpx;
+  flex: 0 0 58rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10rpx;
+}
+
+.field-icon image {
+  width: 30rpx;
+  height: 30rpx;
+}
+
+.field-icon.coral {
+  background: #fcecef;
+}
+
+.field-icon.teal {
+  background: #edf5f3;
+}
+
+.field-icon.navy {
+  background: #edf1f6;
+}
+
 .field-label {
   color: $ink;
   font-size: 29rpx;
   font-weight: 600;
   line-height: 42rpx;
+}
+
+.field-subtitle {
+  margin-top: 2rpx;
+  color: $muted;
+  font-size: 22rpx;
+  line-height: 32rpx;
 }
 
 .field-optional {
@@ -166,18 +242,37 @@ $teal: #4f8681;
 }
 
 .option {
+  position: relative;
   display: flex;
   min-width: 0;
-  min-height: 104rpx;
+  min-height: 114rpx;
   align-items: center;
   justify-content: center;
-  padding: 14rpx 8rpx;
+  padding: 19rpx 8rpx 15rpx;
   flex-direction: column;
   background: #f3f5f7;
   border: 2rpx solid transparent;
   border-radius: 10rpx;
   box-sizing: border-box;
   text-align: center;
+}
+
+.selected-mark {
+  position: absolute;
+  top: 7rpx;
+  right: 7rpx;
+  display: flex;
+  width: 27rpx;
+  height: 27rpx;
+  align-items: center;
+  justify-content: center;
+  background: $teal;
+  border-radius: 50%;
+}
+
+.selected-mark image {
+  width: 17rpx;
+  height: 17rpx;
 }
 
 .option.selected {

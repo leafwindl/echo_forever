@@ -16,7 +16,7 @@
           bindtap="onOpenCall"
           hover-class="button-pressed"
         >
-          <text class="call-symbol">☎</text>
+          <image class="button-icon" src="/assets/icons/phone.svg" mode="aspectFit" />
           <text>通话</text>
         </button>
         <button
@@ -25,14 +25,17 @@
           bindtap="onOpenTools"
           hover-class="button-pressed"
           aria-label="更多设置"
-        >···</button>
+        >
+          <image class="button-icon" src="/assets/icons/ellipsis.svg" mode="aspectFit" />
+        </button>
       </view>
     </view>
 
     <image class="character-image" src="/assets/images/echo_idle.png" mode="widthFix" />
     <view class="character-caption">
-      <text wx:if="{{displayName}}">{{displayName}}，今天过得怎么样？</text>
-      <text wx:else>今天过得怎么样？</text>
+      <image class="caption-icon" src="/assets/icons/message-circle.svg" mode="aspectFit" />
+      <text wx:if="{{displayName}}">{{displayName}}，我在这里</text>
+      <text wx:else>我在这里</text>
     </view>
   </view>
 
@@ -80,7 +83,9 @@
         bindtap="onOpenTools"
         hover-class="button-pressed"
         aria-label="聊天设置"
-      >＋</button>
+      >
+        <image class="composer-icon" src="/assets/icons/plus.svg" mode="aspectFit" />
+      </button>
       <input
         class="composer-input"
         value="{{inputText}}"
@@ -97,7 +102,9 @@
         bindtap="onSend"
         hover-class="button-pressed"
         aria-label="发送"
-      >↑</button>
+      >
+        <image class="composer-icon send-icon" src="/assets/icons/arrow-up.svg" mode="aspectFit" />
+      </button>
     </view>
   </view>
 </view>

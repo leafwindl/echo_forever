@@ -53,9 +53,26 @@ $bg: #F5F6F8;
 .intro-card {
   display: flex;
   align-items: center;
-  gap: 24rpx;
+  gap: 22rpx;
   background: #E8EEF5;
   border-bottom-color: #D9E0E8;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 24rpx 34rpx 14rpx;
+  color: #536174;
+  background: $bg;
+  font-size: 23rpx;
+  font-weight: 600;
+  line-height: 32rpx;
+}
+
+.group-header image {
+  width: 28rpx;
+  height: 28rpx;
 }
 
 .intro-avatar {
@@ -96,7 +113,7 @@ $bg: #F5F6F8;
   color: $danger;
   background: transparent;
   border: 1rpx solid #F2B8BE;
-  border-radius: 12rpx;
+  border-radius: 10rpx;
   font-size: 24rpx;
 }
 
@@ -125,7 +142,8 @@ $bg: #F5F6F8;
   padding: 20rpx;
   color: $text-main;
   background: #F5F6F8;
-  border-radius: 12rpx;
+  border: 1rpx solid #e5e8ed;
+  border-radius: 10rpx;
   box-sizing: border-box;
   font-size: 27rpx;
 }
@@ -140,17 +158,26 @@ $bg: #F5F6F8;
   line-height: 40rpx;
 }
 
+.choice-grid {
+  display: grid;
+  gap: 12rpx;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .choice {
+  position: relative;
   display: flex;
+  min-width: 0;
+  min-height: 118rpx;
   align-items: center;
-  gap: 18rpx;
-  min-height: 72rpx;
-  margin-top: 12rpx;
-  padding: 14rpx 18rpx;
+  justify-content: center;
+  padding: 20rpx 10rpx 16rpx;
+  flex-direction: column;
   background: #F3F5F7;
   border: 2rpx solid transparent;
-  border-radius: 12rpx;
+  border-radius: 10rpx;
   box-sizing: border-box;
+  text-align: center;
 }
 
 .choice.selected {
@@ -158,18 +185,36 @@ $bg: #F5F6F8;
   border-color: $teal;
 }
 
+.choice-check {
+  position: absolute;
+  top: 7rpx;
+  right: 7rpx;
+  display: flex;
+  width: 27rpx;
+  height: 27rpx;
+  align-items: center;
+  justify-content: center;
+  background: $teal;
+  border-radius: 50%;
+}
+
+.choice-check image {
+  width: 17rpx;
+  height: 17rpx;
+}
+
 .choice-label {
-  flex: 0 0 104rpx;
   color: $text-main;
-  font-size: 26rpx;
-  font-weight: 500;
+  font-size: 25rpx;
+  font-weight: 600;
+  line-height: 34rpx;
 }
 
 .choice-description {
-  flex: 1;
+  margin-top: 5rpx;
   color: $text-soft;
-  font-size: 24rpx;
-  line-height: 34rpx;
+  font-size: 20rpx;
+  line-height: 28rpx;
 }
 
 .topics {
@@ -183,7 +228,7 @@ $bg: #F5F6F8;
   color: $text-soft;
   background: #F2F3F5;
   border: 1rpx solid transparent;
-  border-radius: 26rpx;
+  border-radius: 8rpx;
   font-size: 24rpx;
 }
 
@@ -213,7 +258,7 @@ $bg: #F5F6F8;
   padding: 0;
   color: #fff;
   background: $echo-primary;
-  border-radius: 12rpx;
+  border-radius: 10rpx;
   font-size: 24rpx;
 }
 
@@ -244,7 +289,7 @@ $bg: #F5F6F8;
   height: 78rpx;
   line-height: 78rpx;
   margin: 0;
-  border-radius: 12rpx;
+  border-radius: 10rpx;
   font-size: 27rpx;
 }
 
