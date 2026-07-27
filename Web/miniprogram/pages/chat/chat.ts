@@ -13,6 +13,16 @@ interface ChatPageData {
   errorText: string;
   lastMsgId: string;
   msgIdCounter: number;
+  chatExpanded: boolean;
+  sitCrop: {
+    cropWidth: string;
+    cropHeight: string;
+    cropOffsetX: string;
+    cropOffsetY: string;
+    imageWidth: string;
+    imageLeft: string;
+    imageTop: string;
+  };
 }
 
 const TEMPORARY_ERROR_MESSAGE = '（我刚刚有点卡住了，等一下再和我说一次好吗？）';
@@ -28,6 +38,16 @@ Page({
     errorText: '',
     lastMsgId: '',
     msgIdCounter: 0,
+    chatExpanded: false,
+    sitCrop: {
+      cropWidth: '750rpx',
+      cropHeight: '500rpx',
+      cropOffsetX: '0rpx',
+      cropOffsetY: '0rpx',
+      imageWidth: '800rpx',
+      imageLeft: '-25rpx',
+      imageTop: '-50rpx',
+    },
   } as ChatPageData,
 
   onLoad() {
@@ -108,6 +128,10 @@ Page({
     void this.sendChatMessage(text);
   },
 
+  onToggleChatExpand() {
+    this.setData({ chatExpanded: !this.data.chatExpanded });
+  },
+
   async sendChatMessage(text: string) {
     this.setData({ isSending: true });
     this.addMessage('user', text);
@@ -170,6 +194,21 @@ Page({
         if (result.tapIndex === 2) this.confirmClearContext();
       },
     });
+  },
+
+  onOpenPersonaPage() {
+    if (!this.data.isReady) return;
+    wx.navigateTo({ url: '/pages/persona/persona' });
+  },
+
+  onOpenMemoryPage() {
+    if (!this.data.isReady) return;
+    wx.navigateTo({ url: '/pages/memory/memory' });
+  },
+
+  onClearContext() {
+    if (!this.data.isReady) return;
+    this.confirmClearContext();
   },
 
   confirmClearContext() {

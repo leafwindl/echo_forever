@@ -1,52 +1,28 @@
 <view class="page">
-  <view class="character-band">
-    <view class="topbar">
-      <view class="echo-identity">
-        <text class="echo-name">Echo</text>
-        <view class="presence">
-          <view class="presence-dot"></view>
-          <text>在这里</text>
-        </view>
-      </view>
-
-      <view class="top-actions">
-        <button
-          class="call-button"
-          disabled="{{!isReady || isSending}}"
-          bindtap="onOpenCall"
-          hover-class="button-pressed"
-        >
-          <image class="button-icon" src="/assets/icons/phone.svg" mode="aspectFit" />
-          <text>通话</text>
-        </button>
-        <button
-          class="more-button"
-          disabled="{{!isReady}}"
-          bindtap="onOpenTools"
-          hover-class="button-pressed"
-          aria-label="更多设置"
-        >
-          <image class="button-icon" src="/assets/icons/ellipsis.svg" mode="aspectFit" />
-        </button>
-      </view>
-    </view>
-
-    <image class="character-image" src="/assets/images/echo_idle.png" mode="widthFix" />
-    <view class="character-caption">
-      <text wx:if="{{displayName}}">{{displayName}}，今天过得怎么样？</text>
-      <text wx:else>今天过得怎么样？</text>
-    </view>
+  <view
+    class="character-area {{chatExpanded ? 'character-area-expanded' : ''}}"
+    style="flex: {{chatExpanded ? 3 : 7}};"
+  >
+    <character chat-expanded="{{chatExpanded}}" sit-crop="{{sitCrop}}" />
   </view>
 
-  <view class="conversation-band">
-    <view class="login-state" wx:if="{{isBootstrapping || errorText}}">
-      <view class="loading-mark" wx:if="{{isBootstrapping}}"></view>
-      <text>{{isBootstrapping ? '正在连接 Echo' : errorText}}</text>
-      <button wx:if="{{!isBootstrapping}}" class="retry-button" bindtap="onRetry">重试</button>
+  <view class="chat-container" style="flex: {{chatExpanded ? 7 : 3}};">
+    <view class="chat-handle" bindtap="onToggleChatExpand">
+      <text>{{chatExpanded ? '▼ 收起聊天' : '▲ 展开聊天'}}</text>
+    </view>
+
+    <view class="login-status" wx:if="{{isBootstrapping || errorText}}">
+      <text>{{isBootstrapping ? '正在安全登录...' : errorText}}</text>
+      <button
+        wx:if="{{!isBootstrapping}}"
+        class="login-retry-btn"
+        size="mini"
+        bindtap="onRetry"
+      >重新登录</button>
     </view>
 
     <scroll-view
-      class="message-list"
+      class="chat-list"
       scroll-y
       scroll-into-view="{{lastMsgId}}"
       scroll-with-animation
@@ -54,13 +30,7 @@
     >
       <view class="message-padding">
         <block wx:for="{{messages}}" wx:key="id">
-          <view class="message-row {{item.sender}}" id="msg-{{item.id}}">
-            <image
-              wx:if="{{item.sender === 'echo'}}"
-              class="message-avatar"
-              src="/assets/images/echo_avatar.png"
-              mode="aspectFill"
-            />
+          <view class="msg-item {{item.sender}}" id="msg-{{item.id}}">
             <view class="bubble">
               <view wx:if="{{item.isTyping}}" class="typing-indicator">
                 <view class="typing-dot"></view>
@@ -71,39 +41,41 @@
             </view>
           </view>
         </block>
-        <view class="message-list-end"></view>
+        <view class="list-bottom"></view>
       </view>
     </scroll-view>
 
-    <view class="composer">
+    <view class="input-area">
       <button
-        class="composer-tool"
-        disabled="{{!isReady}}"
-        bindtap="onOpenTools"
-        hover-class="button-pressed"
-        aria-label="聊天设置"
+        class="phone-mode-btn"
+        disabled="{{!isReady || isSending}}"
+        bindtap="onOpenCall"
+        aria-label="进入电话模式"
       >
-        <image class="composer-icon" src="/assets/icons/plus.svg" mode="aspectFit" />
+        <image src="/assets/icons/phone.svg" mode="aspectFit" />
+        <text>电话</text>
       </button>
       <input
-        class="composer-input"
+        class="input"
         value="{{inputText}}"
         disabled="{{!isReady || isSending}}"
         maxlength="2000"
-        placeholder="发消息给 Echo"
+        placeholder="{{isReady ? '说点什么...' : '请先完成登录'}}"
         bindinput="onInput"
         bindconfirm="onSend"
         confirm-type="send"
       />
       <button
-        class="send-button {{inputText ? 'active' : ''}}"
+        class="send-btn {{inputText && isReady && !isSending ? 'active' : ''}}"
         disabled="{{!isReady || isSending || !inputText}}"
         bindtap="onSend"
-        hover-class="button-pressed"
-        aria-label="发送"
-      >
-        <image class="composer-icon send-icon" src="/assets/icons/arrow-up.svg" mode="aspectFit" />
-      </button>
+      >{{isSending ? '等待' : '发送'}}</button>
+    </view>
+
+    <view class="chat-actions">
+      <view class="action-btn" bindtap="onClearContext">清除上下文</view>
+      <view class="action-btn primary" bindtap="onOpenPersonaPage">个性化设置</view>
+      <view class="action-btn primary" bindtap="onOpenMemoryPage">记忆管理</view>
     </view>
   </view>
 </view>
