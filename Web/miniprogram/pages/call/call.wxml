@@ -8,24 +8,26 @@
       <text class="call-time">{{elapsedLabel}}</text>
     </view>
 
-    <view class="avatar-frame {{status === 'speaking' ? 'speaking' : ''}}">
-      <image class="avatar" src="/assets/images/echo_avatar.png" mode="aspectFill" />
-    </view>
-
-    <view class="status-block">
-      <view class="wave {{status}}">
-        <view class="bar"></view>
-        <view class="bar"></view>
-        <view class="bar"></view>
-        <view class="bar"></view>
-        <view class="bar"></view>
+    <view class="call-stage">
+      <view class="avatar-frame {{status === 'speaking' ? 'speaking' : ''}}">
+        <image class="avatar" src="/assets/images/echo_avatar.png" mode="aspectFill" />
       </view>
-      <text class="status-label">{{statusLabel}}</text>
-      <text class="partial-text" wx:if="{{partialText}}">{{partialText}}</text>
-    </view>
 
-    <view class="caption" wx:if="{{echoCaption}}">
-      <text>{{echoCaption}}</text>
+      <view class="status-block">
+        <view class="wave {{status}}">
+          <view class="bar"></view>
+          <view class="bar"></view>
+          <view class="bar"></view>
+          <view class="bar"></view>
+          <view class="bar"></view>
+        </view>
+        <text class="status-label">{{statusLabel}}</text>
+        <text class="partial-text" wx:if="{{partialText}}">{{partialText}}</text>
+      </view>
+
+      <scroll-view class="caption" scroll-y wx:if="{{echoCaption}}">
+        <text>{{echoCaption}}</text>
+      </scroll-view>
     </view>
 
     <view class="call-actions">

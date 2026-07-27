@@ -16,10 +16,10 @@ $teal: #4f8881;
 
 .character-band {
   position: relative;
-  height: 35vh;
-  min-height: 400rpx;
-  max-height: 550rpx;
-  flex: 0 0 35vh;
+  height: 39vh;
+  min-height: 440rpx;
+  max-height: 610rpx;
+  flex: 0 0 39vh;
   background: $brand;
   border-bottom: 1rpx solid #d9e0e8;
   overflow: hidden;
@@ -78,9 +78,9 @@ $teal: #4f8881;
   margin: 0;
   padding: 0;
   color: #26384f;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.82);
   border: 1rpx solid rgba(38, 56, 79, 0.12);
-  border-radius: 10rpx;
+  border-radius: 12rpx;
   box-sizing: border-box;
   font-size: 24rpx;
   line-height: 66rpx;
@@ -102,34 +102,25 @@ $teal: #4f8881;
 
 .character-image {
   position: absolute;
-  bottom: -455rpx;
+  bottom: -500rpx;
   left: 50%;
-  width: 550rpx;
+  width: 570rpx;
   transform: translateX(-50%);
 }
 
 .character-caption {
   position: absolute;
   z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
   right: 28rpx;
   bottom: 26rpx;
-  max-width: 350rpx;
+  max-width: 330rpx;
   padding: 15rpx 18rpx;
   color: #354459;
   background: rgba(255, 255, 255, 0.9);
   border: 1rpx solid rgba(38, 56, 79, 0.1);
-  border-radius: 10rpx;
+  border-radius: 12rpx;
   font-size: 23rpx;
   line-height: 34rpx;
-}
-
-.caption-icon {
-  width: 26rpx;
-  height: 26rpx;
-  flex: 0 0 26rpx;
 }
 
 .conversation-band {
@@ -210,9 +201,8 @@ $teal: #4f8881;
   min-height: 42rpx;
   padding: 16rpx 20rpx;
   color: $ink;
-  background: #f0f2f5;
-  border: 1rpx solid #e5e8ed;
-  border-radius: 14rpx 14rpx 14rpx 4rpx;
+  background: #f1f3f6;
+  border-radius: 16rpx 16rpx 16rpx 4rpx;
   box-sizing: border-box;
   font-size: 28rpx;
   line-height: 42rpx;
@@ -222,8 +212,7 @@ $teal: #4f8881;
 .message-row.user .bubble {
   color: #fff;
   background: #385d78;
-  border-color: #385d78;
-  border-radius: 14rpx 14rpx 4rpx 14rpx;
+  border-radius: 16rpx 16rpx 4rpx 16rpx;
 }
 
 .typing-indicator {
@@ -259,7 +248,7 @@ $teal: #4f8881;
   display: grid;
   align-items: center;
   padding: 16rpx 22rpx calc(16rpx + env(safe-area-inset-bottom));
-  background: #f6f7f9;
+  background: #f7f8fa;
   border-top: 1rpx solid $line;
   gap: 12rpx;
   grid-template-columns: 68rpx minmax(0, 1fr) 68rpx;

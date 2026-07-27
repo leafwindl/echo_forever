@@ -13,10 +13,10 @@ $mint: #7fc0b5;
 
 .ambient-character {
   position: absolute;
-  top: -40rpx;
+  top: 0;
   left: 50%;
-  width: 860rpx;
-  opacity: 0.14;
+  width: 800rpx;
+  opacity: 0.12;
   transform: translateX(-50%);
 }
 
@@ -29,18 +29,26 @@ $mint: #7fc0b5;
 .call-content {
   position: relative;
   z-index: 2;
-  display: flex;
+  display: grid;
   height: 100%;
-  align-items: center;
-  padding: 56rpx 44rpx calc(52rpx + env(safe-area-inset-bottom));
-  flex-direction: column;
+  padding: 34rpx 40rpx calc(34rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .call-heading {
   display: flex;
   align-items: center;
   flex-direction: column;
+}
+
+.call-stage {
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  padding-top: 28rpx;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .echo-name {
@@ -58,9 +66,9 @@ $mint: #7fc0b5;
 }
 
 .avatar-frame {
-  width: 286rpx;
-  height: 286rpx;
-  margin-top: 54rpx;
+  width: 260rpx;
+  height: 260rpx;
+  flex: 0 0 260rpx;
   padding: 9rpx;
   background: #e9edf1;
   border: 3rpx solid rgba(255, 255, 255, 0.32);
@@ -88,10 +96,12 @@ $mint: #7fc0b5;
 
 .status-block {
   display: flex;
-  min-height: 150rpx;
+  width: 100%;
+  min-height: 126rpx;
   align-items: center;
-  margin-top: 40rpx;
+  margin-top: 28rpx;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .wave {
@@ -133,22 +143,22 @@ $mint: #7fc0b5;
 }
 
 .partial-text {
-  width: 560rpx;
+  width: 100%;
+  max-width: 560rpx;
+  max-height: 68rpx;
   margin-top: 12rpx;
   color: #aeb7ba;
   font-size: 23rpx;
   line-height: 34rpx;
   text-align: center;
+  overflow: hidden;
 }
 
 .caption {
-  display: flex;
-  width: 600rpx;
-  min-height: 78rpx;
-  max-height: 150rpx;
-  align-items: center;
-  justify-content: center;
-  margin-top: 4rpx;
+  width: 100%;
+  max-width: 600rpx;
+  height: 112rpx;
+  margin-top: 8rpx;
   padding: 18rpx 24rpx;
   color: #dfe4e5;
   background: rgba(48, 56, 59, 0.82);
@@ -160,16 +170,22 @@ $mint: #7fc0b5;
   text-align: center;
 }
 
+.caption text {
+  display: block;
+}
+
 .call-actions {
   display: flex;
-  width: 480rpx;
+  width: 100%;
+  max-width: 480rpx;
   justify-content: space-between;
-  margin-top: auto;
+  justify-self: center;
+  padding-top: 24rpx;
 }
 
 .action-item {
   display: flex;
-  width: 170rpx;
+  width: 160rpx;
   align-items: center;
   flex-direction: column;
 }
@@ -177,8 +193,8 @@ $mint: #7fc0b5;
 .talk-button,
 .hangup-button {
   display: flex;
-  width: 118rpx;
-  height: 118rpx;
+  width: 112rpx;
+  height: 112rpx;
   align-items: center;
   justify-content: center;
   margin: 0;
