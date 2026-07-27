@@ -46,15 +46,6 @@
     </scroll-view>
 
     <view class="input-area">
-      <button
-        class="phone-mode-btn"
-        disabled="{{!isReady || isSending}}"
-        bindtap="onOpenCall"
-        aria-label="进入电话模式"
-      >
-        <image src="/assets/icons/phone.svg" mode="aspectFit" />
-        <text>电话</text>
-      </button>
       <input
         class="input"
         value="{{inputText}}"
@@ -66,10 +57,19 @@
         confirm-type="send"
       />
       <button
-        class="send-btn {{inputText && isReady && !isSending ? 'active' : ''}}"
+        class="send-btn"
         disabled="{{!isReady || isSending || !inputText}}"
         bindtap="onSend"
       >{{isSending ? '等待' : '发送'}}</button>
+      <button
+        class="phone-mode-btn"
+        disabled="{{!isReady || isSending}}"
+        bindtap="onOpenCall"
+        aria-label="进入电话模式"
+      >
+        <image src="/assets/icons/phone.svg" mode="aspectFit" />
+        <text>电话</text>
+      </button>
     </view>
 
     <view class="chat-actions">
