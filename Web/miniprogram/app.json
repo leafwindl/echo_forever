@@ -8,7 +8,7 @@
   ],
   "window": {
     "navigationBarTitleText": "Echo",
-    "navigationBarBackgroundColor": "#E8EEF5",
+    "navigationBarBackgroundColor": "#FDEBF0",
     "navigationBarTextStyle": "black"
   },
   "lazyCodeLoading": "requiredComponents",

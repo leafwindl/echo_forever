@@ -1,8 +1,8 @@
 type CharacterPose = 'idle' | 'sit';
 
 const POSE_IMAGES: Record<CharacterPose, string> = {
-  idle: '/assets/images/echo_idle.png',
-  sit: '/assets/images/idle_sit.png',
+  idle: '/assets/images/echo_idle.webp',
+  sit: '/assets/images/idle_sit.webp',
 };
 
 Component({

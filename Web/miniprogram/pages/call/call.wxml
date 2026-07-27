@@ -1,5 +1,5 @@
 <view class="page">
-  <image class="ambient-character" src="/assets/images/echo_idle.png" mode="widthFix" />
+  <image class="ambient-character" src="/assets/images/echo_idle.webp" mode="widthFix" />
   <view class="veil"></view>
 
   <view class="call-content">
@@ -10,7 +10,7 @@
 
     <view class="call-stage">
       <view class="avatar-frame {{status === 'speaking' ? 'speaking' : ''}}">
-        <image class="avatar" src="/assets/images/echo_avatar.png" mode="aspectFill" />
+        <image class="avatar" src="/assets/images/echo_idle.webp" mode="widthFix" />
       </view>
 
       <view class="status-block">
@@ -32,23 +32,24 @@
 
     <view class="call-actions">
       <view class="action-item">
-        <button
-          class="talk-button {{isRecording ? 'recording' : ''}}"
-          disabled="{{!isReady || isSending}}"
+        <view
+          class="call-button talk-button {{isRecording ? 'recording' : ''}} {{!isReady || isSending ? 'disabled' : ''}}"
+          aria-role="button"
+          aria-label="{{isRecording ? '松开并发送语音' : '按住说话'}}"
           bindtouchstart="onStartRecord"
           bindtouchend="onStopRecord"
           bindtouchcancel="onCancelRecord"
         >
-          <image class="call-action-icon" src="/assets/icons/mic.svg" mode="aspectFit" />
-        </button>
-        <text class="action-label">{{isRecording ? '松开发送' : '按住说话'}}</text>
+          <text class="button-main-label">{{isRecording ? '松开' : '按住'}}</text>
+          <text class="button-sub-label">{{isRecording ? '发送' : '说话'}}</text>
+        </view>
       </view>
 
       <view class="action-item">
-        <button class="hangup-button" bindtap="onHangup">
-          <image class="call-action-icon" src="/assets/icons/phone-off.svg" mode="aspectFit" />
-        </button>
-        <text class="action-label">结束</text>
+        <view class="call-button hangup-button" aria-role="button" aria-label="结束通话" bindtap="onHangup">
+          <text class="button-main-label">结束</text>
+          <text class="button-sub-label">通话</text>
+        </view>
       </view>
     </view>
   </view>

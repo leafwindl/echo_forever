@@ -5,9 +5,7 @@
       <text class="count">{{memories.length}} 条</text>
     </view>
     <view class="top-actions">
-      <button class="icon-btn" size="mini" bindtap="onRefresh" aria-label="刷新">
-        <image class="tool-icon" src="/assets/icons/refresh-cw.svg" mode="aspectFit" />
-      </button>
+      <button class="refresh-btn" size="mini" bindtap="onRefresh">刷新</button>
       <button class="danger-btn" size="mini" bindtap="onClearMemories" loading="{{isClearing}}" disabled="{{isClearing || activeTab !== 'active' || memories.length === 0}}">清空</button>
     </view>
   </view>
@@ -22,9 +20,6 @@
 
   <scroll-view class="memory-list" scroll-y wx:else>
     <view class="empty" wx:if="{{memories.length === 0}}">
-      <view class="empty-icon-wrap">
-        <image class="empty-icon" src="/assets/icons/brain.svg" mode="aspectFit" />
-      </view>
       <text class="empty-title">{{activeTab === 'active' ? '还没有长期记忆' : '没有已删除的记忆'}}</text>
       <text class="empty-copy">{{activeTab === 'active' ? '聊天中稳定、重要的信息会出现在这里' : '删除过的记忆会暂时保留在这里'}}</text>
     </view>
@@ -50,7 +45,7 @@
           bindtap="onDeleteMemory"
           aria-label="删除这条记忆"
         >
-          <image class="delete-icon" src="/assets/icons/trash-2.svg" mode="aspectFit" />
+          <text>删除</text>
         </button>
       </view>
     </block>

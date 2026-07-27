@@ -2,14 +2,13 @@
   <view class="brand-band">
     <view class="brand-copy">
       <view class="brand-kicker">
-        <image src="/assets/icons/sparkles.svg" mode="aspectFit" />
         <text>初次见面</text>
       </view>
       <text class="brand-name">Echo</text>
       <text class="brand-line">先认识你，再开始我们的聊天</text>
     </view>
     <text class="step-chip">1 / 1</text>
-    <image class="brand-character" src="/assets/images/echo_idle.png" mode="widthFix" />
+    <image class="brand-character" src="/assets/images/echo_idle.webp" mode="widthFix" />
   </view>
 
   <view class="loading-state" wx:if="{{isLoading}}">
@@ -27,9 +26,6 @@
     <view class="form-inner">
       <view class="field first-field">
         <view class="field-title-row">
-          <view class="field-icon navy">
-            <image src="/assets/icons/user-round.svg" mode="aspectFit" />
-          </view>
           <view class="field-title-copy">
             <text class="field-label">你的称呼</text>
             <text class="field-subtitle">希望 Echo 怎么称呼你</text>
@@ -46,9 +42,6 @@
 
       <view class="field">
         <view class="field-title-row">
-          <view class="field-icon coral">
-            <image src="/assets/icons/message-circle.svg" mode="aspectFit" />
-          </view>
           <view class="field-title-copy">
             <text class="field-label">聊天方式</text>
             <text class="field-subtitle">喜欢怎样聊天</text>
@@ -64,7 +57,7 @@
             bindtap="onSelect"
           >
             <view class="selected-mark" wx:if="{{replyStyle === item.value}}">
-              <image src="/assets/icons/check.svg" mode="aspectFit" />
+              <text>✓</text>
             </view>
             <text class="option-label">{{item.label}}</text>
             <text class="option-description">{{item.description}}</text>
@@ -74,9 +67,6 @@
 
       <view class="field">
         <view class="field-title-row">
-          <view class="field-icon coral">
-            <image src="/assets/icons/heart-handshake.svg" mode="aspectFit" />
-          </view>
           <view class="field-title-copy">
             <text class="field-label">陪伴偏好</text>
             <text class="field-subtitle">遇到烦恼时</text>
@@ -92,7 +82,7 @@
             bindtap="onSelect"
           >
             <view class="selected-mark" wx:if="{{supportMode === item.value}}">
-              <image src="/assets/icons/check.svg" mode="aspectFit" />
+              <text>✓</text>
             </view>
             <text class="option-label">{{item.label}}</text>
             <text class="option-description">{{item.description}}</text>
@@ -102,9 +92,6 @@
 
       <view class="field">
         <view class="field-title-row">
-          <view class="field-icon teal">
-            <image src="/assets/icons/sprout.svg" mode="aspectFit" />
-          </view>
           <view class="field-title-copy">
             <text class="field-label">相处节奏</text>
             <text class="field-subtitle">熟悉起来的节奏</text>
@@ -120,7 +107,7 @@
             bindtap="onSelect"
           >
             <view class="selected-mark" wx:if="{{relationshipPace === item.value}}">
-              <image src="/assets/icons/check.svg" mode="aspectFit" />
+              <text>✓</text>
             </view>
             <text class="option-label">{{item.label}}</text>
             <text class="option-description">{{item.description}}</text>
@@ -131,9 +118,6 @@
       <view class="field">
         <view class="field-heading">
           <view class="field-title-row">
-            <view class="field-icon navy">
-              <image src="/assets/icons/notebook-pen.svg" mode="aspectFit" />
-            </view>
             <view class="field-title-copy">
               <text class="field-label">关于你</text>
               <text class="field-subtitle">想让 Echo 先了解什么</text>

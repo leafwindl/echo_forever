@@ -67,7 +67,6 @@
         bindtap="onOpenCall"
         aria-label="进入电话模式"
       >
-        <image src="/assets/icons/phone.svg" mode="aspectFit" />
         <text>电话</text>
       </button>
     </view>

@@ -1,15 +1,14 @@
-$coral: #ef7279;
-$ink: #252a34;
-$muted: #737986;
-$line: #e4e7ec;
-$teal: #4f8681;
+$coral: #e96f8a;
+$ink: #3b2931;
+$muted: #8a717b;
+$line: #f0dce3;
 
 .page {
   display: flex;
   min-height: 100vh;
   flex-direction: column;
   color: $ink;
-  background: #f5f6f8;
+  background: #fff7f9;
 }
 
 .brand-band {
@@ -17,8 +16,8 @@ $teal: #4f8681;
   height: 350rpx;
   flex: 0 0 350rpx;
   overflow: hidden;
-  background: #e8eef5;
-  border-bottom: 1rpx solid #dce2ea;
+  background: #fdebf0;
+  border-bottom: 1rpx solid #f4d5df;
 }
 
 .brand-copy {
@@ -35,18 +34,13 @@ $teal: #4f8681;
   align-items: center;
   gap: 8rpx;
   margin-bottom: 16rpx;
-  color: #5f6d80;
+  color: #9a596c;
   font-size: 22rpx;
   line-height: 30rpx;
 }
 
-.brand-kicker image {
-  width: 25rpx;
-  height: 25rpx;
-}
-
 .brand-name {
-  color: #24344d;
+  color: #5b3441;
   font-size: 62rpx;
   font-weight: 700;
   line-height: 76rpx;
@@ -54,7 +48,7 @@ $teal: #4f8681;
 
 .brand-line {
   margin-top: 10rpx;
-  color: #59687b;
+  color: #805868;
   font-size: 27rpx;
   line-height: 40rpx;
 }
@@ -65,9 +59,9 @@ $teal: #4f8681;
   top: 38rpx;
   right: 34rpx;
   padding: 7rpx 14rpx;
-  color: #5a687a;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1rpx solid rgba(38, 56, 79, 0.1);
+  color: #8c5969;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1rpx solid rgba(179, 101, 124, 0.16);
   border-radius: 8rpx;
   font-size: 20rpx;
   font-variant-numeric: tabular-nums;
@@ -166,33 +160,6 @@ $teal: #4f8681;
   flex-direction: column;
 }
 
-.field-icon {
-  display: flex;
-  width: 58rpx;
-  height: 58rpx;
-  flex: 0 0 58rpx;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10rpx;
-}
-
-.field-icon image {
-  width: 30rpx;
-  height: 30rpx;
-}
-
-.field-icon.coral {
-  background: #fcecef;
-}
-
-.field-icon.teal {
-  background: #edf5f3;
-}
-
-.field-icon.navy {
-  background: #edf1f6;
-}
-
 .field-label {
   color: $ink;
   font-size: 29rpx;
@@ -208,7 +175,7 @@ $teal: #4f8681;
 }
 
 .field-optional {
-  color: #9aa0aa;
+  color: #ad8d98;
   font-size: 23rpx;
 }
 
@@ -218,7 +185,7 @@ $teal: #4f8681;
   margin-top: 18rpx;
   padding: 20rpx 22rpx;
   color: $ink;
-  background: #f3f5f7;
+  background: #fff7f9;
   border: 2rpx solid transparent;
   border-radius: 10rpx;
   box-sizing: border-box;
@@ -250,7 +217,7 @@ $teal: #4f8681;
   justify-content: center;
   padding: 19rpx 8rpx 15rpx;
   flex-direction: column;
-  background: #f3f5f7;
+  background: #fff7f9;
   border: 2rpx solid transparent;
   border-radius: 10rpx;
   box-sizing: border-box;
@@ -266,18 +233,17 @@ $teal: #4f8681;
   height: 27rpx;
   align-items: center;
   justify-content: center;
-  background: $teal;
+  color: #fff;
+  background: $coral;
   border-radius: 50%;
-}
-
-.selected-mark image {
-  width: 17rpx;
-  height: 17rpx;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 27rpx;
 }
 
 .option.selected {
-  background: #eef5f4;
-  border-color: $teal;
+  background: #fff0f4;
+  border-color: $coral;
 }
 
 .option-label {
