@@ -5,10 +5,8 @@ from shared.config import settings
 
 
 class ChatRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=128)
     message: str = Field(min_length=1, max_length=10000)
-    input_type: Literal["text", "voice"] = "text"
-    voice_reply_enabled: bool = False
+    mode: Literal["chat", "call"] = "chat"
 
     @field_validator("message")
     @classmethod
@@ -23,7 +21,6 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    audio_url: str | None = None
     audio_urls: list[str] = Field(default_factory=list)
 
 

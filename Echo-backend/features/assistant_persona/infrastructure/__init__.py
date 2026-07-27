@@ -1,0 +1,1 @@
+"""Assistant persona configuration provider."""

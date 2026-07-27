@@ -1,106 +1,103 @@
 <view class="page">
-  <!-- 2D 动漫人物区域 -->
-  <view class="character-area {{chatExpanded ? 'character-area-expanded' : ''}}" style="flex: {{chatExpanded ? 3 : 7}};">
-    <character id="mycharacter"
-      chat-expanded="{{chatExpanded}}"
-      sit-crop="{{sitCrop}}">
-    </character>
+  <view class="character-band">
+    <view class="topbar">
+      <view class="echo-identity">
+        <text class="echo-name">Echo</text>
+        <view class="presence">
+          <view class="presence-dot"></view>
+          <text>在这里</text>
+        </view>
+      </view>
+
+      <view class="top-actions">
+        <button
+          class="call-button"
+          disabled="{{!isReady || isSending}}"
+          bindtap="onOpenCall"
+          hover-class="button-pressed"
+        >
+          <text class="call-symbol">☎</text>
+          <text>通话</text>
+        </button>
+        <button
+          class="more-button"
+          disabled="{{!isReady}}"
+          bindtap="onOpenTools"
+          hover-class="button-pressed"
+          aria-label="更多设置"
+        >···</button>
+      </view>
+    </view>
+
+    <image class="character-image" src="/assets/images/echo_idle.png" mode="widthFix" />
+    <view class="character-caption">
+      <text wx:if="{{displayName}}">{{displayName}}，今天过得怎么样？</text>
+      <text wx:else>今天过得怎么样？</text>
+    </view>
   </view>
 
-  <!-- 聊天区域容器 -->
-  <view class="chat-container" style="flex: {{chatExpanded ? 7 : 3}};">
-    <!-- 切换栏 -->
-    <view class="chat-handle" bindtap="onToggleChatExpand">
-      <text class="chat-handle-text">{{chatExpanded ? '▼ 收起聊天' : '▲ 展开聊天'}}</text>
+  <view class="conversation-band">
+    <view class="login-state" wx:if="{{isBootstrapping || errorText}}">
+      <view class="loading-mark" wx:if="{{isBootstrapping}}"></view>
+      <text>{{isBootstrapping ? '正在连接 Echo' : errorText}}</text>
+      <button wx:if="{{!isBootstrapping}}" class="retry-button" bindtap="onRetry">重试</button>
     </view>
 
-    <view class="login-status" wx:if="{{isLoggingIn || loginErrorText}}">
-      <text>{{isLoggingIn ? '正在安全登录…' : loginErrorText}}</text>
-      <button
-        wx:if="{{!isLoggingIn}}"
-        class="login-retry-btn"
-        size="mini"
-        bindtap="onRetryLogin"
-      >重新登录</button>
-    </view>
-
-    <!-- 对话列表 -->
-    <scroll-view class="chat-list" scroll-y scroll-into-view="{{lastMsgId}}" scroll-with-animation>
-      <view class="intro-msg" wx:if="{{messages.length === 0}}">
-        <text>嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？</text>
-      </view>
-      <block wx:for="{{messages}}" wx:key="id">
-        <view class="msg-item {{item.sender === 'user' ? 'user' : 'echo'}}" id="msg-{{item.id}}">
-          <view class="bubble">
-            <view wx:if="{{item.isTyping}}" class="typing-indicator">
-              <view class="typing-dot"></view>
-              <view class="typing-dot"></view>
-              <view class="typing-dot"></view>
+    <scroll-view
+      class="message-list"
+      scroll-y
+      scroll-into-view="{{lastMsgId}}"
+      scroll-with-animation
+      wx:else
+    >
+      <view class="message-padding">
+        <block wx:for="{{messages}}" wx:key="id">
+          <view class="message-row {{item.sender}}" id="msg-{{item.id}}">
+            <image
+              wx:if="{{item.sender === 'echo'}}"
+              class="message-avatar"
+              src="/assets/images/echo_avatar.png"
+              mode="aspectFill"
+            />
+            <view class="bubble">
+              <view wx:if="{{item.isTyping}}" class="typing-indicator">
+                <view class="typing-dot"></view>
+                <view class="typing-dot"></view>
+                <view class="typing-dot"></view>
+              </view>
+              <text wx:else selectable>{{item.content}}</text>
             </view>
-            <text wx:else>{{item.content}}</text>
           </view>
-        </view>
-      </block>
-      <view class="list-bottom" id="bottom"></view>
+        </block>
+        <view class="message-list-end"></view>
+      </view>
     </scroll-view>
 
-    <!-- 输入区域 -->
-    <view class="input-area {{phoneMode ? 'phone-input-area' : ''}}">
-      <block wx:if="{{!phoneMode}}">
-        <input class="input" value="{{inputText}}" disabled="{{isSending || !userId}}" maxlength="2000" placeholder="{{userId ? '说点什么...' : '请先完成登录'}}" bindinput="onInput" bindconfirm="onSend" confirm-type="send"/>
-        <button class="send-btn {{isSending || !userId ? 'disabled' : ''}}" size="mini" disabled="{{isSending || !userId}}" bindtap="onSend">{{isSending ? '等待' : '发送'}}</button>
-      </block>
-      <block wx:else>
-        <view class="phone-panel">
-          <view class="phone-status {{phoneStatus}}">
-            <view class="phone-status-dot"></view>
-            <text>{{phoneStatusLabel}}</text>
-          </view>
-          <button
-            class="hold-voice-btn {{isRecording ? 'recording' : ''}} {{isSending || !userId ? 'disabled' : ''}}"
-            disabled="{{isSending || !userId}}"
-            bindtouchstart="onStartRecord"
-            bindtouchend="onStopRecord"
-            bindtouchcancel="onCancelRecord"
-          >
-            {{phoneStatus === 'recording' ? '松开发送' : '按住说话'}}
-          </button>
-        </view>
-      </block>
-
-      <button class="phone-mode-btn {{phoneMode ? 'active' : ''}} {{!userId ? 'disabled' : ''}}" disabled="{{!userId}}" bindtap="onTogglePhoneMode">
-        {{phoneMode ? '挂断' : '☎ 电话'}}
-      </button>
-    </view>
-
-    <view class="chat-actions">
-      <view class="action-btn" bindtap="onClearContext">清除上下文</view>
-      <view class="action-btn primary" bindtap="onOpenPersonaPage">个性化设置</view>
-      <view class="action-btn primary" bindtap="onOpenMemoryPage">记忆管理</view>
-      <view class="action-btn debug" wx:if="{{adminDebugEnabled}}" bindtap="onOpenAdminDebug">提示词调试</view>
-    </view>
-  </view>
-
-  <view class="admin-mask" wx:if="{{adminDebugVisible}}">
-    <view class="admin-panel">
-      <view class="admin-panel-header">
-        <text class="admin-title">提示词调试</text>
-        <text class="admin-close" bindtap="onCloseAdminDebug">关闭</text>
-      </view>
-
-      <view class="admin-source">当前来源：{{adminPromptSource || '加载中'}}</view>
-      <textarea
-        class="admin-textarea"
-        value="{{adminPromptText}}"
-        placeholder="输入新的系统提示词"
-        bindinput="onAdminPromptInput"
-        maxlength="-1"
+    <view class="composer">
+      <button
+        class="composer-tool"
+        disabled="{{!isReady}}"
+        bindtap="onOpenTools"
+        hover-class="button-pressed"
+        aria-label="聊天设置"
+      >＋</button>
+      <input
+        class="composer-input"
+        value="{{inputText}}"
+        disabled="{{!isReady || isSending}}"
+        maxlength="2000"
+        placeholder="发消息给 Echo"
+        bindinput="onInput"
+        bindconfirm="onSend"
+        confirm-type="send"
       />
-
-      <view class="admin-actions">
-        <button class="admin-secondary-btn" loading="{{adminPromptLoading}}" bindtap="onClearAdminChatContext">清空聊天</button>
-        <button class="admin-primary-btn" loading="{{adminPromptLoading}}" bindtap="onSaveAdminPrompt">保存提示词</button>
-      </view>
+      <button
+        class="send-button {{inputText ? 'active' : ''}}"
+        disabled="{{!isReady || isSending || !inputText}}"
+        bindtap="onSend"
+        hover-class="button-pressed"
+        aria-label="发送"
+      >↑</button>
     </view>
   </view>
 </view>

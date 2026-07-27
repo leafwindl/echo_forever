@@ -1,0 +1,56 @@
+<view class="page">
+  <image class="ambient-character" src="/assets/images/echo_idle.png" mode="widthFix" />
+  <view class="veil"></view>
+
+  <view class="call-content">
+    <view class="call-heading">
+      <text class="echo-name">Echo</text>
+      <text class="call-time">{{elapsedLabel}}</text>
+    </view>
+
+    <view class="avatar-frame {{status === 'speaking' ? 'speaking' : ''}}">
+      <image class="avatar" src="/assets/images/echo_avatar.png" mode="aspectFill" />
+    </view>
+
+    <view class="status-block">
+      <view class="wave {{status}}">
+        <view class="bar"></view>
+        <view class="bar"></view>
+        <view class="bar"></view>
+        <view class="bar"></view>
+        <view class="bar"></view>
+      </view>
+      <text class="status-label">{{statusLabel}}</text>
+      <text class="partial-text" wx:if="{{partialText}}">{{partialText}}</text>
+    </view>
+
+    <view class="caption" wx:if="{{echoCaption}}">
+      <text>{{echoCaption}}</text>
+    </view>
+
+    <view class="call-actions">
+      <view class="action-item">
+        <button
+          class="talk-button {{isRecording ? 'recording' : ''}}"
+          disabled="{{!isReady || isSending}}"
+          bindtouchstart="onStartRecord"
+          bindtouchend="onStopRecord"
+          bindtouchcancel="onCancelRecord"
+        >
+          <view class="mic-mark">
+            <view class="mic-head"></view>
+            <view class="mic-stem"></view>
+          </view>
+        </button>
+        <text class="action-label">{{isRecording ? '松开发送' : '按住说话'}}</text>
+      </view>
+
+      <view class="action-item">
+        <button class="hangup-button" bindtap="onHangup">
+          <view class="hangup-mark"></view>
+        </button>
+        <text class="action-label">结束</text>
+      </view>
+    </view>
+  </view>
+</view>

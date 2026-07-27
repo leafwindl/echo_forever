@@ -1,13 +1,17 @@
 import {
+  AffectionStyle,
   getPersona,
   PersonaProactivity,
   PersonaReplyLength,
   PersonaReplyStyle,
   PersonaSupportMode,
+  RelationshipPace,
   resetPersona,
+  resetRelationship,
   updatePersona,
-  UserPersona,
+  UserPreferences,
 } from '../../utils/api';
+import { clearSession } from '../../utils/session';
 
 interface ChoiceOption<T extends string> {
   value: T;
@@ -26,6 +30,8 @@ interface PersonaPageData {
   replyLength: PersonaReplyLength;
   supportMode: PersonaSupportMode;
   proactivity: PersonaProactivity;
+  relationshipPace: RelationshipPace;
+  affectionStyle: AffectionStyle;
   avoidTopics: string[];
   aboutUser: string;
   enabled: boolean;
@@ -38,6 +44,8 @@ interface PersonaPageData {
   replyLengthOptions: ChoiceOption<PersonaReplyLength>[];
   supportModeOptions: ChoiceOption<PersonaSupportMode>[];
   proactivityOptions: ChoiceOption<PersonaProactivity>[];
+  relationshipPaceOptions: ChoiceOption<RelationshipPace>[];
+  affectionStyleOptions: ChoiceOption<AffectionStyle>[];
   presetTopics: PresetTopicOption[];
   customAvoidTopics: string[];
 }
@@ -53,6 +61,8 @@ const DEFAULT_DATA = {
   replyLength: 'balanced' as PersonaReplyLength,
   supportMode: 'balanced' as PersonaSupportMode,
   proactivity: 'balanced' as PersonaProactivity,
+  relationshipPace: 'natural' as RelationshipPace,
+  affectionStyle: 'contextual' as AffectionStyle,
   avoidTopics: [] as string[],
   aboutUser: '',
   enabled: true,
@@ -98,6 +108,16 @@ Page({
       { value: 'balanced', label: '适中', description: '必要时自然追问一次' },
       { value: 'active', label: '主动', description: '适当关联上下文和下一步' },
     ],
+    relationshipPaceOptions: [
+      { value: 'slow', label: '慢一些', description: '经过更多长期互动后再逐渐熟络' },
+      { value: 'natural', label: '自然', description: '根据互动和共同经历自然发展' },
+      { value: 'open', label: '开放', description: '可以更快熟络，但仍尊重关系边界' },
+    ],
+    affectionStyleOptions: [
+      { value: 'restrained', label: '克制', description: '不主动使用亲昵称呼和高浓度表达' },
+      { value: 'contextual', label: '看语境', description: '关系和语境都合适时自然表达' },
+      { value: 'expressive', label: '更有温度', description: '可以更明显地表达在意，但不过界' },
+    ],
     ...buildTopicView([]),
   } as PersonaPageData,
 
@@ -105,13 +125,15 @@ Page({
     this.loadPersona();
   },
 
-  applyPersona(persona: UserPersona) {
+  applyPersona(persona: UserPreferences) {
     this.setData({
       preferredName: persona.preferred_name || '',
       replyStyle: persona.reply_style,
       replyLength: persona.reply_length,
       supportMode: persona.support_mode,
       proactivity: persona.proactivity,
+      relationshipPace: persona.relationship_pace,
+      affectionStyle: persona.affection_style,
       avoidTopics: Array.isArray(persona.avoid_topics) ? persona.avoid_topics : [],
       ...buildTopicView(Array.isArray(persona.avoid_topics) ? persona.avoid_topics : []),
       aboutUser: persona.about_user || '',
@@ -134,10 +156,15 @@ Page({
   handleApiError(error: unknown, fallbackMessage: string) {
     const apiError = error as PersonaApiError;
     console.error(fallbackMessage, error);
+    if (apiError.isUnauthorized) {
+      clearSession();
+      wx.reLaunch({ url: '/pages/onboarding/onboarding' });
+      return;
+    }
     this.setData({
       isLoading: false,
       isSaving: false,
-      errorText: apiError.isUnauthorized ? '登录已失效，请返回聊天页重新登录' : fallbackMessage,
+      errorText: fallbackMessage,
     });
   },
 
@@ -168,6 +195,10 @@ Page({
       this.setData({ supportMode: value as PersonaSupportMode });
     } else if (field === 'proactivity') {
       this.setData({ proactivity: value as PersonaProactivity });
+    } else if (field === 'relationshipPace') {
+      this.setData({ relationshipPace: value as RelationshipPace });
+    } else if (field === 'affectionStyle') {
+      this.setData({ affectionStyle: value as AffectionStyle });
     }
   },
 
@@ -220,6 +251,8 @@ Page({
         reply_length: this.data.replyLength,
         support_mode: this.data.supportMode,
         proactivity: this.data.proactivity,
+        relationship_pace: this.data.relationshipPace,
+        affection_style: this.data.affectionStyle,
         avoid_topics: this.data.avoidTopics,
         about_user: this.data.aboutUser.trim() || null,
         enabled: this.data.enabled,
@@ -249,6 +282,27 @@ Page({
           wx.showToast({ title: '已恢复默认', icon: 'success' });
         } catch (error) {
           this.handleApiError(error, '恢复默认失败，请稍后重试');
+        }
+      },
+    });
+  },
+
+  onResetRelationship() {
+    if (this.data.isSaving) return;
+    wx.showModal({
+      title: '重置关系进度',
+      content: 'Echo 会从初识阶段重新建立熟悉感。个性化设置、长期记忆和聊天记录不会被删除。',
+      confirmText: '确认重置',
+      confirmColor: '#E04F5F',
+      success: async (result) => {
+        if (!result.confirm) return;
+        this.setData({ isSaving: true, errorText: '' });
+        try {
+          await resetRelationship();
+          this.setData({ isSaving: false });
+          wx.showToast({ title: '关系进度已重置', icon: 'success' });
+        } catch (error) {
+          this.handleApiError(error, '关系进度重置失败');
         }
       },
     });

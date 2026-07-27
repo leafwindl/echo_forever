@@ -2,25 +2,17 @@ export type MiniProgramEnvironment = 'develop' | 'trial' | 'release';
 
 interface AppEnvironmentConfig {
   apiBaseUrl: string;
-  adminDebugEnabled: boolean;
-  adminDebugToken: string;
 }
 
 const ENVIRONMENT_CONFIGS: Record<MiniProgramEnvironment, AppEnvironmentConfig> = {
   develop: {
     apiBaseUrl: 'http://127.0.0.1:8000',
-    adminDebugEnabled: false,
-    adminDebugToken: '',
   },
   trial: {
     apiBaseUrl: 'https://api.echoaiforever.cn',
-    adminDebugEnabled: false,
-    adminDebugToken: '',
   },
   release: {
     apiBaseUrl: 'https://api.echoaiforever.cn',
-    adminDebugEnabled: false,
-    adminDebugToken: '',
   },
 };
 

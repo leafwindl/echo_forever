@@ -1,12 +1,11 @@
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable
 
 from features.chat.domain.dialogue_style import (
     NATURAL_DIALOGUE_RETRY_INSTRUCTION,
+    apply_dialogue_fallback,
     find_dialogue_style_violations,
-    sanitize_dialogue_reply,
 )
 from features.chat.domain.entities import ChatTurnResult, ChatValidationError
 from features.chat.domain.repositories import ChatConversationRepository
@@ -15,6 +14,7 @@ from features.chat.domain.services import (
     ChatLLM,
     ConversationSummaryUpdater,
     MemoryExtractionScheduler,
+    RelationshipTurnRecorder,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class GenerateChatReply:
         llm: ChatLLM,
         summary_updater: ConversationSummaryUpdater,
         memory_scheduler: MemoryExtractionScheduler,
+        relationship_recorder: RelationshipTurnRecorder | None = None,
         summary_update_in_background: bool = False,
     ):
         self.conversation_repository = conversation_repository
@@ -37,6 +38,7 @@ class GenerateChatReply:
         self.llm = llm
         self.summary_updater = summary_updater
         self.memory_scheduler = memory_scheduler
+        self.relationship_recorder = relationship_recorder
         self.summary_update_in_background = summary_update_in_background
         self._summary_tasks: set[asyncio.Task[bool]] = set()
 
@@ -97,6 +99,15 @@ class GenerateChatReply:
             source_message_id=user_message_id,
         )
 
+        if self.relationship_recorder is not None:
+            relationship_recorded = self.relationship_recorder.record(
+                user_id=clean_user_id,
+                user_message=clean_message,
+                source_message_id=user_message_id,
+            )
+            if not relationship_recorded:
+                logger.warning("Relationship turn recording skipped for user_id=%s", clean_user_id)
+
         return ChatTurnResult(
             reply=reply,
             user_message=clean_message,
@@ -116,6 +127,7 @@ class GenerateChatReply:
         conversation_id: str | None = None,
         user_message_type: str = "text",
         assistant_message_type: str = "text",
+        conversation_mode: str = "chat",
     ) -> ChatTurnResult:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -136,6 +148,7 @@ class GenerateChatReply:
             clean_user_id,
             clean_message,
             resolved_conversation_id,
+            conversation_mode,
         )
         logger.info(
             "Chat context completed duration_ms=%.1f",
@@ -143,7 +156,7 @@ class GenerateChatReply:
         )
         llm_started_at = time.perf_counter()
         reply = await self.llm.generate_reply(context.messages)
-        style_violations = find_dialogue_style_violations(reply)
+        style_violations = find_dialogue_style_violations(reply, clean_message)
         if style_violations:
             logger.warning(
                 "Dialogue style retry requested violation_types=%s",
@@ -159,13 +172,17 @@ class GenerateChatReply:
             except Exception:
                 logger.warning("Dialogue style retry failed", exc_info=True)
 
-            remaining_violations = find_dialogue_style_violations(reply)
+            remaining_violations = find_dialogue_style_violations(reply, clean_message)
             if remaining_violations:
                 logger.warning(
                     "Dialogue style fallback applied violation_types=%s",
                     ",".join(remaining_violations),
                 )
-                reply = sanitize_dialogue_reply(reply)
+                reply = apply_dialogue_fallback(
+                    reply,
+                    clean_message,
+                    remaining_violations,
+                )
         logger.info(
             "LLM reply generated for user_id=%s text_length=%s duration_ms=%.1f",
             clean_user_id,
@@ -173,79 +190,6 @@ class GenerateChatReply:
             (time.perf_counter() - llm_started_at) * 1000,
         )
 
-        return await self._complete_turn(
-            clean_user_id=clean_user_id,
-            clean_message=clean_message,
-            resolved_conversation_id=resolved_conversation_id,
-            reply=reply,
-            user_message_type=user_message_type,
-            assistant_message_type=assistant_message_type,
-        )
-
-    async def execute_stream(
-        self,
-        user_id: str,
-        message: str,
-        on_delta: Callable[[str], Awaitable[None]],
-        conversation_id: str | None = None,
-        user_message_type: str = "text",
-        assistant_message_type: str = "text",
-    ) -> ChatTurnResult:
-        clean_user_id = user_id.strip()
-        clean_message = message.strip()
-        if not clean_user_id:
-            raise ChatValidationError("Missing user_id")
-        if not clean_message:
-            raise ChatValidationError("Empty message")
-
-        resolved_conversation_id = (
-            self.conversation_repository.ensure_conversation(clean_user_id, conversation_id)
-            if conversation_id
-            else self.conversation_repository.get_or_create_active_conversation(clean_user_id)
-        )
-        context_started_at = time.perf_counter()
-        context = await self.context_provider.build_context(
-            clean_user_id,
-            clean_message,
-            resolved_conversation_id,
-        )
-        logger.info(
-            "Streaming chat context completed duration_ms=%.1f",
-            (time.perf_counter() - context_started_at) * 1000,
-        )
-
-        llm_started_at = time.perf_counter()
-        first_delta_at: float | None = None
-        reply_chunks: list[str] = []
-        async for delta in self.llm.stream_reply(context.messages):
-            if not delta:
-                continue
-            if first_delta_at is None:
-                first_delta_at = time.perf_counter()
-                logger.info(
-                    "Streaming LLM first delta user_id=%s ttft_ms=%.1f",
-                    clean_user_id,
-                    (first_delta_at - llm_started_at) * 1000,
-                )
-            reply_chunks.append(delta)
-            await on_delta(delta)
-
-        reply = "".join(reply_chunks).strip()
-        if not reply:
-            raise ValueError("LLM returned an empty streaming reply")
-        style_violations = find_dialogue_style_violations(reply)
-        if style_violations:
-            # Streamed text is already visible, so record the issue instead of rewriting it.
-            logger.warning(
-                "Streaming dialogue style violation violation_types=%s",
-                ",".join(style_violations),
-            )
-        logger.info(
-            "Streaming LLM reply completed user_id=%s text_length=%s duration_ms=%.1f",
-            clean_user_id,
-            len(reply),
-            (time.perf_counter() - llm_started_at) * 1000,
-        )
         return await self._complete_turn(
             clean_user_id=clean_user_id,
             clean_message=clean_message,

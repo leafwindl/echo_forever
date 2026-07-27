@@ -7,11 +7,12 @@
 
   <scroll-view class="form" scroll-y wx:else>
     <view class="intro-card">
+      <image class="intro-avatar" src="/assets/images/echo_avatar.png" mode="aspectFill" />
       <view class="intro-main">
-        <text class="intro-title">让 Echo 更懂你的交流习惯</text>
-        <text class="intro-text">这些是你主动设置的偏好，不会展示或开放系统提示词。</text>
+        <text class="intro-title">你的交流偏好</text>
+        <text class="intro-text">Echo 会在合适的语境里使用这些设置</text>
       </view>
-      <switch color="#FF9A9E" checked="{{enabled}}" bindchange="onEnabledChange" />
+      <switch color="#4F8881" checked="{{enabled}}" bindchange="onEnabledChange" />
     </view>
 
     <view class="section">
@@ -60,6 +61,26 @@
     </view>
 
     <view class="section">
+      <text class="section-title">关系发展节奏</text>
+      <block wx:for="{{relationshipPaceOptions}}" wx:key="value">
+        <view class="choice {{relationshipPace === item.value ? 'selected' : ''}}" data-field="relationshipPace" data-value="{{item.value}}" bindtap="onSelectChoice">
+          <text class="choice-label">{{item.label}}</text>
+          <text class="choice-description">{{item.description}}</text>
+        </view>
+      </block>
+    </view>
+
+    <view class="section">
+      <text class="section-title">亲近表达</text>
+      <block wx:for="{{affectionStyleOptions}}" wx:key="value">
+        <view class="choice {{affectionStyle === item.value ? 'selected' : ''}}" data-field="affectionStyle" data-value="{{item.value}}" bindtap="onSelectChoice">
+          <text class="choice-label">{{item.label}}</text>
+          <text class="choice-description">{{item.description}}</text>
+        </view>
+      </block>
+    </view>
+
+    <view class="section">
       <view class="section-heading">
         <text class="section-title">避免主动展开的话题</text>
         <text class="section-count">{{avoidTopics.length}}/5</text>
@@ -83,7 +104,8 @@
       <textarea class="about-input" maxlength="300" value="{{aboutUser}}" placeholder="选填，例如你的兴趣、当前目标或沟通习惯。这里的内容只作为背景信息。" bindinput="onAboutUserInput" />
     </view>
 
-    <view class="privacy-note">设置会绑定当前账号，并用于之后的对话。恢复默认不会影响长期记忆和聊天记录。</view>
+    <view class="privacy-note">恢复默认不会影响长期记忆和聊天记录。</view>
+    <button class="relationship-reset-btn" disabled="{{isSaving}}" bindtap="onResetRelationship">重置关系进度</button>
     <view class="bottom-space"></view>
   </scroll-view>
 

@@ -30,7 +30,19 @@ class PostgresSchemaTests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS user_personas", schema_text)
         self.assertIn("user_id TEXT PRIMARY KEY", schema_text)
         self.assertIn("avoid_topics JSONB NOT NULL", schema_text)
-        self.assertIn("schema_version INTEGER NOT NULL DEFAULT 1", schema_text)
+        self.assertIn("relationship_pace VARCHAR(32) NOT NULL DEFAULT 'natural'", schema_text)
+        self.assertIn("affection_style VARCHAR(32) NOT NULL DEFAULT 'contextual'", schema_text)
+        self.assertIn("is_customized BOOLEAN NOT NULL DEFAULT TRUE", schema_text)
+        self.assertIn("onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE", schema_text)
+        self.assertIn("schema_version INTEGER NOT NULL DEFAULT 3", schema_text)
+
+    def test_schema_contains_relationship_state_and_event_log(self):
+        schema_text = build_postgres_schema_text(vector_dimension=1024)
+
+        self.assertIn("CREATE TABLE IF NOT EXISTS relationship_states", schema_text)
+        self.assertIn("affection_permission VARCHAR(32)", schema_text)
+        self.assertIn("CREATE TABLE IF NOT EXISTS relationship_events", schema_text)
+        self.assertIn("idx_relationship_events_user_type", schema_text)
 
 
 if __name__ == "__main__":

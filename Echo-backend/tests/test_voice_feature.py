@@ -123,7 +123,7 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         result = await use_case.execute("hello")
 
-        self.assertEqual(result.audio_url, "http://example.test/audio.mp3")
+        self.assertEqual(result.audio_urls, ("http://example.test/audio.mp3",))
         self.assertEqual(storage.generated_audio, [b"audio:hello"])
 
     async def test_synthesize_voice_reply_rejects_empty_text(self):

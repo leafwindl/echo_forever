@@ -6,7 +6,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.chat.application.generate_reply import GenerateChatReply
-from features.chat.application.send_message import SendChatMessage, StreamingSpeechSegmenter
+from features.chat.application.send_message import SendChatMessage
+from features.chat.domain.dialogue_style import (
+    apply_dialogue_fallback,
+    find_dialogue_style_violations,
+)
 from features.chat.domain.entities import (
     ChatContext,
     ChatRequestInProgressError,
@@ -48,7 +52,11 @@ class FakeConversationRepository:
 
 
 class FakeContextProvider:
-    async def build_context(self, user_id, user_message, conversation_id):
+    def __init__(self):
+        self.conversation_modes = []
+
+    async def build_context(self, user_id, user_message, conversation_id, conversation_mode):
+        self.conversation_modes.append(conversation_mode)
         return ChatContext(
             messages=[{"role": "user", "content": user_message}],
             history_messages=[],
@@ -58,10 +66,6 @@ class FakeContextProvider:
 class FakeLLM:
     async def generate_reply(self, messages):
         return "hello from echo"
-
-    async def stream_reply(self, messages):
-        for delta in ("hello ", "from echo"):
-            yield delta
 
 
 class SequenceLLM:
@@ -99,6 +103,16 @@ class FakeMemoryScheduler:
         )
 
 
+class FakeRelationshipRecorder:
+    def __init__(self, result=True):
+        self.result = result
+        self.calls = []
+
+    def record(self, user_id, user_message, source_message_id):
+        self.calls.append((user_id, user_message, source_message_id))
+        return self.result
+
+
 class FakeVoiceReplySynthesizer:
     def __init__(self):
         self.received_replies = []
@@ -106,11 +120,6 @@ class FakeVoiceReplySynthesizer:
     async def synthesize_reply(self, reply):
         self.received_replies.append(reply)
         return "http://example.test/voice.mp3"
-
-    async def start_streaming_segment(self, text):
-        self.received_replies.append(text)
-        return "http://example.test/voice-stream.mp3"
-
 
 class FailingVoiceReplySynthesizer:
     async def synthesize_reply(self, reply):
@@ -134,12 +143,14 @@ class FakeChatRequestGuard:
 class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
     def build_generate_use_case(self):
         repository = FakeConversationRepository()
+        relationship_recorder = FakeRelationshipRecorder()
         use_case = GenerateChatReply(
             conversation_repository=repository,
             context_provider=FakeContextProvider(),
             llm=FakeLLM(),
             summary_updater=FakeSummaryUpdater(),
             memory_scheduler=FakeMemoryScheduler(),
+            relationship_recorder=relationship_recorder,
         )
         return use_case, repository
 
@@ -170,22 +181,21 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.memory_extraction_job_id, "job_fake")
         self.assertEqual(repository.persisted_turns[0]["user_message"], "remember my name")
 
-    async def test_generate_chat_reply_streams_and_persists_complete_turn(self):
-        use_case, repository = self.build_generate_use_case()
-        deltas = []
-
-        async def on_delta(delta):
-            deltas.append(delta)
-
-        result = await use_case.execute_stream(
-            user_id="user_a",
-            message="hello",
-            on_delta=on_delta,
+    async def test_generate_chat_reply_records_relationship_after_persisting_turn(self):
+        repository = FakeConversationRepository()
+        recorder = FakeRelationshipRecorder()
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            llm=FakeLLM(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            relationship_recorder=recorder,
         )
 
-        self.assertEqual(deltas, ["hello ", "from echo"])
-        self.assertEqual(result.reply, "hello from echo")
-        self.assertEqual(repository.persisted_turns[0]["assistant_reply"], "hello from echo")
+        await use_case.execute(user_id="user_a", message="今天赢球了")
+
+        self.assertEqual([("user_a", "今天赢球了", 10)], recorder.calls)
 
     async def test_generate_chat_reply_rejects_empty_message(self):
         use_case, _ = self.build_generate_use_case()
@@ -248,35 +258,173 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("我会认真听。", result.reply)
         self.assertEqual(2, len(llm.calls))
 
-    async def test_send_chat_message_can_return_voice_reply_url(self):
+    def test_dialogue_style_flags_contextual_naturalness_violations(self):
+        self.assertIn(
+            "fabricated_offline_state",
+            find_dialogue_style_violations("不忙，刚看完几篇文章。", "你在忙吗？"),
+        )
+        self.assertIn(
+            "fabricated_human_experience",
+            find_dialogue_style_violations("我也经常累了就躺着。", "今天有点累。"),
+        )
+        self.assertIn(
+            "direct_physical_action",
+            find_dialogue_style_violations("抱抱你，我在。", "今天很难过。"),
+        )
+        self.assertIn(
+            "unrequested_advice",
+            find_dialogue_style_violations("累了就歇会儿，别硬撑。", "今天有点累。"),
+        )
+        self.assertIn(
+            "unrequested_advice",
+            find_dialogue_style_violations("听起来消耗不少，歇一歇吧。", "今天有点累。"),
+        )
+        self.assertIn(
+            "unrequested_advice",
+            find_dialogue_style_violations("明白，先缓缓也行。", "我不想听建议。"),
+        )
+        self.assertIn(
+            "multiple_questions",
+            find_dialogue_style_violations("跟谁打的？比分怎么样？", "今天赢球了。"),
+        )
+        self.assertIn(
+            "ungrounded_time_detail",
+            find_dialogue_style_violations("今天周六也累到了？", "今天有点累。"),
+        )
+
+    def test_dialogue_style_flags_unverified_voice_capabilities(self):
+        violations = find_dialogue_style_violations(
+            "我会把声音调整成熟一点，你可以去设置里选择其他音色选项。",
+            "声音可以成熟一点吗？",
+        )
+
+        self.assertIn("voice_capability_promise", violations)
+        self.assertIn("unverified_settings", violations)
+        self.assertIn(
+            "unverified_settings",
+            find_dialogue_style_violations(
+                "音色需要你在产品的语音设置里改一下。",
+                "声音可以成熟一点吗？",
+            ),
+        )
+
+    async def test_generate_chat_reply_retries_unrequested_advice(self):
+        repository = FakeConversationRepository()
+        llm = SequenceLLM(["累了就歇会儿，别硬撑。", "听起来今天挺消耗人的。"])
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            llm=llm,
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+        )
+
+        result = await use_case.execute(user_id="user_a", message="今天有点累。")
+
+        self.assertEqual("听起来今天挺消耗人的。", result.reply)
+        self.assertEqual(2, len(llm.calls))
+
+    async def test_generate_chat_reply_uses_narrow_fallback_after_failed_rewrite(self):
+        repository = FakeConversationRepository()
+        llm = SequenceLLM(["累了就歇会儿。", "今天别硬撑，好好休息吧。"])
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            llm=llm,
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+        )
+
+        result = await use_case.execute(user_id="user_a", message="今天有点累。")
+
+        self.assertEqual("那今天就聊点不费脑子的。", result.reply)
+        self.assertEqual(2, len(llm.calls))
+
+    def test_dialogue_fallback_keeps_advice_and_voice_boundaries(self):
+        self.assertEqual(
+            "好，不分析。你想说什么就说什么。",
+            apply_dialogue_fallback(
+                "先缓缓再说。",
+                "我现在不想听建议。",
+                ("unrequested_advice",),
+            ),
+        )
+        self.assertEqual(
+            "我明白，确实听着偏稚气。这个得改语音合成配置，光靠聊天内容改不了。",
+            apply_dialogue_fallback(
+                "去设置里换一下。",
+                "声音能成熟一点吗？",
+                ("unverified_settings",),
+            ),
+        )
+
+    async def test_call_mode_returns_voice_and_persists_voice_message_types(self):
         voice_synthesizer = FakeVoiceReplySynthesizer()
         use_case, repository = self.build_send_use_case(voice_synthesizer=voice_synthesizer)
 
         result = await use_case.execute(
             user_id="user_a",
             message="hello",
-            input_type="voice",
-            voice_reply_enabled=True,
+            conversation_mode="call",
         )
 
         self.assertEqual(result.reply, "hello from echo")
-        self.assertEqual(result.audio_url, "http://example.test/voice.mp3")
         self.assertEqual(result.audio_urls, ("http://example.test/voice.mp3",))
         self.assertEqual(voice_synthesizer.received_replies, ["hello from echo"])
         self.assertEqual(repository.persisted_turns[0]["user_message_type"], "voice_asr")
         self.assertEqual(repository.persisted_turns[0]["assistant_message_type"], "voice_reply")
 
-    async def test_send_chat_message_keeps_text_reply_when_voice_synthesis_fails(self):
+    async def test_call_mode_keeps_text_reply_when_voice_synthesis_fails(self):
         use_case, _ = self.build_send_use_case(voice_synthesizer=FailingVoiceReplySynthesizer())
 
         result = await use_case.execute(
             user_id="user_a",
             message="hello",
-            voice_reply_enabled=True,
+            conversation_mode="call",
         )
 
         self.assertEqual(result.reply, "hello from echo")
-        self.assertIsNone(result.audio_url)
+        self.assertEqual(result.audio_urls, ())
+
+    async def test_chat_mode_does_not_synthesize_voice(self):
+        voice_synthesizer = FakeVoiceReplySynthesizer()
+        use_case, repository = self.build_send_use_case(voice_synthesizer=voice_synthesizer)
+
+        result = await use_case.execute(user_id="user_a", message="hello")
+
+        self.assertEqual(result.audio_urls, ())
+        self.assertEqual(voice_synthesizer.received_replies, [])
+        self.assertEqual(repository.persisted_turns[0]["user_message_type"], "text")
+        self.assertEqual(repository.persisted_turns[0]["assistant_message_type"], "text")
+
+    async def test_send_chat_message_passes_call_mode_to_context_provider(self):
+        context_provider = FakeContextProvider()
+        generator = GenerateChatReply(
+            conversation_repository=FakeConversationRepository(),
+            context_provider=context_provider,
+            llm=FakeLLM(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+        )
+        use_case = SendChatMessage(
+            chat_reply_generator=generator,
+            voice_reply_synthesizer=FakeVoiceReplySynthesizer(),
+            request_guard=FakeChatRequestGuard(),
+        )
+
+        await use_case.execute(user_id="user_a", message="hello", conversation_mode="call")
+
+        self.assertEqual(context_provider.conversation_modes, ["call"])
+
+    async def test_send_chat_message_rejects_unknown_mode(self):
+        use_case, _ = self.build_send_use_case()
+
+        with self.assertRaises(ValueError):
+            await use_case.execute(
+                user_id="user_a",
+                message="hello",
+                conversation_mode="stream",
+            )
 
     async def test_send_chat_message_rejects_when_user_request_is_in_progress(self):
         request_guard = FakeChatRequestGuard(acquired=False)
@@ -296,39 +444,6 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(request_guard.try_calls, ["user_a"])
         self.assertEqual(request_guard.release_calls, ["user_a"])
-
-    async def test_send_chat_message_streams_text_and_audio_segments(self):
-        voice_synthesizer = FakeVoiceReplySynthesizer()
-        use_case, _ = self.build_send_use_case(voice_synthesizer=voice_synthesizer)
-        deltas = []
-        audio_urls = []
-
-        async def on_delta(delta):
-            deltas.append(delta)
-
-        async def on_audio(audio_url):
-            audio_urls.append(audio_url)
-
-        result = await use_case.execute_stream(
-            user_id="user_a",
-            message="hello",
-            input_type="voice",
-            voice_reply_enabled=True,
-            on_text_delta=on_delta,
-            on_audio_ready=on_audio,
-        )
-
-        self.assertEqual(deltas, ["hello ", "from echo"])
-        self.assertEqual(voice_synthesizer.received_replies, ["hello from echo"])
-        self.assertEqual(audio_urls, ["http://example.test/voice-stream.mp3"])
-        self.assertEqual(result.audio_urls, ("http://example.test/voice-stream.mp3",))
-
-    def test_streaming_speech_segmenter_emits_sentence_before_completion(self):
-        segmenter = StreamingSpeechSegmenter(max_chars=12, total_max_chars=100)
-
-        self.assertEqual(segmenter.push("第一句话。第二"), ("第一句话。",))
-        self.assertEqual(segmenter.finish(), ("第二",))
-
 
 if __name__ == "__main__":
     unittest.main()

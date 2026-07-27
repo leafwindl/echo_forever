@@ -7,7 +7,7 @@ from shared.config import settings
 def get_database_url() -> str:
     database_url = settings.database_url.strip()
     if not database_url:
-        raise RuntimeError("DATABASE_URL is required when DB_PROVIDER=postgres")
+        raise RuntimeError("DATABASE_URL is required")
     if database_url.startswith("postgresql+psycopg://"):
         return database_url.replace("postgresql+psycopg://", "postgresql://", 1)
     return database_url

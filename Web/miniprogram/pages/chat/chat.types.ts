@@ -5,16 +5,6 @@ export interface Message {
   isTyping?: boolean;
 }
 
-export interface SitCrop {
-  cropWidth: string;
-  cropHeight: string;
-  cropOffsetX: string;
-  cropOffsetY: string;
-  imageWidth: string;
-  imageLeft: string;
-  imageTop: string;
-}
-
 export interface RequestInProgressError {
   isRequestInProgress?: boolean;
   isRateLimited?: boolean;

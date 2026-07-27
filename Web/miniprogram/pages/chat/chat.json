@@ -1,5 +1,5 @@
 {
-  "usingComponents": {
-    "character": "/components/character/character"
-  }
+  "navigationBarTitleText": "Echo",
+  "navigationBarBackgroundColor": "#e8eef5",
+  "navigationBarTextStyle": "black"
 }

@@ -71,8 +71,12 @@ class PersonaInfrastructureTests(unittest.TestCase):
                 "proactivity": "quiet",
                 "avoid_topics": '["家庭话题"]',
                 "about_user": "喜欢直接交流",
+                "relationship_pace": "slow",
+                "affection_style": "restrained",
                 "enabled": True,
-                "schema_version": 1,
+                "is_customized": True,
+                "onboarding_completed": True,
+                "schema_version": 3,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -80,8 +84,11 @@ class PersonaInfrastructureTests(unittest.TestCase):
 
         self.assertEqual("user-a", persona.user_id)
         self.assertEqual(("家庭话题",), persona.avoid_topics)
+        self.assertEqual("slow", persona.relationship_pace)
+        self.assertEqual("restrained", persona.affection_style)
         self.assertEqual(now.isoformat(), persona.created_at)
         self.assertTrue(persona.is_customized)
+        self.assertTrue(persona.onboarding_completed)
 
     def test_invalid_json_topics_degrade_to_empty_list(self):
         persona = _persona_from_row(
@@ -95,7 +102,9 @@ class PersonaInfrastructureTests(unittest.TestCase):
                 "avoid_topics": "not-json",
                 "about_user": None,
                 "enabled": False,
-                "schema_version": 1,
+                "is_customized": False,
+                "onboarding_completed": True,
+                "schema_version": 3,
                 "created_at": None,
                 "updated_at": None,
             }
@@ -103,6 +112,7 @@ class PersonaInfrastructureTests(unittest.TestCase):
 
         self.assertEqual((), persona.avoid_topics)
         self.assertFalse(persona.enabled)
+        self.assertTrue(persona.onboarding_completed)
 
 
 if __name__ == "__main__":

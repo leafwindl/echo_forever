@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from typing import Protocol
 
 from features.chat.domain.entities import ChatContext, MemoryExtractionScheduleResult
@@ -10,13 +9,12 @@ class ChatContextProvider(Protocol):
         user_id: str,
         user_message: str,
         conversation_id: str,
+        conversation_mode: str,
     ) -> ChatContext: ...
 
 
 class ChatLLM(Protocol):
     async def generate_reply(self, messages: list[dict]) -> str: ...
-
-    def stream_reply(self, messages: list[dict]) -> AsyncIterator[str]: ...
 
 
 class ConversationSummaryUpdater(Protocol):
@@ -33,10 +31,17 @@ class MemoryExtractionScheduler(Protocol):
     ) -> MemoryExtractionScheduleResult: ...
 
 
+class RelationshipTurnRecorder(Protocol):
+    def record(
+        self,
+        user_id: str,
+        user_message: str,
+        source_message_id: int,
+    ) -> bool: ...
+
+
 class ChatVoiceReplySynthesizer(Protocol):
     async def synthesize_reply(self, reply: str) -> tuple[str, ...]: ...
-
-    async def start_streaming_segment(self, text: str) -> str: ...
 
 
 class ChatRequestGuard(Protocol):

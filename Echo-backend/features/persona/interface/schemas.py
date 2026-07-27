@@ -9,6 +9,8 @@ class PersonaUpdateRequest(BaseModel):
     proactivity: str = Field(default="balanced", max_length=32)
     avoid_topics: list[str] = Field(default_factory=list, max_length=5)
     about_user: str | None = Field(default=None, max_length=300)
+    relationship_pace: str = Field(default="natural", max_length=32)
+    affection_style: str = Field(default="contextual", max_length=32)
     enabled: bool = True
 
 
@@ -20,8 +22,11 @@ class PersonaResponse(BaseModel):
     proactivity: str
     avoid_topics: list[str]
     about_user: str | None = None
+    relationship_pace: str
+    affection_style: str
     enabled: bool
     schema_version: int
     is_customized: bool
+    onboarding_completed: bool
     created_at: str | None = None
     updated_at: str | None = None

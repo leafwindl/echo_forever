@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from shared.config import settings
 
 from features.persona.public import PERSONA_SCHEMA_VERSION
+from features.relationship.public import RELATIONSHIP_SCHEMA_VERSION
 from features.system.public import is_database_ready
 
 router = APIRouter(tags=["health"])
@@ -31,5 +32,7 @@ async def version_info():
         "version": settings.app_version,
         "revision": settings.build_revision,
         "prompt_version": settings.prompt_version,
+        "assistant_persona_version": settings.assistant_persona_version,
         "persona_schema_version": PERSONA_SCHEMA_VERSION,
+        "relationship_schema_version": RELATIONSHIP_SCHEMA_VERSION,
     }

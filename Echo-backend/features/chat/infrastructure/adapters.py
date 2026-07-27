@@ -12,11 +12,14 @@ from features.chat.domain.services import (
     ChatVoiceReplySynthesizer,
     ConversationSummaryUpdater,
     MemoryExtractionScheduler,
+    RelationshipTurnRecorder,
 )
 from features.chat.infrastructure.context_builder import build_chat_context
 from features.chat.infrastructure.conversation_summary import maybe_update_conversation_summary
-from features.chat.infrastructure.repository_provider import get_repository_module
+from features.chat.infrastructure import postgres_repositories
 from features.memory.public import schedule_memory_extraction
+from features.persona.public import get_persona
+from features.relationship.public import record_relationship_turn
 
 
 class InMemoryChatRequestGuard(ChatRequestGuard):
@@ -51,10 +54,10 @@ class InMemoryChatRequestGuard(ChatRequestGuard):
 
 class ChatConversationRepositoryAdapter(ChatConversationRepository):
     def ensure_conversation(self, user_id: str, conversation_id: str | None) -> str:
-        return get_repository_module().ensure_conversation(user_id, conversation_id)
+        return postgres_repositories.ensure_conversation(user_id, conversation_id)
 
     def get_or_create_active_conversation(self, user_id: str) -> str:
-        return get_repository_module().get_or_create_active_conversation(user_id)
+        return postgres_repositories.get_or_create_active_conversation(user_id)
 
     def add_chat_turn(
         self,
@@ -65,7 +68,7 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
         user_message_type: str,
         assistant_message_type: str,
     ) -> tuple[int, int]:
-        return get_repository_module().add_chat_turn(
+        return postgres_repositories.add_chat_turn(
             user_id=user_id,
             conversation_id=conversation_id,
             user_message=user_message,
@@ -81,8 +84,14 @@ class ChatContextProviderAdapter(ChatContextProvider):
         user_id: str,
         user_message: str,
         conversation_id: str,
+        conversation_mode: str,
     ) -> ChatContext:
-        context = await build_chat_context(user_id, user_message, conversation_id=conversation_id)
+        context = await build_chat_context(
+            user_id,
+            user_message,
+            conversation_id=conversation_id,
+            conversation_mode=conversation_mode,
+        )
         return ChatContext(
             messages=context.messages,
             history_messages=context.history_messages,
@@ -97,10 +106,6 @@ class ChatLLMAdapter(ChatLLM):
         provider = get_llm_provider()
         return await provider.chat_completion(messages=messages)
 
-    async def stream_reply(self, messages: list[dict]):
-        provider = get_llm_provider()
-        async for delta in provider.chat_completion_stream(messages=messages):
-            yield delta
 
 
 class ConversationSummaryUpdaterAdapter(ConversationSummaryUpdater):
@@ -129,14 +134,31 @@ class MemoryExtractionSchedulerAdapter(MemoryExtractionScheduler):
         )
 
 
+class RelationshipTurnRecorderAdapter(RelationshipTurnRecorder):
+    def record(
+        self,
+        user_id: str,
+        user_message: str,
+        source_message_id: int,
+    ) -> bool:
+        try:
+            preferences = get_persona(user_id)
+            record_relationship_turn(
+                user_id=user_id,
+                user_message=user_message,
+                source_message_id=source_message_id,
+                relationship_pace=(
+                    preferences.relationship_pace if preferences.enabled else "natural"
+                ),
+            )
+            return True
+        except Exception:
+            return False
+
+
 class VoiceReplySynthesizerAdapter(ChatVoiceReplySynthesizer):
     async def synthesize_reply(self, reply: str) -> tuple[str, ...]:
         from features.voice.public import synthesize_voice_reply
 
         result = await synthesize_voice_reply(reply)
         return result.audio_urls
-
-    async def start_streaming_segment(self, text: str) -> str:
-        from features.voice.public import start_streaming_voice_segment
-
-        return await start_streaming_voice_segment(text)

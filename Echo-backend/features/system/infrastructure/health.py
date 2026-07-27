@@ -1,6 +1,6 @@
 import logging
 
-from db.connection import get_connection
+from db.postgres_connection import get_connection
 
 logger = logging.getLogger(__name__)
 

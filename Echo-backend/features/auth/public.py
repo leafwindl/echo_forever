@@ -2,7 +2,7 @@ from typing import Optional
 
 from features.auth.domain.entities import AuthConfigurationError, AuthenticatedSession, AuthError
 from features.auth.infrastructure.container import get_login_with_wechat_code_use_case
-from features.auth.infrastructure.repository_provider import get_repository_module
+from features.auth.infrastructure import postgres_repositories
 
 
 async def login_with_wechat_code(code: str, client_id: Optional[str] = None) -> AuthenticatedSession:
@@ -11,7 +11,7 @@ async def login_with_wechat_code(code: str, client_id: Optional[str] = None) -> 
 
 
 def ensure_user_identity(user_id: str, conn=None) -> None:
-    get_repository_module().upsert_user(user_id=user_id, conn=conn)
+    postgres_repositories.upsert_user(user_id=user_id, conn=conn)
 
 
 __all__ = [

@@ -5,7 +5,7 @@
       <text class="count">{{memories.length}} 条</text>
     </view>
     <view class="top-actions">
-      <button class="icon-btn" size="mini" bindtap="onRefresh">刷新</button>
+      <button class="icon-btn" size="mini" bindtap="onRefresh" aria-label="刷新">↻</button>
       <button class="danger-btn" size="mini" bindtap="onClearMemories" loading="{{isClearing}}" disabled="{{isClearing || activeTab !== 'active' || memories.length === 0}}">清空</button>
     </view>
   </view>
@@ -32,8 +32,8 @@
           </view>
           <text class="content">{{item.content}}</text>
           <view class="memory-foot">
-            <text>置信度 {{item.confidence}}</text>
-            <text>{{item.updated_at}}</text>
+            <text>置信度 {{item.confidenceLabel}}</text>
+            <text>{{item.updatedLabel}}</text>
           </view>
         </view>
         <button

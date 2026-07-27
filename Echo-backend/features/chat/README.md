@@ -1,75 +1,28 @@
-# Chat 模块
+# Chat Feature
 
-## 1. 业务目标
+Chat 负责一轮完整对话：构建上下文、调用 LLM、保存消息、更新摘要、调度记忆和关系事件，并在电话模式请求 TTS。
 
-负责一轮完整聊天编排：构建上下文、调用 LLM、保存 user/assistant 消息、更新会话摘要、触发长期记忆抽取，并按需生成语音回复。
+## 契约
 
-## 2. 核心业务流程
+`POST /chat/send` 只接受：
 
-1. 接收聊天请求，解析当前用户、输入内容、输入来源和是否需要语音回复。
-2. 校验用户身份和消息内容；空消息会被拒绝。
-3. 获取当前用户的活跃会话；如果没有则创建新会话。
-4. 构建模型上下文：系统提示词、相关长期记忆、会话摘要、近期聊天历史和当前消息。
-5. 优先通过向量召回相关长期记忆；没有可用向量时回退到重要度列表。
-6. 调用大模型生成回复。
-7. 将用户消息和 AI 回复作为同一轮对话写入数据库。
-8. 在消息数量达到阈值时尝试更新会话摘要；摘要失败不影响本轮回复。
-9. 根据本轮对话内容判断是否需要抽取长期记忆，并在需要时创建后台任务。
-10. 如果前端开启语音回复，调用语音模块把 AI 回复合成为可播放音频。
-11. 返回 AI 文字回复和可选音频 URL 给前端。
+```json
+{"message": "你好", "mode": "chat"}
+```
 
-## 3. 对外契约
+- `mode=chat`：即时通讯文字表达，消息类型为 `text`，不合成语音。
+- `mode=call`：口语化短句表达，消息类型为 `voice_asr` / `voice_reply`，返回 `audio_urls`。
+- 用户身份只来自 Bearer Token。
+- 响应不包含旧的单值 `audio_url`，也没有 SSE 聊天接口。
 
-### HTTP API
+## 流程
 
-- `POST /chat/send`
-  - Request: `ChatRequest`
-  - Response: `ChatResponse`
-  - `input_type`: `text` 或 `voice`，用于标记用户输入来源。
-  - `voice_reply_enabled`: 是否需要返回语音回复。
+1. Interface 校验请求、鉴权和限流。
+2. Application 串行保护同一用户的一轮请求。
+3. Context Builder 按安全、产品人格、自然对话、渠道、关系、用户偏好、长期记忆、摘要、历史的顺序组装上下文。
+4. LLM 生成完整回复；自然度规则失败时只重写一次。
+5. 同一事务语义中保存用户和 Echo 消息。
+6. 更新会话摘要，调度记忆抽取并记录关系信号。
+7. 电话模式调用 Voice；TTS 失败时仍返回已保存的文字。
 
-### 发布的事件
-
-- 当前无已落地事件。
-- 预留事件：`ChatMessageSent`，用于表示用户消息已回复。
-
-### 依赖的其它模块接口
-
-- Memory 模块：召回长期记忆，并在对话结束后调度记忆抽取。
-- Voice 模块：在前端开启语音回复时，将 AI 文本回复合成为音频。
-- LLM Provider：根据上下文生成 AI 回复。
-- 会话仓储：获取或创建当前会话。
-- 消息仓储：保存用户消息和 AI 回复。
-- 记忆仓储：在上下文构建时读取长期记忆。
-
-## 4. 数据库表
-
-- `conversations`
-- `chat_messages`
-- `user_memories`
-- `memory_embeddings`
-- `background_jobs`
-
-## 5. 关键配置项
-
-- `LLM_MODEL`
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL`
-- `TEMPERATURE`
-- `MAX_TOKENS`
-- `TIMEOUT`
-- `CHAT_MESSAGE_MAX_CHARS`
-- `CHAT_RATE_LIMIT_REQUESTS`
-- `CHAT_RATE_LIMIT_WINDOW_SECONDS`
-- `CHAT_DAILY_REQUEST_LIMIT`
-- `GLOBAL_DAILY_CHAT_REQUEST_LIMIT`
-- `MEMORY_VECTOR_TOP_K`
-- `MEMORY_VECTOR_SCORE_THRESHOLD`
-
-## 6. 注意事项
-
-- Application 不直接访问数据库、配置或 provider。
-- 跨模块调用 Memory 时只走 Memory 模块公开接口。
-- 会话摘要失败不能影响当前聊天回复。
-- 语音合成失败不能影响文字回复和聊天落库。
-- 长期记忆注入必须克制，避免把无关历史塞入 prompt。
+Application 仅依赖 Domain Protocol。PostgreSQL、模型 Provider 和其它 feature 均由 Infrastructure 适配。

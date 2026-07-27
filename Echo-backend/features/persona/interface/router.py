@@ -1,24 +1,24 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from shared.interface.dependencies import CurrentUser, get_bearer_current_user
+from shared.interface.dependencies import CurrentUser, get_current_user
 
 from features.persona.interface.schemas import PersonaResponse, PersonaUpdateRequest
 from features.persona.public import (
     PersonaOperationError,
     PersonaUpdate,
     PersonaValidationError,
-    UserPersona,
+    UserPreferences,
     get_persona,
     reset_persona,
     update_persona,
 )
 
 router = APIRouter(prefix="/persona", tags=["persona"])
-CurrentUserDependency = Annotated[CurrentUser, Depends(get_bearer_current_user)]
+CurrentUserDependency = Annotated[CurrentUser, Depends(get_current_user)]
 
 
-def _response_from_domain(persona: UserPersona) -> PersonaResponse:
+def _response_from_domain(persona: UserPreferences) -> PersonaResponse:
     return PersonaResponse(
         preferred_name=persona.preferred_name,
         reply_style=persona.reply_style,
@@ -27,9 +27,12 @@ def _response_from_domain(persona: UserPersona) -> PersonaResponse:
         proactivity=persona.proactivity,
         avoid_topics=list(persona.avoid_topics),
         about_user=persona.about_user,
+        relationship_pace=persona.relationship_pace,
+        affection_style=persona.affection_style,
         enabled=persona.enabled,
         schema_version=persona.schema_version,
         is_customized=persona.is_customized,
+        onboarding_completed=persona.onboarding_completed,
         created_at=persona.created_at,
         updated_at=persona.updated_at,
     )
@@ -62,6 +65,8 @@ def persona_update(
                 proactivity=request.proactivity,
                 avoid_topics=tuple(request.avoid_topics),
                 about_user=request.about_user,
+                relationship_pace=request.relationship_pace,
+                affection_style=request.affection_style,
                 enabled=request.enabled,
             ),
         )

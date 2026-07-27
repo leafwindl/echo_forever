@@ -5,7 +5,11 @@ from typing import Any
 
 from db.postgres_connection import get_connection, transaction
 
-from features.persona.domain.entities import PersonaUpdate, UserPersona, build_user_persona
+from features.persona.domain.entities import (
+    PersonaUpdate,
+    UserPreferences,
+    build_user_preferences,
+)
 
 
 def _timestamp_text(value: object) -> str | None:
@@ -27,8 +31,8 @@ def _topics_from_database(value: object) -> tuple[str, ...]:
     return tuple(str(item) for item in value)
 
 
-def _persona_from_row(row: dict[str, Any]) -> UserPersona:
-    persona = build_user_persona(
+def _persona_from_row(row: dict[str, Any]) -> UserPreferences:
+    preferences = build_user_preferences(
         str(row["user_id"]),
         PersonaUpdate(
             preferred_name=row.get("preferred_name"),
@@ -38,12 +42,15 @@ def _persona_from_row(row: dict[str, Any]) -> UserPersona:
             proactivity=str(row["proactivity"]),
             avoid_topics=_topics_from_database(row.get("avoid_topics")),
             about_user=row.get("about_user"),
+            relationship_pace=str(row.get("relationship_pace") or "natural"),
+            affection_style=str(row.get("affection_style") or "contextual"),
             enabled=bool(row["enabled"]),
         ),
-        is_customized=True,
+        is_customized=bool(row.get("is_customized")),
+        onboarding_completed=bool(row.get("onboarding_completed")),
     )
     return replace(
-        persona,
+        preferences,
         schema_version=int(row.get("schema_version") or 1),
         created_at=_timestamp_text(row.get("created_at")),
         updated_at=_timestamp_text(row.get("updated_at")),
@@ -53,13 +60,15 @@ def _persona_from_row(row: dict[str, Any]) -> UserPersona:
 class PostgresPersonaRepository:
     """PostgreSQL Persona 仓储；所有查询均以 user_id 隔离。"""
 
-    def get(self, user_id: str) -> UserPersona | None:
+    def get(self, user_id: str) -> UserPreferences | None:
         with get_connection() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
                 SELECT user_id, preferred_name, reply_style, reply_length,
                        support_mode, proactivity, avoid_topics, about_user,
-                       enabled, schema_version, created_at, updated_at
+                       relationship_pace, affection_style,
+                       enabled, is_customized, onboarding_completed,
+                       schema_version, created_at, updated_at
                 FROM user_personas
                 WHERE user_id = %s
                 """,
@@ -68,16 +77,17 @@ class PostgresPersonaRepository:
             row = cursor.fetchone()
         return _persona_from_row(row) if row else None
 
-    def save(self, persona: UserPersona) -> UserPersona:
+    def save(self, persona: UserPreferences) -> UserPreferences:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
                 INSERT INTO user_personas (
                     user_id, preferred_name, reply_style, reply_length,
                     support_mode, proactivity, avoid_topics, about_user,
-                    enabled, schema_version
+                    relationship_pace, affection_style,
+                    enabled, is_customized, onboarding_completed, schema_version
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (user_id) DO UPDATE SET
                     preferred_name = EXCLUDED.preferred_name,
                     reply_style = EXCLUDED.reply_style,
@@ -86,12 +96,18 @@ class PostgresPersonaRepository:
                     proactivity = EXCLUDED.proactivity,
                     avoid_topics = EXCLUDED.avoid_topics,
                     about_user = EXCLUDED.about_user,
+                    relationship_pace = EXCLUDED.relationship_pace,
+                    affection_style = EXCLUDED.affection_style,
                     enabled = EXCLUDED.enabled,
+                    is_customized = EXCLUDED.is_customized,
+                    onboarding_completed = EXCLUDED.onboarding_completed,
                     schema_version = EXCLUDED.schema_version,
                     updated_at = NOW()
                 RETURNING user_id, preferred_name, reply_style, reply_length,
                           support_mode, proactivity, avoid_topics, about_user,
-                          enabled, schema_version, created_at, updated_at
+                          relationship_pace, affection_style,
+                          enabled, is_customized, onboarding_completed,
+                          schema_version, created_at, updated_at
                 """,
                 (
                     persona.user_id,
@@ -102,7 +118,11 @@ class PostgresPersonaRepository:
                     persona.proactivity,
                     json.dumps(persona.avoid_topics, ensure_ascii=False),
                     persona.about_user,
+                    persona.relationship_pace,
+                    persona.affection_style,
                     persona.enabled,
+                    persona.is_customized,
+                    persona.onboarding_completed,
                     persona.schema_version,
                 ),
             )
@@ -110,9 +130,3 @@ class PostgresPersonaRepository:
         if not row:
             raise RuntimeError("Persona upsert returned no row")
         return _persona_from_row(row)
-
-    def delete(self, user_id: str) -> bool:
-        with transaction() as conn, conn.cursor() as cursor:
-            cursor.execute("DELETE FROM user_personas WHERE user_id = %s", (user_id,))
-            deleted = cursor.rowcount
-        return bool(deleted)

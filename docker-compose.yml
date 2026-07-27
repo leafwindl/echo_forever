@@ -26,7 +26,6 @@ services:
     env_file:
       - Echo-backend/.env
     environment:
-      DB_PROVIDER: postgres
       DATABASE_URL: ${DATABASE_URL_DOCKER:-postgresql://echo:echo_dev_password@echo-postgres:5432/echo}
       MELOTTS_BASE_URL: http://echo-melotts:9000
       FUNASR_WS_URL: ws://echo-funasr:10095

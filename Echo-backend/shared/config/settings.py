@@ -20,7 +20,11 @@ class Settings(BaseSettings):
     temperature: float = Field(default=0.8, validation_alias="TEMPERATURE")
     max_tokens: int = Field(default=500, validation_alias="MAX_TOKENS")
     timeout: int = Field(default=30, validation_alias="TIMEOUT")
-    prompt_version: str = Field(default="echo-v0.3.0", validation_alias="PROMPT_VERSION")
+    prompt_version: str = Field(default="echo-v1.0.0", validation_alias="PROMPT_VERSION")
+    assistant_persona_version: str = Field(
+        default="echo-persona-v1",
+        validation_alias="ASSISTANT_PERSONA_VERSION",
+    )
     persona_prompt_max_tokens: int = Field(
         default=400,
         validation_alias="PERSONA_PROMPT_MAX_TOKENS",
@@ -42,7 +46,6 @@ class Settings(BaseSettings):
     app_version: str = Field(default="dev", validation_alias="APP_VERSION")
     build_revision: str = Field(default="unknown", validation_alias="BUILD_REVISION")
     enable_api_docs: bool = Field(default=False, validation_alias="ENABLE_API_DOCS")
-    db_provider: str = Field(default="postgres", validation_alias="DB_PROVIDER")
     database_url: str = Field(default="", validation_alias="DATABASE_URL")
     db_pool_size: int = Field(default=5, validation_alias="DB_POOL_SIZE")
     db_pool_timeout_seconds: int = Field(
@@ -191,12 +194,12 @@ class Settings(BaseSettings):
     )
     ffmpeg_binary: str = Field(default="ffmpeg", validation_alias="FFMPEG_BINARY")
 
-    minimax_api_key: str = Field(default="", validation_alias="MINIMAX_API_KEY")
-    minimax_group_id: str = Field(default="", validation_alias="MINIMAX_GROUP_ID")
-    minimax_tts_voice_id: str = Field(
-        default="zh-CN-XiaoxiaoNeural",
-        validation_alias="MINIMAX_TTS_VOICE_ID",
-    )
+    @property
+    def streaming_asr_final_timeout_seconds(self) -> int:
+        provider = self.voice_streaming_asr_provider.strip().lower()
+        if provider == "tencent":
+            return self.tencent_asr_final_timeout_seconds
+        return self.funasr_final_timeout_seconds
 
     static_url_prefix: str = Field(
         default="http://localhost:8000",
@@ -227,10 +230,6 @@ class Settings(BaseSettings):
     auth_token_expires_seconds: int = Field(
         default=2592000,
         validation_alias="AUTH_TOKEN_EXPIRES_SECONDS",
-    )
-    enable_legacy_user_id_auth: bool = Field(
-        default=False,
-        validation_alias="ENABLE_LEGACY_USER_ID_AUTH",
     )
     enable_chat_request_serialization: bool = Field(
         default=True,
@@ -310,17 +309,9 @@ class Settings(BaseSettings):
     )
 
     system_prompt: str = (
-        "你叫Echo，一位温柔、细腻的AI伙伴。\n"
-        "你总是用自然、不生硬的方式回复，像好朋友一样。\n"
-        "回答简洁但有温度，可以适当表达关心。\n"
-        "用户说什么，你都耐心倾听，并给予支持。"
+        "Echo 是面向长期交流的 AI 陪伴助手。"
+        "产品目标是提供自然、连续、有边界的日常陪伴，而不是心理治疗、真人替代或角色扮演。"
     )
-
-    @property
-    def LLM_MODEL(self) -> str:
-        """Compatibility alias for older code that still reads settings.LLM_MODEL."""
-        return self.llm_model
-
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

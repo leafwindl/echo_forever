@@ -1,555 +1,84 @@
-# Echo AI 伴侣——微信小程序 Demo 技术框架
+# Echo 1.0
 
-> 版本：V0.3-gray.1 开发中
-> 目标：在微信小程序内实现核心 AI 交流功能，验证对话体验、人格表达与基础记忆  
+Echo 是原生微信小程序形态的 AI 陪伴产品。1.0 聚焦一条可发布的基础体验：首次认识用户、文字聊天、独立语音通话、稳定人格、用户偏好、关系阶段和长期记忆。
 
-v0.3 提示词、自然对话与用户个性化设计见：
-`doc/doc_iteration/Echo v0.3 提示词与用户个性化设计开发文档.md`
+## 1.0 用户流程
 
-当前 v0.3 已完成代码实现，正在进入真实 PostgreSQL、微信体验版和真实模型验收阶段。
+1. 小程序启动后通过 `wx.login()` 建立 Bearer 会话。
+2. 新用户先填写称呼、聊天风格、支持方式、关系节奏和可选自述。
+3. 完成首次设置后进入 Echo 人物与文字聊天页。
+4. 点击“通话”进入独立电话界面，按住说话；松手后完成 ASR、对话和 TTS 播放。
+5. 用户可在设置中修改偏好、管理长期记忆或重置关系进度。
 
----
+已完成首次设置的用户会直接进入聊天页。恢复默认偏好不会重复触发首次引导。
 
-## 1. 范围与边界
+## 核心契约
 
-**本期包含**
+- 所有用户接口只接受 `Authorization: Bearer <token>`，不接受请求体、查询参数或自定义 Header 中的 `user_id`。
+- `POST /chat/send` 使用 `mode=chat|call`。`chat` 只返回文字；`call` 使用更口语化的 Prompt，并返回 `audio_urls`。
+- 文字和 TTS 均在完整生成后一次返回。电话 ASR 优先使用 WebSocket 实时识别，失败时自动上传完整 MP3 降级识别。
+- PostgreSQL + pgvector 是 1.0 唯一数据库实现，不承接旧 SQLite 数据。
 
-- 纯文本/语音 AI 聊天（问答式，主线交互）
-- 基础人格系统（系统 Prompt 控制回复风格）
-- 基础短期记忆（会话内上下文连续）
-- 基础建账/登录（微信授权一键登录）
-
-**本期不包含**
-
-- 任何无感交互、主动触发、情境感知（受限于小程序能力）
-- 壁纸、灵动岛等界面形态
-- 情绪感知、情绪报告
-- 助手类功能（日程、待办）
-- 复杂的隐私数据本地处理
-
-**小程序定位**  
-一个“能聊、会记、有人格”的 AI 伴侣 Demo，让早期用户体验到“被记得”的差异化价值，建立情感连接。
-
----
-
-## 2. 核心架构
-
-![framework](/assets/image.png)
-
-**通信方式**
-
-- 常规请求使用 HTTPS；聊天通过 `POST /chat/send` 等待完整文字与语音文件生成后一次性返回。
-- 电话模式通过 WebSocket 上传录音帧；TTS 使用一次性随机 URL 输出分段音频流，生成一段播放一段。
-
----
-
-## 3. 核心功能模块设计
-
-### 3.1 聊天界面（前端）
-
-**核心交互**
-
-- 标准对话列表UI，文本输入框 + 发送按钮
-- 接收AI回复时展示“对方正在输入”状态
-- 支持查看历史消息，上拉翻页
-- 首次进入时显示 AI 第一句开场白（由后台返回，结合用户画像）
-- 长按角色头像触发语音输入和输出。
-
-**用户端操作**
-
-- 提供“清除上下文”按钮，可重置当前会话记忆
-
-**需要调用的后端接口**
-
-- `POST /chat/send`：发送用户消息，返回AI回复
-- `GET /chat/history`：拉取历史消息
-
----
-
-### 3.2 用户系统与鉴权
-
-**实现方案**
-
-- 使用微信 `wx.login()` 获取code，后端换取 openid 和 session_key （已有框架暂未启用）
-- 首次登录自动创建账户，openid 作为唯一标识
-- 无需手机号，降低获客门槛
-
----
-
-### 3.3 人格系统与 Prompt 拼装（核心后端模块）
-
-这是决定 AI “像不像 Echo”的关键模块。
-
-**基础 Prompt 结构**
-
-text
-
-系统人设：你叫Echo，一位温柔、细腻的AI伙伴...
-用户信息：用户昵称“小宇”，希望你称呼他“小宇”，喜欢简洁的回复...
-长期记忆：你记得：他是大学生，近期在准备考研，胃不好...
-当前会话：(最近的上下文消息...)
-指令：请用自然、不生硬的方式回复，可以适当表达关心。
-
-**本期简化实现**
-
-- 系统人设硬编码在后端配置文件中
-- 当前会话取最近 N 轮对话（例如 10 轮），滑动窗口
-
----
-
-### 3.4 记忆系统（最简可运行版）
-
-**目标**  
-让 AI 记住跨会话的对话历史，保证上下文连续；为后续结构化长期记忆奠定数据库基础。
-
-**分级设计**
-
-|记忆类型|生命周期|示例|实现手段|
-|---|---|---|---|
-|会话上下文|单次连接内|正在聊的电影名字|对话历史直接传给模型（滑动窗口）|
-|跨会话历史|持久（永久）|上次聊过的任何内容|SQLite 存储所有消息，按需加载|
-|结构化事实|跨会话可复用|“我在北京上学”“以后叫我小安”|规则门控 + LLM JSON 抽取，写入长期记忆表|
-
-**技术实现**
-
-1. **存储方案**：使用 SQLite 数据库（`echo_memory.db`），表 `chat_messages` 结构如下：
-    
-    - `id`：自增主键
-    - `user_id`：用户标识（与前端 `user_id` 对应）
-    - `role`：`user` 或 `assistant`
-    - `content`：消息文本
-    - `timestamp`：消息时间戳（默认当前时间）
-    
-    创建索引 `idx_user_id` 以加速按用户查询。
-    
-2. **写入消息**：每次用户发消息和 AI 回复后，调用 `add_message(user_id, role, content)` 将两条消息分别存入数据库。
-    
-3. **读取历史**：每次新对话开始时，调用 `get_history(user_id, limit=20)` 获取该用户最近的 N 条消息（按时间正序），然后拼接到 Prompt 中的历史对话部分。`limit` 可根据模型窗口大小调整（当前默认 20 条，约 10 轮对话）。
-    
-4. **内存滑动窗口**：对话期间仍可使用内存中的 `chat_history` 作为临时缓存，但最终会持久化到 SQLite；服务重启后从数据库加载最近历史。
-    
-
-**当前状态与后续扩展**
-
-- **结构化事实抽取**：已通过关键词门控触发异步 LLM 抽取，要求模型只输出 JSON，并支持 `create/update/deactivate/ignore`。后续可继续增强抽取 Prompt、增加人工可解释日志与误记纠偏。
-- **记忆删除/清空**：后端已提供 `/memory/list`、`/memory/{memory_id}`、`/memory/clear`，小程序可查看、删除和清空长期记忆；当前暂不支持用户直接编辑单条记忆内容。
-- **记忆召回**：长期记忆支持 `importance`、`confidence` 与向量召回。未配置 embedding 时按重要度回退，配置后优先检索与当前消息相关的记忆。
-
-**隐私说明**  
-所有聊天记录以明文形式存储在本地 SQLite 文件中（服务端）。生产环境应迁移到更安全的数据库（如 PostgreSQL）并加密传输。用户数据仅用于提供对话连续性，不会用于其他目的。
-
----
-
-### 3.5 简单的用户引导与画像建立
-
-**首次进入流程**
-
-1. 微信授权，获取头像昵称
-2. Echo 发送第一句问候：“嗨，我是 Echo，很开心认识你。你可以告诉我你希望我怎么称呼你吗？”
-3. 用户回复称呼后，Echo 说：“好的~ 以后你可以跟我聊任何事，我会试着记住你告诉我的事。”
-4. 此信息自动成为第一条长期记忆：`称呼: XX`
-
-**后续信息积累**
-
-- 当用户明显透露身份/偏好（如“我今天考研复习好累”），系统事后抽取为记忆。
-- 可在设置页提供一个“关于我”的文本框，允许用户主动填写一段自我描述，直接注入 Prompt。（后续可实现）
-
----
-
-### 3.6 AI 调用逻辑与服务编排
-
-**文本对话主链路**
-
-1. 小程序启动后调用 `wx.login()`，把 `code` 和本地 `client_id` 发给 `POST /login`。
-2. 后端优先使用微信 `code2session` 换取 `openid`；未配置微信密钥时，用 `client_id` 生成稳定的本地开发用户 ID。
-3. 前端把 `user_id` 存入本地缓存，后续请求 `POST /chat/send` 时携带 `user_id` 和 `message`。
-4. `Chat Service` 校验入参，获取或创建当前 active 会话。
-5. `Context Builder` 统一拼装发给模型的 `messages`：
-   - 系统 Prompt：来自 `config.py` 中的 `settings.system_prompt`
-   - 长期记忆：优先使用 embedding 向量召回；没有向量时回退到重要度列表
-   - 会话摘要：长对话压缩后的上下文
-   - 最近历史：默认最多 10 轮对话
-   - 当前用户消息
-6. `llm_client.request_llm()` 调用 OpenAI 兼容接口：`{OPENAI_BASE_URL}/chat/completions`。
-7. 后端把用户消息和 AI 回复写入 SQLite，并异步尝试更新会话摘要。
-8. 记忆门控命中后，后台任务调用抽取 Prompt，把稳定事实写入长期记忆表，不阻塞当前回复。
-
-**语音链路**
-
-1. 电话模式通过 `WS /voice/asr/stream` 实时上传 MP3 帧；当前生产配置直连腾讯云实时 ASR，FunASR 作为可配置的本地回退。
-2. 流式链路不可用时，小程序自动把完整 MP3 上传到 `POST /voice/asr`，继续使用腾讯 ASR 整段识别。
-3. 最终识别文本统一发送到 `POST /chat/send`，服务端完成 DeepSeek 回复和 TTS 后一次性返回文字与静态音频 URL。
-4. 小程序收到完整回复后显示整条文字，再下载并顺序播放完整音频文件；静态 URL 支持播放器重复请求。
-5. 挂断会终止当前和后续播放。当前 TTS 配置由 `TTS_PROVIDER` 决定，灰度环境使用 CosyVoice v3.5 Flash。
-
-本地模型服务的部署与真机验收见 `doc/deploy/v0.3 电话模式语音服务部署与验收.md`。
-
-**OpenAI 兼容模型配置**
-
-```dotenv
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o
-MEMORY_EXTRACTION_MODEL=gpt-4o-mini
-EMBEDDING_API_KEY=sk-...
-EMBEDDING_BASE_URL=https://api.openai.com/v1
-EMBEDDING_MODEL=text-embedding-3-small
-```
-
-只要供应商兼容 OpenAI 的 `/chat/completions` 和 embedding 响应结构，就可以替换 `OPENAI_BASE_URL`、`LLM_MODEL` 与相关 key。
-
----
-
-## 4. 技术选型
-
-| 层级        | 推荐方案             | 说明                         |
-| --------- | ---------------- | -------------------------- |
-| 小程序框架     | 原生微信小程序          | 快速开发                       |
-| 后端框架      | Python (FastAPI) | 异步高效，易于对接 AI 库             |
-| 数据库       | SQLite   | SQLite存持久化数据 |
-| 大模型 API   | OpenAI 兼容 API（可配置 DeepSeekV4-flash / GPT 系列等） | 初期直接使用 API，避免训练成本          |
-| 部署        | 本地开发地址 / 预发布 HTTPS 域名 / 正式 HTTPS 域名 | 通过小程序环境配置切换，避免业务代码硬编码地址                    |
-
----
-
-## 5. Harness 工程化推进思路
-
-这里的 Harness 指“给 AI 协作开发搭好工程护栏”：先定义总目标，再拆成阶段任务，每阶段写清验收标准，完成后做整合验证。它不是一次性让 AI 生成全部代码，而是让每一次 Prompt 都围绕同一个可运行产品收敛。
-
-**总目标**
-
-在微信小程序内交付一个可真机体验的 Echo AI 伴侣 Demo，至少完成登录、文本对话、人格 Prompt、短期上下文、结构化长期记忆、记忆查看/删除、语音输入输出和本地 HTTPS 联调。
-
-**推进方式**
-
-1. **设置总目标**：明确用户体验、技术边界、数据边界和最终交付物。
-2. **分阶段实现**：每阶段只解决一个主问题，避免聊天、记忆、语音、部署同时混在一起。
-3. **设置验收标准**：每阶段都有可运行、可测试、可观察的判断条件。
-4. **阶段后整合**：每做完一段，就把前后端、数据库、Prompt 和 README 对齐一次。
-5. **最后总验收**：真机跑通核心路径，并检查失败态、环境变量、隐私说明和部署步骤。
-
-### 5.1 Vibe 思路
-
-Echo 的核心 Vibe 不是“工具型助理”，而是“稳定、温柔、会记得边界的 AI 伙伴”。设计上要让用户感觉被认真对待，但不能让产品显得过度窥探或假装亲密。
-
-**人格 Vibe**
-
-- 温柔、细腻、克制，不说教，不夸张承诺。
-- 像朋友一样自然回应，优先短句和真实的接话感。
-- 记忆只用于让对话更连续，不把记住的信息当作炫技点。
-- 遇到低落、压力、焦虑时给支持，但不扮演医生或心理咨询师。
-- 对敏感信息保持谨慎，不主动追问隐私。
-
-**产品 Vibe**
-
-- 第一屏就是能聊的体验，不做复杂介绍。
-- “正在输入”、历史延续、称呼记忆是建立陪伴感的关键微交互。
-- 记忆页要给用户控制感：能看见、能删除、能清空。
-- 语音体验服务于自然陪伴，不追求复杂助手指令。
-
-### 5.2 关键 Prompt
-
-**总目标 Prompt**
+## 项目结构
 
 ```text
-你是 Echo AI 伴侣微信小程序 Demo 的工程搭档。
-总目标：交付一个可真机体验的 AI 伴侣 Demo，包含登录、文本聊天、人格 Prompt、短期上下文、结构化长期记忆、记忆查看/删除、语音输入输出和部署联调文档。
-
-请按 Harness 工程方式推进：
-1. 先确认当前阶段目标和边界。
-2. 只实现本阶段最小闭环。
-3. 为本阶段列出可验证的验收标准。
-4. 修改代码后运行必要检查。
-5. 阶段完成后更新 README，说明实现逻辑、配置项和下一阶段入口。
+Echo-backend/             FastAPI 后端
+  features/               feature-first 业务模块
+  providers/              LLM / ASR / TTS / Embedding 供应商适配
+  shared/                 配置、鉴权、限流与日志安全
+  db/                     PostgreSQL 连接与 schema
+Web/miniprogram/           原生微信小程序
+  pages/                  onboarding / chat / call / persona / memory
+  services/               录音流、ASR 上传和音频播放
+  utils/                  API、环境与登录态
+scripts/                   架构检查、数据库初始化和运维脚本
+doc/                       研究、测试与部署资料
 ```
 
-**阶段执行 Prompt**
+后端模块依赖方向：
 
 ```text
-当前阶段：{阶段名称}
-阶段目标：{一句话描述要跑通的能力}
-范围内任务：
-- {任务 1}
-- {任务 2}
-- {任务 3}
-
-验收标准：
-- {用户路径能完成什么}
-- {接口/数据库/页面应出现什么结果}
-- {失败态应如何表现}
-
-请先阅读现有代码结构，沿用项目已有风格，完成实现后给出验证命令和结果。
+Interface -> Application -> Domain
+Infrastructure ---------> Domain Protocol
+main.py 负责应用装配
 ```
 
-**人格与回复 Vibe Prompt**
+前端依赖方向：
 
 ```text
-你叫 Echo，一位温柔、细腻、克制的 AI 伙伴。
-你像熟悉的朋友一样回应用户：自然、简洁、有温度。
-你可以适当表达关心，但不要夸张承诺，不要说教，不要假装自己拥有现实世界能力。
-你会参考用户长期记忆，但不要生硬复述“我记得你...”。
-当用户表达压力或低落时，先接住情绪，再给一个很小、可执行的建议。
-当信息涉及隐私、医疗、法律、财务等高风险主题时，保持谨慎并提醒寻求专业帮助。
+Page -> services / utils
+services -> utils
+utils 不依赖 Page
 ```
 
-**记忆抽取 Prompt**
+## 本地启动
 
-```text
-请从当前这一轮对话中判断是否有值得长期记住的用户信息。
-可以记住：稳定身份、称呼、偏好、目标、关系、重要事件、交互边界。
-不要记住：一次性情绪、闲聊、你的推测、敏感信息，除非用户明确要求长期记住。
-请只输出 JSON，格式为：
-{
-  "memories": [
-    {
-      "action": "create | update | deactivate | ignore",
-      "target_memory_id": "",
-      "memory_type": "profile | preference | relationship | goal | event | boundary",
-      "content": "一句稳定、可复用的中文记忆",
-      "confidence": 0.0,
-      "importance": 1
-    }
-  ]
-}
+```bash
+docker compose up -d --build echo-postgres echo-backend
+docker compose ps
+curl http://127.0.0.1:8000/health/ready
+curl http://127.0.0.1:8000/version
 ```
 
-**整合验收 Prompt**
+微信开发者工具打开 `Web/`。开发环境 API 默认为 `http://127.0.0.1:8000`，体验版和正式版使用 `https://api.echoaiforever.cn`，配置位于 `Web/miniprogram/utils/env.ts`。
 
-```text
-请作为项目验收工程师检查 Echo Demo：
-1. 从 README、后端、前端三个角度检查功能是否一致。
-2. 按登录、文本对话、长期记忆、记忆删除、语音回复、部署配置逐项验收。
-3. 找出阻塞真机体验的问题、潜在风险和缺失文档。
-4. 给出最小修复清单，优先保证 Demo 可运行。
+后端配置复制自 `Echo-backend/.env.example`。部署必填项包括微信凭据、Token 密钥、PostgreSQL、LLM；语音通话还需要腾讯 ASR 和 CosyVoice 凭据及定制音色 ID。
+
+## 验证
+
+```bash
+python -B scripts/check_architecture.py
+python -B -m unittest discover -s Echo-backend/tests -v
+npx tsc --noEmit -p Web/tsconfig.json
 ```
 
----
+发布前还应在微信真机完成：新用户首次引导、已有用户直达聊天、文字消息、通话权限拒绝与重试、ASR 降级、TTS 播放、登录过期、记忆删除和清空。
 
-## 6. 实施步骤（Demo 路线图）
+## 版本
 
-### 第一阶段：最简对话
+- 应用版本：`1.0.0`
+- Prompt 版本：`echo-v1.0.0`
+- 用户偏好 schema：`3`
+- Echo 助手人格：`echo-persona-v1`
 
-**目标**：能完成一问一答，看到 AI 回复。
-
-- 搭建后端服务，实现 `/chat/send`、`/voice/asr`、`/voice/reply`接口
-- 直接接入大模型 API，硬编码一个系统 Prompt
-- 小程序实现聊天界面，发送消息并显示回复
-- 完成微信登录，获得 openid
-
-**验收标准**
-
-- 后端 `GET /` 返回 `{"status":"ok"}`。
-- 小程序可以拿到稳定 `user_id`。
-- 输入一条文本消息后，页面展示用户消息和 Echo 回复。
-- LLM 调用失败时，前端有可理解的错误提示或兜底表现。
-
-**交付物**
-可运行的后端 + 小程序，能在真机上与固定人格的 AI 对话。
-
----
-
-### 第二阶段：上下文与消息持久化
-
-**目标**：让 Echo 能接住最近对话，不因服务重启丢失基础历史。
-
-- 初始化 SQLite 数据库。
-- 设计 `chat_messages`、`conversations` 等基础表。
-- 每轮对话写入用户消息和 assistant 回复。
-- `Context Builder` 从数据库读取最近 10 轮对话并拼装 Prompt。
-
-**验收标准**
-
-- 连续追问时，Echo 能理解上一轮话题。
-- 重启后端后，同一 `user_id` 仍能读取最近历史。
-- 数据库中能看到用户消息、AI 回复、时间戳和会话 ID。
-
----
-
-### 第三阶段：长期记忆与用户控制
-
-**目标**：让 Echo 记住稳定事实，并允许用户查看和删除。
-
-- 用规则门控判断当前消息是否值得抽取记忆。
-- 命中后异步调用 LLM，要求只输出结构化 JSON。
-- 支持长期记忆的创建、更新、失效和去重。
-- 提供 `/memory/list`、`/memory/{memory_id}`、`/memory/clear`。
-- 小程序增加记忆页，展示、删除、清空长期记忆。
-
-**验收标准**
-
-- 用户说“以后叫我小安”，后台能生成一条长期记忆。
-- 用户再问“你记得怎么叫我吗？”，Echo 能自然回答。
-- 删除该记忆后，再次对话不会继续使用已删除信息。
-- 普通闲聊不会每轮触发记忆抽取。
-
----
-
-### 第四阶段：人格 Vibe 与体验打磨
-
-**目标**：让 Echo 的表达稳定、自然，并符合“温柔 AI 伙伴”的产品定位。
-
-- 固化系统 Prompt，明确语气、边界和高风险话题处理方式。
-- 优化首句问候、称呼记忆、正在输入状态。
-- 控制回复长度，避免工具式长篇说明。
-- 检查记忆注入方式，避免生硬复述用户隐私。
-
-**验收标准**
-
-- Echo 回复整体简洁、有温度，不像通用问答机器人。
-- 记忆使用自然，不频繁说“根据我的记忆”。
-- 对压力、低落等消息能先共情，再给轻量建议。
-- 对医疗、法律、财务等高风险内容不会给确定性结论。
-
----
-
-### 第五阶段：语音闭环
-
-**目标**：完成“用户说话 -> Echo 听懂 -> Echo 文字与语音回复”的闭环。
-
-- 前端录音并上传 MP3。
-- 后端 `/voice/asr` 调用腾讯云 ASR，返回识别文本。
-- `/voice/reply` 复用文本对话逻辑生成回复。
-- 调用 MiniMax TTS 生成音频，并通过静态文件 URL 返回。
-
-**验收标准**
-
-- 真机录音后，用户文本能先显示在聊天列表。
-- Echo 能返回文字回复和可播放音频。
-- 文本与语音对话写入同一套历史和记忆系统。
-- ASR 或 TTS 失败时，不影响文本对话主链路。
-
----
-
-### 第六阶段：整合与部署
-
-**目标**：让 Demo 在真机上稳定跑通，并具备可复现部署步骤。
-
-- 对齐后端 `.env`、小程序环境配置、预发布/正式 HTTPS 域名。
-- 验证登录、文本对话、记忆页、删除记忆、语音回复。
-- 更新 README 中的 AI 调用逻辑、Prompt、部署步骤和验收清单。
-- 检查隐私说明、环境变量说明和生产迁移风险。
-
-**验收标准**
-
-- 新同学按 README 可以启动后端并打开小程序联调。
-- 真机访问 HTTPS 后端，不依赖本机 localhost。
-- 核心路径至少完成一次端到端验收。
-- README 与代码当前状态一致。
-
----
-
-## 7. 本地开发与部署步骤
-
-### 7.1 启动后端
-
-```powershell
-cd Echo-backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-```
-
-编辑 `Echo-backend/.env`，至少配置：
-
-```dotenv
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o
-```
-
-可选能力按需配置：
-
-```dotenv
-WECHAT_APPID=your_wechat_appid
-WECHAT_SECRET=your_wechat_secret
-
-TENCENT_SECRET_ID=your_tencent_secret_id
-TENCENT_SECRET_KEY=your_tencent_secret_key
-TENCENT_APP_ID=your_tencent_app_id
-
-MINIMAX_API_KEY=your_minimax_api_key
-MINIMAX_GROUP_ID=your_minimax_group_id
-MINIMAX_TTS_VOICE_ID=your_voice_id
-
-EMBEDDING_API_KEY=sk-...
-EMBEDDING_BASE_URL=https://api.openai.com/v1
-EMBEDDING_MODEL=text-embedding-3-small
-```
-
-启动服务：
-
-```powershell
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-浏览器访问 `http://127.0.0.1:8000/`，看到 `{"status":"ok"}` 即后端启动成功。
-
-### 7.2 配置小程序访问地址
-
-小程序前端的后端地址集中在 `Web/miniprogram/utils/env.ts` 的 `ENVIRONMENT_CONFIGS` 中，按微信环境自动选择：
-
-```ts
-develop // 开发版
-trial   // 体验版
-release // 正式版
-```
-
-配置规则：
-
-1. 本地开发可将 `develop.apiBaseUrl` 指向 `http://127.0.0.1:8000` 或临时调试 HTTPS 地址。
-2. 体验版发布前，将 `trial.apiBaseUrl` 改为预发布服务器 HTTPS 域名。
-3. 正式版发布前，将 `release.apiBaseUrl` 改为正式服务器 HTTPS 域名。
-4. 语音播放依赖后端返回的 `audio_url`，因此 `Echo-backend/.env` 中的 `PUBLIC_BASE_URL` 必须与当前环境的公网 HTTPS 域名一致。
-5. 修改 `PUBLIC_BASE_URL` 后需要重启后端。
-
-正式真机和上线版本必须在微信公众平台配置合法域名：
-
-- `request` 合法域名：后端 API 域名。
-- `uploadFile` 合法域名：同一个后端 API 域名。
-- `downloadFile` 合法域名：用于访问后端返回的语音文件域名。
-
-### 7.3 启动微信小程序
-
-1. 使用微信开发者工具打开 `Web` 目录。
-2. 确认 `project.config.json` 中的 `miniprogramRoot` 为 `miniprogram/`。
-3. 点击“编译”，确认聊天页和记忆页可以正常打开。
-4. 本地调试可临时勾选“不校验合法域名”；真机和上线版本需要在微信公众平台配置合法请求域名。
-
-### 7.4 端到端验收清单
-
-- `POST /login` 返回稳定 `user_id`。
-- `POST /chat/send` 返回 `reply`，聊天页能展示。
-- 发送“以后叫我小安”后，稍等片刻在记忆页能看到相关长期记忆。
-- 删除该记忆后，记忆页刷新不再显示。
-- 语音上传能返回 ASR 文本，`/voice/reply` 能返回 `reply` 和 `audio_url`。
-- 服务重启后，SQLite 中已有的历史和长期记忆仍可读取。
-
-### 7.5 Docker Compose 后端部署
-
-后端已提供轻量 Docker Compose 部署文件：
-
-- `Dockerfile`
-- `docker-compose.yml`
-- `.dockerignore`
-
-详细步骤见 `doc/deploy/后端 Docker Compose 部署说明.md`。
-
-发布微信基础体验版前，必须逐项完成：
-
-```text
-doc/deploy/小程序基础体验版发布清单.md
-```
-
-## 8. 上线前待办
-
-当前已完成环境切换、Bearer Token 鉴权、单实例请求配额、语音大小限制、PostgreSQL 自动备份和基础就绪检查。发布基础体验版前仍需完成：
-
-1. 部署当前安全配置并确认公网 `/admin/debug/*` 返回 404。
-2. 在微信公众平台配置 `request`、`uploadFile`、`downloadFile` 合法域名。
-3. 配置《小程序用户隐私保护指引》、用户协议、录音用途和长期记忆说明。
-4. 在第三方模型/语音服务商控制台设置预算上限或余额告警。
-5. 完成 PostgreSQL 备份恢复演练和基础体验版真机端到端验收。
-6. 提交并标记唯一发布版本，确保 `/version` 与服务器部署 commit 一致。
-
-完整门禁见 `doc/deploy/小程序基础体验版发布清单.md`。
+运行版本以 `/version` 返回值为准。

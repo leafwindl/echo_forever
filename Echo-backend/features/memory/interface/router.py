@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from features.memory.interface.schemas import (
-    MemoryClearRequest,
     MemoryClearResponse,
     MemoryDeleteResponse,
     MemoryItem,
@@ -77,10 +76,8 @@ async def memory_delete(memory_id: str, current_user: CurrentUser = Depends(get_
 
 @router.post("/clear", response_model=MemoryClearResponse)
 async def memory_clear(
-    request: MemoryClearRequest,
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """清空当前用户长期记忆；不会删除聊天原始记录和会话摘要。"""
-    del request
     result = clear_memories(current_user.user_id)
     return MemoryClearResponse(cleared_count=result.cleared_count)

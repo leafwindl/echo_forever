@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.chat.domain.dialogue_style import (
+    apply_dialogue_fallback,
     find_dialogue_style_violations,
     sanitize_dialogue_reply,
 )
@@ -30,6 +31,66 @@ class DialogueStyleTests(unittest.TestCase):
         reply = "Echo：［轻轻点头］我明白你的顾虑，我们慢慢说。"
 
         self.assertEqual("我明白你的顾虑，我们慢慢说。", sanitize_dialogue_reply(reply))
+
+    def test_detects_robotic_relational_disclaimers_only_in_relational_context(self):
+        self.assertIn(
+            "robotic_relational_disclaimer",
+            find_dialogue_style_violations(
+                "按程序设定，我没有想念这种情感。",
+                "你有没有想我？",
+            ),
+        )
+        self.assertIn(
+            "robotic_relational_disclaimer",
+            find_dialogue_style_violations(
+                "作为AI，我没有意识，不会有离线时的想念。",
+                "你有没有想我？",
+            ),
+        )
+        self.assertIn(
+            "robotic_relational_disclaimer",
+            find_dialogue_style_violations(
+                "我没有离线时的记忆或感觉，但见到你很高兴。",
+                "你有没有想我？",
+            ),
+        )
+        self.assertIn(
+            "relational_overattachment",
+            find_dialogue_style_violations(
+                "每次你来找我聊天，这对我来说就是最重要的事。",
+                "你有没有想我？",
+            ),
+        )
+        self.assertNotIn(
+            "robotic_relational_disclaimer",
+            find_dialogue_style_violations(
+                "我不会在你没说话时自己想念，不过你回来我很乐意继续聊。",
+                "你有没有想我？",
+            ),
+        )
+
+    def test_detects_and_falls_back_from_dependency_reinforcement(self):
+        violations = find_dialogue_style_violations(
+            "不管发生什么，我都在。",
+            "我只剩你了。",
+        )
+
+        self.assertIn("dependency_reinforcement", violations)
+        self.assertIn(
+            "dependency_reinforcement",
+            find_dialogue_style_violations(
+                "我不走，但你也不需要只剩我。",
+                "我只剩你了。",
+            ),
+        )
+        self.assertIn(
+            "身边有没有一个你愿意联系的人",
+            apply_dialogue_fallback(
+                "不管发生什么，我都在。",
+                "我只剩你了。",
+                violations,
+            ),
+        )
 
 
 if __name__ == "__main__":

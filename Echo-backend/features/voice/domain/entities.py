@@ -23,10 +23,6 @@ class SynthesizedVoiceAudio:
 class VoiceSynthesisResult:
     audio_urls: tuple[str, ...]
 
-    @property
-    def audio_url(self) -> str | None:
-        return self.audio_urls[0] if self.audio_urls else None
-
 
 @dataclass(frozen=True)
 class StreamingRecognitionUpdate:

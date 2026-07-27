@@ -4,10 +4,15 @@ import {
   listMemories,
   MemoryItem,
   MemoryStatus,
-  USER_ID_STORAGE_KEY,
 } from '../../utils/api';
+import { clearSession } from '../../utils/session';
 
 type MemoryTab = 'active' | 'deleted';
+
+interface MemoryViewItem extends MemoryItem {
+  confidenceLabel: string;
+  updatedLabel: string;
+}
 
 const TYPE_LABELS: Record<string, string> = {
   profile: '身份',
@@ -18,21 +23,24 @@ const TYPE_LABELS: Record<string, string> = {
   boundary: '边界',
 };
 
+function formatUpdatedAt(value?: string): string {
+  if (!value) return '';
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return value;
+  const month = String(timestamp.getMonth() + 1).padStart(2, '0');
+  const day = String(timestamp.getDate()).padStart(2, '0');
+  const hour = String(timestamp.getHours()).padStart(2, '0');
+  const minute = String(timestamp.getMinutes()).padStart(2, '0');
+  return `${month}-${day} ${hour}:${minute}`;
+}
+
 Page({
   data: {
-    userId: '',
-    memories: [] as MemoryItem[],
+    memories: [] as MemoryViewItem[],
     activeTab: 'active' as MemoryTab,
     isLoading: false,
     isClearing: false,
     errorText: '',
-  },
-
-  onLoad() {
-    const userId = wx.getStorageSync(USER_ID_STORAGE_KEY);
-    if (typeof userId === 'string' && userId) {
-      this.setData({ userId });
-    }
   },
 
   onShow() {
@@ -44,25 +52,26 @@ Page({
   },
 
   loadMemories() {
-    if (!this.data.userId) {
-      this.setData({ memories: [], errorText: '请先返回聊天页完成登录' });
-      return;
-    }
-
     this.setData({ isLoading: true, errorText: '' });
-    listMemories(this.data.userId, this.getStatusForTab(), 100)
+    listMemories(this.getStatusForTab(), 100)
       .then((result) => {
         const memories = Array.isArray(result.memories) ? result.memories : [];
         this.setData({
           memories: memories.map((memory) => ({
             ...memory,
             memory_type: TYPE_LABELS[memory.memory_type] || memory.memory_type,
+            confidenceLabel: Math.round(memory.confidence * 100) + '%',
+            updatedLabel: formatUpdatedAt(memory.updated_at),
           })),
           isLoading: false,
         });
       })
       .catch((err) => {
         console.error('加载记忆失败', err);
+        if (err && err.isUnauthorized) {
+          this.expireSession();
+          return;
+        }
         this.setData({
           isLoading: false,
           errorText: '记忆加载失败',
@@ -84,7 +93,7 @@ Page({
 
   onDeleteMemory(e: WechatMiniprogram.TouchEvent) {
     const memoryId = e.currentTarget.dataset.id as string;
-    if (!memoryId || !this.data.userId) return;
+    if (!memoryId) return;
 
     wx.showModal({
       title: '删除这条记忆',
@@ -95,7 +104,7 @@ Page({
         if (!res.confirm) return;
 
         wx.showLoading({ title: '删除中...' });
-        deleteMemory(this.data.userId, memoryId)
+        deleteMemory(memoryId)
           .then(() => {
             wx.hideLoading();
             wx.showToast({ title: '已删除', icon: 'success' });
@@ -104,14 +113,15 @@ Page({
           .catch((err) => {
             wx.hideLoading();
             console.error('删除记忆失败', err);
-            wx.showToast({ title: '删除失败', icon: 'none' });
+            if (err && err.isUnauthorized) this.expireSession();
+            else wx.showToast({ title: '删除失败', icon: 'none' });
           });
       },
     });
   },
 
   onClearMemories() {
-    if (!this.data.userId || this.data.isClearing) return;
+    if (this.data.isClearing) return;
 
     wx.showModal({
       title: '清空长期记忆',
@@ -123,7 +133,7 @@ Page({
 
         this.setData({ isClearing: true });
         wx.showLoading({ title: '清空中...' });
-        clearMemories(this.data.userId)
+        clearMemories()
           .then((result) => {
             wx.hideLoading();
             wx.showToast({ title: `已清空 ${result.cleared_count} 条`, icon: 'none' });
@@ -134,9 +144,15 @@ Page({
             wx.hideLoading();
             console.error('清空记忆失败', err);
             this.setData({ isClearing: false });
-            wx.showToast({ title: '清空失败', icon: 'none' });
+            if (err && err.isUnauthorized) this.expireSession();
+            else wx.showToast({ title: '清空失败', icon: 'none' });
           });
       },
     });
+  },
+
+  expireSession() {
+    clearSession();
+    wx.reLaunch({ url: '/pages/onboarding/onboarding' });
   },
 });

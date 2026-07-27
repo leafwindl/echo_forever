@@ -1,9 +1,10 @@
-$echo-primary: #FF9A9E;
-$danger: #E04F5F;
-$text-main: #2F3033;
-$text-soft: #7A7F87;
-$line: #ECEEF2;
-$bg: #F7F8FA;
+$echo-primary: #E96F77;
+$teal: #4F8881;
+$danger: #D95762;
+$text-main: #232B39;
+$text-soft: #6F7885;
+$line: #E2E6EB;
+$bg: #F5F6F8;
 
 .page {
   display: flex;
@@ -14,12 +15,12 @@ $bg: #F7F8FA;
 }
 
 .status-card {
-  margin: 80rpx 28rpx;
+  margin: 80rpx 32rpx;
   padding: 36rpx;
   color: $text-soft;
   text-align: center;
   background: #fff;
-  border-radius: 18rpx;
+  border-radius: 12rpx;
 }
 
 .status-card.error {
@@ -36,17 +37,16 @@ $bg: #F7F8FA;
 .form {
   flex: 1;
   min-height: 0;
-  padding: 24rpx 24rpx 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
 .intro-card,
 .section {
-  margin-bottom: 20rpx;
-  padding: 26rpx;
+  margin: 0;
+  padding: 30rpx 34rpx;
   background: #fff;
-  border: 1rpx solid $line;
-  border-radius: 18rpx;
+  border-bottom: 1rpx solid $line;
   box-sizing: border-box;
 }
 
@@ -54,6 +54,17 @@ $bg: #F7F8FA;
   display: flex;
   align-items: center;
   gap: 24rpx;
+  background: #E8EEF5;
+  border-bottom-color: #D9E0E8;
+}
+
+.intro-avatar {
+  width: 82rpx;
+  height: 82rpx;
+  flex: 0 0 82rpx;
+  background: #fff;
+  border: 1rpx solid #D3DAE3;
+  border-radius: 50%;
 }
 
 .intro-main {
@@ -75,6 +86,18 @@ $bg: #F7F8FA;
   color: $text-soft;
   font-size: 24rpx;
   line-height: 36rpx;
+}
+
+.relationship-reset-btn {
+  width: 280rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  margin: 28rpx auto 24rpx;
+  color: $danger;
+  background: transparent;
+  border: 1rpx solid #F2B8BE;
+  border-radius: 12rpx;
+  font-size: 24rpx;
 }
 
 .section-title {
@@ -124,15 +147,15 @@ $bg: #F7F8FA;
   min-height: 72rpx;
   margin-top: 12rpx;
   padding: 14rpx 18rpx;
-  background: #F7F8FA;
+  background: #F3F5F7;
   border: 2rpx solid transparent;
   border-radius: 12rpx;
   box-sizing: border-box;
 }
 
 .choice.selected {
-  background: #FFF1F2;
-  border-color: $echo-primary;
+  background: #EDF5F3;
+  border-color: $teal;
 }
 
 .choice-label {
@@ -165,9 +188,9 @@ $bg: #F7F8FA;
 }
 
 .topic.selected {
-  color: #C64B58;
-  background: #FFF0F1;
-  border-color: #FFC9CE;
+  color: #376B65;
+  background: #EDF5F3;
+  border-color: #B9D4D0;
 }
 
 .topic-input-row {
@@ -195,7 +218,7 @@ $bg: #F7F8FA;
 }
 
 .privacy-note {
-  padding: 4rpx 18rpx 24rpx;
+  padding: 28rpx 34rpx 0;
   text-align: center;
 }
 
@@ -221,14 +244,14 @@ $bg: #F7F8FA;
   height: 78rpx;
   line-height: 78rpx;
   margin: 0;
-  border-radius: 39rpx;
+  border-radius: 12rpx;
   font-size: 27rpx;
 }
 
 .reset-btn {
   flex: 1;
   color: $danger;
-  background: #FFF1F2;
+  background: #F5EDEF;
 }
 
 .save-btn {

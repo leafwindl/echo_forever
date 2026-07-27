@@ -21,10 +21,6 @@ class MemoryListResponse(BaseModel):
     count: int
 
 
-class MemoryClearRequest(BaseModel):
-    user_id: str
-
-
 class MemoryDeleteResponse(BaseModel):
     memory_id: str
     status: str

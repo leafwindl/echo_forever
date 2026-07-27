@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-PERSONA_SCHEMA_VERSION = 1
+PERSONA_SCHEMA_VERSION = 3
 MAX_PREFERRED_NAME_CHARS = 40
 MAX_ABOUT_USER_CHARS = 300
 MAX_AVOID_TOPICS = 5
@@ -10,6 +10,8 @@ VALID_REPLY_STYLES = frozenset({"natural", "concise", "lively"})
 VALID_REPLY_LENGTHS = frozenset({"short", "balanced", "detailed"})
 VALID_SUPPORT_MODES = frozenset({"comfort", "advice", "balanced"})
 VALID_PROACTIVITY_LEVELS = frozenset({"quiet", "balanced", "active"})
+VALID_RELATIONSHIP_PACES = frozenset({"slow", "natural", "open"})
+VALID_AFFECTION_STYLES = frozenset({"restrained", "contextual", "expressive"})
 
 
 class PersonaValidationError(ValueError):
@@ -22,7 +24,7 @@ class PersonaOperationError(RuntimeError):
 
 @dataclass(frozen=True)
 class PersonaUpdate:
-    """由用户提交、尚未绑定用户身份的个性化设置。"""
+    """由用户提交、尚未绑定用户身份的交流偏好。"""
 
     preferred_name: str | None = None
     reply_style: str = "natural"
@@ -31,12 +33,14 @@ class PersonaUpdate:
     proactivity: str = "balanced"
     avoid_topics: tuple[str, ...] = ()
     about_user: str | None = None
+    relationship_pace: str = "natural"
+    affection_style: str = "contextual"
     enabled: bool = True
 
 
 @dataclass(frozen=True)
-class UserPersona:
-    """可进入提示词装配的用户级 Persona 纯领域对象。"""
+class UserPreferences:
+    """User-owned conversation and relationship preferences for Echo."""
 
     user_id: str
     preferred_name: str | None = None
@@ -46,9 +50,12 @@ class UserPersona:
     proactivity: str = "balanced"
     avoid_topics: tuple[str, ...] = ()
     about_user: str | None = None
+    relationship_pace: str = "natural"
+    affection_style: str = "contextual"
     enabled: bool = True
     schema_version: int = PERSONA_SCHEMA_VERSION
     is_customized: bool = False
+    onboarding_completed: bool = False
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -93,13 +100,19 @@ def _normalize_avoid_topics(values: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(normalized)
 
 
-def build_user_persona(user_id: str, update: PersonaUpdate, *, is_customized: bool) -> UserPersona:
-    """规范化用户输入并建立满足领域约束的 Persona。"""
+def build_user_preferences(
+    user_id: str,
+    update: PersonaUpdate,
+    *,
+    is_customized: bool,
+    onboarding_completed: bool,
+) -> UserPreferences:
+    """Normalize user input into the canonical 1.0 preferences model."""
     clean_user_id = user_id.strip()
     if not clean_user_id:
         raise PersonaValidationError("Missing user_id")
 
-    return UserPersona(
+    return UserPreferences(
         user_id=clean_user_id,
         preferred_name=_normalize_optional_text(
             update.preferred_name,
@@ -128,11 +141,27 @@ def build_user_persona(user_id: str, update: PersonaUpdate, *, is_customized: bo
             MAX_ABOUT_USER_CHARS,
             "about_user",
         ),
+        relationship_pace=_normalize_choice(
+            update.relationship_pace,
+            VALID_RELATIONSHIP_PACES,
+            "relationship_pace",
+        ),
+        affection_style=_normalize_choice(
+            update.affection_style,
+            VALID_AFFECTION_STYLES,
+            "affection_style",
+        ),
         enabled=update.enabled,
         is_customized=is_customized,
+        onboarding_completed=onboarding_completed,
     )
 
 
-def default_user_persona(user_id: str) -> UserPersona:
+def default_user_preferences(user_id: str) -> UserPreferences:
     """返回未持久化的安全默认设置。"""
-    return build_user_persona(user_id, PersonaUpdate(), is_customized=False)
+    return build_user_preferences(
+        user_id,
+        PersonaUpdate(),
+        is_customized=False,
+        onboarding_completed=False,
+    )

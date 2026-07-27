@@ -2,7 +2,7 @@ import logging
 from typing import Dict, List
 
 from providers.llm_provider import get_llm_provider
-from features.chat.infrastructure.repository_provider import get_repository_module
+from features.chat.infrastructure import postgres_repositories
 from shared.config import settings
 
 logger = logging.getLogger(__name__)
@@ -38,12 +38,11 @@ def _build_summary_messages(existing_summary: str, messages_to_summarize: List[D
 
 
 async def maybe_update_conversation_summary(user_id: str, conversation_id: str) -> bool:
-    repositories = get_repository_module()
-    summary_state = repositories.get_conversation_summary(user_id, conversation_id)
+    summary_state = postgres_repositories.get_conversation_summary(user_id, conversation_id)
     existing_summary = str(summary_state["summary"])
     summary_message_id = int(summary_state["summary_message_id"])
 
-    unsummarized_messages = repositories.get_conversation_messages(
+    unsummarized_messages = postgres_repositories.get_conversation_messages(
         user_id,
         conversation_id,
         after_message_id=summary_message_id,
@@ -72,7 +71,7 @@ async def maybe_update_conversation_summary(user_id: str, conversation_id: str) 
         logger.warning("Conversation summary returned empty content for conversation_id=%s", conversation_id)
         return False
 
-    repositories.update_conversation_summary(
+    postgres_repositories.update_conversation_summary(
         user_id=user_id,
         conversation_id=conversation_id,
         summary=updated_summary,

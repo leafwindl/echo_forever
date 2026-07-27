@@ -1,0 +1,105 @@
+<view class="page">
+  <view class="brand-band">
+    <view class="brand-copy">
+      <text class="brand-name">Echo</text>
+      <text class="brand-line">先认识你，再开始我们的聊天</text>
+    </view>
+    <image class="brand-character" src="/assets/images/echo_idle.png" mode="widthFix" />
+  </view>
+
+  <view class="loading-state" wx:if="{{isLoading}}">
+    <view class="loading-line"></view>
+    <text>正在准备你的 Echo</text>
+  </view>
+
+  <view class="error-state" wx:elif="{{errorText && !preferredName}}">
+    <text class="error-title">暂时没连上</text>
+    <text class="error-copy">{{errorText}}</text>
+    <button class="retry-button" bindtap="onRetry">重新连接</button>
+  </view>
+
+  <scroll-view class="form" scroll-y wx:else>
+    <view class="form-inner">
+      <view class="field first-field">
+        <text class="field-label">希望 Echo 怎么称呼你</text>
+        <input
+          class="name-input"
+          value="{{preferredName}}"
+          maxlength="40"
+          placeholder="输入你的称呼"
+          bindinput="onNameInput"
+        />
+      </view>
+
+      <view class="field">
+        <text class="field-label">喜欢怎样聊天</text>
+        <view class="option-grid">
+          <view
+            wx:for="{{replyStyleOptions}}"
+            wx:key="value"
+            class="option {{replyStyle === item.value ? 'selected' : ''}}"
+            data-field="replyStyle"
+            data-value="{{item.value}}"
+            bindtap="onSelect"
+          >
+            <text class="option-label">{{item.label}}</text>
+            <text class="option-description">{{item.description}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="field">
+        <text class="field-label">遇到烦恼时</text>
+        <view class="option-grid">
+          <view
+            wx:for="{{supportModeOptions}}"
+            wx:key="value"
+            class="option {{supportMode === item.value ? 'selected' : ''}}"
+            data-field="supportMode"
+            data-value="{{item.value}}"
+            bindtap="onSelect"
+          >
+            <text class="option-label">{{item.label}}</text>
+            <text class="option-description">{{item.description}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="field">
+        <text class="field-label">熟悉起来的节奏</text>
+        <view class="option-grid">
+          <view
+            wx:for="{{relationshipPaceOptions}}"
+            wx:key="value"
+            class="option {{relationshipPace === item.value ? 'selected' : ''}}"
+            data-field="relationshipPace"
+            data-value="{{item.value}}"
+            bindtap="onSelect"
+          >
+            <text class="option-label">{{item.label}}</text>
+            <text class="option-description">{{item.description}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="field">
+        <view class="field-heading">
+          <text class="field-label">想让 Echo 先了解什么</text>
+          <text class="field-optional">选填</text>
+        </view>
+        <textarea
+          class="about-input"
+          value="{{aboutUser}}"
+          maxlength="300"
+          placeholder="例如：最近在准备考试，聊天时不喜欢被连续追问"
+          bindinput="onAboutInput"
+        />
+      </view>
+
+      <text class="privacy-copy">这些信息只用于调整你和 Echo 的交流方式，之后可以在个性化设置中修改。</text>
+      <text class="inline-error" wx:if="{{errorText}}">{{errorText}}</text>
+      <button class="complete-button" loading="{{isSaving}}" disabled="{{isSaving}}" bindtap="onComplete">开始认识 Echo</button>
+      <view class="safe-space"></view>
+    </view>
+  </scroll-view>
+</view>

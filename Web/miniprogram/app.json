@@ -1,13 +1,15 @@
 { 
   "pages": [  
+    "pages/onboarding/onboarding",
     "pages/chat/chat",
+    "pages/call/call",
     "pages/memory/memory",
     "pages/persona/persona"
   ],
   "window": {
-    "navigationBarTitleText": "Echo AI 伴侣",
-    "navigationBarBackgroundColor": "#FF9A9E",
-    "navigationBarTextStyle": "white"
+    "navigationBarTitleText": "Echo",
+    "navigationBarBackgroundColor": "#E8EEF5",
+    "navigationBarTextStyle": "black"
   },
   "lazyCodeLoading": "requiredComponents",
   "style": "v2",

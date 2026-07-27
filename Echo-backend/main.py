@@ -11,10 +11,12 @@ from fastapi.staticfiles import StaticFiles
 from db.schema import init_db
 from features.admin.interface.router import router as admin_debug_router
 from features.auth.interface.router import router as auth_router
+from features.assistant_persona.public import get_assistant_persona
 from features.chat.interface.router import router as chat_router
 from features.memory.interface.router import router as memory_router
 from features.memory.public import resume_pending_memory_extraction_jobs
 from features.persona.interface.router import router as persona_router
+from features.relationship.interface.router import router as relationship_router
 from features.system.interface.router import router as health_router
 from features.voice.interface.router import router as voice_router
 from features.voice.public import cleanup_expired_voice_audio
@@ -61,8 +63,10 @@ async def lifespan(app: FastAPI):
     install_sensitive_data_filter()
     logger.info("Echo Backend 启动中...")
     init_db()
-    logger.info("Database provider: %s", settings.db_provider)
+    logger.info("Database provider: PostgreSQL + pgvector")
     logger.info("Prompt version: %s", settings.prompt_version)
+    assistant_persona = get_assistant_persona(settings.assistant_persona_version)
+    logger.info("Assistant persona version: %s", assistant_persona.version)
     resumed_count = resume_pending_memory_extraction_jobs()
     if resumed_count:
         logger.info("Resumed %s pending memory extraction jobs", resumed_count)
@@ -124,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(memory_router)
     app.include_router(persona_router)
+    app.include_router(relationship_router)
     app.include_router(voice_router)
     if settings.enable_admin_debug_api:
         app.include_router(admin_debug_router)

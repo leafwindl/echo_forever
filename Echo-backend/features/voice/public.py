@@ -1,5 +1,3 @@
-from collections.abc import AsyncIterator
-
 from features.voice.application.use_cases import (
     OpenStreamingVoiceRecognition,
     RecognizeVoice,
@@ -20,7 +18,6 @@ from features.voice.infrastructure.container import (
     get_recognize_voice_use_case,
     get_synthesize_voice_reply_use_case,
 )
-from features.voice.infrastructure.streaming_tts import consume_streaming_tts, start_streaming_tts
 
 
 async def recognize_voice(audio_bytes: bytes, content_type: str) -> VoiceRecognitionResult:
@@ -38,14 +35,6 @@ async def open_streaming_voice_recognition() -> VoiceStreamingRecognitionSession
     return await use_case.execute()
 
 
-async def start_streaming_voice_segment(text: str) -> str:
-    return await start_streaming_tts(text)
-
-
-def open_streaming_voice_audio(stream_id: str) -> AsyncIterator[bytes]:
-    return consume_streaming_tts(stream_id)
-
-
 def cleanup_expired_voice_audio() -> VoiceAudioCleanupResult:
     return cleanup_expired_voice_audio_files()
 
@@ -61,7 +50,5 @@ __all__ = [
     "cleanup_expired_voice_audio",
     "recognize_voice",
     "open_streaming_voice_recognition",
-    "open_streaming_voice_audio",
     "synthesize_voice_reply",
-    "start_streaming_voice_segment",
 ]

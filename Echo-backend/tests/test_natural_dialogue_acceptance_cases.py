@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.persona.domain.entities import PersonaUpdate, build_user_persona
+from features.persona.domain.entities import PersonaUpdate, build_user_preferences
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "natural_dialogue_acceptance_cases.json"
 
@@ -27,7 +27,7 @@ class NaturalDialogueAcceptanceCasesTests(unittest.TestCase):
             raw_persona = case.get("persona")
             if not raw_persona:
                 continue
-            build_user_persona(
+            build_user_preferences(
                 f"fixture-{case['id']}",
                 PersonaUpdate(
                     preferred_name=raw_persona.get("preferred_name"),
@@ -40,6 +40,7 @@ class NaturalDialogueAcceptanceCasesTests(unittest.TestCase):
                     enabled=raw_persona.get("enabled", True),
                 ),
                 is_customized=True,
+                onboarding_completed=True,
             )
 
 

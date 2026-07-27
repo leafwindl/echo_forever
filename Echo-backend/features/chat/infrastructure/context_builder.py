@@ -4,14 +4,16 @@ from dataclasses import dataclass, field
 from shared.config import settings
 
 from features.admin.public import get_effective_system_prompt
+from features.assistant_persona.public import get_assistant_persona
+from features.chat.infrastructure import postgres_repositories
 from features.chat.infrastructure.prompt_renderer import render_prompt_layers
-from features.chat.infrastructure.repository_provider import get_repository_module
 from features.memory.public import (
     list_memories,
     list_memory_embedding_records,
     retrieve_relevant_memories,
 )
 from features.persona.public import get_persona
+from features.relationship.public import get_relationship_context
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,7 @@ async def build_chat_context(
     user_id: str,
     user_message: str,
     conversation_id: str | None = None,
+    conversation_mode: str = "chat",
 ) -> ChatContext:
     long_term_memories, memory_retrieval_mode = await _load_long_term_memories(
         user_id,
@@ -86,12 +89,11 @@ async def build_chat_context(
     summary_text = ""
     summary_message_id = 0
     if conversation_id:
-        repositories = get_repository_module()
-        summary_state = repositories.get_conversation_summary(user_id, conversation_id)
+        summary_state = postgres_repositories.get_conversation_summary(user_id, conversation_id)
         summary_text = str(summary_state["summary"])
         summary_message_id = int(summary_state["summary_message_id"])
 
-    history = get_repository_module().get_history(
+    history = postgres_repositories.get_history(
         user_id,
         limit=MAX_HISTORY_MESSAGES,
         conversation_id=conversation_id,
@@ -104,6 +106,20 @@ async def build_chat_context(
         logger.warning("Persona loading unavailable", exc_info=True)
         persona = None
 
+    assistant_persona = get_assistant_persona(settings.assistant_persona_version)
+    try:
+        relationship = get_relationship_context(
+            user_id=user_id,
+            user_message=user_message,
+            relationship_pace=(
+                persona.relationship_pace if persona and persona.enabled else "natural"
+            ),
+            affection_style=(persona.affection_style if persona and persona.enabled else "contextual"),
+        )
+    except Exception:
+        logger.warning("Relationship state loading unavailable", exc_info=True)
+        relationship = None
+
     messages: list[dict[str, str]] = render_prompt_layers(
         product_identity=get_effective_system_prompt().content,
         persona=persona,
@@ -113,14 +129,21 @@ async def build_chat_context(
         persona_maximum_tokens=settings.persona_prompt_max_tokens,
         memory_maximum_tokens=settings.memory_prompt_max_tokens,
         summary_maximum_tokens=settings.summary_prompt_max_tokens,
+        assistant_persona=assistant_persona,
+        relationship=relationship,
+        conversation_mode=conversation_mode,
     )
     messages.extend(history)
     messages.append({"role": "user", "content": user_message})
 
     logger.info(
-        "Chat context built prompt_version=%s persona_customized=%s memory_mode=%s",
+        "Chat context built prompt_version=%s assistant_persona_version=%s "
+        "user_preferences_customized=%s relationship_stage=%s conversation_mode=%s memory_mode=%s",
         settings.prompt_version,
+        assistant_persona.version,
         bool(persona and persona.is_customized and persona.enabled),
+        relationship.state.stage if relationship else "new_fallback",
+        conversation_mode,
         memory_retrieval_mode,
     )
 

@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+CONVERSATION_MODES = ("chat", "call")
+
 
 class ChatValidationError(ValueError):
     """Raised when a chat use case receives invalid input."""
@@ -45,8 +47,3 @@ class ChatTurnResult:
 class ChatReplyDeliveryResult:
     reply: str
     audio_urls: tuple[str, ...] = ()
-
-    @property
-    def audio_url(self) -> str | None:
-        """Backward-compatible first audio segment URL."""
-        return self.audio_urls[0] if self.audio_urls else None
