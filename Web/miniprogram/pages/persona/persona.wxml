@@ -8,7 +8,7 @@
   <scroll-view class="form" scroll-y wx:else>
     <view class="intro-card">
       <view class="intro-avatar">
-        <image src="/assets/images/echo_idle.webp" mode="widthFix" />
+        <image src="/assets/images/echo_idle.png" mode="widthFix" />
       </view>
       <view class="intro-main">
         <text class="intro-title">你的交流偏好</text>

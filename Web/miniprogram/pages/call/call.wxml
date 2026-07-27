@@ -1,5 +1,5 @@
 <view class="page">
-  <image class="ambient-character" src="/assets/images/echo_idle.webp" mode="widthFix" />
+  <image class="ambient-character" src="/assets/images/echo_idle.png" mode="widthFix" />
   <view class="veil"></view>
 
   <view class="call-content">
@@ -10,7 +10,7 @@
 
     <view class="call-stage">
       <view class="avatar-frame {{status === 'speaking' ? 'speaking' : ''}}">
-        <image class="avatar" src="/assets/images/echo_idle.webp" mode="widthFix" />
+        <image class="avatar" src="/assets/images/echo_idle.png" mode="widthFix" />
       </view>
 
       <view class="status-block">

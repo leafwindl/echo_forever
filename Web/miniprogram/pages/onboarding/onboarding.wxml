@@ -8,7 +8,7 @@
       <text class="brand-line">先认识你，再开始我们的聊天</text>
     </view>
     <text class="step-chip">1 / 1</text>
-    <image class="brand-character" src="/assets/images/echo_idle.webp" mode="widthFix" />
+    <image class="brand-character" src="/assets/images/echo_idle.png" mode="widthFix" />
   </view>
 
   <view class="loading-state" wx:if="{{isLoading}}">
