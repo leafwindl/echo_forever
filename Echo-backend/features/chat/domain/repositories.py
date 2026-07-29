@@ -2,11 +2,9 @@ from typing import Optional, Protocol
 
 
 class ChatConversationRepository(Protocol):
-    def ensure_conversation(self, user_id: str, conversation_id: Optional[str]) -> str:
-        ...
+    def ensure_conversation(self, user_id: str, conversation_id: Optional[str]) -> str: ...
 
-    def get_or_create_active_conversation(self, user_id: str) -> str:
-        ...
+    def get_or_create_active_conversation(self, user_id: str) -> str: ...
 
     def add_chat_turn(
         self,
@@ -16,10 +14,17 @@ class ChatConversationRepository(Protocol):
         assistant_reply: str,
         user_message_type: str,
         assistant_message_type: str,
-    ) -> tuple[int, int]:
-        ...
+    ) -> tuple[int, int]: ...
+
+    def count_user_messages(self, user_id: str, conversation_id: str) -> int: ...
+
+    def list_recent_user_messages(
+        self,
+        user_id: str,
+        conversation_id: str,
+        limit: int,
+    ) -> tuple[tuple[int, str], ...]: ...
 
 
 class ChatContextRepository(Protocol):
-    def clear_context(self, user_id: str) -> tuple[int, int]:
-        ...
+    def clear_context(self, user_id: str) -> tuple[int, int]: ...

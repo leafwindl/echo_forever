@@ -4,7 +4,6 @@ import logging
 from typing import Optional
 
 from features.memory.domain.entities import (
-    MEMORY_EXTRACTION_JOB_TYPE,
     MemoryExtractionConfig,
     MemoryExtractionResult,
     MemoryGateResult,
@@ -53,6 +52,7 @@ class MemoryExtractionService:
         user_message: str,
         assistant_reply: str,
         source_message_id: Optional[int] = None,
+        allowed_source_message_ids: tuple[int, ...] = (),
     ) -> MemoryExtractionResult:
         """从一轮完整对话中抽取记忆，并以安全方式落库。
 
@@ -89,6 +89,7 @@ class MemoryExtractionService:
                 source_message_id=source_message_id,
                 active_memories=active_memories,
                 result=result,
+                allowed_source_message_ids=allowed_source_message_ids,
             )
 
         logger.info(
@@ -108,6 +109,7 @@ class MemoryExtractionService:
         source_message_id: Optional[int],
         active_memories: list,
         result: MemoryExtractionResult,
+        allowed_source_message_ids: tuple[int, ...] = (),
     ):
         """在领域归一化之后，应用一条模型提出的记忆操作。"""
         action = str(item.get("action", "ignore")).strip().lower()
@@ -116,6 +118,12 @@ class MemoryExtractionService:
         content = str(item.get("content", "")).strip()
         confidence = coerce_confidence(item.get("confidence"))
         importance = coerce_importance(item.get("importance"))
+        proposed_source_message_id = item.get("source_message_id")
+        if (
+            isinstance(proposed_source_message_id, int)
+            and proposed_source_message_id in allowed_source_message_ids
+        ):
+            source_message_id = proposed_source_message_id
 
         if action in {"ignore", "none", ""}:
             result.ignored += 1
@@ -125,17 +133,25 @@ class MemoryExtractionService:
             target_memory = self._resolve_target_memory(user_id, target_memory_id)
             if not target_memory and memory_type in ALLOWED_MEMORY_TYPES and content:
                 target_memory = find_duplicate_memory(active_memories, memory_type, content)
-            if target_memory and self.memory_repository.deactivate_memory(user_id, target_memory.memory_id):
+            if target_memory and self.memory_repository.deactivate_memory(
+                user_id, target_memory.memory_id
+            ):
                 self._safe_delete_memory_embedding(user_id, target_memory.memory_id)
                 active_memories[:] = [
-                    memory for memory in active_memories if memory.memory_id != target_memory.memory_id
+                    memory
+                    for memory in active_memories
+                    if memory.memory_id != target_memory.memory_id
                 ]
                 result.deactivated += 1
             else:
                 result.ignored += 1
             return
 
-        if memory_type not in ALLOWED_MEMORY_TYPES or not content or confidence < MIN_MEMORY_CONFIDENCE:
+        if (
+            memory_type not in ALLOWED_MEMORY_TYPES
+            or not content
+            or confidence < MIN_MEMORY_CONFIDENCE
+        ):
             result.ignored += 1
             return
 
@@ -195,16 +211,22 @@ class MemoryExtractionService:
         try:
             await self.embedding_repository.upsert_memory_embedding(user_id, memory_id, content)
         except ValueError as exc:
-            logger.warning("Memory embedding skipped for user_id=%s memory_id=%s: %s", user_id, memory_id, exc)
+            logger.warning(
+                "Memory embedding skipped for user_id=%s memory_id=%s: %s", user_id, memory_id, exc
+            )
         except Exception:
-            logger.exception("Memory embedding upsert failed for user_id=%s memory_id=%s", user_id, memory_id)
+            logger.exception(
+                "Memory embedding upsert failed for user_id=%s memory_id=%s", user_id, memory_id
+            )
 
     def _safe_delete_memory_embedding(self, user_id: str, memory_id: str):
         """删除记忆时要尽量清理旧向量，但不应因此让主操作失败。"""
         try:
             self.embedding_repository.delete_memory_embedding(user_id, memory_id)
         except Exception:
-            logger.exception("Memory embedding delete failed for user_id=%s memory_id=%s", user_id, memory_id)
+            logger.exception(
+                "Memory embedding delete failed for user_id=%s memory_id=%s", user_id, memory_id
+            )
 
     def schedule_memory_extraction(
         self,
@@ -212,19 +234,37 @@ class MemoryExtractionService:
         user_message: str,
         assistant_reply: str,
         source_message_id: Optional[int] = None,
+        candidate_user_messages: tuple[tuple[int, str], ...] = (),
+        force_batch_review: bool = False,
     ) -> MemoryGateResult:
         """只有当前对话包含记忆信号时，才创建可持久化的抽取任务。"""
-        gate_result = should_extract_memory(user_message)
+        gate_result = should_extract_memory(
+            user_message,
+            force_batch_review=force_batch_review,
+        )
         if not gate_result.should_extract:
-            logger.info("Memory extraction skipped for user_id=%s reason=%s", user_id, gate_result.reason)
+            logger.info(
+                "Memory extraction skipped for user_id=%s reason=%s", user_id, gate_result.reason
+            )
             return gate_result
+
+        extraction_input = user_message
+        if force_batch_review and candidate_user_messages:
+            extraction_input = "\n".join(
+                f"- source_message_id={candidate_id} | {candidate.strip()}"
+                for candidate_id, candidate in candidate_user_messages
+                if candidate.strip()
+            )
 
         job_id = self.job_repository.create_extraction_job(
             {
                 "user_id": user_id,
-                "user_message": user_message,
+                "user_message": extraction_input,
                 "assistant_reply": assistant_reply,
                 "source_message_id": source_message_id,
+                "allowed_source_message_ids": [
+                    candidate_id for candidate_id, _ in candidate_user_messages
+                ],
             }
         )
         scheduled = self._schedule_memory_extraction_job(job_id)
@@ -240,7 +280,9 @@ class MemoryExtractionService:
     async def _run_memory_extraction_job(self, job_id: str):
         """执行已认领的任务；重试策略由任务仓储负责维护。"""
         if not self.job_repository.claim_job(job_id):
-            logger.info("Memory extraction job skipped because it is not runnable: job_id=%s", job_id)
+            logger.info(
+                "Memory extraction job skipped because it is not runnable: job_id=%s", job_id
+            )
             return
 
         job = self.job_repository.get_job(job_id)
@@ -256,6 +298,11 @@ class MemoryExtractionService:
                 user_message=str(payload.get("user_message", "")),
                 assistant_reply=str(payload.get("assistant_reply", "")),
                 source_message_id=payload.get("source_message_id"),
+                allowed_source_message_ids=tuple(
+                    int(message_id)
+                    for message_id in payload.get("allowed_source_message_ids", [])
+                    if isinstance(message_id, int)
+                ),
             )
             self.job_repository.complete_job(job_id)
             logger.info(
@@ -269,7 +316,9 @@ class MemoryExtractionService:
             )
         except Exception as exc:
             self.job_repository.fail_job(job_id, str(exc))
-            logger.exception("Memory extraction job failed for user_id=%s job_id=%s", user_id, job_id)
+            logger.exception(
+                "Memory extraction job failed for user_id=%s job_id=%s", user_id, job_id
+            )
 
     def _schedule_memory_extraction_job(self, job_id: str) -> bool:
         """有运行中的事件循环时立即执行，否则保留为 pending 等待恢复。"""

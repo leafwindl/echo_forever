@@ -33,7 +33,6 @@ def get_synthesize_voice_reply_use_case() -> SynthesizeVoiceReply:
         _synthesize_voice_reply_use_case = SynthesizeVoiceReply(
             synthesizer=ProviderVoiceSynthesizer(),
             audio_storage=LocalVoiceAudioStorage(),
-            segment_max_chars=settings.tts_segment_max_chars,
             reply_max_chars=settings.tts_reply_max_chars,
         )
     return _synthesize_voice_reply_use_case

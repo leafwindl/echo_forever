@@ -24,6 +24,7 @@ class FakeConversationRepository:
     def __init__(self):
         self.persisted_turns = []
         self.cleared_user_ids = []
+        self.user_message_count = 1
 
     def ensure_conversation(self, user_id, conversation_id):
         return conversation_id or "conv_fake"
@@ -55,6 +56,16 @@ class FakeConversationRepository:
     def clear_context(self, user_id):
         self.cleared_user_ids.append(user_id)
         return 4, 1
+
+    def count_user_messages(self, user_id, conversation_id):
+        return self.user_message_count
+
+    def list_recent_user_messages(self, user_id, conversation_id, limit):
+        del user_id, conversation_id
+        messages = [
+            (index + 1, turn["user_message"]) for index, turn in enumerate(self.persisted_turns)
+        ]
+        return tuple(messages[-limit:])
 
 
 class FakeContextProvider:
@@ -101,7 +112,19 @@ class BlockingSummaryUpdater:
 
 
 class FakeMemoryScheduler:
-    def schedule(self, user_id, user_message, assistant_reply, source_message_id):
+    def __init__(self):
+        self.calls = []
+
+    def schedule(
+        self,
+        user_id,
+        user_message,
+        assistant_reply,
+        source_message_id,
+        candidate_user_messages,
+        force_batch_review,
+    ):
+        self.calls.append((candidate_user_messages, force_batch_review))
         return MemoryExtractionScheduleResult(
             should_extract=True,
             reason="keyword:test",
@@ -126,6 +149,7 @@ class FakeVoiceReplySynthesizer:
     async def synthesize_reply(self, reply):
         self.received_replies.append(reply)
         return "http://example.test/voice.mp3"
+
 
 class FailingVoiceReplySynthesizer:
     async def synthesize_reply(self, reply):
@@ -271,6 +295,55 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("我会认真听。", result.reply)
         self.assertEqual(2, len(llm.calls))
+
+    async def test_generate_chat_reply_pauses_questions_after_two_question_turns(self):
+        repository = FakeConversationRepository()
+        context_provider = FakeContextProvider()
+
+        async def build_context(user_id, user_message, conversation_id, conversation_mode):
+            del user_id, conversation_id, conversation_mode
+            return ChatContext(
+                messages=[{"role": "user", "content": user_message}],
+                history_messages=[],
+                pause_followup_questions=True,
+            )
+
+        context_provider.build_context = build_context
+        llm = SequenceLLM(
+            [
+                "这听起来挺有意思的。你还想说哪一部分？",
+                "这听起来挺有意思的，我先跟着你的节奏。",
+            ]
+        )
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=context_provider,
+            llm=llm,
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+        )
+
+        result = await use_case.execute(user_id="user_a", message="我们平时会聊一点")
+
+        self.assertEqual("这听起来挺有意思的，我先跟着你的节奏。", result.reply)
+        self.assertEqual(2, len(llm.calls))
+
+    async def test_every_fifth_user_turn_requests_batch_memory_review(self):
+        repository = FakeConversationRepository()
+        repository.user_message_count = 5
+        scheduler = FakeMemoryScheduler()
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            llm=FakeLLM(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=scheduler,
+        )
+
+        await use_case.execute(user_id="user_a", message="普通但可能有长期信息的一句话")
+
+        self.assertTrue(scheduler.calls[0][1])
+        self.assertEqual(scheduler.calls[0][0][-1][1], "普通但可能有长期信息的一句话")
 
     def test_dialogue_style_flags_contextual_naturalness_violations(self):
         self.assertIn(
@@ -458,6 +531,7 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(request_guard.try_calls, ["user_a"])
         self.assertEqual(request_guard.release_calls, ["user_a"])
+
 
 if __name__ == "__main__":
     unittest.main()

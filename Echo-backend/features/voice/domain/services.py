@@ -16,7 +16,11 @@ class VoiceRecognizer(Protocol):
 
 
 class VoiceSynthesizer(Protocol):
-    async def synthesize(self, text: str) -> SynthesizedVoiceAudio: ...
+    async def synthesize(
+        self,
+        text: str,
+        instruction: str | None = None,
+    ) -> SynthesizedVoiceAudio: ...
 
 
 class VoiceStreamingRecognitionSession(Protocol):

@@ -18,6 +18,7 @@ class ChatContext:
     conversation_summary: str = ""
     long_term_memories: list[dict[str, object]] = field(default_factory=list)
     memory_retrieval_mode: str = "none"
+    pause_followup_questions: bool = False
 
 
 @dataclass(frozen=True)

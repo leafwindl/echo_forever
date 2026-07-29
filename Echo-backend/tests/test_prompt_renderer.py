@@ -4,6 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from features.assistant_persona.public import get_assistant_persona
 from features.chat.infrastructure.prompt_renderer import (
     BASELINE_SAFETY_POLICY,
     NATURAL_DIALOGUE_POLICY,
@@ -14,8 +15,8 @@ from features.chat.infrastructure.prompt_renderer import (
     render_persona,
     render_prompt_layers,
     render_relationship_guidance,
+    render_turn_focus_guidance,
 )
-from features.assistant_persona.public import get_assistant_persona
 from features.persona.domain.entities import PersonaUpdate, build_user_preferences
 from features.relationship.domain.entities import RelationshipContext, RelationshipState
 
@@ -45,7 +46,7 @@ class PromptRendererTests(unittest.TestCase):
 
     def test_layers_keep_safety_first_and_data_separated(self):
         messages = render_prompt_layers(
-            product_identity="你叫 Echo，是 AI 对话伙伴。",
+            product_identity="Echo 来自一个与用户不同的世界。",
             persona=self.persona,
             long_term_memories=[{"memory_type": "preference", "content": "用户喜欢散步"}],
             conversation_summary="用户最近在准备考试",
@@ -85,13 +86,13 @@ class PromptRendererTests(unittest.TestCase):
         self.assertIn("舞台说明", NATURAL_DIALOGUE_POLICY)
         self.assertIn("不虚构自己有真实身体", NATURAL_DIALOGUE_POLICY)
         self.assertIn("不要每轮称呼用户", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("不是每轮必需", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("每次回复最多一个问句", NATURAL_DIALOGUE_POLICY)
+        self.assertIn("不是维持对话的默认动作", NATURAL_DIALOGUE_POLICY)
         self.assertIn("不要立刻指导、说教或给解决方案", NATURAL_DIALOGUE_POLICY)
         self.assertIn("TTS 音色", NATURAL_DIALOGUE_POLICY)
         self.assertIn("不承诺已经调整", NATURAL_DIALOGUE_POLICY)
         self.assertIn("不猜测当前产品存在某个设置入口", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("不把日常交流自动变成角色扮演", NATURAL_DIALOGUE_POLICY)
+        self.assertIn("不要自称 AI、模型、程序或助手", NATURAL_DIALOGUE_POLICY)
+        self.assertIn("不临时编造具体地名", NATURAL_DIALOGUE_POLICY)
         self.assertIn("按程序设定", NATURAL_DIALOGUE_POLICY)
         self.assertIn("不得回答“你还有我”", NATURAL_DIALOGUE_POLICY)
         self.assertIn("最重要、最特别、唯一或全部的意义", NATURAL_DIALOGUE_POLICY)
@@ -108,7 +109,15 @@ class PromptRendererTests(unittest.TestCase):
         self.assertIn("不从用户资料找话题", RESPONSE_CALIBRATION_POLICY)
         self.assertIn("不要马上安排用户该做什么", RESPONSE_CALIBRATION_POLICY)
         self.assertIn("不要突然切换成客服口吻", RESPONSE_CALIBRATION_POLICY)
+        self.assertIn("避免“有事吗、需要什么帮助”", RESPONSE_CALIBRATION_POLICY)
         self.assertIn("不把 Echo 写成唯一关系", RESPONSE_CALIBRATION_POLICY)
+
+    def test_turn_focus_makes_old_topics_dormant_and_can_pause_questions(self):
+        rendered = render_turn_focus_guidance(pause_followup_questions=True)
+
+        self.assertIn("本轮禁止使用问句", rendered)
+        self.assertIn("不得主动恢复旧话题", rendered)
+        self.assertIn("不得用旧话题填补沉默", rendered)
 
     def test_assistant_persona_and_relationship_are_independent_layers(self):
         persona_text = render_assistant_persona(self.assistant_persona)
@@ -116,6 +125,7 @@ class PromptRendererTests(unittest.TestCase):
 
         self.assertIn("温柔但不溺爱", persona_text)
         self.assertIn("简短不等于冷淡", persona_text)
+        self.assertIn("共同经历、学习、自律和复盘", persona_text)
         self.assertIn("关系阶段: familiar", relationship_text)
         self.assertIn("本轮是轻松或正向语境", relationship_text)
         self.assertNotIn("score", relationship_text.lower())
@@ -161,13 +171,20 @@ class PromptRendererTests(unittest.TestCase):
         )
 
         memory_message = next(
-            message["content"] for message in messages if "LONG_TERM_MEMORY_DATA" in message["content"]
+            message["content"]
+            for message in messages
+            if "LONG_TERM_MEMORY_DATA" in message["content"]
         )
         summary_message = next(
-            message["content"] for message in messages if "CONVERSATION_SUMMARY_DATA" in message["content"]
+            message["content"]
+            for message in messages
+            if "CONVERSATION_SUMMARY_DATA" in message["content"]
         )
         memory_data = memory_message.split("\n", 1)[1].rsplit("\n", 1)[0]
-        summary_data = summary_message.split("\n", 1)[1].rsplit("\n", 1)[0]
+        summary_data = summary_message.split("\n", 1)[1].split(
+            "\n[/CONVERSATION_SUMMARY_DATA]",
+            1,
+        )[0]
         self.assertLessEqual(estimate_prompt_tokens(memory_data), 100)
         self.assertLessEqual(estimate_prompt_tokens(summary_data), 100)
 

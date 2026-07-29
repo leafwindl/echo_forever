@@ -8,10 +8,29 @@ from features.chat.domain.dialogue_style import (
     apply_dialogue_fallback,
     find_dialogue_style_violations,
     sanitize_dialogue_reply,
+    should_pause_followup_questions,
 )
 
 
 class DialogueStyleTests(unittest.TestCase):
+    def test_question_cooldown_after_two_consecutive_assistant_questions(self):
+        history = [
+            {"role": "assistant", "content": "你最近在看什么？"},
+            {"role": "user", "content": "Agent。"},
+            {"role": "assistant", "content": "你准备从哪里开始？"},
+        ]
+
+        self.assertTrue(should_pause_followup_questions(history, "两个方向都有"))
+        self.assertFalse(should_pause_followup_questions(history, "你可以继续问我"))
+        self.assertIn(
+            "followup_question_cooldown",
+            find_dialogue_style_violations(
+                "挺有意思的。你们实验室平时聊什么？",
+                "两个方向都有",
+                pause_followup_questions=True,
+            ),
+        )
+
     def test_detects_common_stage_direction_formats(self):
         self.assertIn(
             "parenthesized_action",

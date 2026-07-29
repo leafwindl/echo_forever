@@ -33,15 +33,17 @@ class TencentVoiceRecognizer(VoiceRecognizer):
 
 
 class ProviderVoiceSynthesizer(VoiceSynthesizer):
-    async def synthesize(self, text: str) -> SynthesizedVoiceAudio:
+    async def synthesize(
+        self,
+        text: str,
+        instruction: str | None = None,
+    ) -> SynthesizedVoiceAudio:
         provider = get_tts_provider()
-        result = await provider.text_to_speech(text, settings.tts_voice_id)
-        if isinstance(result, bytes):
-            return SynthesizedVoiceAudio(
-                audio_bytes=result,
-                file_suffix=".mp3",
-                content_type="audio/mpeg",
-            )
+        result = await provider.text_to_speech(
+            text,
+            settings.tts_voice_id,
+            instruction=instruction,
+        )
         return SynthesizedVoiceAudio(
             audio_bytes=result.audio_bytes,
             file_suffix=result.file_suffix,

@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 import unittest
@@ -11,7 +12,7 @@ from features.voice.application.use_cases import (
     SynthesizeVoiceReply,
 )
 from features.voice.domain.entities import SynthesizedVoiceAudio, UnsupportedVoiceFormatError
-from features.voice.domain.segmentation import sanitize_text_for_speech, split_text_for_speech
+from features.voice.domain.speech_delivery import prepare_speech_text, select_speech_delivery
 from features.voice.infrastructure.audio_storage import cleanup_expired_audio_files_in_dir
 from features.voice.infrastructure.streaming_asr import TencentASRTranscriptAccumulator
 
@@ -29,8 +30,8 @@ class FakeAudioStorage:
     def delete_upload(self, audio_path):
         self.deleted_uploads.append(audio_path)
 
-    async def save_generated_audio(self, audio_bytes):
-        self.generated_audio.append(audio_bytes)
+    async def save_generated_audio(self, audio_bytes, suffix=".mp3"):
+        self.generated_audio.append((audio_bytes, suffix))
         return "http://example.test/audio.mp3"
 
 
@@ -45,12 +46,21 @@ class FailingRecognizer:
 
 
 class FakeSynthesizer:
-    async def synthesize(self, text):
-        return f"audio:{text}".encode("utf-8")
+    def __init__(self):
+        self.requests = []
+
+    async def synthesize(self, text, instruction=None):
+        self.requests.append((text, instruction))
+        return SynthesizedVoiceAudio(
+            audio_bytes=f"audio:{text}".encode(),
+            file_suffix=".mp3",
+            content_type="audio/mpeg",
+        )
 
 
 class FailingSynthesizer:
-    async def synthesize(self, text):
+    async def synthesize(self, text, instruction=None):
+        del instruction
         raise RuntimeError(f"synthesize failed:{text}")
 
 
@@ -58,7 +68,8 @@ class FakeStructuredSynthesizer:
     def __init__(self):
         self.segments = []
 
-    async def synthesize(self, text):
+    async def synthesize(self, text, instruction=None):
+        del instruction
         self.segments.append(text)
         return SynthesizedVoiceAudio(
             audio_bytes=f"wav:{text}".encode(),
@@ -121,7 +132,9 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
         result = await use_case.execute("hello")
 
         self.assertEqual(result.audio_urls, ("http://example.test/audio.mp3",))
-        self.assertEqual(storage.generated_audio, [b"audio:hello"])
+        self.assertEqual(storage.generated_audio, [(b"audio:hello", ".mp3")])
+        self.assertEqual(len(use_case.synthesizer.requests), 1)
+        self.assertIn("自然松弛", use_case.synthesizer.requests[0][1])
 
     async def test_synthesize_voice_reply_rejects_empty_text(self):
         use_case = SynthesizeVoiceReply(
@@ -132,27 +145,20 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await use_case.execute("   ")
 
-    async def test_synthesize_voice_reply_splits_and_stores_wav_segments(self):
+    async def test_synthesize_voice_reply_uses_one_request_and_stores_one_wav(self):
         storage = FakeStructuredAudioStorage()
         synthesizer = FakeStructuredSynthesizer()
         use_case = SynthesizeVoiceReply(
             synthesizer=synthesizer,
             audio_storage=storage,
-            segment_max_chars=8,
             reply_max_chars=100,
         )
 
         result = await use_case.execute("第一句话。第二句话！")
 
-        self.assertEqual(synthesizer.segments, ["第一句话。", "第二句话！"])
-        self.assertEqual(
-            result.audio_urls,
-            (
-                "http://example.test/audio-1.wav",
-                "http://example.test/audio-2.wav",
-            ),
-        )
-        self.assertEqual([suffix for _, suffix in storage.generated_audio], [".wav", ".wav"])
+        self.assertEqual(synthesizer.segments, ["第一句话。第二句话！"])
+        self.assertEqual(result.audio_urls, ("http://example.test/audio-1.wav",))
+        self.assertEqual([suffix for _, suffix in storage.generated_audio], [".wav"])
 
     async def test_open_streaming_voice_recognition_returns_provider_session(self):
         session = FakeStreamingSession()
@@ -162,28 +168,35 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIs(result, session)
 
-    def test_split_text_for_speech_enforces_segment_and_total_limits(self):
-        segments = split_text_for_speech(
-            "abcdefghij。后面的内容不会全部进入合成。",
-            max_chars=4,
-            total_max_chars=14,
-        )
+    def test_prepare_speech_text_applies_total_limit_without_segmenting(self):
+        text = prepare_speech_text("abcdefghij。后面的内容不会全部进入合成。", maximum_chars=14)
 
-        self.assertTrue(segments)
-        self.assertTrue(all(len(segment) <= 4 for segment in segments))
-        self.assertLessEqual(sum(len(segment) for segment in segments), 14)
+        self.assertEqual(text, "abcdefghij。后面的")
 
-    def test_sanitize_text_for_speech_removes_visual_only_unicode(self):
+    def test_prepare_speech_text_removes_visual_only_unicode(self):
         self.assertEqual(
-            sanitize_text_for_speech("我在听。🌿\u200d✨"),
+            prepare_speech_text("我在听。🌿\u200d✨", maximum_chars=100),
             "我在听。",
         )
 
-    def test_split_text_for_speech_omits_emoji_only_segment(self):
-        self.assertEqual(
-            split_text_for_speech("第一句话。🌿", max_chars=80, total_max_chars=100),
-            ("第一句话。",),
-        )
+    def test_speech_delivery_varies_with_reply_semantics(self):
+        self.assertEqual(select_speech_delivery("怎么啦？").style, "curious")
+        self.assertEqual(select_speech_delivery("听起来真的很累，先缓一缓。").style, "caring")
+        self.assertEqual(select_speech_delivery("太好了，你做到了！").style, "cheerful")
+        self.assertEqual(select_speech_delivery("这件事很重要，我们认真看看。").style, "serious")
+        self.assertEqual(select_speech_delivery("我在听，你慢慢说。").style, "natural")
+
+    def test_fixed_naturalness_corpus_matches_delivery_rules(self):
+        fixture_path = Path(__file__).parent / "fixtures" / "voice_naturalness_cases.json"
+        cases = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+        self.assertGreaterEqual(len(cases), 5)
+        for case in cases:
+            with self.subTest(case=case["id"]):
+                self.assertEqual(
+                    select_speech_delivery(case["text"]).style,
+                    case["expected_style"],
+                )
 
     def test_tencent_accumulator_replaces_partial_and_keeps_stable_segments(self):
         accumulator = TencentASRTranscriptAccumulator()

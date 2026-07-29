@@ -1,14 +1,14 @@
+import sys
 import unittest
 from pathlib import Path
-import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import providers.tts_provider as tts_provider_module
-from providers.embedding_provider import OpenAICompatibleEmbeddingProvider, get_embedding_provider
 from providers.asr_provider import ASRProvider, get_asr_provider
+from providers.embedding_provider import OpenAICompatibleEmbeddingProvider, get_embedding_provider
 from providers.registry import register_provider_factory, reset_provider_registry_for_tests
 from providers.tts_provider import CosyVoiceTTSProvider, EdgeTTSProvider, get_tts_provider
 from shared.config import settings
@@ -20,8 +20,9 @@ class FakeEmbeddingProvider:
 
 
 class FakeTTSProvider:
-    async def text_to_speech(self, text, voice_id):
-        return f"{voice_id}:{text}".encode("utf-8")
+    async def text_to_speech(self, text, voice_id, instruction=None):
+        del instruction
+        return f"{voice_id}:{text}".encode()
 
 
 class FakeASRProvider:
@@ -86,7 +87,11 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
             patch.object(settings, "cosyvoice_websocket_url", ""),
             patch.object(settings, "cosyvoice_instruction", "温柔自然地说话"),
         ):
-            result = await provider.text_to_speech("你好", "custom-voice")
+            result = await provider.text_to_speech(
+                "你好",
+                "custom-voice",
+                instruction="轻松自然地说话",
+            )
 
         self.assertEqual(result.audio_bytes, b"audio-1audio-2")
         self.assertEqual(result.content_type, "audio/mpeg")
@@ -95,7 +100,7 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(synthesizer.text, "你好")
         self.assertEqual(synthesizer.kwargs["model"], "cosyvoice-v3.5-flash")
         self.assertEqual(synthesizer.kwargs["voice"], "custom-voice")
-        self.assertEqual(synthesizer.kwargs["instruction"], "温柔自然地说话")
+        self.assertEqual(synthesizer.kwargs["instruction"], "轻松自然地说话")
         self.assertEqual(
             synthesizer.kwargs["url"],
             "wss://workspace-a.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",

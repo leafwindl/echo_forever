@@ -14,9 +14,9 @@ from features.chat.domain.services import (
     MemoryExtractionScheduler,
     RelationshipTurnRecorder,
 )
+from features.chat.infrastructure import postgres_repositories
 from features.chat.infrastructure.context_builder import build_chat_context
 from features.chat.infrastructure.conversation_summary import maybe_update_conversation_summary
-from features.chat.infrastructure import postgres_repositories
 from features.memory.public import schedule_memory_extraction
 from features.persona.public import get_persona
 from features.relationship.public import record_relationship_turn
@@ -77,6 +77,16 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
             assistant_message_type=assistant_message_type,
         )
 
+    def count_user_messages(self, user_id: str, conversation_id: str) -> int:
+        return postgres_repositories.count_user_messages(user_id, conversation_id)
+
+    def list_recent_user_messages(
+        self,
+        user_id: str,
+        conversation_id: str,
+        limit: int,
+    ) -> tuple[tuple[int, str], ...]:
+        return postgres_repositories.list_recent_user_messages(user_id, conversation_id, limit)
 
 
 class ChatContextRepositoryAdapter(ChatContextRepository):
@@ -104,6 +114,7 @@ class ChatContextProviderAdapter(ChatContextProvider):
             conversation_summary=context.conversation_summary,
             long_term_memories=context.long_term_memories,
             memory_retrieval_mode=context.memory_retrieval_mode,
+            pause_followup_questions=context.pause_followup_questions,
         )
 
 
@@ -111,7 +122,6 @@ class ChatLLMAdapter(ChatLLM):
     async def generate_reply(self, messages: list[dict]) -> str:
         provider = get_llm_provider()
         return await provider.chat_completion(messages=messages)
-
 
 
 class ConversationSummaryUpdaterAdapter(ConversationSummaryUpdater):
@@ -126,12 +136,16 @@ class MemoryExtractionSchedulerAdapter(MemoryExtractionScheduler):
         user_message: str,
         assistant_reply: str,
         source_message_id: int,
+        candidate_user_messages: tuple[tuple[int, str], ...],
+        force_batch_review: bool,
     ) -> MemoryExtractionScheduleResult:
         result = schedule_memory_extraction(
             user_id=user_id,
             user_message=user_message,
             assistant_reply=assistant_reply,
             source_message_id=source_message_id,
+            candidate_user_messages=candidate_user_messages,
+            force_batch_review=force_batch_review,
         )
         return MemoryExtractionScheduleResult(
             should_extract=result.should_extract,

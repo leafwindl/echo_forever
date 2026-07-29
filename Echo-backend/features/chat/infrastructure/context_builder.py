@@ -4,8 +4,12 @@ from dataclasses import dataclass, field
 from shared.config import settings
 
 from features.assistant_persona.public import get_assistant_persona
+from features.chat.domain.dialogue_style import should_pause_followup_questions
 from features.chat.infrastructure import postgres_repositories
-from features.chat.infrastructure.prompt_renderer import render_prompt_layers
+from features.chat.infrastructure.prompt_renderer import (
+    render_prompt_layers,
+    render_turn_focus_guidance,
+)
 from features.memory.public import (
     list_memories,
     list_memory_embedding_records,
@@ -28,6 +32,7 @@ class ChatContext:
     conversation_summary: str = ""
     long_term_memories: list[dict[str, object]] = field(default_factory=list)
     memory_retrieval_mode: str = "none"
+    pause_followup_questions: bool = False
 
 
 def _list_active_memories_for_context(user_id: str) -> list[dict[str, object]]:
@@ -98,6 +103,7 @@ async def build_chat_context(
         conversation_id=conversation_id,
         after_message_id=summary_message_id,
     )
+    pause_followup_questions = should_pause_followup_questions(history, user_message)
 
     try:
         persona = get_persona(user_id)
@@ -113,7 +119,9 @@ async def build_chat_context(
             relationship_pace=(
                 persona.relationship_pace if persona and persona.enabled else "natural"
             ),
-            affection_style=(persona.affection_style if persona and persona.enabled else "contextual"),
+            affection_style=(
+                persona.affection_style if persona and persona.enabled else "contextual"
+            ),
         )
     except Exception:
         logger.warning("Relationship state loading unavailable", exc_info=True)
@@ -131,6 +139,12 @@ async def build_chat_context(
         assistant_persona=assistant_persona,
         relationship=relationship,
         conversation_mode=conversation_mode,
+    )
+    messages.append(
+        {
+            "role": "system",
+            "content": render_turn_focus_guidance(pause_followup_questions),
+        }
     )
     messages.extend(history)
     messages.append({"role": "user", "content": user_message})
@@ -152,4 +166,5 @@ async def build_chat_context(
         conversation_summary=summary_text,
         long_term_memories=long_term_memories,
         memory_retrieval_mode=memory_retrieval_mode,
+        pause_followup_questions=pause_followup_questions,
     )

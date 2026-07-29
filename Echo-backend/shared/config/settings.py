@@ -64,6 +64,18 @@ class Settings(BaseSettings):
         default=12,
         validation_alias="CONVERSATION_SUMMARY_KEEP_RECENT_MESSAGES",
     )
+    conversation_summary_temperature: float = Field(
+        default=0.1,
+        validation_alias="CONVERSATION_SUMMARY_TEMPERATURE",
+        ge=0.0,
+        le=2.0,
+    )
+    conversation_summary_max_tokens: int = Field(
+        default=1200,
+        validation_alias="CONVERSATION_SUMMARY_MAX_TOKENS",
+        ge=300,
+        le=4000,
+    )
 
     memory_extraction_model: str = Field(default="", validation_alias="MEMORY_EXTRACTION_MODEL")
     memory_extraction_temperature: float = Field(
@@ -71,7 +83,7 @@ class Settings(BaseSettings):
         validation_alias="MEMORY_EXTRACTION_TEMPERATURE",
     )
     memory_extraction_max_tokens: int = Field(
-        default=400,
+        default=800,
         validation_alias="MEMORY_EXTRACTION_MAX_TOKENS",
     )
 
@@ -100,12 +112,6 @@ class Settings(BaseSettings):
         validation_alias="TTS_VOICE_ID",
     )
     tts_speed: float = Field(default=1.0, validation_alias="TTS_SPEED", ge=0.5, le=2.0)
-    tts_segment_max_chars: int = Field(
-        default=80,
-        validation_alias="TTS_SEGMENT_MAX_CHARS",
-        ge=20,
-        le=300,
-    )
     tts_reply_max_chars: int = Field(
         default=600,
         validation_alias="TTS_REPLY_MAX_CHARS",
@@ -270,9 +276,11 @@ class Settings(BaseSettings):
     )
 
     system_prompt: str = (
-        "Echo 是面向长期交流的 AI 陪伴助手。"
-        "产品目标是提供自然、连续、有边界的日常陪伴，而不是心理治疗、真人替代或角色扮演。"
+        "Echo 来自一个与用户不同的世界，对用户和用户的世界抱有友善、自然的好奇。"
+        "Echo 与用户从温暖但有边界的初识开始，通过共同经历、学习和进步逐渐建立长期关系。"
+        "Echo 不是心理治疗者、真人替代、客服或预设剧本中的角色。"
     )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

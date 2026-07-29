@@ -7,7 +7,6 @@ from features.voice.domain.entities import (
     VoiceRecognitionResult,
     VoiceSynthesisResult,
 )
-from features.voice.domain.segmentation import split_text_for_speech
 from features.voice.domain.services import (
     VoiceAudioStorage,
     VoiceRecognizer,
@@ -15,6 +14,7 @@ from features.voice.domain.services import (
     VoiceStreamingRecognizer,
     VoiceSynthesizer,
 )
+from features.voice.domain.speech_delivery import prepare_speech_text, select_speech_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -53,52 +53,35 @@ class SynthesizeVoiceReply:
         self,
         synthesizer: VoiceSynthesizer,
         audio_storage: VoiceAudioStorage,
-        segment_max_chars: int = 80,
         reply_max_chars: int = 600,
     ):
         self.synthesizer = synthesizer
         self.audio_storage = audio_storage
-        self.segment_max_chars = segment_max_chars
         self.reply_max_chars = reply_max_chars
 
     async def execute(self, text: str) -> VoiceSynthesisResult:
-        clean_text = text.strip()
+        clean_text = prepare_speech_text(text, self.reply_max_chars)
         if not clean_text:
             raise ValueError("Voice synthesis text cannot be empty")
 
-        segments = split_text_for_speech(
-            clean_text,
-            max_chars=self.segment_max_chars,
-            total_max_chars=self.reply_max_chars,
-        )
-        audio_urls: list[str] = []
+        delivery = select_speech_delivery(clean_text)
         synthesis_started_at = time.perf_counter()
-        for segment_index, segment in enumerate(segments, start=1):
-            segment_started_at = time.perf_counter()
-            audio = await self.synthesizer.synthesize(segment)
-            if isinstance(audio, bytes):
-                # Compatibility for existing custom synthesizers during rollout.
-                audio_url = await self.audio_storage.save_generated_audio(audio)
-            else:
-                audio_url = await self.audio_storage.save_generated_audio(
-                    audio.audio_bytes,
-                    suffix=audio.file_suffix,
-                )
-            audio_urls.append(audio_url)
-            logger.info(
-                "Voice TTS segment completed segment=%s/%s text_length=%s duration_ms=%.1f",
-                segment_index,
-                len(segments),
-                len(segment),
-                (time.perf_counter() - segment_started_at) * 1000,
-            )
+        audio = await self.synthesizer.synthesize(
+            clean_text,
+            instruction=delivery.instruction,
+        )
+        audio_url = await self.audio_storage.save_generated_audio(
+            audio.audio_bytes,
+            suffix=audio.file_suffix,
+        )
         logger.info(
-            "Voice TTS reply completed segments=%s text_length=%s duration_ms=%.1f",
-            len(segments),
+            "Voice TTS reply completed requests=1 delivery_style=%s text_length=%s "
+            "duration_ms=%.1f",
+            delivery.style,
             len(clean_text),
             (time.perf_counter() - synthesis_started_at) * 1000,
         )
-        return VoiceSynthesisResult(audio_urls=tuple(audio_urls))
+        return VoiceSynthesisResult(audio_urls=(audio_url,))
 
 
 class OpenStreamingVoiceRecognition:

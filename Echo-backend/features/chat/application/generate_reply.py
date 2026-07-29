@@ -92,11 +92,22 @@ class GenerateChatReply:
                 resolved_conversation_id,
             )
 
+        user_message_count = self.conversation_repository.count_user_messages(
+            clean_user_id,
+            resolved_conversation_id,
+        )
+        candidate_user_messages = self.conversation_repository.list_recent_user_messages(
+            clean_user_id,
+            resolved_conversation_id,
+            limit=5,
+        )
         memory_gate = self.memory_scheduler.schedule(
             user_id=clean_user_id,
             user_message=clean_message,
             assistant_reply=reply,
             source_message_id=user_message_id,
+            candidate_user_messages=candidate_user_messages,
+            force_batch_review=(user_message_count % 5 == 0),
         )
 
         if self.relationship_recorder is not None:
@@ -156,7 +167,11 @@ class GenerateChatReply:
         )
         llm_started_at = time.perf_counter()
         reply = await self.llm.generate_reply(context.messages)
-        style_violations = find_dialogue_style_violations(reply, clean_message)
+        style_violations = find_dialogue_style_violations(
+            reply,
+            clean_message,
+            pause_followup_questions=context.pause_followup_questions,
+        )
         if style_violations:
             logger.warning(
                 "Dialogue style retry requested violation_types=%s",
@@ -172,7 +187,11 @@ class GenerateChatReply:
             except Exception:
                 logger.warning("Dialogue style retry failed", exc_info=True)
 
-            remaining_violations = find_dialogue_style_violations(reply, clean_message)
+            remaining_violations = find_dialogue_style_violations(
+                reply,
+                clean_message,
+                pause_followup_questions=context.pause_followup_questions,
+            )
             if remaining_violations:
                 logger.warning(
                     "Dialogue style fallback applied violation_types=%s",

@@ -2,6 +2,7 @@ import uuid
 from typing import Dict, List, Optional, Tuple
 
 from db.postgres_connection import get_connection, transaction
+
 from features.auth.public import ensure_user_identity
 
 
@@ -45,7 +46,9 @@ def get_or_create_active_conversation(user_id: str) -> str:
             )
             row = cursor.fetchone()
 
-            conversation_id = row["conversation_id"] if row else ensure_conversation(user_id, conn=conn)
+            conversation_id = (
+                row["conversation_id"] if row else ensure_conversation(user_id, conn=conn)
+            )
             cursor.execute(
                 """
                 UPDATE chat_messages
@@ -88,7 +91,9 @@ def update_conversation_summary(
 ) -> None:
     if conn is None:
         with transaction() as tx:
-            return update_conversation_summary(user_id, conversation_id, summary, summary_message_id, conn=tx)
+            return update_conversation_summary(
+                user_id, conversation_id, summary, summary_message_id, conn=tx
+            )
 
     with conn.cursor() as cursor:
         cursor.execute(
@@ -167,6 +172,49 @@ def add_chat_turn(
             conn=conn,
         )
         return user_message_id, assistant_message_id
+
+
+def count_user_messages(user_id: str, conversation_id: str) -> int:
+    with get_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS message_count
+                FROM chat_messages
+                WHERE user_id = %s
+                  AND conversation_id = %s
+                  AND role = 'user'
+                  AND status = 'active'
+                """,
+                (user_id, conversation_id),
+            )
+            row = cursor.fetchone()
+    return int(row["message_count"]) if row else 0
+
+
+def list_recent_user_messages(
+    user_id: str,
+    conversation_id: str,
+    limit: int,
+) -> tuple[tuple[int, str], ...]:
+    with get_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, content
+                FROM chat_messages
+                WHERE user_id = %s
+                  AND conversation_id = %s
+                  AND role = 'user'
+                  AND status = 'active'
+                ORDER BY id DESC
+                LIMIT %s
+                """,
+                (user_id, conversation_id, limit),
+            )
+            rows = cursor.fetchall()
+    rows.reverse()
+    return tuple((int(row["id"]), str(row["content"])) for row in rows)
 
 
 def clear_context(user_id: str) -> tuple[int, int]:

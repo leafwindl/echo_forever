@@ -54,6 +54,8 @@ def schedule_memory_extraction(
     user_message: str,
     assistant_reply: str,
     source_message_id: int | None = None,
+    candidate_user_messages: tuple[tuple[int, str], ...] = (),
+    force_batch_review: bool = False,
 ) -> MemoryGateResult:
     """稳定的模块入口：供 Chat 在一轮对话完成后调度记忆抽取。"""
     service = get_memory_extraction_service()
@@ -62,6 +64,8 @@ def schedule_memory_extraction(
         user_message=user_message,
         assistant_reply=assistant_reply,
         source_message_id=source_message_id,
+        candidate_user_messages=candidate_user_messages,
+        force_batch_review=force_batch_review,
     )
 
 
@@ -69,6 +73,7 @@ def resume_pending_memory_extraction_jobs(limit: int = 20) -> int:
     """稳定的模块入口：供应用启动时恢复持久化后台任务。"""
     service = get_memory_extraction_service()
     return service.resume_pending_memory_extraction_jobs(limit=limit)
+
 
 __all__ = [
     "MEMORY_EXTRACTION_JOB_TYPE",

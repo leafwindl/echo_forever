@@ -28,6 +28,8 @@ class MemoryExtractionScheduler(Protocol):
         user_message: str,
         assistant_reply: str,
         source_message_id: int,
+        candidate_user_messages: tuple[tuple[int, str], ...],
+        force_batch_review: bool,
     ) -> MemoryExtractionScheduleResult: ...
 
 

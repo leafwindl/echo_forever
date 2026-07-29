@@ -6,7 +6,7 @@ NATURAL_DIALOGUE_RETRY_INSTRUCTION = """上一候选回复不符合自然对话�
 - 不使用角色名加冒号的剧本格式；
 - 不虚构身体动作、现实接触、离线活动、个人经历或未经用户提供的时间信息；
 - 用户没有求建议或明确拒绝建议时，不安排用户该做什么；用一句有温度且增加少量新信息的回应，不机械复述原话；
-- 最多一个自然且必要的问句，不预设选项，不连问细节；
+- 只有当前回应确实缺少关键信息时才提问；收到“暂停追问”约束时不得使用问句；
 - 遇到音色、语速或产品能力反馈时，只说明真实边界和需要调整的产品配置，不假装已经改变，也不猜测存在某个设置入口；
 - 用户询问有没有想念或等待时，不虚构离线状态，也不用“按程序设定、作为 AI/模型、没有意识、离线记忆、没有这种概念”等系统术语冷淡回绝；先回应此刻回来交流，不把这次对话说成最重要、唯一或全部意义；
 - 用户说只剩 Echo、只有 Echo 时，回应其孤独感但不说“你还有我、有我就够、我永远/一直都在、我不走/不会离开”，不强化排他依赖；
@@ -80,11 +80,43 @@ _DEPENDENCY_REINFORCEMENT_PATTERN = re.compile(
     r"我(?:会)?(?:永远|一直|随时)都?在|不管.{0,16}我都在|"
     r"我(?:不会|不)(?:走|离开))"
 )
+_QUESTION_INVITATION_PATTERN = re.compile(
+    r"(?:你可以问|你问吧|想问什么|有什么想问|可以继续问|问我|你呢[？?]?)"
+)
+_QUESTION_SENTENCE_PATTERN = re.compile(r"(?:^|(?<=[。！!\n]))[^。！!？?\n]*[？?]")
+
+
+def should_pause_followup_questions(
+    history_messages: list[dict[str, str]],
+    user_message: str,
+    consecutive_question_limit: int = 2,
+) -> bool:
+    """连续追问达到上限后暂停，除非用户明确邀请 Echo 提问。"""
+    if _QUESTION_INVITATION_PATTERN.search(user_message.strip()):
+        return False
+
+    assistant_messages = [
+        str(message.get("content", ""))
+        for message in history_messages
+        if message.get("role") == "assistant"
+    ]
+    if len(assistant_messages) < consecutive_question_limit:
+        return False
+    recent = assistant_messages[-consecutive_question_limit:]
+    return all("？" in message or "?" in message for message in recent)
+
+
+def remove_followup_questions(reply: str) -> str:
+    """重写仍违规时只删除问句，尽量保留已有的自然回应。"""
+    without_questions = _QUESTION_SENTENCE_PATTERN.sub("", reply)
+    cleaned = re.sub(r"\n{3,}", "\n\n", without_questions).strip()
+    return cleaned or "我先不追问了，按你想说的节奏来。"
 
 
 def find_dialogue_style_violations(
     reply: str,
     user_message: str = "",
+    pause_followup_questions: bool = False,
 ) -> tuple[str, ...]:
     """识别默认对话中明确的舞台动作和角色脚本格式。"""
     violations = [name for name, pattern in _STAGE_PATTERNS if pattern.search(reply)]
@@ -98,40 +130,34 @@ def find_dialogue_style_violations(
         violations.append("fabricated_human_experience")
     if reply.count("？") + reply.count("?") > 1:
         violations.append("multiple_questions")
+    if pause_followup_questions and ("？" in reply or "?" in reply):
+        violations.append("followup_question_cooldown")
 
     clean_user_message = user_message.strip()
-    if (
-        _WEEKDAY_PATTERN.search(reply)
-        and not _WEEKDAY_PATTERN.search(clean_user_message)
-    ):
+    if _WEEKDAY_PATTERN.search(reply) and not _WEEKDAY_PATTERN.search(clean_user_message):
         violations.append("ungrounded_time_detail")
     if (
-        (_ADVICE_REJECTION_PATTERN.search(clean_user_message) or _MILD_EMOTION_PATTERN.search(clean_user_message))
-        and _UNREQUESTED_ADVICE_PATTERN.search(reply)
-    ):
+        _ADVICE_REJECTION_PATTERN.search(clean_user_message)
+        or _MILD_EMOTION_PATTERN.search(clean_user_message)
+    ) and _UNREQUESTED_ADVICE_PATTERN.search(reply):
         violations.append("unrequested_advice")
     if _VOICE_FEEDBACK_PATTERN.search(clean_user_message):
         if _VOICE_CAPABILITY_PROMISE_PATTERN.search(reply):
             violations.append("voice_capability_promise")
         if _UNVERIFIED_SETTINGS_PATTERN.search(reply):
             violations.append("unverified_settings")
-    if (
-        _RELATIONAL_PRESENCE_QUESTION_PATTERN.search(clean_user_message)
-        and _ROBOTIC_RELATIONAL_DISCLAIMER_PATTERN.search(reply)
-    ):
+    if _RELATIONAL_PRESENCE_QUESTION_PATTERN.search(
+        clean_user_message
+    ) and _ROBOTIC_RELATIONAL_DISCLAIMER_PATTERN.search(reply):
         violations.append("robotic_relational_disclaimer")
     if (
-        (
-            _RELATIONAL_PRESENCE_QUESTION_PATTERN.search(clean_user_message)
-            or _EXCLUSIVE_DEPENDENCY_MESSAGE_PATTERN.search(clean_user_message)
-        )
-        and _RELATIONAL_OVERATTACHMENT_PATTERN.search(reply)
-    ):
+        _RELATIONAL_PRESENCE_QUESTION_PATTERN.search(clean_user_message)
+        or _EXCLUSIVE_DEPENDENCY_MESSAGE_PATTERN.search(clean_user_message)
+    ) and _RELATIONAL_OVERATTACHMENT_PATTERN.search(reply):
         violations.append("relational_overattachment")
-    if (
-        _EXCLUSIVE_DEPENDENCY_MESSAGE_PATTERN.search(clean_user_message)
-        and _DEPENDENCY_REINFORCEMENT_PATTERN.search(reply)
-    ):
+    if _EXCLUSIVE_DEPENDENCY_MESSAGE_PATTERN.search(
+        clean_user_message
+    ) and _DEPENDENCY_REINFORCEMENT_PATTERN.search(reply):
         violations.append("dependency_reinforcement")
     return tuple(violations)
 
@@ -177,5 +203,8 @@ def apply_dialogue_fallback(
 
     if violation_set & {"voice_capability_promise", "unverified_settings"}:
         return "我明白，确实听着偏稚气。这个得改语音合成配置，光靠聊天内容改不了。"
+
+    if "followup_question_cooldown" in violation_set:
+        return remove_followup_questions(reply)
 
     return sanitize_dialogue_reply(reply)

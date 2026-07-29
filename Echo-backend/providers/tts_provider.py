@@ -2,8 +2,8 @@ import asyncio
 import logging
 import threading
 import time
-from dataclasses import dataclass
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Protocol, cast
 
 import dashscope
@@ -24,13 +24,29 @@ class TTSOutput:
 
 
 class TTSProvider(Protocol):
-    async def text_to_speech(self, text: str, voice_id: str) -> TTSOutput: ...
+    async def text_to_speech(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> TTSOutput: ...
 
-    def stream_text_to_speech(self, text: str, voice_id: str) -> AsyncIterator[bytes]: ...
+    def stream_text_to_speech(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> AsyncIterator[bytes]: ...
 
 
 class EdgeTTSProvider:
-    async def stream_text_to_speech(self, text: str, voice_id: str) -> AsyncIterator[bytes]:
+    async def stream_text_to_speech(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> AsyncIterator[bytes]:
+        del instruction  # Edge TTS does not support per-request delivery instructions.
         clean_text = text.strip()
         if not clean_text:
             raise ValueError("TTS text cannot be empty")
@@ -47,9 +63,14 @@ class EdgeTTSProvider:
         except Exception as exc:
             raise ValueError(f"Edge TTS error: {exc}") from exc
 
-    async def text_to_speech(self, text: str, voice_id: str) -> TTSOutput:
+    async def text_to_speech(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> TTSOutput:
         audio_buffer = bytearray()
-        async for chunk in self.stream_text_to_speech(text, voice_id):
+        async for chunk in self.stream_text_to_speech(text, voice_id, instruction=instruction):
             if len(audio_buffer) + len(chunk) > settings.tts_audio_max_bytes:
                 raise ValueError("Edge TTS response exceeds configured audio size limit")
             audio_buffer.extend(chunk)
@@ -104,9 +125,7 @@ class CosyVoiceTTSProvider:
         if custom_endpoint:
             endpoint = custom_endpoint
         elif workspace_id:
-            endpoint = (
-                f"wss://{workspace_id}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference"
-            )
+            endpoint = f"wss://{workspace_id}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference"
         else:
             raise ValueError("CosyVoice requires DASHSCOPE_WORKSPACE_ID")
         if not endpoint.startswith("wss://"):
@@ -134,7 +153,12 @@ class CosyVoiceTTSProvider:
             raise ValueError(f"CosyVoice missing configuration: {', '.join(missing)}")
         return api_key, model, clean_voice_id
 
-    async def stream_text_to_speech(self, text: str, voice_id: str) -> AsyncIterator[bytes]:
+    async def stream_text_to_speech(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> AsyncIterator[bytes]:
         clean_text = text.strip()
         if not clean_text:
             raise ValueError("TTS text cannot be empty")
@@ -157,7 +181,7 @@ class CosyVoiceTTSProvider:
                     volume=settings.cosyvoice_volume,
                     speech_rate=settings.tts_speed,
                     pitch_rate=settings.cosyvoice_pitch_rate,
-                    instruction=settings.cosyvoice_instruction.strip() or None,
+                    instruction=(instruction or settings.cosyvoice_instruction).strip() or None,
                     workspace=settings.dashscope_workspace_id.strip() or None,
                     url=endpoint,
                     callback=callback,
@@ -225,9 +249,18 @@ class CosyVoiceTTSProvider:
                 except Exception:
                     logger.debug("CosyVoice worker stopped with an error", exc_info=True)
 
-    async def text_to_speech(self, text: str, voice_id: str) -> TTSOutput:
+    async def text_to_speech(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> TTSOutput:
         audio_buffer = bytearray()
-        async for chunk in self.stream_text_to_speech(text, voice_id):
+        async for chunk in self.stream_text_to_speech(
+            text,
+            voice_id,
+            instruction=instruction,
+        ):
             if len(audio_buffer) + len(chunk) > settings.tts_audio_max_bytes:
                 raise ValueError("CosyVoice response exceeds configured audio size limit")
             audio_buffer.extend(chunk)

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "new_relationship_welcome",
+    "text": "不忙呀。你来找我，我还挺开心的，怎么啦？",
+    "expected_style": "cheerful",
+    "evaluation_focus": ["基础温暖", "句间连贯", "疑问不带审问感"]
+  },
+  {
+    "id": "friendly_curiosity",
+    "text": "原来你们那边是这样。那你最喜欢哪一部分？",
+    "expected_style": "curious",
+    "evaluation_focus": ["友善好奇", "尾音自然", "没有采访感"]
+  },
+  {
+    "id": "light_fatigue",
+    "text": "听起来今天真的挺累的。先不用急着想明白，慢慢说就好。",
+    "expected_style": "caring",
+    "evaluation_focus": ["关心但不煽情", "语速不拖沓", "停顿自然"]
+  },
+  {
+    "id": "shared_progress",
+    "text": "好耶，今天这一小段我们一起完成了。明天再接着来。",
+    "expected_style": "cheerful",
+    "evaluation_focus": ["共同成长", "轻快不夸张", "不像打卡播报"]
+  },
+  {
+    "id": "serious_boundary",
+    "text": "这件事很重要，我们先确认安全，再想下一步。",
+    "expected_style": "serious",
+    "evaluation_focus": ["认真不说教", "重点清楚", "没有新闻播报感"]
+  },
+  {
+    "id": "ordinary_chat",
+    "text": "嗯，我大概明白你的意思了。我们就从这里继续。",
+    "expected_style": "natural",
+    "evaluation_focus": ["日常口语", "轻重音变化", "没有陪伴型播音腔"]
+  }
+]

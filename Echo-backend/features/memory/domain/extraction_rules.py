@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Dict, List, Optional
 
 from features.memory.domain.entities import Memory, MemoryGateResult
@@ -65,8 +66,34 @@ MEMORY_TRIGGER_KEYWORDS = (
     "from now on",
 )
 
+SEMANTIC_MEMORY_PATTERNS = (
+    (
+        "identity",
+        re.compile(
+            r"(?:我是|作为).{0,48}(?:学生|研究生|博士|老师|工程师|设计师|医生|开发者|从事|专业|方向)"
+        ),
+    ),
+    (
+        "goal",
+        re.compile(
+            r"(?:我想|我希望|我要|目标是).{0,64}(?:做出|实现|成为|完成|改进|优化|学习|研究|开发|坚持)"
+        ),
+    ),
+    (
+        "relationship_preference",
+        re.compile(r"(?:我希望|我更喜欢|我想要).{0,24}(?:交流|聊天|关系|相处).{0,64}"),
+    ),
+    (
+        "stable_preference",
+        re.compile(r"(?:对我来说|我通常|我一直|我比较).{1,64}(?:喜欢|不喜欢|在意|重视|习惯|偏好)"),
+    ),
+)
 
-def should_extract_memory(user_message: str) -> MemoryGateResult:
+
+def should_extract_memory(
+    user_message: str,
+    force_batch_review: bool = False,
+) -> MemoryGateResult:
     """在调用 LLM 前先做轻量判断，避免每轮对话都消耗抽取成本。"""
     text = user_message.strip()
     if not text:
@@ -76,6 +103,13 @@ def should_extract_memory(user_message: str) -> MemoryGateResult:
     for keyword in MEMORY_TRIGGER_KEYWORDS:
         if keyword in normalized_text:
             return MemoryGateResult(True, f"keyword:{keyword}")
+
+    for signal_name, pattern in SEMANTIC_MEMORY_PATTERNS:
+        if pattern.search(text):
+            return MemoryGateResult(True, f"semantic:{signal_name}")
+
+    if force_batch_review:
+        return MemoryGateResult(True, "periodic_batch_review")
 
     return MemoryGateResult(False, "no_memory_signal")
 
@@ -127,12 +161,14 @@ def build_extraction_messages(
 ) -> list[dict]:
     """构建只允许 JSON 输出的提示词，让应用层能稳定解析操作。"""
     prompt = f"""
-请从当前这一轮对话中判断是否有值得长期记住的用户信息。
+请从下面的用户原话候选中判断是否有值得长期记住的用户信息。
 
 可以记住：
 - 用户明确表达的稳定身份、称呼、偏好、目标、关系、重要事件、交互边界
 - 用户明确说“记住”“以后”“我喜欢/不喜欢”“叫我”等长期倾向
 - 用户纠正了之前的信息
+- 记忆内容只能来自“用户原话候选”；Echo 回复只用于理解指代，不得作为用户事实来源
+- 用户对长期交流方式的明确期待（如真诚、稳定、少追问）属于 relationship 或 preference，不能因为它不是个人资料而忽略
 
 不要记住：
 - 一次性的普通情绪或闲聊
@@ -143,7 +179,7 @@ def build_extraction_messages(
 已有长期记忆：
 {format_existing_memories(existing_memories)}
 
-当前用户消息：
+用户原话候选（可能包含最近多轮）：
 {user_message}
 
 当前 Echo 回复：
@@ -155,6 +191,7 @@ def build_extraction_messages(
     {{
       "action": "create | update | deactivate | ignore",
       "target_memory_id": "需要更新或失效的已有 memory_id，没有则为空字符串",
+      "source_message_id": "事实对应的用户原话 source_message_id；候选没有 ID 时填 0",
       "memory_type": "profile | preference | relationship | goal | event | boundary",
       "content": "用一句中文写成稳定、可复用的记忆",
       "confidence": 0.0,
