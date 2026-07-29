@@ -3,6 +3,8 @@ export interface Message {
   sender: 'user' | 'echo';
   content: string;
   isTyping?: boolean;
+  stickerUrl?: string;
+  sources?: Array<{ title: string; url: string }>;
 }
 
 export interface RequestInProgressError {

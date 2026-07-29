@@ -71,6 +71,43 @@ export interface MemoryItem {
 export interface ChatSendResponse {
   reply: string;
   audioUrls: string[];
+  contentParts: ChatContentPart[];
+  sources: ChatSource[];
+}
+
+export interface ChatContentPart {
+  type: 'text' | 'sticker';
+  text?: string;
+  sticker_id?: string;
+  url?: string;
+}
+
+export interface ChatSource {
+  title: string;
+  url: string;
+  snippet?: string;
+  published_at?: string;
+}
+
+export interface DailyLetter {
+  letter_id: string;
+  local_date: string;
+  timezone: string;
+  status: 'ready' | 'read';
+  subject: string;
+  content: string;
+  published_at?: string;
+  read_at?: string;
+}
+
+export interface StickerItem {
+  sticker_id: string;
+  owner_type: 'echo' | 'user';
+  source: 'builtin' | 'generated' | 'uploaded';
+  url: string;
+  description: string;
+  semantic_tags: string[];
+  status: string;
 }
 
 export interface ClearChatContextResponse {
@@ -190,6 +227,8 @@ export function sendMessage(
             audioUrls: Array.isArray(data.audio_urls)
               ? data.audio_urls.filter((url: unknown) => typeof url === 'string' && url)
               : [],
+            contentParts: Array.isArray(data.content_parts) ? data.content_parts : [],
+            sources: Array.isArray(data.sources) ? data.sources : [],
           });
         } else if (res.statusCode === 409) {
           reject({ ...data, isRequestInProgress: true });
@@ -202,6 +241,93 @@ export function sendMessage(
         }
       },
       fail: (err) => reject(err),
+    });
+  });
+}
+
+export function listLetters(limit = 20): Promise<{ items: DailyLetter[]; unreadCount: number }> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}/letters`,
+      method: 'GET',
+      header: getJsonHeader(),
+      data: { limit },
+      success: (res: any) => {
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200 && data && Array.isArray(data.items)) {
+          resolve({ items: data.items, unreadCount: Number(data.unread_count || 0) });
+        } else if (res.statusCode === 401) reject({ ...data, isUnauthorized: true });
+        else reject(data);
+      },
+      fail: reject,
+    });
+  });
+}
+
+export function markLetterRead(letterId: string): Promise<DailyLetter> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}/letters/${encodeURIComponent(letterId)}/read`,
+      method: 'POST',
+      header: getJsonHeader(),
+      data: {},
+      success: (res: any) => {
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200) resolve(data as DailyLetter);
+        else if (res.statusCode === 401) reject({ ...data, isUnauthorized: true });
+        else reject(data);
+      },
+      fail: reject,
+    });
+  });
+}
+
+export function listStickers(query = ''): Promise<StickerItem[]> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}/stickers`, method: 'GET', header: getJsonHeader(), data: { query },
+      success: (res: any) => {
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200 && data && Array.isArray(data.items)) resolve(data.items);
+        else reject(data);
+      }, fail: reject,
+    });
+  });
+}
+
+export function uploadSticker(filePath: string): Promise<StickerItem> {
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: `${BASE_URL}/stickers/upload`, filePath, name: 'file', header: getAuthHeader(),
+      success: (res: any) => {
+        const data = normalizeResponseData(res.data);
+        if (res.statusCode === 200) resolve(data as StickerItem);
+        else reject(data);
+      }, fail: reject,
+    });
+  });
+}
+
+export function confirmSticker(stickerId: string): Promise<StickerItem> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}/stickers/${encodeURIComponent(stickerId)}/confirm-save`,
+      method: 'POST', header: getJsonHeader(), data: {},
+      success: (res: any) => res.statusCode === 200
+        ? resolve(normalizeResponseData(res.data) as StickerItem)
+        : reject(normalizeResponseData(res.data)),
+      fail: reject,
+    });
+  });
+}
+
+export function deleteSticker(stickerId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: `${BASE_URL}/stickers/${encodeURIComponent(stickerId)}`,
+      method: 'DELETE', header: getJsonHeader(),
+      success: (res: any) => res.statusCode === 204 ? resolve() : reject(res.data),
+      fail: reject,
     });
   });
 }

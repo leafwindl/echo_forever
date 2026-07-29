@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from features.agent.domain.entities import ContentPart, SourceReference
+
 CONVERSATION_MODES = ("chat", "call")
 
 
@@ -42,12 +44,16 @@ class ChatTurnResult:
     memory_extraction_scheduled: bool = False
     memory_extraction_gate_reason: str = ""
     memory_extraction_job_id: str = ""
+    sources: tuple[SourceReference, ...] = ()
+    content_parts: tuple[ContentPart, ...] = ()
 
 
 @dataclass(frozen=True)
 class ChatReplyDeliveryResult:
     reply: str
     audio_urls: tuple[str, ...] = ()
+    sources: tuple[SourceReference, ...] = ()
+    content_parts: tuple[ContentPart, ...] = ()
 
 
 @dataclass(frozen=True)

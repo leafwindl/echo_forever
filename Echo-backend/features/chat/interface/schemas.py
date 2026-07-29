@@ -22,6 +22,22 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     audio_urls: list[str] = Field(default_factory=list)
+    content_parts: list["ChatContentPart"] = Field(default_factory=list)
+    sources: list["ChatSource"] = Field(default_factory=list)
+
+
+class ChatContentPart(BaseModel):
+    type: Literal["text", "sticker"]
+    text: str = ""
+    sticker_id: str = ""
+    url: str = ""
+
+
+class ChatSource(BaseModel):
+    title: str
+    url: str
+    snippet: str = ""
+    published_at: str | None = None
 
 
 class ClearChatResponse(BaseModel):

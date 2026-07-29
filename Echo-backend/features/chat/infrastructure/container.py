@@ -5,6 +5,7 @@ from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.application.send_message import SendChatMessage
 from features.chat.infrastructure.adapters import (
     ChatContextProviderAdapter,
+    ChatAgentEnricherAdapter,
     ChatContextRepositoryAdapter,
     ChatConversationRepositoryAdapter,
     ChatLLMAdapter,
@@ -30,6 +31,7 @@ def get_generate_chat_reply_use_case() -> GenerateChatReply:
             summary_updater=ConversationSummaryUpdaterAdapter(),
             memory_scheduler=MemoryExtractionSchedulerAdapter(),
             relationship_recorder=RelationshipTurnRecorderAdapter(),
+            agent_enricher=ChatAgentEnricherAdapter(),
             summary_update_in_background=True,
         )
     return _generate_chat_reply_use_case

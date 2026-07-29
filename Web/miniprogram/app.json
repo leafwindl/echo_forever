@@ -5,6 +5,8 @@
     "pages/call/call",
     "pages/memory/memory",
     "pages/persona/persona"
+    ,"pages/letters/letters",
+    "pages/stickers/stickers"
   ],
   "window": {
     "navigationBarTitleText": "Echo",

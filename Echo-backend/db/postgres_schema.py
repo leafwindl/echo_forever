@@ -170,6 +170,120 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS agent_runs (
+            id BIGSERIAL PRIMARY KEY,
+            run_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            trigger_type VARCHAR(32) NOT NULL,
+            trigger_id TEXT,
+            status VARCHAR(32) NOT NULL DEFAULT 'pending',
+            objective TEXT NOT NULL DEFAULT '',
+            step_count INTEGER NOT NULL DEFAULT 0,
+            max_steps INTEGER NOT NULL DEFAULT 6,
+            error_code TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            started_at TIMESTAMPTZ,
+            finished_at TIMESTAMPTZ
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS agent_tool_calls (
+            id BIGSERIAL PRIMARY KEY,
+            tool_call_id TEXT NOT NULL UNIQUE,
+            run_id TEXT NOT NULL,
+            tool_name VARCHAR(80) NOT NULL,
+            status VARCHAR(32) NOT NULL DEFAULT 'pending',
+            input_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+            output_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+            error_code TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            started_at TIMESTAMPTZ,
+            finished_at TIMESTAMPTZ
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS daily_letters (
+            id BIGSERIAL PRIMARY KEY,
+            letter_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            local_date DATE NOT NULL,
+            timezone TEXT NOT NULL,
+            status VARCHAR(32) NOT NULL DEFAULT 'pending',
+            subject TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            source_message_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+            generation_version TEXT NOT NULL,
+            scheduled_at TIMESTAMPTZ,
+            generated_at TIMESTAMPTZ,
+            published_at TIMESTAMPTZ,
+            read_at TIMESTAMPTZ,
+            failure_code TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(user_id, local_date, generation_version)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS letter_preferences (
+            user_id TEXT PRIMARY KEY,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',
+            publish_time TIME NOT NULL DEFAULT '08:00',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS stickers (
+            id BIGSERIAL PRIMARY KEY,
+            sticker_id TEXT NOT NULL UNIQUE,
+            owner_type VARCHAR(16) NOT NULL,
+            owner_user_id TEXT,
+            source VARCHAR(16) NOT NULL,
+            storage_key TEXT NOT NULL,
+            public_url TEXT,
+            content_type TEXT NOT NULL,
+            width INTEGER,
+            height INTEGER,
+            byte_size BIGINT NOT NULL DEFAULT 0,
+            perceptual_hash TEXT,
+            description TEXT NOT NULL DEFAULT '',
+            semantic_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+            status VARCHAR(16) NOT NULL DEFAULT 'processing',
+            moderation_status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS sticker_generation_jobs (
+            id BIGSERIAL PRIMARY KEY,
+            job_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            normalized_intent TEXT NOT NULL DEFAULT '',
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            generated_sticker_id TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            error_code TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            finished_at TIMESTAMPTZ
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS chat_message_attachments (
+            id BIGSERIAL PRIMARY KEY,
+            attachment_id TEXT NOT NULL UNIQUE,
+            message_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            attachment_type VARCHAR(24) NOT NULL,
+            resource_id TEXT NOT NULL,
+            position INTEGER NOT NULL DEFAULT 0,
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
         "CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_users_openid ON users(openid)",
         "CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)",
@@ -208,6 +322,15 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_background_jobs_type_created ON background_jobs(job_type, created_at)",
         "CREATE INDEX IF NOT EXISTS idx_voice_files_user_created ON voice_files(user_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_voice_files_status_expires ON voice_files(status, expires_at)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_runs_user_created ON agent_runs(user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_runs_status_created ON agent_runs(status, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_agent_tool_calls_run_created ON agent_tool_calls(run_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_daily_letters_user_published ON daily_letters(user_id, published_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_daily_letters_status_scheduled ON daily_letters(status, scheduled_at)",
+        "CREATE INDEX IF NOT EXISTS idx_stickers_owner_status ON stickers(owner_user_id, status, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_stickers_hash ON stickers(perceptual_hash)",
+        "CREATE INDEX IF NOT EXISTS idx_sticker_jobs_status_created ON sticker_generation_jobs(status, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_chat_attachments_message ON chat_message_attachments(message_id, position)",
     ]
 
 

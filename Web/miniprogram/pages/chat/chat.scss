@@ -42,6 +42,32 @@ $line: #f0dce3;
   overflow: hidden;
 }
 
+.letter-entry {
+  position: absolute;
+  z-index: 4;
+  top: 32rpx;
+  right: 34rpx;
+  width: 76rpx;
+  height: 76rpx;
+  color: #9b6272;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1rpx solid rgba(233, 111, 138, 0.24);
+  border-radius: 38rpx;
+  box-shadow: 0 8rpx 24rpx rgba(137, 74, 91, 0.12);
+  text-align: center;
+}
+
+.letter-icon { font-size: 40rpx; line-height: 76rpx; }
+.letter-badge {
+  position: absolute; top: -8rpx; right: -5rpx; min-width: 32rpx; height: 32rpx;
+  padding: 0 7rpx; color: #fff; background: #e96f8a; border-radius: 18rpx;
+  box-sizing: border-box; font-size: 20rpx; line-height: 32rpx;
+}
+
+.sticker-image { display: block; width: 240rpx; height: 240rpx; margin-top: 12rpx; }
+.source-list { margin-top: 12rpx; padding-top: 10rpx; border-top: 1rpx solid #efdce2; }
+.source-item { margin-top: 6rpx; color: #a56378; font-size: 21rpx; line-height: 30rpx; }
+
 .chat-container {
   position: relative;
   z-index: 2;

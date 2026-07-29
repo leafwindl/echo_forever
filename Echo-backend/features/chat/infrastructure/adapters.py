@@ -1,5 +1,6 @@
 import threading
 
+from features.agent.public import enrich_chat
 from providers.llm_provider import get_llm_provider
 from shared.config import settings
 
@@ -7,6 +8,7 @@ from features.chat.domain.entities import ChatContext, MemoryExtractionScheduleR
 from features.chat.domain.repositories import ChatContextRepository, ChatConversationRepository
 from features.chat.domain.services import (
     ChatContextProvider,
+    ChatAgentEnricher,
     ChatLLM,
     ChatRequestGuard,
     ChatVoiceReplySynthesizer,
@@ -20,6 +22,11 @@ from features.chat.infrastructure.conversation_summary import maybe_update_conve
 from features.memory.public import schedule_memory_extraction
 from features.persona.public import get_persona
 from features.relationship.public import record_relationship_turn
+
+
+class ChatAgentEnricherAdapter(ChatAgentEnricher):
+    async def enrich(self, user_id: str, message: str):
+        return await enrich_chat(user_id, message)
 
 
 class InMemoryChatRequestGuard(ChatRequestGuard):

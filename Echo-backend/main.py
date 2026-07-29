@@ -19,6 +19,10 @@ from features.relationship.interface.router import router as relationship_router
 from features.system.interface.router import router as health_router
 from features.voice.interface.router import router as voice_router
 from features.voice.public import cleanup_expired_voice_audio
+from features.letters.interface.router import router as letters_router
+from features.letters.public import generate_due_letters
+from features.stickers.interface.router import router as stickers_router
+from features.stickers.public import generate_pending_stickers
 from shared.config import settings
 from shared.security import install_sensitive_data_filter
 
@@ -56,6 +60,26 @@ async def run_voice_audio_cleanup_loop() -> None:
         await run_voice_audio_cleanup_once()
 
 
+async def run_daily_letter_loop() -> None:
+    while True:
+        try:
+            created = await generate_due_letters()
+            if created:
+                logger.info("Daily letter generation finished created=%s", created)
+        except Exception:
+            logger.warning("Daily letter worker failed", exc_info=True)
+        await asyncio.sleep(settings.daily_letter_worker_interval_seconds)
+
+
+async def run_sticker_generation_loop() -> None:
+    while True:
+        try:
+            await generate_pending_stickers()
+        except Exception:
+            logger.warning("Sticker generation worker failed", exc_info=True)
+        await asyncio.sleep(10)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Uvicorn installs its handlers after importing the app, so attach the filter again here.
@@ -72,8 +96,14 @@ async def lifespan(app: FastAPI):
 
     await run_voice_audio_cleanup_once()
     voice_cleanup_task: asyncio.Task[None] | None = None
+    daily_letter_task: asyncio.Task[None] | None = None
+    sticker_generation_task: asyncio.Task[None] | None = None
     if settings.voice_cleanup_interval_seconds > 0:
         voice_cleanup_task = asyncio.create_task(run_voice_audio_cleanup_loop())
+    if settings.daily_letter_enabled:
+        daily_letter_task = asyncio.create_task(run_daily_letter_loop())
+    if settings.sticker_generation_enabled:
+        sticker_generation_task = asyncio.create_task(run_sticker_generation_loop())
 
     try:
         yield
@@ -82,6 +112,14 @@ async def lifespan(app: FastAPI):
             voice_cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await voice_cleanup_task
+        if daily_letter_task:
+            daily_letter_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await daily_letter_task
+        if sticker_generation_task:
+            sticker_generation_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await sticker_generation_task
         logger.info("Echo Backend 已停止。")
 
 
@@ -129,6 +167,8 @@ def create_app() -> FastAPI:
     app.include_router(persona_router)
     app.include_router(relationship_router)
     app.include_router(voice_router)
+    app.include_router(letters_router)
+    app.include_router(stickers_router)
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     return app

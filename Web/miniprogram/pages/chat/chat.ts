@@ -1,6 +1,6 @@
-import { clearChatContext, getPersona, sendMessage } from '../../utils/api';
+import { clearChatContext, getPersona, listLetters, sendMessage } from '../../utils/api';
 import { clearSession, ensureSession } from '../../utils/session';
-import { createMessage, replaceMessageContent } from './chat.messages';
+import { createMessage, replaceMessageContent, replaceMessagePayload } from './chat.messages';
 import type { Message, RequestInProgressError } from './chat.types';
 
 interface ChatPageData {
@@ -14,6 +14,7 @@ interface ChatPageData {
   lastMsgId: string;
   msgIdCounter: number;
   chatExpanded: boolean;
+  unreadLetterCount: number;
   sitCrop: {
     cropWidth: string;
     cropHeight: string;
@@ -39,6 +40,7 @@ Page({
     lastMsgId: '',
     msgIdCounter: 0,
     chatExpanded: false,
+    unreadLetterCount: 0,
     sitCrop: {
       cropWidth: '750rpx',
       cropHeight: '500rpx',
@@ -81,6 +83,7 @@ Page({
           : '嗨，我在呢。今天想聊点什么？';
         this.addMessage('echo', greeting);
       }
+      void this.refreshLetters();
     } catch (error) {
       const requestError = error as RequestInProgressError;
       if (requestError.isUnauthorized && !forceLogin) {
@@ -105,6 +108,7 @@ Page({
         return;
       }
       this.setData({ displayName: (preferences.preferred_name || '').trim() });
+      void this.refreshLetters();
     } catch (error) {
       const requestError = error as RequestInProgressError;
       if (requestError.isUnauthorized) this.expireSession();
@@ -139,10 +143,17 @@ Page({
 
     try {
       const response = await sendMessage(text, 'chat');
-      this.updateMessage(
-        pendingMessageId,
-        response.reply || '（我刚刚没组织好语言，可以再说一次吗？）',
-      );
+      const sticker = response.contentParts.find((part) => part.type === 'sticker');
+      this.setData({
+        messages: replaceMessagePayload(
+          this.data.messages,
+          pendingMessageId,
+          response.reply || '（我刚刚没组织好语言，可以再说一次吗？）',
+          sticker?.url || '',
+          response.sources.map((source) => ({ title: source.title, url: source.url })),
+        ),
+        lastMsgId: `msg-${pendingMessageId}`,
+      });
     } catch (error) {
       console.error('发送消息失败', error);
       const requestError = error as RequestInProgressError;
@@ -187,13 +198,34 @@ Page({
   onOpenTools() {
     if (!this.data.isReady) return;
     wx.showActionSheet({
-      itemList: ['个性化设置', '记忆管理', '清除聊天上下文'],
+      itemList: ['个性化设置', '记忆管理', 'Echo 来信', '表情包库', '清除聊天上下文'],
       success: (result) => {
         if (result.tapIndex === 0) wx.navigateTo({ url: '/pages/persona/persona' });
         if (result.tapIndex === 1) wx.navigateTo({ url: '/pages/memory/memory' });
-        if (result.tapIndex === 2) this.confirmClearContext();
+        if (result.tapIndex === 2) this.onOpenLetters();
+        if (result.tapIndex === 3) wx.navigateTo({ url: '/pages/stickers/stickers' });
+        if (result.tapIndex === 4) this.confirmClearContext();
       },
     });
+  },
+
+  async refreshLetters() {
+    try {
+      const result = await listLetters(20);
+      this.setData({ unreadLetterCount: result.unreadCount });
+    } catch (error) {
+      console.warn('刷新来信状态失败', error);
+    }
+  },
+
+  onOpenLetters() {
+    if (!this.data.isReady) return;
+    wx.navigateTo({ url: '/pages/letters/letters' });
+  },
+
+  onOpenSource(event: WechatMiniprogram.BaseEvent) {
+    const url = String(event.currentTarget.dataset.url || '');
+    if (url) wx.setClipboardData({ data: url });
   },
 
   onOpenPersonaPage() {

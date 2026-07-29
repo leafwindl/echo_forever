@@ -1,5 +1,6 @@
 from typing import Protocol
 
+from features.agent.domain.entities import AgentEnrichment
 from features.chat.domain.entities import ChatContext, MemoryExtractionScheduleResult
 
 
@@ -15,6 +16,10 @@ class ChatContextProvider(Protocol):
 
 class ChatLLM(Protocol):
     async def generate_reply(self, messages: list[dict]) -> str: ...
+
+
+class ChatAgentEnricher(Protocol):
+    async def enrich(self, user_id: str, message: str) -> AgentEnrichment: ...
 
 
 class ConversationSummaryUpdater(Protocol):

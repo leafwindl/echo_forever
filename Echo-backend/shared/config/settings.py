@@ -275,6 +275,61 @@ class Settings(BaseSettings):
         ge=1,
     )
 
+    agent_enabled: bool = Field(default=True, validation_alias="AGENT_ENABLED")
+    agent_max_steps: int = Field(default=6, validation_alias="AGENT_MAX_STEPS", ge=1, le=12)
+    agent_max_tool_calls: int = Field(
+        default=4, validation_alias="AGENT_MAX_TOOL_CALLS", ge=1, le=10
+    )
+    agent_run_timeout_seconds: int = Field(
+        default=45, validation_alias="AGENT_RUN_TIMEOUT_SECONDS", ge=5, le=180
+    )
+    default_user_timezone: str = Field(
+        default="Asia/Shanghai", validation_alias="DEFAULT_USER_TIMEZONE"
+    )
+    web_search_enabled: bool = Field(default=False, validation_alias="WEB_SEARCH_ENABLED")
+    web_search_api_key: str = Field(default="", validation_alias="WEB_SEARCH_API_KEY")
+    web_search_base_url: str = Field(
+        default="https://api.tavily.com/search", validation_alias="WEB_SEARCH_BASE_URL"
+    )
+    web_search_timeout_seconds: int = Field(
+        default=12, validation_alias="WEB_SEARCH_TIMEOUT_SECONDS", ge=2, le=60
+    )
+    web_search_max_results: int = Field(
+        default=5, validation_alias="WEB_SEARCH_MAX_RESULTS", ge=1, le=10
+    )
+    daily_letter_enabled: bool = Field(default=True, validation_alias="DAILY_LETTER_ENABLED")
+    daily_letter_generation_time: str = Field(
+        default="07:45", validation_alias="DAILY_LETTER_GENERATION_TIME"
+    )
+    daily_letter_publish_time: str = Field(
+        default="08:00", validation_alias="DAILY_LETTER_PUBLISH_TIME"
+    )
+    daily_letter_worker_interval_seconds: int = Field(
+        default=60, validation_alias="DAILY_LETTER_WORKER_INTERVAL_SECONDS", ge=10
+    )
+    daily_letter_generation_version: str = Field(
+        default="letter-v1", validation_alias="DAILY_LETTER_GENERATION_VERSION"
+    )
+    sticker_enabled: bool = Field(default=True, validation_alias="STICKER_ENABLED")
+    sticker_upload_max_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        validation_alias="STICKER_UPLOAD_MAX_BYTES",
+        ge=1024,
+        le=20 * 1024 * 1024,
+    )
+    sticker_proactive_cooldown_turns: int = Field(
+        default=5, validation_alias="STICKER_PROACTIVE_COOLDOWN_TURNS", ge=1
+    )
+    sticker_generation_enabled: bool = Field(
+        default=False, validation_alias="STICKER_GENERATION_ENABLED"
+    )
+    image_generation_api_key: str = Field(
+        default="", validation_alias="IMAGE_GENERATION_API_KEY"
+    )
+    image_generation_base_url: str = Field(
+        default="", validation_alias="IMAGE_GENERATION_BASE_URL"
+    )
+
     system_prompt: str = (
         "Echo 来自一个与用户不同的世界，对用户和用户的世界抱有友善、自然的好奇。"
         "Echo 与用户从温暖但有边界的初识开始，通过共同经历、学习和进步逐渐建立长期关系。"

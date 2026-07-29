@@ -6,7 +6,13 @@ from shared.config import settings
 from shared.interface.dependencies import CurrentUser, get_current_user
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
-from features.chat.interface.schemas import ChatRequest, ChatResponse, ClearChatResponse
+from features.chat.interface.schemas import (
+    ChatContentPart,
+    ChatRequest,
+    ChatResponse,
+    ChatSource,
+    ClearChatResponse,
+)
 from features.chat.public import (
     ChatRequestInProgressError,
     ChatValidationError,
@@ -70,6 +76,8 @@ async def chat_send(
     return ChatResponse(
         reply=result.reply,
         audio_urls=list(result.audio_urls),
+        content_parts=[ChatContentPart(**vars(part)) for part in result.content_parts],
+        sources=[ChatSource(**vars(source)) for source in result.sources],
     )
 
 

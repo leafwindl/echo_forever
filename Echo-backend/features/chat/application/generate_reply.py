@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 
+from features.agent.domain.entities import AgentEnrichment
 from features.chat.domain.dialogue_style import (
     NATURAL_DIALOGUE_RETRY_INSTRUCTION,
     apply_dialogue_fallback,
@@ -10,6 +11,7 @@ from features.chat.domain.dialogue_style import (
 from features.chat.domain.entities import ChatTurnResult, ChatValidationError
 from features.chat.domain.repositories import ChatConversationRepository
 from features.chat.domain.services import (
+    ChatAgentEnricher,
     ChatContextProvider,
     ChatLLM,
     ConversationSummaryUpdater,
@@ -31,6 +33,7 @@ class GenerateChatReply:
         summary_updater: ConversationSummaryUpdater,
         memory_scheduler: MemoryExtractionScheduler,
         relationship_recorder: RelationshipTurnRecorder | None = None,
+        agent_enricher: ChatAgentEnricher | None = None,
         summary_update_in_background: bool = False,
     ):
         self.conversation_repository = conversation_repository
@@ -39,6 +42,7 @@ class GenerateChatReply:
         self.summary_updater = summary_updater
         self.memory_scheduler = memory_scheduler
         self.relationship_recorder = relationship_recorder
+        self.agent_enricher = agent_enricher
         self.summary_update_in_background = summary_update_in_background
         self._summary_tasks: set[asyncio.Task[bool]] = set()
 
@@ -161,12 +165,18 @@ class GenerateChatReply:
             resolved_conversation_id,
             conversation_mode,
         )
+        agent_enrichment = (
+            await self.agent_enricher.enrich(clean_user_id, clean_message)
+            if self.agent_enricher is not None
+            else AgentEnrichment()
+        )
         logger.info(
             "Chat context completed duration_ms=%.1f",
             (time.perf_counter() - context_started_at) * 1000,
         )
         llm_started_at = time.perf_counter()
-        reply = await self.llm.generate_reply(context.messages)
+        llm_messages = [*context.messages, *agent_enrichment.system_messages]
+        reply = await self.llm.generate_reply(llm_messages)
         style_violations = find_dialogue_style_violations(
             reply,
             clean_message,
@@ -180,7 +190,7 @@ class GenerateChatReply:
             try:
                 reply = await self.llm.generate_reply(
                     [
-                        *context.messages,
+                        *llm_messages,
                         {"role": "system", "content": NATURAL_DIALOGUE_RETRY_INSTRUCTION},
                     ]
                 )
@@ -209,7 +219,7 @@ class GenerateChatReply:
             (time.perf_counter() - llm_started_at) * 1000,
         )
 
-        return await self._complete_turn(
+        result = await self._complete_turn(
             clean_user_id=clean_user_id,
             clean_message=clean_message,
             resolved_conversation_id=resolved_conversation_id,
@@ -217,3 +227,6 @@ class GenerateChatReply:
             user_message_type=user_message_type,
             assistant_message_type=assistant_message_type,
         )
+        result.sources = agent_enrichment.sources
+        result.content_parts = agent_enrichment.content_parts
+        return result

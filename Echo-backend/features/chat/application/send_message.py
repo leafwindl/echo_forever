@@ -7,6 +7,7 @@ from features.chat.domain.entities import (
     ChatRequestInProgressError,
 )
 from features.chat.domain.services import ChatRequestGuard, ChatVoiceReplySynthesizer
+from features.agent.domain.entities import ContentPart
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,12 @@ class SendChatMessage:
                     # TTS is an enhancement; text reply and persisted chat turn still stand.
                     logger.exception("Voice synthesis failed for chat response")
 
-            return ChatReplyDeliveryResult(reply=chat_result.reply, audio_urls=audio_urls)
+            content_parts = (ContentPart(type="text", text=chat_result.reply), *chat_result.content_parts)
+            return ChatReplyDeliveryResult(
+                reply=chat_result.reply,
+                audio_urls=audio_urls,
+                sources=chat_result.sources,
+                content_parts=content_parts,
+            )
         finally:
             self.request_guard.release(clean_user_id)

@@ -23,3 +23,15 @@ export function replaceMessageContent(
     };
   });
 }
+
+export function replaceMessagePayload(
+  messages: Message[],
+  messageId: number,
+  content: string,
+  stickerUrl = '',
+  sources: Array<{ title: string; url: string }> = [],
+): Message[] {
+  return messages.map((message) => message.id === messageId
+    ? { ...message, content, stickerUrl, sources, isTyping: false }
+    : message);
+}

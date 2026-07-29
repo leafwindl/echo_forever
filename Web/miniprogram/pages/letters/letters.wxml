@@ -1,0 +1,25 @@
+<view class="page">
+  <view class="intro">
+    <text class="eyebrow">FROM ECHO</text>
+    <text class="title">写给你的信</text>
+    <text class="subtitle">我们聊过的事，会在这里慢慢沉淀下来。</text>
+  </view>
+  <view wx:if="{{loading}}" class="empty">正在取回来信…</view>
+  <view wx:elif="{{errorText}}" class="empty">{{errorText}}</view>
+  <view wx:elif="{{!letters.length}}" class="empty">今天还没有新信。</view>
+  <view wx:else class="letter-list">
+    <view wx:for="{{letters}}" wx:key="letter_id" class="letter-card {{item.status === 'ready' ? 'unread' : ''}}" data-id="{{item.letter_id}}" bindtap="onOpenLetter">
+      <view class="letter-date">{{item.local_date}}</view>
+      <view class="letter-subject">{{item.subject}}</view>
+      <view class="letter-preview">{{item.content}}</view>
+    </view>
+  </view>
+  <view wx:if="{{selected}}" class="overlay" bindtap="onCloseLetter">
+    <view class="paper" catchtap="">
+      <text class="paper-date">{{selected.local_date}}</text>
+      <text class="paper-title">{{selected.subject}}</text>
+      <text class="paper-content" selectable>{{selected.content}}</text>
+      <button class="close" bindtap="onCloseLetter">收好这封信</button>
+    </view>
+  </view>
+</view>
