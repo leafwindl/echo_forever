@@ -14,8 +14,6 @@ class Settings(BaseSettings):
         default="https://api.openai.com/v1",
         validation_alias="OPENAI_BASE_URL",
     )
-    wechat_appid: str = Field(default="", validation_alias="WECHAT_APPID")
-    wechat_secret: str = Field(default="", validation_alias="WECHAT_SECRET")
     llm_model: str = Field(default="", validation_alias="LLM_MODEL")
     temperature: float = Field(default=0.8, validation_alias="TEMPERATURE")
     max_tokens: int = Field(default=500, validation_alias="MAX_TOKENS")
@@ -195,8 +193,135 @@ class Settings(BaseSettings):
     )
     auth_token_secret: str = Field(default="", validation_alias="AUTH_TOKEN_SECRET")
     auth_token_expires_seconds: int = Field(
+        default=900,
+        validation_alias="AUTH_ACCESS_TOKEN_EXPIRES_SECONDS",
+        ge=60,
+        le=86400,
+    )
+    auth_jwt_issuer: str = Field(default="echo-backend", validation_alias="AUTH_JWT_ISSUER")
+    auth_jwt_audience: str = Field(default="echo-app", validation_alias="AUTH_JWT_AUDIENCE")
+    auth_jwt_key_id: str = Field(default="echo-v1", validation_alias="AUTH_JWT_KEY_ID")
+    auth_jwt_previous_keys_json: str = Field(
+        default="{}",
+        validation_alias="AUTH_JWT_PREVIOUS_KEYS_JSON",
+    )
+    auth_refresh_token_pepper: str = Field(
+        default="",
+        validation_alias="AUTH_REFRESH_TOKEN_PEPPER",
+    )
+    auth_refresh_token_expires_seconds: int = Field(
         default=2592000,
-        validation_alias="AUTH_TOKEN_EXPIRES_SECONDS",
+        validation_alias="AUTH_REFRESH_TOKEN_EXPIRES_SECONDS",
+        ge=3600,
+        le=31536000,
+    )
+    auth_internal_fixture_phones: str = Field(
+        default="",
+        validation_alias="AUTH_INTERNAL_FIXTURE_PHONES",
+    )
+    sms_provider: str = Field(default="log", validation_alias="SMS_PROVIDER")
+    sms_code_pepper: str = Field(default="", validation_alias="SMS_CODE_PEPPER")
+    sms_challenge_expires_seconds: int = Field(
+        default=300,
+        validation_alias="SMS_CHALLENGE_EXPIRES_SECONDS",
+        ge=60,
+        le=900,
+    )
+    sms_resend_after_seconds: int = Field(
+        default=60,
+        validation_alias="SMS_RESEND_AFTER_SECONDS",
+        ge=1,
+        le=600,
+    )
+    sms_maximum_attempts: int = Field(
+        default=5,
+        validation_alias="SMS_MAXIMUM_ATTEMPTS",
+        ge=1,
+        le=10,
+    )
+    sms_log_verification_code: bool = Field(
+        default=False,
+        validation_alias="SMS_LOG_VERIFICATION_CODE",
+    )
+    sms_fixed_verification_code: str = Field(
+        default="",
+        validation_alias="SMS_FIXED_VERIFICATION_CODE",
+    )
+    sms_stub_delivery_enabled: bool = Field(
+        default=False,
+        validation_alias="SMS_STUB_DELIVERY_ENABLED",
+    )
+    aliyun_sms_access_key_id: str = Field(
+        default="",
+        validation_alias="ALIYUN_SMS_ACCESS_KEY_ID",
+    )
+    aliyun_sms_access_key_secret: str = Field(
+        default="",
+        validation_alias="ALIYUN_SMS_ACCESS_KEY_SECRET",
+    )
+    aliyun_sms_sign_name: str = Field(default="", validation_alias="ALIYUN_SMS_SIGN_NAME")
+    aliyun_sms_template_code: str = Field(
+        default="",
+        validation_alias="ALIYUN_SMS_TEMPLATE_CODE",
+    )
+    tencent_sms_secret_id: str = Field(default="", validation_alias="TENCENT_SMS_SECRET_ID")
+    tencent_sms_secret_key: str = Field(
+        default="",
+        validation_alias="TENCENT_SMS_SECRET_KEY",
+    )
+    tencent_sms_sdk_app_id: str = Field(
+        default="",
+        validation_alias="TENCENT_SMS_SDK_APP_ID",
+    )
+    tencent_sms_sign_name: str = Field(default="", validation_alias="TENCENT_SMS_SIGN_NAME")
+    tencent_sms_template_id: str = Field(
+        default="",
+        validation_alias="TENCENT_SMS_TEMPLATE_ID",
+    )
+    sms_rate_limit_phone_requests: int = Field(
+        default=5,
+        validation_alias="SMS_RATE_LIMIT_PHONE_REQUESTS",
+        ge=1,
+    )
+    sms_rate_limit_device_requests: int = Field(
+        default=10,
+        validation_alias="SMS_RATE_LIMIT_DEVICE_REQUESTS",
+        ge=1,
+    )
+    sms_rate_limit_ip_requests: int = Field(
+        default=20,
+        validation_alias="SMS_RATE_LIMIT_IP_REQUESTS",
+        ge=1,
+    )
+    sms_rate_limit_window_seconds: int = Field(
+        default=3600,
+        validation_alias="SMS_RATE_LIMIT_WINDOW_SECONDS",
+        ge=1,
+    )
+    sms_global_daily_request_limit: int = Field(
+        default=10000,
+        validation_alias="SMS_GLOBAL_DAILY_REQUEST_LIMIT",
+        ge=1,
+    )
+    auth_verify_rate_limit_requests: int = Field(
+        default=10,
+        validation_alias="AUTH_VERIFY_RATE_LIMIT_REQUESTS",
+        ge=1,
+    )
+    auth_verify_rate_limit_window_seconds: int = Field(
+        default=60,
+        validation_alias="AUTH_VERIFY_RATE_LIMIT_WINDOW_SECONDS",
+        ge=1,
+    )
+    auth_refresh_rate_limit_requests: int = Field(
+        default=30,
+        validation_alias="AUTH_REFRESH_RATE_LIMIT_REQUESTS",
+        ge=1,
+    )
+    auth_refresh_rate_limit_window_seconds: int = Field(
+        default=60,
+        validation_alias="AUTH_REFRESH_RATE_LIMIT_WINDOW_SECONDS",
+        ge=1,
     )
     enable_chat_request_serialization: bool = Field(
         default=True,

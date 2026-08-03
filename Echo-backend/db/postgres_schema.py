@@ -16,10 +16,40 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         CREATE TABLE IF NOT EXISTS users (
             id BIGSERIAL PRIMARY KEY,
             user_id TEXT NOT NULL UNIQUE,
-            openid TEXT UNIQUE,
+            phone TEXT UNIQUE,
+            phone_verified_at TIMESTAMPTZ,
             nickname TEXT,
             avatar_url TEXT,
             status TEXT NOT NULL DEFAULT 'active',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS sms_verification_challenges (
+            request_id TEXT PRIMARY KEY,
+            phone TEXT NOT NULL,
+            code_hash TEXT NOT NULL,
+            purpose VARCHAR(32) NOT NULL CHECK (purpose = 'login'),
+            device_id TEXT NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+            expires_at TIMESTAMPTZ NOT NULL,
+            consumed_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
+            token_id TEXT PRIMARY KEY,
+            token_hash TEXT NOT NULL UNIQUE,
+            token_family_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            used_at TIMESTAMPTZ,
+            revoked_at TIMESTAMPTZ,
+            replaced_by TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
@@ -285,7 +315,33 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id)",
-        "CREATE INDEX IF NOT EXISTS idx_users_openid ON users(openid)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL",
+        """
+        CREATE INDEX IF NOT EXISTS idx_sms_challenges_phone_created
+        ON sms_verification_challenges(phone, created_at DESC)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_sms_challenges_device_created
+        ON sms_verification_challenges(device_id, created_at DESC)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_sms_challenges_expires
+        ON sms_verification_challenges(expires_at)
+        WHERE consumed_at IS NULL
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family
+        ON auth_refresh_tokens(token_family_id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_device
+        ON auth_refresh_tokens(user_id, device_id, created_at DESC)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires
+        ON auth_refresh_tokens(expires_at)
+        WHERE revoked_at IS NULL
+        """,
         "CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)",
         """
         CREATE INDEX IF NOT EXISTS idx_conversations_user_status_updated

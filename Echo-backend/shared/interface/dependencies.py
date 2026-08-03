@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import Header, HTTPException, status
 
 from shared.config import settings
-from shared.security import TokenError, TokenService
+from shared.security import TokenError, TokenService, parse_verification_keys
 
 
 @dataclass(frozen=True)
@@ -22,6 +22,10 @@ def _token_service() -> TokenService:
     return TokenService(
         secret=settings.auth_token_secret,
         expires_in=settings.auth_token_expires_seconds,
+        issuer=settings.auth_jwt_issuer,
+        audience=settings.auth_jwt_audience,
+        key_id=settings.auth_jwt_key_id,
+        verification_keys=parse_verification_keys(settings.auth_jwt_previous_keys_json),
     )
 
 

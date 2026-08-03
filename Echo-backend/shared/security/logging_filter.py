@@ -1,10 +1,11 @@
 import logging
 import re
 
-
 SENSITIVE_PATTERNS = (
     re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s,;]+"),
     re.compile(r"(?i)(access_token[\"'=:\s]+)[^\"'\s,;}]+"),
+    re.compile(r"(?i)(refresh_token[\"'=:\s]+)[^\"'\s,;}]+"),
+    re.compile(r"(?i)(phone(?:_masked)?[\"'=:\s]+)[^\"'\s,;}]+"),
     re.compile(r"(?i)(secret[\"'=:\s]+)[^\"'\s,;&}]+"),
     re.compile(r"(?i)(openid[\"'=:\s]+)[^\"'\s,;}]+"),
     re.compile(r"(?i)(js_code=)[^&\s]+"),
@@ -35,11 +36,14 @@ def _redact_log_argument(value: object) -> object:
 
 class SensitiveDataFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = redact_sensitive_text(record.msg)
-        if isinstance(record.args, dict):
-            record.args = {key: _redact_log_argument(value) for key, value in record.args.items()}
-        elif isinstance(record.args, tuple):
-            record.args = tuple(_redact_log_argument(value) for value in record.args)
+        # Render first so redacting a ``label=%s`` placeholder cannot leave a
+        # mismatched argument tuple behind and trigger a secondary logging error.
+        try:
+            rendered = record.getMessage()
+        except (TypeError, ValueError):
+            rendered = str(record.msg)
+        record.msg = redact_sensitive_text(rendered)
+        record.args = ()
         return True
 
 

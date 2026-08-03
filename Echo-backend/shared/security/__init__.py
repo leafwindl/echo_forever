@@ -5,7 +5,7 @@ from shared.security.rate_limit import (
     RateLimitRule,
     request_limiter,
 )
-from shared.security.token_service import TokenError, TokenService
+from shared.security.token_service import TokenError, TokenService, parse_verification_keys
 
 __all__ = [
     "InMemoryRateLimiter",
@@ -16,4 +16,5 @@ __all__ = [
     "install_sensitive_data_filter",
     "redact_sensitive_text",
     "request_limiter",
+    "parse_verification_keys",
 ]
