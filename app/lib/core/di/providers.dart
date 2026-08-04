@@ -17,6 +17,10 @@ import 'package:echo_app/features/auth/data/auth_api.dart';
 import 'package:echo_app/features/auth/data/auth_repository_impl.dart';
 import 'package:echo_app/features/auth/domain/auth_repository.dart';
 import 'package:echo_app/features/auth/domain/auth_session.dart';
+import 'package:echo_app/features/memory/data/memory_api.dart';
+import 'package:echo_app/features/memory/data/memory_repository.dart';
+import 'package:echo_app/features/persona/data/persona_api.dart';
+import 'package:echo_app/features/persona/data/persona_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -79,6 +83,22 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
     ref.watch(authApiProvider),
     ref.watch(secureStoreProvider),
   );
+});
+
+final personaApiProvider = Provider<PersonaApi>((ref) {
+  return PersonaApi(ref.watch(authenticatedDioClientProvider));
+});
+
+final personaRepositoryProvider = Provider<PersonaRepository>((ref) {
+  return PersonaRepositoryImpl(ref.watch(personaApiProvider));
+});
+
+final memoryApiProvider = Provider<MemoryApi>((ref) {
+  return MemoryApi(ref.watch(authenticatedDioClientProvider));
+});
+
+final memoryRepositoryProvider = Provider<MemoryRepository>((ref) {
+  return MemoryRepositoryImpl(ref.watch(memoryApiProvider));
 });
 
 Dio _createDio(Ref ref, {required bool authenticated}) {

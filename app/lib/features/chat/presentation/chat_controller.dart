@@ -2,12 +2,19 @@ import 'package:echo_app/core/errors/app_exception.dart';
 import 'package:echo_app/features/chat/data/chat_providers.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/domain/chat_repository.dart';
+import 'package:echo_app/features/persona/presentation/persona_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const _emptyReply = '（我刚刚没组织好语言，可以再说一次吗？）';
 const _temporaryError = '（我刚刚有点卡住了，等一下再和我说一次好吗？）';
 
-final chatPreferredNameProvider = Provider<String>((ref) => '');
+final chatPreferredNameProvider = Provider<String>((ref) {
+  return ref.watch(
+    personaControllerProvider.select(
+      (state) => state.asData?.value.persona.preferredName ?? '',
+    ),
+  );
+});
 
 class ChatState {
   const ChatState({

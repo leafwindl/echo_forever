@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:echo_app/core/routing/route_names.dart';
 import 'package:echo_app/features/auth/presentation/auth_controller.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/presentation/chat_controller.dart';
@@ -47,6 +48,20 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       appBar: AppBar(
         title: const Text('Echo'),
         actions: <Widget>[
+          IconButton(
+            tooltip: '个性化设置',
+            onPressed: state.isBusy
+                ? null
+                : () => context.pushNamed(RouteNames.persona),
+            icon: const Icon(Icons.tune_rounded),
+          ),
+          IconButton(
+            tooltip: '长期记忆',
+            onPressed: state.isBusy
+                ? null
+                : () => context.pushNamed(RouteNames.memory),
+            icon: const Icon(Icons.bookmark_outline_rounded),
+          ),
           IconButton(
             key: const Key('open-call-button'),
             tooltip: '与 Echo 通话',
