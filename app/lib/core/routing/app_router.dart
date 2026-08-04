@@ -4,6 +4,7 @@ import 'package:echo_app/core/routing/route_names.dart';
 import 'package:echo_app/features/auth/presentation/auth_controller.dart';
 import 'package:echo_app/features/auth/presentation/phone_login_page.dart';
 import 'package:echo_app/features/auth/presentation/verification_code_page.dart';
+import 'package:echo_app/features/call/presentation/call_page.dart';
 import 'package:echo_app/features/chat/presentation/chat_page.dart';
 import 'package:echo_app/shared/widgets/echo_error_view.dart';
 import 'package:echo_app/shared/widgets/echo_loading_view.dart';
@@ -58,6 +59,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/home',
         name: RouteNames.home,
         builder: (context, state) => const ChatPage(),
+      ),
+      GoRoute(
+        path: '/call',
+        name: RouteNames.call,
+        builder: (context, state) => const CallPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

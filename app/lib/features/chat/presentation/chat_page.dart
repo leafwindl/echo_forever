@@ -9,6 +9,7 @@ import 'package:echo_app/shared/widgets/confirm_action_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 enum _ChatMenuAction { clearContext, logout }
@@ -46,6 +47,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       appBar: AppBar(
         title: const Text('Echo'),
         actions: <Widget>[
+          IconButton(
+            key: const Key('open-call-button'),
+            tooltip: '与 Echo 通话',
+            onPressed: state.isBusy ? null : () => context.push('/call'),
+            icon: const Icon(Icons.call_rounded),
+          ),
           PopupMenuButton<_ChatMenuAction>(
             tooltip: '聊天菜单',
             enabled: !state.isBusy,
