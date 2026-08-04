@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:echo_app/features/call/domain/call_adapters.dart';
 import 'package:echo_app/features/call/domain/call_models.dart';
-import 'package:web_socket_channel/io.dart';
-import 'package:web_socket_channel/status.dart' as status;
 
+/// WebSocket 语音客户端。
+///
+/// 传输层使用 dart:io 原生 [WebSocket]（不走 web_socket_channel 包），
+/// 规避 web_socket_channel 3.x 在 Android 上连接后立即断开的兼容问题。
 class WebSocketVoiceClient implements VoiceSocketClient {
   WebSocketVoiceClient({required this.baseUrl, required this.accessToken});
 
@@ -15,24 +18,24 @@ class WebSocketVoiceClient implements VoiceSocketClient {
 
   @override
   Future<VoiceSocketSession> open({required String requestId}) async {
-    final uri = Uri.parse(baseUrl).replace(
-      scheme: Uri.parse(baseUrl).scheme == 'https' ? 'wss' : 'ws',
+    final base = Uri.parse(baseUrl);
+    final uri = base.replace(
+      scheme: base.scheme == 'https' ? 'wss' : 'ws',
       path: '/voice/asr/stream',
     );
-    final channel = IOWebSocketChannel.connect(
-      uri,
+    final socket = await WebSocket.connect(
+      uri.toString(),
       headers: <String, String>{
         'Authorization': 'Bearer $accessToken',
         'X-Request-ID': requestId,
       },
-      connectTimeout: const Duration(seconds: 5),
-    );
-    return _WebSocketVoiceSession(channel);
+    ).timeout(const Duration(seconds: 5));
+    return _WebSocketVoiceSession(socket);
   }
 }
 
 class _WebSocketVoiceSession implements VoiceSocketSession {
-  _WebSocketVoiceSession(this._channel) {
+  _WebSocketVoiceSession(this._socket) {
     _listen();
     _readyTimer = Timer(const Duration(seconds: 5), () {
       if (!_ready.isCompleted) {
@@ -42,7 +45,7 @@ class _WebSocketVoiceSession implements VoiceSocketSession {
     });
   }
 
-  final IOWebSocketChannel _channel;
+  final WebSocket _socket;
   final StreamController<VoiceStreamEvent> _events =
       StreamController<VoiceStreamEvent>.broadcast();
   final Completer<void> _ready = Completer<void>();
@@ -56,8 +59,12 @@ class _WebSocketVoiceSession implements VoiceSocketSession {
   @override
   Stream<VoiceStreamEvent> get events => _events.stream;
 
+  void _emit(VoiceStreamEvent event) {
+    if (!_events.isClosed) _events.add(event);
+  }
+
   void _listen() {
-    _channel.stream.listen(
+    _socket.listen(
       (message) {
         if (message is! String) return;
         Map<String, dynamic> json;
@@ -72,35 +79,36 @@ class _WebSocketVoiceSession implements VoiceSocketSession {
               _readyTimer?.cancel();
               _ready.complete();
             }
-            _events.add(const VoiceStreamEvent.ready());
+            _emit(const VoiceStreamEvent.ready());
           case 'partial':
-            _events.add(
+            _emit(
               VoiceStreamEvent.partial((json['text'] as String? ?? '').trim()),
             );
           case 'final':
             final text = (json['text'] as String? ?? '').trim();
-            _events.add(VoiceStreamEvent.finalResult(text));
+            _emit(VoiceStreamEvent.finalResult(text));
             if (!_final.isCompleted) _final.complete(text);
             _finalTimer?.cancel();
           case 'error':
             final detail = json['detail'] as String? ?? '流式语音识别失败';
-            _events.add(VoiceStreamEvent.error(detail, closeCode: _closeCode));
+            _emit(VoiceStreamEvent.error(detail, closeCode: _closeCode));
             if (!_final.isCompleted) _final.completeError(StateError(detail));
         }
       },
       onError: (Object error, StackTrace stack) {
-        _events.add(VoiceStreamEvent.error(error.toString()));
+        _emit(VoiceStreamEvent.error(error.toString()));
         _fail(error, stack);
       },
       onDone: () {
+        _closeCode = _socket.closeCode;
         _closed = true;
         _readyTimer?.cancel();
         _finalTimer?.cancel();
-        _events.add(VoiceStreamEvent.closed(_channel.closeCode));
+        _emit(VoiceStreamEvent.closed(_closeCode));
         if (!_ready.isCompleted) {
           _ready.completeError(StateError('流式语音服务不可用'));
         } else if (_finishRequested && !_final.isCompleted) {
-          _final.completeError(VoiceStreamClosedException(_channel.closeCode));
+          _final.completeError(VoiceStreamClosedException(_closeCode));
         }
       },
       cancelOnError: false,
@@ -120,7 +128,7 @@ class _WebSocketVoiceSession implements VoiceSocketSession {
   bool sendAudio(Uint8List bytes) {
     if (_closed || _finishRequested || bytes.isEmpty) return false;
     if (!_ready.isCompleted) return false;
-    _channel.sink.add(bytes);
+    _socket.add(bytes);
     return true;
   }
 
@@ -132,7 +140,7 @@ class _WebSocketVoiceSession implements VoiceSocketSession {
     if (_closed) throw VoiceStreamClosedException(_closeCode);
     if (!_finishRequested) {
       _finishRequested = true;
-      _channel.sink.add(jsonEncode(<String, String>{'event': 'stop'}));
+      _socket.add(jsonEncode(<String, String>{'event': 'stop'}));
       _finalTimer = Timer(const Duration(seconds: 15), () {
         if (!_final.isCompleted) {
           _final.completeError(StateError('流式语音识别结果超时'));
@@ -148,7 +156,7 @@ class _WebSocketVoiceSession implements VoiceSocketSession {
     if (_closed) return;
     _finishRequested = true;
     if (_ready.isCompleted) {
-      _channel.sink.add(jsonEncode(<String, String>{'event': 'cancel'}));
+      _socket.add(jsonEncode(<String, String>{'event': 'cancel'}));
     }
     await close();
   }
@@ -159,7 +167,11 @@ class _WebSocketVoiceSession implements VoiceSocketSession {
     _closed = true;
     _readyTimer?.cancel();
     _finalTimer?.cancel();
-    await _channel.sink.close(status.normalClosure);
+    try {
+      await _socket.close(WebSocketStatus.normalClosure);
+    } on Object {
+      // 忽略关闭异常：socket 可能已断
+    }
     await _events.close();
   }
 }
@@ -168,7 +180,4 @@ class VoiceStreamClosedException implements Exception {
   const VoiceStreamClosedException(this.closeCode);
 
   final int? closeCode;
-
-  @override
-  String toString() => 'Voice stream closed (code: $closeCode)';
 }

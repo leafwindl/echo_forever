@@ -5,6 +5,7 @@ import 'package:echo_app/core/auth_session/session_snapshot.dart';
 import 'package:echo_app/core/config/app_config.dart';
 import 'package:echo_app/core/errors/error_code.dart';
 import 'package:echo_app/core/network/dio_client.dart';
+import 'package:echo_app/core/network/endpoints.dart';
 import 'package:echo_app/core/network/interceptors/auth_interceptor.dart';
 import 'package:echo_app/core/network/interceptors/error_interceptor.dart';
 import 'package:echo_app/core/network/interceptors/request_id_interceptor.dart';
@@ -15,6 +16,8 @@ import 'package:echo_app/core/routing/pending_route_store.dart';
 import 'package:echo_app/core/storage/secure_store.dart';
 import 'package:echo_app/features/auth/data/auth_api.dart';
 import 'package:echo_app/features/auth/data/auth_repository_impl.dart';
+import 'package:echo_app/features/auth/data/dto/auth_requests.dart';
+import 'package:echo_app/features/auth/data/dto/auth_responses.dart';
 import 'package:echo_app/features/auth/domain/auth_repository.dart';
 import 'package:echo_app/features/auth/domain/auth_session.dart';
 import 'package:echo_app/features/letters/data/letters_api.dart';
@@ -47,9 +50,29 @@ final tokenRefreshCoordinatorProvider = Provider<TokenRefreshCoordinator>((
   return TokenRefreshCoordinator(
     readSession: () => ref.read(sessionControllerProvider).asData?.value,
     refreshSession: (refreshToken, deviceId) async {
-      final session = await ref
-          .read(authRepositoryProvider)
-          .refresh(refreshToken: refreshToken, deviceId: deviceId);
+      // 直接走 public Dio 发刷新请求，避免经 authRepository 触发
+      // authenticatedDio 构建造成 Riverpod 循环依赖。
+      final response = await ref
+          .read(publicDioClientProvider)
+          .post<Map<String, dynamic>>(
+            Endpoints.refreshLogin,
+            data: RefreshLoginRequestDto(
+              refreshToken: refreshToken,
+              deviceId: deviceId,
+            ).toJson(),
+          );
+      final dto = TokenResponseDto.fromJson(response.data!);
+      final now = DateTime.now().toUtc();
+      final session = AuthSession(
+        userId: dto.userId,
+        accessToken: dto.accessToken,
+        refreshToken: dto.refreshToken,
+        tokenType: dto.tokenType,
+        accessExpiresAt: now.add(Duration(seconds: dto.expiresIn)),
+        refreshExpiresAt: now.add(Duration(seconds: dto.refreshExpiresIn)),
+        deviceId: deviceId,
+        isNewUser: dto.isNewUser,
+      );
       return _toSnapshot(session);
     },
     persistSession: (snapshot) async {
