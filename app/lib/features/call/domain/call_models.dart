@@ -16,7 +16,7 @@ enum CallPhase {
   error,
 }
 
-enum VoiceAudioFormat { pcm16le, mp3 }
+enum VoiceAudioFormat { pcm16le }
 
 class CallState {
   const CallState({

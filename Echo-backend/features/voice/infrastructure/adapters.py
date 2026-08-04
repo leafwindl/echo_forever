@@ -16,7 +16,7 @@ from features.voice.infrastructure.audio_storage import (
 
 
 class LocalVoiceAudioStorage(VoiceAudioStorage):
-    def save_upload(self, audio_bytes: bytes, suffix: str = ".mp3") -> str:
+    def save_upload(self, audio_bytes: bytes, suffix: str = ".pcm") -> str:
         return save_upload_audio_file(audio_bytes, suffix=suffix)
 
     def delete_upload(self, audio_path: str) -> None:

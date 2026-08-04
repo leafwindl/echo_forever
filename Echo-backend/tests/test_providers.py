@@ -1,4 +1,6 @@
+import base64
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -6,8 +8,9 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import providers.asr_provider as asr_provider_module
 import providers.tts_provider as tts_provider_module
-from providers.asr_provider import ASRProvider, get_asr_provider
+from providers.asr_provider import ASRProvider, TencentASRProvider, get_asr_provider
 from providers.embedding_provider import OpenAICompatibleEmbeddingProvider, get_embedding_provider
 from providers.registry import register_provider_factory, reset_provider_registry_for_tests
 from providers.tts_provider import CosyVoiceTTSProvider, EdgeTTSProvider, get_tts_provider
@@ -15,7 +18,7 @@ from shared.config import settings
 
 
 class FakeEmbeddingProvider:
-    async def create_embedding(self, text, model=None):
+    async def create_embedding(self, _text, _model=None):
         return [1.0, 2.0, 3.0]
 
 
@@ -28,6 +31,18 @@ class FakeTTSProvider:
 class FakeASRProvider:
     async def recognize(self, audio_path):
         return f"recognized:{audio_path}"
+
+
+class FakeTencentASRClient:
+    instances = []
+
+    def __init__(self, *_args):
+        self.request = None
+        self.__class__.instances.append(self)
+
+    def SentenceRecognition(self, request):
+        self.request = request
+        return SimpleNamespace(Result="  腾讯识别结果  ")
 
 
 class FakeCosyVoiceSynthesizer:
@@ -61,6 +76,7 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         reset_provider_registry_for_tests()
         FakeCosyVoiceSynthesizer.instances.clear()
+        FakeTencentASRClient.instances.clear()
 
     async def test_embedding_provider_rejects_empty_text(self):
         provider = OpenAICompatibleEmbeddingProvider()
@@ -114,12 +130,12 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
             patch.object(settings, "dashscope_workspace_id", ""),
             patch.object(settings, "cosyvoice_websocket_url", ""),
             patch.object(settings, "cosyvoice_model", "cosyvoice-v3.5-flash"),
-        ):
-            with self.assertRaisesRegex(
+            self.assertRaisesRegex(
                 ValueError,
                 "DASHSCOPE_API_KEY, DASHSCOPE_WORKSPACE_ID, TTS_VOICE_ID",
-            ):
-                await provider.text_to_speech("你好", "")
+            ),
+        ):
+            await provider.text_to_speech("你好", "")
 
     async def test_get_tts_provider_supports_cosyvoice(self):
         with patch.object(settings, "tts_provider", "cosyvoice"):
@@ -156,6 +172,32 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIs(provider, fake_provider)
         self.assertEqual(text, "recognized:audio.mp3")
+
+    async def test_tencent_asr_provider_submits_raw_pcm(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            audio_path = Path(temp_dir) / "voice.pcm"
+            audio_bytes = b"\x01\x02\x03\x04"
+            audio_path.write_bytes(audio_bytes)
+
+            with (
+                patch.object(
+                    asr_provider_module.asr_client,
+                    "AsrClient",
+                    FakeTencentASRClient,
+                ),
+                patch.object(settings, "tencent_secret_id", "secret-id"),
+                patch.object(settings, "tencent_secret_key", "secret-key"),
+                patch.object(settings, "tencent_asr_engine_model_type", "16k_zh"),
+            ):
+                text = await TencentASRProvider().recognize(str(audio_path))
+
+        request = FakeTencentASRClient.instances[0].request
+        self.assertEqual(text, "腾讯识别结果")
+        self.assertEqual(request.EngSerViceType, "16k_zh")
+        self.assertEqual(request.SourceType, 1)
+        self.assertEqual(request.VoiceFormat, "pcm")
+        self.assertEqual(request.DataLen, len(audio_bytes))
+        self.assertEqual(base64.b64decode(request.Data), audio_bytes)
 
 
 if __name__ == "__main__":

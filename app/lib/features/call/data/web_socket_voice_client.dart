@@ -36,6 +36,12 @@ class WebSocketVoiceClient implements VoiceSocketClient {
 
 class _WebSocketVoiceSession implements VoiceSocketSession {
   _WebSocketVoiceSession(this._socket) {
+    // A peer can close before open() returns the session to its caller.
+    // Register handlers immediately so those failures are observed without
+    // becoming uncaught asynchronous errors; callers still receive the same
+    // error when awaiting either future.
+    _ready.future.ignore();
+    _final.future.ignore();
     _listen();
     _readyTimer = Timer(const Duration(seconds: 5), () {
       if (!_ready.isCompleted) {
@@ -46,21 +52,39 @@ class _WebSocketVoiceSession implements VoiceSocketSession {
   }
 
   final WebSocket _socket;
-  final StreamController<VoiceStreamEvent> _events =
-      StreamController<VoiceStreamEvent>.broadcast();
+  late final StreamController<VoiceStreamEvent> _events =
+      StreamController<VoiceStreamEvent>.broadcast(onListen: _flushReadyEvent);
   final Completer<void> _ready = Completer<void>();
   final Completer<String> _final = Completer<String>();
   Timer? _readyTimer;
   Timer? _finalTimer;
   bool _closed = false;
   bool _finishRequested = false;
+  bool _readyEventPending = false;
   int? _closeCode;
 
   @override
   Stream<VoiceStreamEvent> get events => _events.stream;
 
+  @override
+  Future<void> get ready => _ready.future;
+
   void _emit(VoiceStreamEvent event) {
-    if (!_events.isClosed) _events.add(event);
+    if (_events.isClosed) return;
+    // `open()` starts consuming the native socket before it can return the
+    // session.  Keep the initial ready event for the first application
+    // listener instead of silently dropping it from a broadcast stream.
+    if (event.type == VoiceStreamEventType.ready && !_events.hasListener) {
+      _readyEventPending = true;
+      return;
+    }
+    _events.add(event);
+  }
+
+  void _flushReadyEvent() {
+    if (!_readyEventPending || _events.isClosed) return;
+    _readyEventPending = false;
+    _events.add(const VoiceStreamEvent.ready());
   }
 
   void _listen() {

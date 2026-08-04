@@ -63,15 +63,17 @@ class FakeRecorderAdapter implements RecorderAdapter {
 }
 
 class FakeVoiceSocketClient implements VoiceSocketClient {
-  FakeVoiceSocketClient(this.session, {this.openError});
+  FakeVoiceSocketClient(this.session, {this.openError, this.openGate});
 
   final FakeVoiceSocketSession session;
   final Object? openError;
+  final Future<void>? openGate;
   int openCalls = 0;
 
   @override
   Future<VoiceSocketSession> open({required String requestId}) async {
     openCalls += 1;
+    await openGate;
     if (openError != null) throw openError!;
     return session;
   }
@@ -85,11 +87,21 @@ class FakeVoiceSocketSession implements VoiceSocketSession {
   String finalText = '测试 final';
   Object? finishError;
   bool acceptFrames = true;
+  final Completer<void> readyCompleter = Completer<void>();
 
   @override
   Stream<VoiceStreamEvent> get events => _events.stream;
 
-  void emit(VoiceStreamEvent event) => _events.add(event);
+  @override
+  Future<void> get ready => readyCompleter.future;
+
+  void emit(VoiceStreamEvent event) {
+    if (event.type == VoiceStreamEventType.ready &&
+        !readyCompleter.isCompleted) {
+      readyCompleter.complete();
+    }
+    _events.add(event);
+  }
 
   @override
   bool sendAudio(Uint8List bytes) {

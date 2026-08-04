@@ -69,6 +69,7 @@ class _WidgetFixtures {
           voiceSocketClientProvider.overrideWithValue(
             FakeVoiceSocketClient(socket),
           ),
+          voiceStreamingEnabledProvider.overrideWithValue(true),
           voiceUploadClientProvider.overrideWithValue(upload),
           callChatClientProvider.overrideWithValue(chat),
           audioPlayerAdapterProvider.overrideWithValue(player),

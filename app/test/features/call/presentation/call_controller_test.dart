@@ -64,6 +64,51 @@ void main() {
     expect(fixtures.tempStore.deleted, <String>['fake.pcm']);
   });
 
+  test('batch mode records first and uploads once after release', () async {
+    final fixtures = _CallFixtures(streamingEnabled: false);
+    final container = fixtures.container();
+    addTearDown(container.dispose);
+    final subscription = _keepAlive(container);
+    addTearDown(subscription.close);
+    final controller = container.read(callControllerProvider.notifier);
+
+    await controller.connect();
+    expect(await controller.startRecording(), isTrue);
+    fixtures.recorder.emit(List<int>.filled(6400, 4));
+
+    expect(await controller.stopRecording(), isTrue);
+    expect(fixtures.socketClient.openCalls, 0);
+    expect(fixtures.upload.calls, 1);
+    expect(fixtures.chat.messages, <String>['fallback final']);
+  });
+
+  test('stop waits for an in-flight socket to become ready', () async {
+    final openGate = Completer<void>();
+    final fixtures = _CallFixtures(socketOpenGate: openGate.future);
+    final container = fixtures.container();
+    addTearDown(container.dispose);
+    final subscription = _keepAlive(container);
+    addTearDown(subscription.close);
+    final controller = container.read(callControllerProvider.notifier);
+
+    await controller.connect();
+    expect(await controller.startRecording(), isTrue);
+    fixtures.recorder.emit(List<int>.filled(6400, 3));
+
+    final stopping = controller.stopRecording();
+    await container.pump();
+    expect(container.read(callControllerProvider).phase, CallPhase.recognizing);
+    expect(fixtures.upload.calls, 0);
+
+    openGate.complete();
+    fixtures.socket.emit(const VoiceStreamEvent.ready());
+
+    expect(await stopping, isTrue);
+    expect(fixtures.socket.controls, contains('stop'));
+    expect(fixtures.upload.calls, 0);
+    expect(fixtures.chat.messages, <String>['测试 final']);
+  });
+
   test(
     'manual user interruption stops speaking and starts a new turn',
     () async {
@@ -148,11 +193,15 @@ void main() {
 }
 
 class _CallFixtures {
-  _CallFixtures({Object? socketOpenError})
-    : socketClient = FakeVoiceSocketClient(
-        FakeVoiceSocketSession(),
-        openError: socketOpenError,
-      );
+  _CallFixtures({
+    Object? socketOpenError,
+    Future<void>? socketOpenGate,
+    this.streamingEnabled = true,
+  }) : socketClient = FakeVoiceSocketClient(
+         FakeVoiceSocketSession(),
+         openError: socketOpenError,
+         openGate: socketOpenGate,
+       );
 
   final FakeRecorderAdapter recorder = FakeRecorderAdapter();
   final FakeVoiceSocketClient socketClient;
@@ -163,11 +212,13 @@ class _CallFixtures {
   final FakeAudioSessionAdapter audioSession = FakeAudioSessionAdapter();
   final FakeForegroundService foreground = FakeForegroundService();
   final FakeTempAudioStore tempStore = FakeTempAudioStore();
+  final bool streamingEnabled;
 
   ProviderContainer container() => ProviderContainer(
     overrides: [
       recorderAdapterProvider.overrideWithValue(recorder),
       voiceSocketClientProvider.overrideWithValue(socketClient),
+      voiceStreamingEnabledProvider.overrideWithValue(streamingEnabled),
       voiceUploadClientProvider.overrideWithValue(upload),
       callChatClientProvider.overrideWithValue(chat),
       audioPlayerAdapterProvider.overrideWithValue(player),

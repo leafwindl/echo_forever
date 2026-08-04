@@ -2,22 +2,19 @@ import asyncio
 import base64
 import concurrent.futures
 import os
-import re
-import time
 from typing import Protocol, cast
 
+from shared.config import settings
 from tencentcloud.asr.v20190614 import asr_client, models
 from tencentcloud.common import credential
 from tencentcloud.common.profile.client_profile import ClientProfile
 from tencentcloud.common.profile.http_profile import HttpProfile
 
 from providers.registry import get_provider
-from shared.config import settings
 
 
 class ASRProvider(Protocol):
-    async def recognize(self, audio_path: str) -> str:
-        ...
+    async def recognize(self, audio_path: str) -> str: ...
 
 
 class TencentASRProvider:
@@ -26,7 +23,8 @@ class TencentASRProvider:
             raise ValueError("无效的 audio_path")
 
         def sync_recognize():
-            audio_bytes = open(audio_path, "rb").read()
+            with open(audio_path, "rb") as audio_file:
+                audio_bytes = audio_file.read()
             audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
 
             cred = credential.Credential(settings.tencent_secret_id, settings.tencent_secret_key)
@@ -36,28 +34,18 @@ class TencentASRProvider:
             client_profile.httpProfile = http_profile
             client = asr_client.AsrClient(cred, "ap-shanghai", client_profile)
 
-            req = models.CreateRecTaskRequest()
-            req.EngineModelType = "16k_zh"
-            req.ChannelNum = 1
-            req.ResTextFormat = 0
+            req = models.SentenceRecognitionRequest()
+            req.EngSerViceType = settings.tencent_asr_engine_model_type
             req.SourceType = 1
+            req.VoiceFormat = "pcm"
             req.Data = audio_base64
             req.DataLen = len(audio_bytes)
+            req.FilterModal = 0
+            req.FilterPunc = 0
+            req.ConvertNumMode = 1
 
-            resp = client.CreateRecTask(req)
-            task_id = resp.Data.TaskId
-
-            for _ in range(30):
-                time.sleep(2)
-                req2 = models.DescribeTaskStatusRequest()
-                req2.TaskId = task_id
-                resp2 = client.DescribeTaskStatus(req2)
-                if resp2.Data.Status == 2:
-                    clean_result = re.sub(r"\[.*?\]\s*", "", resp2.Data.Result)
-                    return clean_result.strip()
-                if resp2.Data.Status == 3:
-                    raise RuntimeError(f"ASR failed: {resp2.Data.ErrorMsg}")
-            raise TimeoutError("ASR task timeout")
+            resp = client.SentenceRecognition(req)
+            return str(resp.Result or "").strip()
 
         loop = asyncio.get_running_loop()
         with concurrent.futures.ThreadPoolExecutor() as pool:

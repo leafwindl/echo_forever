@@ -46,15 +46,15 @@ def get_voice_generated_dir() -> Path:
     return VOICE_GENERATED_DIR
 
 
-def save_upload_audio_file(audio_bytes: bytes, suffix: str = ".mp3") -> str:
-    filename = f"{uuid.uuid4().hex}{_normalize_suffix(suffix)}"
+def save_upload_audio_file(audio_bytes: bytes, suffix: str = ".pcm") -> str:
+    filename = f"{uuid.uuid4().hex}{_normalize_upload_suffix(suffix)}"
     filepath = get_voice_upload_dir() / filename
     filepath.write_bytes(audio_bytes)
     return str(filepath)
 
 
 async def save_audio_file(audio_bytes: bytes, suffix: str = ".mp3") -> str:
-    filename = f"{uuid.uuid4().hex}{_normalize_suffix(suffix)}"
+    filename = f"{uuid.uuid4().hex}{_normalize_generated_suffix(suffix)}"
     filepath = get_voice_generated_dir() / filename
     filepath.write_bytes(audio_bytes)
     return f"{settings.static_url_prefix}/static/voices/generated/{filename}"
@@ -87,6 +87,7 @@ def cleanup_expired_voice_audio_files(
         retention_seconds=settings.voice_upload_retention_seconds,
         batch_size=cleanup_batch_size,
         now=current_time,
+        patterns=("*.pcm",),
     )
     result = result.merge(
         cleanup_expired_audio_files_in_dir(
@@ -114,6 +115,7 @@ def cleanup_expired_audio_files_in_dir(
     batch_size: int,
     now: float | None = None,
     include_nested: bool = False,
+    patterns: tuple[str, ...] = ("*.mp3", "*.wav"),
 ) -> VoiceAudioCleanupResult:
     if retention_seconds < 0 or batch_size <= 0 or not directory.exists():
         return VoiceAudioCleanupResult()
@@ -126,9 +128,9 @@ def cleanup_expired_audio_files_in_dir(
     released_bytes = 0
 
     paths = (
-        (path for pattern in ("*.mp3", "*.wav") for path in directory.rglob(pattern))
+        (path for pattern in patterns for path in directory.rglob(pattern))
         if include_nested
-        else (path for pattern in ("*.mp3", "*.wav") for path in directory.glob(pattern))
+        else (path for pattern in patterns for path in directory.glob(pattern))
     )
     candidates = []
     for filepath in paths:
@@ -172,11 +174,16 @@ def cleanup_expired_audio_files_in_dir(
     )
 
 
-def _normalize_suffix(suffix: str) -> str:
+def _normalize_upload_suffix(suffix: str) -> str:
     normalized_suffix = (suffix if suffix.startswith(".") else f".{suffix}").lower()
-    if normalized_suffix not in {".mp3", ".wav"}:
-        return ".mp3"
+    if normalized_suffix != ".pcm":
+        raise ValueError("Voice uploads must use the .pcm suffix")
     return normalized_suffix
+
+
+def _normalize_generated_suffix(suffix: str) -> str:
+    normalized_suffix = (suffix if suffix.startswith(".") else f".{suffix}").lower()
+    return normalized_suffix if normalized_suffix in {".mp3", ".wav"} else ".mp3"
 
 
 def _is_path_within(path: Path, root: Path) -> bool:

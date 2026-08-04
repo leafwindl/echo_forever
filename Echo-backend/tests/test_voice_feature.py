@@ -1,8 +1,9 @@
-import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -12,9 +13,16 @@ from features.voice.application.use_cases import (
     SynthesizeVoiceReply,
 )
 from features.voice.domain.entities import SynthesizedVoiceAudio, UnsupportedVoiceFormatError
-from features.voice.domain.speech_delivery import prepare_speech_text, select_speech_delivery
-from features.voice.infrastructure.audio_storage import cleanup_expired_audio_files_in_dir
-from features.voice.infrastructure.streaming_asr import TencentASRTranscriptAccumulator
+from features.voice.domain.speech_delivery import prepare_speech_text
+from features.voice.infrastructure.audio_storage import (
+    cleanup_expired_audio_files_in_dir,
+    save_upload_audio_file,
+)
+from features.voice.infrastructure.streaming_asr import (
+    TencentASRTranscriptAccumulator,
+    build_tencent_asr_websocket_url,
+)
+from shared.config import settings
 
 
 class FakeAudioStorage:
@@ -23,9 +31,9 @@ class FakeAudioStorage:
         self.generated_audio = []
         self.deleted_uploads = []
 
-    def save_upload(self, audio_bytes, suffix=".mp3"):
+    def save_upload(self, audio_bytes, suffix=".pcm"):
         self.saved_uploads.append((audio_bytes, suffix))
-        return "fake_upload.mp3"
+        return "fake_upload.pcm"
 
     def delete_upload(self, audio_path):
         self.deleted_uploads.append(audio_path)
@@ -101,26 +109,43 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
         storage = FakeAudioStorage()
         use_case = RecognizeVoice(audio_storage=storage, recognizer=FakeRecognizer())
 
-        result = await use_case.execute(b"mp3-bytes", "audio/mp3")
+        result = await use_case.execute(b"\x01\x02\x03\x04", "audio/L16")
 
-        self.assertEqual(result.user_text, "recognized:fake_upload.mp3")
-        self.assertEqual(storage.saved_uploads, [(b"mp3-bytes", ".mp3")])
-        self.assertEqual(storage.deleted_uploads, ["fake_upload.mp3"])
+        self.assertEqual(result.user_text, "recognized:fake_upload.pcm")
+        self.assertEqual(storage.saved_uploads, [(b"\x01\x02\x03\x04", ".pcm")])
+        self.assertEqual(storage.deleted_uploads, ["fake_upload.pcm"])
 
     async def test_recognize_voice_deletes_upload_when_recognizer_fails(self):
         storage = FakeAudioStorage()
         use_case = RecognizeVoice(audio_storage=storage, recognizer=FailingRecognizer())
 
         with self.assertRaises(RuntimeError):
-            await use_case.execute(b"mp3-bytes", "audio/mp3")
+            await use_case.execute(b"\x01\x02", "audio/L16")
 
-        self.assertEqual(storage.deleted_uploads, ["fake_upload.mp3"])
+        self.assertEqual(storage.deleted_uploads, ["fake_upload.pcm"])
 
     async def test_recognize_voice_rejects_unsupported_content_type(self):
         use_case = RecognizeVoice(audio_storage=FakeAudioStorage(), recognizer=FakeRecognizer())
 
         with self.assertRaises(UnsupportedVoiceFormatError):
             await use_case.execute(b"wav-bytes", "audio/wav")
+
+    async def test_recognize_voice_accepts_pcm_content_type_parameters(self):
+        storage = FakeAudioStorage()
+        use_case = RecognizeVoice(audio_storage=storage, recognizer=FakeRecognizer())
+
+        await use_case.execute(
+            b"\x01\x02",
+            "audio/L16; rate=16000; channels=1",
+        )
+
+        self.assertEqual(storage.saved_uploads, [(b"\x01\x02", ".pcm")])
+
+    async def test_recognize_voice_rejects_incomplete_pcm16_sample(self):
+        use_case = RecognizeVoice(audio_storage=FakeAudioStorage(), recognizer=FakeRecognizer())
+
+        with self.assertRaisesRegex(ValueError, "complete 16-bit samples"):
+            await use_case.execute(b"\x01", "audio/L16")
 
     async def test_synthesize_voice_reply_stores_generated_audio(self):
         storage = FakeAudioStorage()
@@ -134,7 +159,7 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.audio_urls, ("http://example.test/audio.mp3",))
         self.assertEqual(storage.generated_audio, [(b"audio:hello", ".mp3")])
         self.assertEqual(len(use_case.synthesizer.requests), 1)
-        self.assertIn("自然松弛", use_case.synthesizer.requests[0][1])
+        self.assertIsNone(use_case.synthesizer.requests[0][1])
 
     async def test_synthesize_voice_reply_rejects_empty_text(self):
         use_case = SynthesizeVoiceReply(
@@ -179,25 +204,6 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
             "我在听。",
         )
 
-    def test_speech_delivery_varies_with_reply_semantics(self):
-        self.assertEqual(select_speech_delivery("怎么啦？").style, "curious")
-        self.assertEqual(select_speech_delivery("听起来真的很累，先缓一缓。").style, "caring")
-        self.assertEqual(select_speech_delivery("太好了，你做到了！").style, "cheerful")
-        self.assertEqual(select_speech_delivery("这件事很重要，我们认真看看。").style, "serious")
-        self.assertEqual(select_speech_delivery("我在听，你慢慢说。").style, "natural")
-
-    def test_fixed_naturalness_corpus_matches_delivery_rules(self):
-        fixture_path = Path(__file__).parent / "fixtures" / "voice_naturalness_cases.json"
-        cases = json.loads(fixture_path.read_text(encoding="utf-8"))
-
-        self.assertGreaterEqual(len(cases), 5)
-        for case in cases:
-            with self.subTest(case=case["id"]):
-                self.assertEqual(
-                    select_speech_delivery(case["text"]).style,
-                    case["expected_style"],
-                )
-
     def test_tencent_accumulator_replaces_partial_and_keeps_stable_segments(self):
         accumulator = TencentASRTranscriptAccumulator()
 
@@ -217,6 +223,18 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second_partial.text, "你好。今天")
         self.assertEqual(final.text, "你好。今天")
         self.assertTrue(final.is_final)
+
+    def test_tencent_streaming_url_declares_pcm_audio(self):
+        with (
+            patch.object(settings, "tencent_app_id", "123456"),
+            patch.object(settings, "tencent_secret_id", "secret-id"),
+            patch.object(settings, "tencent_secret_key", "secret-key"),
+        ):
+            url = build_tencent_asr_websocket_url("voice-id", now=1_700_000_000)
+
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["voice_format"], ["1"])
+        self.assertEqual(query["engine_model_type"], [settings.tencent_asr_engine_model_type])
 
     async def test_cleanup_expired_audio_files_deletes_expired_supported_audio_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -256,6 +274,46 @@ class VoiceFeatureTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(fresh_audio.exists())
             self.assertFalse(expired_wav.exists())
             self.assertTrue(ignored_text.exists())
+
+    def test_upload_storage_keeps_pcm_suffix(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage_dir = Path(temp_dir)
+            with patch(
+                "features.voice.infrastructure.audio_storage.get_voice_upload_dir",
+                return_value=storage_dir,
+            ):
+                audio_path = save_upload_audio_file(b"\x01\x02", suffix=".pcm")
+
+            self.assertEqual(Path(audio_path).suffix, ".pcm")
+            self.assertEqual(Path(audio_path).read_bytes(), b"\x01\x02")
+
+    def test_upload_storage_rejects_non_pcm_suffix(self):
+        with tempfile.TemporaryDirectory() as temp_dir, patch(
+            "features.voice.infrastructure.audio_storage.get_voice_upload_dir",
+            return_value=Path(temp_dir),
+        ), self.assertRaisesRegex(ValueError, r"must use the \.pcm suffix"):
+            save_upload_audio_file(b"\x01\x02", suffix=".mp3")
+
+    def test_pcm_cleanup_can_target_upload_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            storage_dir = Path(temp_dir)
+            expired_pcm = storage_dir / "expired.pcm"
+            expired_pcm.write_bytes(b"old-pcm")
+            expired_pcm.touch()
+            import os
+
+            os.utime(expired_pcm, (100.0, 100.0))
+
+            result = cleanup_expired_audio_files_in_dir(
+                directory=storage_dir,
+                retention_seconds=50,
+                batch_size=10,
+                now=200.0,
+                patterns=("*.pcm",),
+            )
+
+            self.assertEqual(result.deleted, 1)
+            self.assertFalse(expired_pcm.exists())
 
 
 if __name__ == "__main__":

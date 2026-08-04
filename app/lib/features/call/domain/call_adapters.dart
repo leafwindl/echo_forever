@@ -22,6 +22,12 @@ abstract interface class RecorderAdapter {
 abstract interface class VoiceSocketSession {
   Stream<VoiceStreamEvent> get events;
 
+  /// Completes when the server's initial `ready` frame has been received.
+  ///
+  /// The socket may receive that frame before the caller attaches its event
+  /// listener, so readiness is exposed separately from the event stream.
+  Future<void> get ready;
+
   /// Returns false when the bounded outbound queue is saturated.
   bool sendAudio(Uint8List bytes);
 

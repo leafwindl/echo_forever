@@ -25,9 +25,14 @@ final voiceSocketClientProvider = Provider<VoiceSocketClient>((ref) {
   );
 });
 
+final voiceStreamingEnabledProvider = Provider<bool>((ref) {
+  return const bool.fromEnvironment(
+    'ECHO_VOICE_STREAMING_ASR',
+    defaultValue: false,
+  );
+});
+
 final voiceUploadClientProvider = Provider<VoiceUploadClient>((ref) {
-  // A verified PcmUploadTranscoder can be injected here by deployments where
-  // /voice/asr remains MP3-only. The default never labels PCM as audio/mpeg.
   return DioVoiceUploadClient(ref.watch(authenticatedDioClientProvider));
 });
 

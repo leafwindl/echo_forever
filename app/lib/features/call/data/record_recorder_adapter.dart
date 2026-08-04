@@ -1,15 +1,27 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:echo_app/features/call/domain/call_adapters.dart';
 import 'package:echo_app/features/call/domain/call_models.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 class RecordRecorderAdapter implements RecorderAdapter {
   RecordRecorderAdapter({AudioRecorder? recorder})
     : _recorder = recorder ?? AudioRecorder();
+
+  @visibleForTesting
+  static const streamConfig = RecordConfig(
+    encoder: AudioEncoder.pcm16bits,
+    sampleRate: 16000,
+    numChannels: 1,
+    bitRate: 256000,
+    streamBufferSize: 6400,
+    // AudioSessionAdapter owns focus for the whole call. Letting record request
+    // a second focus lease can report a false interruption on Android.
+    audioInterruption: AudioInterruptionMode.none,
+  );
 
   final AudioRecorder _recorder;
   final StreamController<Uint8List> _chunks =
@@ -44,16 +56,7 @@ class RecordRecorderAdapter implements RecorderAdapter {
     _writeChain = Future<void>.value();
     _bytes = 0;
     _stopwatch = Stopwatch()..start();
-    final stream = await _recorder.startStream(
-      const RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: 16000,
-        numChannels: 1,
-        bitRate: 256000,
-        streamBufferSize: 6400,
-        audioInterruption: AudioInterruptionMode.pause,
-      ),
-    );
+    final stream = await _recorder.startStream(streamConfig);
     _started = true;
     _recordSubscription = stream.listen((chunk) {
       if (chunk.isEmpty) return;

@@ -152,7 +152,7 @@ def build_tencent_asr_websocket_url(voice_id: str, now: int | None = None) -> st
         "secretid": settings.tencent_secret_id,
         "timestamp": timestamp,
         "vad_silence_time": 800,
-        "voice_format": 8,
+        "voice_format": 1,
         "voice_id": voice_id,
     }
     query = urlencode(sorted(params.items()))
@@ -183,9 +183,7 @@ class TencentASRStreamingVoiceRecognizer(VoiceStreamingRecognizer):
                 raise RuntimeError("Tencent ASR returned an invalid handshake")
             handshake = json.loads(raw_handshake)
             if int(handshake.get("code") or 0) != 0:
-                raise RuntimeError(
-                    f"Tencent ASR handshake failed code={handshake.get('code')}"
-                )
+                raise RuntimeError(f"Tencent ASR handshake failed code={handshake.get('code')}")
         except Exception:
             await upstream.close()
             raise

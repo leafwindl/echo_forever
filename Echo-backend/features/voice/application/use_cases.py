@@ -14,7 +14,7 @@ from features.voice.domain.services import (
     VoiceStreamingRecognizer,
     VoiceSynthesizer,
 )
-from features.voice.domain.speech_delivery import prepare_speech_text, select_speech_delivery
+from features.voice.domain.speech_delivery import prepare_speech_text
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +25,15 @@ class RecognizeVoice:
         self.recognizer = recognizer
 
     async def execute(self, audio_bytes: bytes, content_type: str) -> VoiceRecognitionResult:
-        if content_type not in SUPPORTED_VOICE_CONTENT_TYPES:
-            raise UnsupportedVoiceFormatError("仅支持 MP3 音频格式")
+        normalized_content_type = content_type.partition(";")[0].strip().lower()
+        if normalized_content_type not in SUPPORTED_VOICE_CONTENT_TYPES:
+            raise UnsupportedVoiceFormatError("仅支持 16 kHz 单声道 PCM16LE 音频格式")
         if not audio_bytes:
             raise ValueError("Voice audio cannot be empty")
+        if len(audio_bytes) % 2 != 0:
+            raise ValueError("PCM16 audio must contain complete 16-bit samples")
 
-        audio_path = self.audio_storage.save_upload(audio_bytes, suffix=".mp3")
+        audio_path = self.audio_storage.save_upload(audio_bytes, suffix=".pcm")
         try:
             recognition_started_at = time.perf_counter()
             user_text = await self.recognizer.recognize(audio_path)
@@ -64,20 +67,14 @@ class SynthesizeVoiceReply:
         if not clean_text:
             raise ValueError("Voice synthesis text cannot be empty")
 
-        delivery = select_speech_delivery(clean_text)
         synthesis_started_at = time.perf_counter()
-        audio = await self.synthesizer.synthesize(
-            clean_text,
-            instruction=delivery.instruction,
-        )
+        audio = await self.synthesizer.synthesize(clean_text)
         audio_url = await self.audio_storage.save_generated_audio(
             audio.audio_bytes,
             suffix=audio.file_suffix,
         )
         logger.info(
-            "Voice TTS reply completed requests=1 delivery_style=%s text_length=%s "
-            "duration_ms=%.1f",
-            delivery.style,
+            "Voice TTS reply completed requests=1 text_length=%s duration_ms=%.1f",
             len(clean_text),
             (time.perf_counter() - synthesis_started_at) * 1000,
         )

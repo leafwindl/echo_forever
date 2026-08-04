@@ -7,7 +7,6 @@ import 'package:echo_app/core/errors/app_exception.dart';
 import 'package:echo_app/features/call/data/call_chat_client.dart';
 import 'package:echo_app/features/call/data/call_providers.dart';
 import 'package:echo_app/features/call/data/temp_audio_store.dart';
-import 'package:echo_app/features/call/data/voice_upload_client.dart';
 import 'package:echo_app/features/call/data/web_socket_voice_client.dart';
 import 'package:echo_app/features/call/domain/call_adapters.dart';
 import 'package:echo_app/features/call/domain/call_models.dart';
@@ -30,6 +29,7 @@ class CallController extends Notifier<CallState> {
   StreamSubscription<bool>? _interruptionSubscription;
   Timer? _sendTimer;
   VoiceSocketSession? _socket;
+  Future<void>? _socketOpening;
   RecordingResult? _recording;
   int _readyBytes = 0;
   int _sendBytes = 0;
@@ -39,6 +39,7 @@ class CallController extends Notifier<CallState> {
   bool _streamReady = false;
   bool _fallbackRequired = false;
   bool _terminalVoiceError = false;
+  bool _streamingEnabled = false;
   bool _disposed = false;
 
   late RecorderAdapter _recorder;
@@ -55,6 +56,7 @@ class CallController extends Notifier<CallState> {
     _disposed = false;
     _recorder = ref.read(recorderAdapterProvider);
     _socketClient = ref.read(voiceSocketClientProvider);
+    _streamingEnabled = ref.read(voiceStreamingEnabledProvider);
     _upload = ref.read(voiceUploadClientProvider);
     _chat = ref.read(callChatClientProvider);
     _player = ref.read(audioPlayerAdapterProvider);
@@ -154,7 +156,9 @@ class CallController extends Notifier<CallState> {
         usingFallback: false,
         clearError: true,
       );
-      unawaited(_openSocket(generation, utterance));
+      if (_streamingEnabled) {
+        _beginSocketOpen(generation, utterance);
+      }
       return true;
     } on Object {
       if (_isUtteranceCurrent(generation, utterance)) {
@@ -168,11 +172,22 @@ class CallController extends Notifier<CallState> {
     }
   }
 
+  void _beginSocketOpen(int generation, int utterance) {
+    final opening = _openSocket(generation, utterance);
+    _socketOpening = opening;
+    unawaited(
+      opening.whenComplete(() {
+        if (identical(_socketOpening, opening)) _socketOpening = null;
+      }),
+    );
+  }
+
   Future<void> _openSocket(int generation, int utterance) async {
     try {
       final socket = await _socketClient.open(requestId: const Uuid().v4());
       if (!_isUtteranceCurrent(generation, utterance) ||
-          state.phase != CallPhase.recording) {
+          (state.phase != CallPhase.recording &&
+              state.phase != CallPhase.recognizing)) {
         await socket.cancel();
         return;
       }
@@ -181,9 +196,15 @@ class CallController extends Notifier<CallState> {
         (event) => _onSocketEvent(event, generation, utterance),
         onError: (Object _) => _requireFallback('socket_error'),
       );
+      await socket.ready;
+      if (_isUtteranceCurrent(generation, utterance) &&
+          !_fallbackRequired &&
+          !_streamReady) {
+        _onSocketEvent(const VoiceStreamEvent.ready(), generation, utterance);
+      }
     } on Object {
       if (_isUtteranceCurrent(generation, utterance)) {
-        _requireFallback('connect_failed');
+        _requireFallback('ready_failed');
       }
     }
   }
@@ -223,7 +244,9 @@ class CallController extends Notifier<CallState> {
           state = state.copyWith(
             errorMessage: _closeCodeMessage(event.closeCode),
           );
-        } else if (state.phase == CallPhase.recording && !_streamReady) {
+        } else if ((state.phase == CallPhase.recording ||
+                state.phase == CallPhase.recognizing) &&
+            !_streamReady) {
           _requireFallback('closed_before_ready');
         }
     }
@@ -231,9 +254,11 @@ class CallController extends Notifier<CallState> {
 
   void _onPcmChunk(Uint8List chunk, int generation, int utterance) {
     if (!_isUtteranceCurrent(generation, utterance) ||
-        state.phase != CallPhase.recording) {
+        (state.phase != CallPhase.recording &&
+            state.phase != CallPhase.recognizing)) {
       return;
     }
+    if (!_streamingEnabled) return;
     for (final frame in _assembler.add(chunk)) {
       _handleFrame(frame);
     }
@@ -305,6 +330,8 @@ class CallController extends Notifier<CallState> {
       for (final tail in _assembler.flush()) {
         _handleFrame(tail);
       }
+      final socketOpening = _socketOpening;
+      if (socketOpening != null) await socketOpening;
       if (!_isUtteranceCurrent(generation, utterance)) return false;
       String text;
       if (_terminalVoiceError) {
@@ -333,14 +360,6 @@ class CallController extends Notifier<CallState> {
       await _finishUtteranceResources();
       resourcesFinished = true;
       return await _requestReply(text.trim(), generation, utterance);
-    } on VoiceFormatGateException {
-      if (_isUtteranceCurrent(generation, utterance)) {
-        state = state.copyWith(
-          phase: CallPhase.idle,
-          errorMessage: '流式识别暂不可用，PCM 整段识别格式门禁尚未关闭。',
-        );
-      }
-      return false;
     } on Object catch (error) {
       if (_isUtteranceCurrent(generation, utterance)) {
         state = state.copyWith(
@@ -488,6 +507,7 @@ class CallController extends Notifier<CallState> {
     _socketSubscription = null;
     final socket = _socket;
     _socket = null;
+    _socketOpening = null;
     if (socket != null) await socket.close();
     final recording = _recording;
     _recording = null;

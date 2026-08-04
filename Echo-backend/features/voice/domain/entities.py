@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-SUPPORTED_VOICE_CONTENT_TYPES = frozenset({"audio/mpeg", "audio/mp3"})
+SUPPORTED_VOICE_CONTENT_TYPES = frozenset({"audio/l16"})
 
 
 class UnsupportedVoiceFormatError(ValueError):

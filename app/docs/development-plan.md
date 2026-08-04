@@ -73,7 +73,7 @@ v2.0 的目标如下：
 | 当前 token 校验 | `Echo-backend/shared/security/token_service.py`、`shared/interface/dependencies.py` | 当前 token 是自定义两段 HMAC token，不是标准三段 JWT；业务接口统一解析 Bearer token |
 | HTTP 业务契约 | `Echo-backend/features/*/interface/router.py`、`schemas.py` | FastAPI 原生响应；错误体主要为 `{"detail": ...}`，当前没有统一业务 `code` |
 | WS 服务端协议 | `Echo-backend/features/voice/interface/router.py` | 连接关闭码、二进制帧、文本控制消息和服务端 JSON 消息 |
-| 腾讯流式 ASR 适配 | `Echo-backend/features/voice/infrastructure/streaming_asr.py` | 当前上游 `voice_format=8`，即 MP3；引擎默认 `16k_zh`，VAD 静音 800 ms |
+| 腾讯流式 ASR 适配 | `Echo-backend/features/voice/infrastructure/streaming_asr.py` | 上游 `voice_format=1`，即 PCM；引擎默认 `16k_zh`，VAD 静音 800 ms |
 | 语音限制 | `Echo-backend/shared/config/settings.py` | 默认上传上限 10 MiB、5 次/60 秒、每用户每日 30 次、final 超时 10 秒 |
 | 数据库基线 | `Echo-backend/db/postgres_schema.py` | `users` 目前有 `openid`，没有 `phone`、refresh token 和 push token 表 |
 
@@ -612,20 +612,21 @@ connecting → idle → recording → recognizing → thinking → speaking → 
 
 状态迁移必须串行：录音开始前停止 Echo 播放；进入 `thinking` 前结束录音和 ASR；播放完成/中断后才回到 `idle`。controller 以 session generation ID 丢弃上一个会话迟到的 partial、final 或播放回调。
 
-### 6.2 现有协议事实
+### 6.2 协议事实
 
-现有小程序和后端的实际组合如下：
+旧小程序与 Flutter APP 的录音格式不同；当前后端契约以 Flutter APP 的 PCM 为准：
 
 - 小程序 `call.ts`：`duration=60000`、`sampleRate=16000`、`numberOfChannels=1`、`format=mp3`、`frameSize=4`。
 - 小程序 `voice-stream.ts`：连接 `WS /voice/asr/stream`，Bearer 放在握手 header；连接 5 秒未收到 `ready` 即失败；结束后 15 秒未收到 `final` 即失败。
 - 后端 `voice/interface/router.py`：连接前校验开关、Bearer 和 voice quota；accept 后打开腾讯 ASR，再发送 `{"type":"ready"}`；二进制帧原样转发上游。
-- 后端 `streaming_asr.py`：腾讯上游 `voice_format=8`，按腾讯定义为 MP3；默认 `engine_model_type=16k_zh`，`needvad=1`，`vad_silence_time=800`。
-- 整段 `/voice/asr` 只接受 `audio/mpeg`/`audio/mp3`，不接受 WAV/PCM；依据 `features/voice/application/use_cases.py` 的 `SUPPORTED_VOICE_CONTENT_TYPES` 与“仅支持 MP3”错误。
+- Flutter `record`：采集 16 kHz、单声道、PCM16LE 裸音频，流式和整段识别复用同一录音产物。
+- 后端 `streaming_asr.py`：腾讯上游 `voice_format=1`，按腾讯定义为 PCM；默认 `engine_model_type=16k_zh`，`needvad=1`，`vad_silence_time=800`。
+- 整段 `/voice/asr` 只接受 `audio/L16`，保存 `.pcm` 后通过腾讯一句话识别提交 `VoiceFormat=pcm`；不做 MP3/MP4 转码或兼容。
 - 后端总音频上限使用 `VOICE_UPLOAD_MAX_BYTES`，默认 10 MiB；小程序打开 WS 前最多缓存 1 MiB 分片。
 
-其中 `voice_format=8` 对应 MP3、`voice_format=1` 对应 PCM，以及 16 kHz PCM 推荐每 200 ms 发送 6,400 字节，另由[腾讯云实时语音识别 WebSocket 官方文档](https://cloud.tencent.com/document/api/1093/48982)交叉确认。
+其中 `voice_format=1` 对应 PCM，以及 16 kHz PCM 推荐每 200 ms 发送 6,400 字节，由[腾讯云实时语音识别 WebSocket 官方文档](https://cloud.tencent.com/document/api/1093/48982)确认；整段识别使用一句话识别的 `VoiceFormat=pcm`。
 
-### 6.3 PCM 目标参数与 P0 格式门禁
+### 6.3 PCM 统一契约
 
 Flutter 既定方案要求 `record` 采集 PCM，目标参数冻结为：
 
@@ -639,16 +640,9 @@ Flutter 既定方案要求 `record` 采集 PCM，目标参数冻结为：
 | 发送节奏 | 每 200 ms 一帧 | 每帧 6,400 字节；平台回调不等长时先在客户端重分帧 |
 | 单次录音上限 | 60 秒 | 与小程序一致；理论 PCM 约 1.92 MiB，低于默认 10 MiB |
 
-当前后端把二进制帧按 MP3 转发，而 Flutter 目标是 PCM；直接发送会导致识别失败。这不是客户端可忽略的细节，也是仓库现状与“后端语音 100% 不改”约束之间的冲突。
+PCM 契约已经统一：WebSocket 二进制帧与 `/voice/asr` multipart 都传输同一份 s16le 裸 PCM；流式腾讯参数固定为 `voice_format=1`，整段腾讯请求固定为 `VoiceFormat=pcm`。APP 上传文件名为 `voice.pcm`、内容类型为 `audio/L16`，后端按大小写不敏感方式校验媒体类型并拒绝非 PCM 请求。
 
-一期 P0 契约门禁必须在 UI 开发前关闭：
-
-1. 用固定语音样本在 Android 真机采集 s16le PCM，验证每帧长度、端序、节奏和时长。
-2. 后端测试环境明确上游格式为 PCM（腾讯 `voice_format=1`）并通过相同样本；WS 对外消息路径与 JSON 协议保持不变。
-3. `/voice/asr` 降级路径也必须能接收同一录音产物，或提供经过验证的 MP3 编码产物；当前端点只收 MP3，不能假定 PCM 可上传。
-4. 将最终编码写入契约测试和部署配置，禁止客户端格式与服务端 `voice_format` 各自硬编码且无版本标识。
-
-要坚持 PCM 采集且保留整段降级，必须批准“语音 provider 编码配置/整段格式适配”这一最小后端兼容改动；它不改变 `/voice/asr/stream` 的业务路径和消息语义，但严格来说超出“只有认证层改造”。在该例外获得确认并通过契约测试之前，语音一期状态只能是 blocked，不能以模拟数据判定完成。不得静默改回 MP3，也不得把 PCM 伪装为 `audio/mpeg`。
+旧小程序仍产出 MP3，不属于当前 Flutter APP 契约；后端不保留 MP3/MP4 转码或双格式兼容。需要继续使用旧小程序时，应单独将其录音端迁移到 PCM 或停用其语音入口，不能把 MP3 字节伪装成 PCM。
 
 ### 6.4 WebSocket 对外协议
 
@@ -858,7 +852,7 @@ Authorization: Bearer <access_token>
 | --- | --- | --- | --- |
 | 认证（新增） | `session.ts` 调 `wx.login`，本地保存 user/access token，无独立登录页 | 手机号页、验证码页、倒计时、自动填充/粘贴、JWT 恢复、refresh single-flight、安全退出；与个性化 onboarding 分开 | 一期 |
 | `chat` | 初始化 session + Persona；未 onboarding 重定向；内存消息、typing、来源、表情、未读来信、清上下文；角色区与聊天区可展开 | Riverpod chat controller；列表稳定滚动；2000 字限制；来源用外链；渲染 sticker；防重复发送；401 刷新；工具入口；保留当前会话内存语义 | 一期 |
-| `call` | 按住录 MP3；WS partial/final；失败上传整段；`mode=call`；顺序播放 TTS；计时、字幕、挂断、常亮 | PCM/协议门禁、record adapter、WS 状态机、spool/fallback、just_audio playlist、audio_service、音频焦点、权限/中断、后台通知栏；静态角色 speaking/listening 动效 | 一期 |
+| `call` | 旧小程序按住录 MP3；WS partial/final；失败上传整段；`mode=call`；顺序播放 TTS；计时、字幕、挂断、常亮 | PCM 已统一；record adapter、WS 状态机、spool/fallback、just_audio playlist、audio_service、音频焦点、权限/中断、后台通知栏；静态角色 speaking/listening 动效 | 一期 |
 | `onboarding` | 首次读取 Persona；称呼必填；表达风格、陪伴偏好、关系节奏、关于用户；PUT Persona 后进 chat | 作为手机号认证后的独立个性化流程；字段及默认值完全对齐；保存中防重复；公开发布前完成；返回用户不重复出现 | 二期 |
 | `persona` | 启用开关、称呼、风格/长度/支持/主动/关系/亲近、最多 5 个避开话题、关于用户；重置 Persona/关系 | 表单状态与服务端 snapshot 分离；离开未保存提示；完整 PUT；40/300 字与 5 项规则；危险操作二次确认；401 统一处理 | 二期 |
 | `memory` | active/deleted tab；最多 100；类型/重要度/置信度/更新时间；单删、清空 | 下拉刷新、空/错/加载态；软删除后刷新；清空只允许 active 且非空；确认文案明确不删聊天 | 二期 |
@@ -989,7 +983,7 @@ Widget 测试覆盖：
 - [ ] 手机号发送、验证码验证、已注册手机号直接登录、新手机号注册、session 恢复、主动刷新、并发 401、refresh 轮换/重放和退出流程通过。
 - [ ] chat 支持发送、typing、reply、sticker、sources、409、429、清上下文和来电入口；同一用户动作不会产生重复 `/chat/send`。
 - [ ] call 完成权限、按住/松开/取消、partial/final、整段降级、`mode=call`、字幕、TTS 多段播放、用户打断和挂断资源释放。
-- [ ] PCM 与后端 ASR 编码门禁已经通过，不存在 PCM 以 MP3 配置转发的情况。
+- [x] PCM 与后端 ASR 编码门禁已经通过，不存在 PCM 以 MP3 配置转发的情况。
 - [ ] Android 活动 call 在后台/锁屏下按设计继续；通知栏可见且“结束”有效；系统不允许时能安全降级。
 - [ ] 角色使用静态图和轻动效，chat/call 只依赖 `CharacterRenderer`，无 Live2D SDK。
 
@@ -1057,12 +1051,12 @@ M0 契约冻结/风险 spike
 任务：
 
 - 为现有 HTTP schemas、错误 status/detail、WS 消息与 close code 建立 fixture/契约清单。
-- 完成 PCM 16k/s16le/mono 真机采集 spike，关闭 `voice_format=8` 与 PCM 冲突；确定整段 fallback 编码。
+- 冻结 PCM 16k/s16le/mono 契约；流式使用 `voice_format=1`，整段 fallback 使用 `VoiceFormat=pcm`。
 - 冻结手机号 challenge、JWT claims、refresh rotation、`users.phone` 唯一约束和数据库 schema migration。
 - 确定 Android application ID、环境名、最低支持系统、Firebase 项目与 CI secret 管理。
 - 形成隐私数据分级、日志脱敏和指标字段清单。
 
-产出：签字确认的契约、语音样本报告、数据库变更方案、风险登记表。PCM 门禁未关闭不得进入 M3，认证契约和手机号唯一约束未冻结不得进入 M1。
+产出：签字确认的契约、语音样本报告、数据库变更方案、风险登记表。认证契约和手机号唯一约束未冻结不得进入 M1。
 
 ### 12.3 M1：Flutter 骨架与认证
 
@@ -1144,7 +1138,7 @@ M0 契约冻结/风险 spike
 
 | 风险 | 影响 | 处理/门禁 |
 | --- | --- | --- |
-| Flutter PCM 与后端固定 MP3 上游格式冲突 | 流式及整段 ASR 无法工作 | M0 必须批准最小 provider/格式兼容例外并用真机样本锁定；未关闭则 M3 blocked |
+| 旧小程序仍发送 MP3，而后端已统一为 PCM | 旧小程序语音入口不可用 | 不增加 MP3/MP4 兼容；迁移旧录音端到 PCM 或停用旧语音入口 |
 | 当前错误无统一业务 code | UI 可能依赖文案 | 旧接口按 status+endpoint 映射；新 auth 先引入稳定 code；契约测试保护 |
 | 国内 Android FCM 不可达 | 推送覆盖不足 | v2.0 明示能力；二阶段评估个推/极光，不阻塞核心聊天 |
 | Android/iOS 后台政策变化 | 录音/播放被中断或审核失败 | 每次 target SDK/插件升级做政策和真机复核；只维持用户主动 call |

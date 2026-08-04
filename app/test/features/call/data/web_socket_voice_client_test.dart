@@ -31,6 +31,20 @@ void main() {
     await session.close();
   });
 
+  test(
+    'ready remains observable when it arrives before the caller listens',
+    () async {
+      server.readyDelay = Duration.zero;
+      final session = await _openSession(server);
+
+      await session.ready.timeout(const Duration(seconds: 2));
+      final event = await _nextEvent(session, VoiceStreamEventType.ready);
+      expect(event.type, VoiceStreamEventType.ready);
+
+      await session.close();
+    },
+  );
+
   test('sends binary audio and parses partial and final events', () async {
     final session = await _openSession(server);
     await _nextEvent(session, VoiceStreamEventType.ready);
@@ -115,6 +129,7 @@ class _VoiceTestServer {
   final List<String> controls = <String>[];
   final Completer<void> audioReceived = Completer<void>();
   final Completer<void> stopReceived = Completer<void>();
+  Duration readyDelay = const Duration(milliseconds: 20);
 
   int get port => _server!.port;
 
@@ -153,7 +168,7 @@ class _VoiceTestServer {
           );
         }
       });
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await Future<void>.delayed(readyDelay);
       upgraded.add(jsonEncode(<String, String>{'type': 'ready'}));
     });
   }
