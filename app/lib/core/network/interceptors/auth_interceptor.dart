@@ -6,7 +6,7 @@ import 'package:echo_app/core/network/token_refresh_coordinator.dart';
 
 typedef SessionReader = SessionSnapshot? Function();
 
-class AuthInterceptor extends QueuedInterceptor {
+class AuthInterceptor extends Interceptor {
   AuthInterceptor({
     required this.dio,
     required this.readSession,
