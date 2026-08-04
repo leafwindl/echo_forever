@@ -17,10 +17,14 @@ import 'package:echo_app/features/auth/data/auth_api.dart';
 import 'package:echo_app/features/auth/data/auth_repository_impl.dart';
 import 'package:echo_app/features/auth/domain/auth_repository.dart';
 import 'package:echo_app/features/auth/domain/auth_session.dart';
+import 'package:echo_app/features/letters/data/letters_api.dart';
+import 'package:echo_app/features/letters/data/letters_repository.dart';
 import 'package:echo_app/features/memory/data/memory_api.dart';
 import 'package:echo_app/features/memory/data/memory_repository.dart';
 import 'package:echo_app/features/persona/data/persona_api.dart';
 import 'package:echo_app/features/persona/data/persona_repository.dart';
+import 'package:echo_app/features/stickers/data/stickers_api.dart';
+import 'package:echo_app/features/stickers/data/stickers_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -99,6 +103,22 @@ final memoryApiProvider = Provider<MemoryApi>((ref) {
 
 final memoryRepositoryProvider = Provider<MemoryRepository>((ref) {
   return MemoryRepositoryImpl(ref.watch(memoryApiProvider));
+});
+
+final stickersApiProvider = Provider<StickersApi>((ref) {
+  return StickersApi(ref.watch(authenticatedDioClientProvider));
+});
+
+final stickersRepositoryProvider = Provider<StickersRepository>((ref) {
+  return StickersRepositoryImpl(ref.watch(stickersApiProvider));
+});
+
+final lettersApiProvider = Provider<LettersApi>((ref) {
+  return LettersApi(ref.watch(authenticatedDioClientProvider));
+});
+
+final lettersRepositoryProvider = Provider<LettersRepository>((ref) {
+  return LettersRepositoryImpl(ref.watch(lettersApiProvider));
 });
 
 Dio _createDio(Ref ref, {required bool authenticated}) {

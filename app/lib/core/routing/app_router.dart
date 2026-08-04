@@ -7,10 +7,12 @@ import 'package:echo_app/features/auth/presentation/phone_login_page.dart';
 import 'package:echo_app/features/auth/presentation/verification_code_page.dart';
 import 'package:echo_app/features/call/presentation/call_page.dart';
 import 'package:echo_app/features/chat/presentation/chat_page.dart';
+import 'package:echo_app/features/letters/presentation/letters_page.dart';
 import 'package:echo_app/features/memory/presentation/memory_page.dart';
 import 'package:echo_app/features/onboarding/presentation/onboarding_page.dart';
 import 'package:echo_app/features/persona/presentation/persona_controller.dart';
 import 'package:echo_app/features/persona/presentation/persona_page.dart';
+import 'package:echo_app/features/stickers/presentation/stickers_page.dart';
 import 'package:echo_app/shared/widgets/echo_error_view.dart';
 import 'package:echo_app/shared/widgets/echo_loading_view.dart';
 import 'package:flutter/material.dart';
@@ -105,6 +107,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/memory',
         name: RouteNames.memory,
         builder: (context, state) => const MemoryPage(),
+      ),
+      GoRoute(
+        path: '/letters',
+        name: RouteNames.letters,
+        builder: (context, state) => const LettersPage(),
+      ),
+      GoRoute(
+        path: '/stickers',
+        name: RouteNames.stickers,
+        builder: (context, state) => const StickersPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

@@ -9,4 +9,6 @@ class RouteNames {
   static const call = 'call';
   static const persona = 'persona';
   static const memory = 'memory';
+  static const letters = 'letters';
+  static const stickers = 'stickers';
 }

@@ -5,6 +5,7 @@ import 'package:echo_app/core/routing/route_names.dart';
 import 'package:echo_app/features/auth/presentation/auth_controller.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/presentation/chat_controller.dart';
+import 'package:echo_app/features/letters/presentation/letters_controller.dart';
 import 'package:echo_app/shared/widgets/character_renderer.dart';
 import 'package:echo_app/shared/widgets/confirm_action_sheet.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-enum _ChatMenuAction { clearContext, logout }
+enum _ChatMenuAction { persona, memory, stickers, clearContext, logout }
 
 typedef CharacterBuilder = Widget Function(bool chatExpanded);
 
@@ -43,24 +44,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(chatControllerProvider);
+    final unreadLetterCount = ref.watch(lettersUnreadCountProvider);
     _scheduleScrollToBottom();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Echo'),
         actions: <Widget>[
           IconButton(
-            tooltip: '个性化设置',
+            key: const Key('open-letters-button'),
+            tooltip: 'Echo 来信',
             onPressed: state.isBusy
                 ? null
-                : () => context.pushNamed(RouteNames.persona),
-            icon: const Icon(Icons.tune_rounded),
-          ),
-          IconButton(
-            tooltip: '长期记忆',
-            onPressed: state.isBusy
-                ? null
-                : () => context.pushNamed(RouteNames.memory),
-            icon: const Icon(Icons.bookmark_outline_rounded),
+                : () => context.pushNamed(RouteNames.letters),
+            icon: Badge(
+              isLabelVisible: unreadLetterCount > 0,
+              label: Text(
+                unreadLetterCount > 99 ? '99+' : unreadLetterCount.toString(),
+              ),
+              child: const Icon(Icons.mail_outline_rounded),
+            ),
           ),
           IconButton(
             key: const Key('open-call-button'),
@@ -73,6 +75,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             enabled: !state.isBusy,
             onSelected: _handleMenuAction,
             itemBuilder: (context) => const <PopupMenuEntry<_ChatMenuAction>>[
+              PopupMenuItem<_ChatMenuAction>(
+                value: _ChatMenuAction.persona,
+                child: Text('个性化设置'),
+              ),
+              PopupMenuItem<_ChatMenuAction>(
+                value: _ChatMenuAction.memory,
+                child: Text('长期记忆'),
+              ),
+              PopupMenuItem<_ChatMenuAction>(
+                value: _ChatMenuAction.stickers,
+                child: Text('表情包库'),
+              ),
               PopupMenuItem<_ChatMenuAction>(
                 value: _ChatMenuAction.clearContext,
                 child: Text('清除聊天上下文'),
@@ -136,6 +150,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   Future<void> _handleMenuAction(_ChatMenuAction action) async {
     switch (action) {
+      case _ChatMenuAction.persona:
+        unawaited(context.pushNamed(RouteNames.persona));
+      case _ChatMenuAction.memory:
+        unawaited(context.pushNamed(RouteNames.memory));
+      case _ChatMenuAction.stickers:
+        unawaited(context.pushNamed(RouteNames.stickers));
       case _ChatMenuAction.clearContext:
         await _confirmAndClearContext();
       case _ChatMenuAction.logout:

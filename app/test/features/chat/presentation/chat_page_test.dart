@@ -4,6 +4,7 @@ import 'package:echo_app/features/chat/data/chat_providers.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/presentation/chat_controller.dart';
 import 'package:echo_app/features/chat/presentation/chat_page.dart';
+import 'package:echo_app/features/letters/presentation/letters_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,15 @@ void main() {
     expect(find.text('嗨，小叶。我在呢，今天想聊点什么？'), findsOneWidget);
     expect(find.byKey(const Key('static-character-renderer')), findsOneWidget);
     expect(find.byKey(const Key('chat-input')), findsOneWidget);
+  });
+
+  testWidgets('shows the unread letter badge in the chat toolbar', (
+    tester,
+  ) async {
+    await _pumpChat(tester, FakeChatRepository(), unreadLetterCount: 3);
+
+    expect(find.byKey(const Key('open-letters-button')), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
   });
 
   testWidgets('shows typing immediately and replaces it with reply', (
@@ -112,12 +122,14 @@ Future<void> _pumpChat(
   WidgetTester tester,
   FakeChatRepository repository, {
   String preferredName = '',
+  int unreadLetterCount = 0,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         chatRepositoryProvider.overrideWithValue(repository),
         chatPreferredNameProvider.overrideWithValue(preferredName),
+        lettersUnreadCountProvider.overrideWithValue(unreadLetterCount),
       ],
       child: const MaterialApp(home: ChatPage()),
     ),
