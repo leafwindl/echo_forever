@@ -2,11 +2,7 @@ import 'package:echo_app/features/persona/domain/persona.dart';
 import 'package:echo_app/features/persona/presentation/persona_form_model.dart';
 import 'package:flutter/material.dart';
 
-const _presetTopics = <String>[
-  '医疗建议',
-  '情感分析',
-  '家庭话题',
-];
+const _presetTopics = <String>['医疗建议', '情感分析', '家庭话题'];
 
 class PersonaEditorFields extends StatefulWidget {
   const PersonaEditorFields({
@@ -189,8 +185,7 @@ class _PersonaEditorFieldsState extends State<PersonaEditorFields> {
             value: draft.affectionStyle,
             options: AffectionStyle.values,
             labelFor: (value) => value.label,
-            onSelected: (value) =>
-                _emit(draft.copyWith(affectionStyle: value)),
+            onSelected: (value) => _emit(draft.copyWith(affectionStyle: value)),
           ),
         ),
         _Section(
@@ -209,8 +204,9 @@ class _PersonaEditorFieldsState extends State<PersonaEditorFields> {
                       label: Text(topic),
                       onSelected: (_) => _toggleTopic(topic),
                     ),
-                  for (final topic in draft.avoidTopics
-                      .where((topic) => !_presetTopics.contains(topic)))
+                  for (final topic in draft.avoidTopics.where(
+                    (topic) => !_presetTopics.contains(topic),
+                  ))
                     FilterChip(
                       selected: true,
                       label: Text(topic),
@@ -278,11 +274,7 @@ class _PersonaEditorFieldsState extends State<PersonaEditorFields> {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({
-    required this.title,
-    required this.child,
-    this.subtitle,
-  });
+  const _Section({required this.title, required this.child, this.subtitle});
 
   final String title;
   final String? subtitle;

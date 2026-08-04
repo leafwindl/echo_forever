@@ -339,12 +339,16 @@ class UserPersona {
     bool clearUpdatedAt = false,
   }) {
     return UserPersona(
-      preferredName: clearPreferredName ? null : preferredName ?? this.preferredName,
+      preferredName: clearPreferredName
+          ? null
+          : preferredName ?? this.preferredName,
       replyStyle: replyStyle ?? this.replyStyle,
       replyLength: replyLength ?? this.replyLength,
       supportMode: supportMode ?? this.supportMode,
       proactivity: proactivity ?? this.proactivity,
-      avoidTopics: clearAvoidTopics ? <String>[] : avoidTopics ?? this.avoidTopics,
+      avoidTopics: clearAvoidTopics
+          ? <String>[]
+          : avoidTopics ?? this.avoidTopics,
       aboutUser: clearAboutUser ? null : aboutUser ?? this.aboutUser,
       relationshipPace: relationshipPace ?? this.relationshipPace,
       affectionStyle: affectionStyle ?? this.affectionStyle,

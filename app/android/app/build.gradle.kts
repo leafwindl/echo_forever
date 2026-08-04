@@ -4,6 +4,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val enableFirebase = providers.gradleProperty("echo.enableFirebase").orNull == "true"
+if (enableFirebase) {
+    // 待 Firebase 项目配置后启用：仅在存在 google-services.json 时应用插件。
+    require(file("google-services.json").exists()) {
+        "echo.enableFirebase=true requires android/app/google-services.json"
+    }
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "cn.echoaiforever.echo_app"
     compileSdk = 37

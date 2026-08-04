@@ -16,10 +16,7 @@ class MemoryApi {
   }) async {
     final response = await _client.get<Map<String, dynamic>>(
       listPath,
-      queryParameters: <String, dynamic>{
-        'status': status,
-        'limit': limit,
-      },
+      queryParameters: <String, dynamic>{'status': status, 'limit': limit},
     );
     return MemoryListResponseDto.fromJson(response.data!);
   }
@@ -38,10 +35,7 @@ class MemoryApi {
 }
 
 class MemoryListResponseDto {
-  const MemoryListResponseDto({
-    required this.memories,
-    required this.count,
-  });
+  const MemoryListResponseDto({required this.memories, required this.count});
 
   factory MemoryListResponseDto.fromJson(Map<String, dynamic> json) {
     return MemoryListResponseDto(
@@ -58,10 +52,7 @@ class MemoryListResponseDto {
 }
 
 class MemoryDeleteResponseDto {
-  const MemoryDeleteResponseDto({
-    required this.memoryId,
-    required this.status,
-  });
+  const MemoryDeleteResponseDto({required this.memoryId, required this.status});
 
   factory MemoryDeleteResponseDto.fromJson(Map<String, dynamic> json) {
     return MemoryDeleteResponseDto(
@@ -75,9 +66,7 @@ class MemoryDeleteResponseDto {
 }
 
 class MemoryClearResponseDto {
-  const MemoryClearResponseDto({
-    required this.clearedCount,
-  });
+  const MemoryClearResponseDto({required this.clearedCount});
 
   factory MemoryClearResponseDto.fromJson(Map<String, dynamic> json) {
     return MemoryClearResponseDto(

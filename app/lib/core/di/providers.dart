@@ -23,6 +23,7 @@ import 'package:echo_app/features/memory/data/memory_api.dart';
 import 'package:echo_app/features/memory/data/memory_repository.dart';
 import 'package:echo_app/features/persona/data/persona_api.dart';
 import 'package:echo_app/features/persona/data/persona_repository.dart';
+import 'package:echo_app/features/push/presentation/push_controller.dart';
 import 'package:echo_app/features/stickers/data/stickers_api.dart';
 import 'package:echo_app/features/stickers/data/stickers_repository.dart';
 import 'package:flutter/foundation.dart';
@@ -119,6 +120,11 @@ final lettersApiProvider = Provider<LettersApi>((ref) {
 
 final lettersRepositoryProvider = Provider<LettersRepository>((ref) {
   return LettersRepositoryImpl(ref.watch(lettersApiProvider));
+});
+
+// Initializes Firebase lazily so builds without google-services.json remain usable.
+final pushInitializationProvider = FutureProvider<void>((ref) async {
+  await ref.read(pushControllerProvider.notifier).initialize();
 });
 
 Dio _createDio(Ref ref, {required bool authenticated}) {

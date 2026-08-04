@@ -12,6 +12,7 @@ import 'package:echo_app/features/memory/presentation/memory_page.dart';
 import 'package:echo_app/features/onboarding/presentation/onboarding_page.dart';
 import 'package:echo_app/features/persona/presentation/persona_controller.dart';
 import 'package:echo_app/features/persona/presentation/persona_page.dart';
+import 'package:echo_app/features/push/presentation/notification_settings_page.dart';
 import 'package:echo_app/features/stickers/presentation/stickers_page.dart';
 import 'package:echo_app/shared/widgets/echo_error_view.dart';
 import 'package:echo_app/shared/widgets/echo_loading_view.dart';
@@ -89,6 +90,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const OnboardingPage(),
       ),
       GoRoute(
+        path: '/chat',
+        name: RouteNames.chat,
+        builder: (context, state) => const ChatPage(),
+      ),
+      GoRoute(
         path: '/home',
         name: RouteNames.home,
         builder: (context, state) => const ChatPage(),
@@ -117,6 +123,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/stickers',
         name: RouteNames.stickers,
         builder: (context, state) => const StickersPage(),
+      ),
+      GoRoute(
+        path: '/notification-settings',
+        name: RouteNames.notificationSettings,
+        builder: (context, state) => const NotificationSettingsPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

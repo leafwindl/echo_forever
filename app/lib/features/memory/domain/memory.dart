@@ -96,29 +96,21 @@ class MemoryRecord {
 }
 
 class MemoryListResult {
-  const MemoryListResult({
-    required this.memories,
-    required this.count,
-  });
+  const MemoryListResult({required this.memories, required this.count});
 
   final List<MemoryRecord> memories;
   final int count;
 }
 
 class MemoryDeleteResult {
-  const MemoryDeleteResult({
-    required this.memoryId,
-    required this.status,
-  });
+  const MemoryDeleteResult({required this.memoryId, required this.status});
 
   final String memoryId;
   final MemoryStatus status;
 }
 
 class MemoryClearResult {
-  const MemoryClearResult({
-    required this.clearedCount,
-  });
+  const MemoryClearResult({required this.clearedCount});
 
   final int clearedCount;
 }

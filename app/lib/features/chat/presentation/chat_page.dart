@@ -14,7 +14,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-enum _ChatMenuAction { persona, memory, stickers, clearContext, logout }
+enum _ChatMenuAction {
+  persona,
+  memory,
+  stickers,
+  notificationSettings,
+  clearContext,
+  logout,
+}
 
 typedef CharacterBuilder = Widget Function(bool chatExpanded);
 
@@ -88,6 +95,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 child: Text('表情包库'),
               ),
               PopupMenuItem<_ChatMenuAction>(
+                value: _ChatMenuAction.notificationSettings,
+                child: Text('通知设置'),
+              ),
+              PopupMenuItem<_ChatMenuAction>(
                 value: _ChatMenuAction.clearContext,
                 child: Text('清除聊天上下文'),
               ),
@@ -156,6 +167,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         unawaited(context.pushNamed(RouteNames.memory));
       case _ChatMenuAction.stickers:
         unawaited(context.pushNamed(RouteNames.stickers));
+      case _ChatMenuAction.notificationSettings:
+        unawaited(context.pushNamed(RouteNames.notificationSettings));
       case _ChatMenuAction.clearContext:
         await _confirmAndClearContext();
       case _ChatMenuAction.logout:

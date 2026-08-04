@@ -28,6 +28,5 @@ class PersonaRepositoryImpl implements PersonaRepository {
   Future<RelationshipStateDto> getRelationship() => _api.getRelationship();
 
   @override
-  Future<RelationshipStateDto> resetRelationship() =>
-      _api.resetRelationship();
+  Future<RelationshipStateDto> resetRelationship() => _api.resetRelationship();
 }

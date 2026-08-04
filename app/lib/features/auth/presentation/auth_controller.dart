@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:echo_app/core/auth_session/session_controller.dart';
 import 'package:echo_app/core/auth_session/session_events.dart';
 import 'package:echo_app/core/auth_session/session_snapshot.dart';
@@ -6,6 +8,7 @@ import 'package:echo_app/core/errors/app_exception.dart';
 import 'package:echo_app/core/routing/pending_route_store.dart';
 import 'package:echo_app/features/auth/domain/auth_session.dart';
 import 'package:echo_app/features/auth/domain/phone_verification.dart';
+import 'package:echo_app/features/push/data/push_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum AuthOperation { idle, sendingCode, verifyingCode, signingOut }
@@ -86,6 +89,8 @@ class AuthController extends Notifier<AuthFlowState> {
       await ref
           .read(sessionControllerProvider.notifier)
           .establish(_toSnapshot(session));
+      final push = ref.read(pushControllerProvider.notifier);
+      unawaited(push.initialize().then((_) => push.registerCurrentToken()));
       state = const AuthFlowState();
       return true;
     } on Object catch (error) {
@@ -108,6 +113,9 @@ class AuthController extends Notifier<AuthFlowState> {
     final snapshot = ref.read(sessionControllerProvider).asData?.value;
     try {
       if (snapshot?.isAuthenticated ?? false) {
+        await ref
+            .read(pushControllerProvider.notifier)
+            .unregisterCurrentDevice();
         await ref
             .read(authRepositoryProvider)
             .logout(
