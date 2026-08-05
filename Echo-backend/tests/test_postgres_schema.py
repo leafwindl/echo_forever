@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from db.postgres_schema import build_postgres_schema_text
+from db.postgres_schema import build_postgres_schema_sql, build_postgres_schema_text
 
 
 class PostgresSchemaTests(unittest.TestCase):
@@ -43,6 +43,24 @@ class PostgresSchemaTests(unittest.TestCase):
         self.assertIn("affection_permission VARCHAR(32)", schema_text)
         self.assertIn("CREATE TABLE IF NOT EXISTS relationship_events", schema_text)
         self.assertIn("idx_relationship_events_user_type", schema_text)
+
+    def test_phone_auth_upgrade_alters_legacy_users_before_creating_index(self):
+        statements = [
+            statement.strip() for statement in build_postgres_schema_sql(vector_dimension=1024)
+        ]
+
+        drop_openid = statements.index("ALTER TABLE users DROP COLUMN IF EXISTS openid")
+        add_phone = statements.index("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT")
+        add_phone_verified_at = statements.index(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified_at TIMESTAMPTZ"
+        )
+        create_phone_index = statements.index(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL"
+        )
+
+        self.assertLess(drop_openid, add_phone)
+        self.assertLess(add_phone, create_phone_index)
+        self.assertLess(add_phone_verified_at, create_phone_index)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
+        "DROP INDEX IF EXISTS idx_users_openid",
+        "ALTER TABLE users DROP COLUMN IF EXISTS openid",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified_at TIMESTAMPTZ",
         """
         CREATE TABLE IF NOT EXISTS sms_verification_challenges (
             request_id TEXT PRIMARY KEY,
