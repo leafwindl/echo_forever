@@ -48,6 +48,12 @@ async def upload_sticker(
 ):
     content = await file.read(settings.sticker_upload_max_bytes + 1)
     content_type = (file.content_type or "").lower()
+    clean_description = description.strip()
+    clean_tags = normalize_tags(tags.split(","))
+    if not clean_description:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请填写表情包描述")
+    if not clean_tags:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请至少填写一个语义标签")
     try:
         content_hash = validate_image(content, content_type, settings.sticker_upload_max_bytes)
     except ValueError as exc:
@@ -70,8 +76,8 @@ async def upload_sticker(
         content_type,
         len(content),
         content_hash,
-        description,
-        normalize_tags(tags.split(",")),
+        clean_description,
+        clean_tags,
     )
     return _response(item)
 

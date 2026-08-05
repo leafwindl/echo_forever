@@ -6,6 +6,8 @@ import 'package:echo_app/features/auth/presentation/auth_controller.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/presentation/chat_controller.dart';
 import 'package:echo_app/features/letters/presentation/letters_controller.dart';
+import 'package:echo_app/features/stickers/domain/sticker.dart';
+import 'package:echo_app/features/stickers/presentation/stickers_controller.dart';
 import 'package:echo_app/shared/widgets/character_renderer.dart';
 import 'package:echo_app/shared/widgets/confirm_action_sheet.dart';
 import 'package:flutter/material.dart';
@@ -119,7 +121,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               child:
                   widget.characterBuilder?.call(state.chatExpanded) ??
                   StaticCharacterRenderer(
-                    chatExpanded: state.chatExpanded,
+                    state: state.chatExpanded
+                        ? CharacterDisplayState.sitting
+                        : CharacterDisplayState.idle,
                     key: const Key('static-character-renderer'),
                   ),
             ),
@@ -133,6 +137,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 inputText: _inputText,
                 onInputChanged: (value) => setState(() => _inputText = value),
                 onSend: _send,
+                onOpenStickers: _openStickerPicker,
                 onToggleExpanded: () => ref
                     .read(chatControllerProvider.notifier)
                     .toggleChatExpanded(),
@@ -157,6 +162,41 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _inputController.clear();
     setState(() => _inputText = '');
     unawaited(ref.read(chatControllerProvider.notifier).sendMessage(message));
+  }
+
+  Future<void> _openStickerPicker() async {
+    if (ref.read(chatControllerProvider).isBusy) {
+      return;
+    }
+    _inputFocusNode.unfocus();
+    final sticker = await showModalBottomSheet<StickerItem>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => _StickerPickerSheet(
+        onManage: () {
+          Navigator.of(sheetContext).pop();
+          unawaited(context.pushNamed(RouteNames.stickers));
+        },
+      ),
+    );
+    if (sticker == null || !mounted) {
+      return;
+    }
+    final uri = sticker.safeUri;
+    if (uri == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('该表情包暂时无法发送')));
+      return;
+    }
+    unawaited(
+      ref
+          .read(chatControllerProvider.notifier)
+          .sendSticker(
+            ChatSticker(stickerId: sticker.stickerId, url: uri.toString()),
+          ),
+    );
   }
 
   Future<void> _handleMenuAction(_ChatMenuAction action) async {
@@ -281,6 +321,7 @@ class _ChatPanel extends StatelessWidget {
     required this.inputText,
     required this.onInputChanged,
     required this.onSend,
+    required this.onOpenStickers,
     required this.onToggleExpanded,
     required this.onDismissError,
     required this.onOpenSource,
@@ -294,6 +335,7 @@ class _ChatPanel extends StatelessWidget {
   final String inputText;
   final ValueChanged<String> onInputChanged;
   final VoidCallback onSend;
+  final VoidCallback onOpenStickers;
   final VoidCallback onToggleExpanded;
   final VoidCallback onDismissError;
   final ValueChanged<ChatSource> onOpenSource;
@@ -350,6 +392,7 @@ class _ChatPanel extends StatelessWidget {
             canSend: inputText.trim().isNotEmpty,
             onChanged: onInputChanged,
             onSend: onSend,
+            onOpenStickers: onOpenStickers,
           ),
         ],
       ),
@@ -366,6 +409,7 @@ class _ChatInput extends StatelessWidget {
     required this.canSend,
     required this.onChanged,
     required this.onSend,
+    required this.onOpenStickers,
   });
 
   final TextEditingController controller;
@@ -375,6 +419,7 @@ class _ChatInput extends StatelessWidget {
   final bool canSend;
   final ValueChanged<String> onChanged;
   final VoidCallback onSend;
+  final VoidCallback onOpenStickers;
 
   @override
   Widget build(BuildContext context) {
@@ -385,6 +430,12 @@ class _ChatInput extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: <Widget>[
+            IconButton(
+              key: const Key('chat-sticker-button'),
+              tooltip: '表情包',
+              onPressed: enabled ? onOpenStickers : null,
+              icon: const Icon(Icons.emoji_emotions_outlined),
+            ),
             Expanded(
               child: TextField(
                 key: const Key('chat-input'),
@@ -423,6 +474,173 @@ class _ChatInput extends StatelessWidget {
   }
 }
 
+class _StickerPickerSheet extends ConsumerWidget {
+  const _StickerPickerSheet({required this.onManage});
+
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncState = ref.watch(stickersControllerProvider);
+    final current = asyncState.asData?.value;
+    final items = current?.items ?? const <StickerItem>[];
+    final isLoading = asyncState.isLoading || current?.isLoading == true;
+    final error = current?.error;
+    final height = MediaQuery.sizeOf(context).height * 0.58;
+
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: height.clamp(320.0, 560.0),
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      '表情包',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '管理表情包',
+                    onPressed: onManage,
+                    icon: const Icon(Icons.photo_library_outlined),
+                  ),
+                  IconButton(
+                    tooltip: '刷新',
+                    onPressed: isLoading
+                        ? null
+                        : () => ref
+                              .read(stickersControllerProvider.notifier)
+                              .refresh(),
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+            ),
+            if (isLoading) const LinearProgressIndicator(minHeight: 2),
+            Expanded(
+              child: switch ((items.isEmpty, isLoading, error)) {
+                (true, true, _) => const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                (true, false, final error?) => _StickerPickerError(
+                  message: error.detail ?? '表情包加载失败',
+                  onRetry: () =>
+                      ref.read(stickersControllerProvider.notifier).refresh(),
+                ),
+                (true, false, null) => _StickerPickerEmpty(onManage: onManage),
+                _ => GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final sticker = items[index];
+                    return _StickerPickerTile(sticker: sticker);
+                  },
+                ),
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerPickerTile extends StatelessWidget {
+  const _StickerPickerTile({required this.sticker});
+
+  final StickerItem sticker;
+
+  @override
+  Widget build(BuildContext context) {
+    final uri = sticker.safeUri;
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: ValueKey<String>('send-sticker-${sticker.stickerId}'),
+        onTap: uri == null ? null : () => Navigator.of(context).pop(sticker),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: uri == null
+              ? const Icon(Icons.broken_image_outlined)
+              : CachedNetworkImage(
+                  imageUrl: uri.toString(),
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  errorWidget: (context, url, error) =>
+                      const Icon(Icons.broken_image_outlined),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StickerPickerEmpty extends StatelessWidget {
+  const _StickerPickerEmpty({required this.onManage});
+
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(Icons.emoji_emotions_outlined, size: 40),
+          const SizedBox(height: 10),
+          const Text('还没有可发送的表情包'),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onManage,
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: const Text('添加表情包'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StickerPickerError extends StatelessWidget {
+  const _StickerPickerError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('重试'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
@@ -439,52 +657,67 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = message.sender == ChatMessageSender.user;
     final colorScheme = Theme.of(context).colorScheme;
+    final stickerUri = message.sticker?.safeUri;
+    final hasTextBubble =
+        message.isTyping ||
+        message.content.isNotEmpty ||
+        message.sources.isNotEmpty;
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isUser
-              ? colorScheme.primaryContainer
-              : message.isError
-              ? colorScheme.errorContainer
-              : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: message.isTyping
-            ? const _TypingIndicator()
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  if (message.content.isNotEmpty)
-                    SelectableText(message.content),
-                  if (message.sticker?.safeUri
-                      case final Uri stickerUri) ...<Widget>[
-                    const SizedBox(height: 8),
-                    CachedNetworkImage(
-                      imageUrl: stickerUri.toString(),
-                      width: 144,
-                      height: 144,
-                      fit: BoxFit.contain,
-                      errorWidget: (context, url, error) => const SizedBox(
-                        width: 144,
-                        height: 64,
-                        child: Center(child: Text('表情加载失败')),
-                      ),
-                    ),
-                  ],
-                  for (final source in message.sources)
-                    _SourceTile(
-                      source: source,
-                      onOpen: () => onOpenSource(source),
-                      onCopy: () => onCopySource(source),
-                    ),
-                ],
+      child: Column(
+        crossAxisAlignment: isUser
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: <Widget>[
+          if (hasTextBubble)
+            Container(
+              key: ValueKey<String>('chat-text-bubble-${message.id}'),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width * 0.78,
               ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isUser
+                    ? colorScheme.primaryContainer
+                    : message.isError
+                    ? colorScheme.errorContainer
+                    : colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: message.isTyping
+                  ? const _TypingIndicator()
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        if (message.content.isNotEmpty)
+                          SelectableText(message.content),
+                        for (final source in message.sources)
+                          _SourceTile(
+                            source: source,
+                            onOpen: () => onOpenSource(source),
+                            onCopy: () => onCopySource(source),
+                          ),
+                      ],
+                    ),
+            ),
+          if (stickerUri case final Uri uri)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: CachedNetworkImage(
+                key: ValueKey<String>('chat-sticker-image-${message.id}'),
+                imageUrl: uri.toString(),
+                width: 144,
+                height: 144,
+                fit: BoxFit.contain,
+                errorWidget: (context, url, error) => const SizedBox(
+                  width: 144,
+                  height: 64,
+                  child: Center(child: Text('表情加载失败')),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

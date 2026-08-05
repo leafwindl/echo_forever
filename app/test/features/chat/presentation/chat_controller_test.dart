@@ -94,6 +94,38 @@ void main() {
     },
   );
 
+  test(
+    'sends a sticker as a standalone user message and waits for Echo',
+    () async {
+      const sticker = ChatSticker(
+        stickerId: 'wave',
+        url: 'https://cdn.example.test/wave.png',
+      );
+      final repository = FakeChatRepository(
+        onSendSticker: (sentSticker, _) async {
+          expect(sentSticker.stickerId, 'wave');
+          return const ChatReply(reply: '我看到你在挥手啦。');
+        },
+      );
+      final container = _container(repository);
+      addTearDown(container.dispose);
+      final subscription = _keepAlive(container);
+      addTearDown(subscription.close);
+
+      final accepted = await container
+          .read(chatControllerProvider.notifier)
+          .sendSticker(sticker);
+      final messages = container.read(chatControllerProvider).messages;
+
+      expect(accepted, isTrue);
+      expect(repository.sendStickerCalls, 1);
+      expect(messages[messages.length - 2].sender, ChatMessageSender.user);
+      expect(messages[messages.length - 2].content, isEmpty);
+      expect(messages[messages.length - 2].sticker?.stickerId, 'wave');
+      expect(messages.last.content, '我看到你在挥手啦。');
+    },
+  );
+
   test('clear resets memory messages and creates a restart greeting', () async {
     final repository = FakeChatRepository();
     final container = _container(repository, preferredName: '小叶');

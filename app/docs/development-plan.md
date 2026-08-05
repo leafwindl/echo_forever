@@ -985,7 +985,7 @@ Widget 测试覆盖：
 - [ ] call 完成权限、按住/松开/取消、partial/final、整段降级、`mode=call`、字幕、TTS 多段播放、用户打断和挂断资源释放。
 - [x] PCM 与后端 ASR 编码门禁已经通过，不存在 PCM 以 MP3 配置转发的情况。
 - [ ] Android 活动 call 在后台/锁屏下按设计继续；通知栏可见且“结束”有效；系统不允许时能安全降级。
-- [ ] 角色使用静态图和轻动效，chat/call 只依赖 `CharacterRenderer`，无 Live2D SDK。
+- [x] 角色使用静态图和轻动效，chat/call 只依赖 `CharacterRenderer`，无 Live2D SDK。
 
 质量验收：
 

@@ -153,15 +153,42 @@ class StickersPage extends ConsumerWidget {
     if (selection == null) {
       return;
     }
+    if (!context.mounted) {
+      return;
+    }
+    final metadata = await _collectMetadata(context);
+    if (metadata == null) {
+      return;
+    }
     final saved = await ref
         .read(stickersControllerProvider.notifier)
-        .savePickedImage(selection);
+        .savePickedImage(
+          selection,
+          description: metadata.description,
+          tags: metadata.tags,
+        );
     if (!context.mounted) {
       return;
     }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(saved ? '已存进私人库' : '保存失败，请检查提示后重试')));
+  }
+
+  Future<_StickerMetadata?> _collectMetadata(BuildContext context) {
+    return showDialog<_StickerMetadata>(
+      context: context,
+      builder: (dialogContext) => const _StickerMetadataDialog(),
+    );
+  }
+
+  static List<String> _parseTags(String value) {
+    return value
+        .split(RegExp(r'[,，、\s]+'))
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
   }
 
   Future<void> _retrySave(BuildContext context, WidgetRef ref) async {
@@ -211,6 +238,98 @@ class StickersPage extends ConsumerWidget {
         context,
       ).showSnackBar(const SnackBar(content: Text('表情包已删除')));
     }
+  }
+}
+
+class _StickerMetadata {
+  const _StickerMetadata({required this.description, required this.tags});
+
+  final String description;
+  final List<String> tags;
+}
+
+class _StickerMetadataDialog extends StatefulWidget {
+  const _StickerMetadataDialog();
+
+  @override
+  State<_StickerMetadataDialog> createState() => _StickerMetadataDialogState();
+}
+
+class _StickerMetadataDialogState extends State<_StickerMetadataDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _tagsController = TextEditingController();
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    _tagsController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('完善表情包信息'),
+      content: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextFormField(
+                key: const Key('sticker-description-input'),
+                controller: _descriptionController,
+                autofocus: true,
+                maxLength: 300,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: '描述',
+                  hintText: '例如：开心地挥手',
+                ),
+                validator: (value) =>
+                    value?.trim().isEmpty ?? true ? '请填写表情包表达的意思' : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                key: const Key('sticker-tags-input'),
+                controller: _tagsController,
+                maxLength: 300,
+                decoration: const InputDecoration(
+                  labelText: '语义标签',
+                  hintText: '开心, 挥手, 打招呼',
+                ),
+                validator: (value) =>
+                    StickersPage._parseTags(value ?? '').isEmpty
+                    ? '请至少填写一个标签'
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          key: const Key('confirm-sticker-metadata-button'),
+          onPressed: () {
+            if (_formKey.currentState?.validate() != true) {
+              return;
+            }
+            Navigator.of(context).pop(
+              _StickerMetadata(
+                description: _descriptionController.text.trim(),
+                tags: StickersPage._parseTags(_tagsController.text),
+              ),
+            );
+          },
+          child: const Text('保存'),
+        ),
+      ],
+    );
   }
 }
 

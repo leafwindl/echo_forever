@@ -42,6 +42,8 @@ void main() {
             name: 'wave.bmp',
             byteLength: 100,
           ),
+          description: '挥手',
+          tags: const <String>['挥手'],
         );
 
     final state = container.read(stickersControllerProvider).asData!.value;
@@ -68,11 +70,17 @@ void main() {
             name: 'wave.png',
             byteLength: 100,
           ),
+          description: '开心挥手',
+          tags: const <String>['开心', '挥手'],
         );
 
     final state = container.read(stickersControllerProvider).asData!.value;
     expect(saved, isTrue);
     expect(repository.uploadedNames, <String>['wave.png']);
+    expect(repository.uploadedDescriptions, <String>['开心挥手']);
+    expect(repository.uploadedTags, <List<String>>[
+      <String>['开心', '挥手'],
+    ]);
     expect(repository.confirmedIds, <String>['uploaded-1']);
     expect(state.saveStep, StickerSaveStep.idle);
     expect(state.items.single.stickerId, 'uploaded-1');
@@ -105,6 +113,8 @@ void main() {
             name: 'wave.png',
             byteLength: 100,
           ),
+          description: '开心挥手',
+          tags: const <String>['开心', '挥手'],
         );
     final failed = container.read(stickersControllerProvider).asData!.value;
     final retry = await container

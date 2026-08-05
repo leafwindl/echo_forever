@@ -84,6 +84,19 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS chat_request_results (
+            user_id TEXT NOT NULL,
+            request_id TEXT NOT NULL,
+            request_fingerprint TEXT NOT NULL,
+            status VARCHAR(24) NOT NULL DEFAULT 'processing',
+            response_payload JSONB,
+            error_code TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY(user_id, request_id)
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS user_memories (
             id BIGSERIAL PRIMARY KEY,
             memory_id TEXT NOT NULL UNIQUE,
@@ -387,11 +400,15 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_stickers_hash ON stickers(perceptual_hash)",
         "CREATE INDEX IF NOT EXISTS idx_sticker_jobs_status_created ON sticker_generation_jobs(status, created_at)",
         "CREATE INDEX IF NOT EXISTS idx_chat_attachments_message ON chat_message_attachments(message_id, position)",
+        "CREATE INDEX IF NOT EXISTS idx_chat_request_results_updated ON chat_request_results(status, updated_at)",
     ]
 
 
 def build_postgres_schema_text(vector_dimension: int | None = None) -> str:
-    return ";\n\n".join(statement.strip() for statement in build_postgres_schema_sql(vector_dimension)) + ";\n"
+    return (
+        ";\n\n".join(statement.strip() for statement in build_postgres_schema_sql(vector_dimension))
+        + ";\n"
+    )
 
 
 def init_db() -> None:

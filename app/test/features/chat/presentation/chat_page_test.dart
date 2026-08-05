@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:echo_app/core/di/providers.dart';
+import 'package:echo_app/core/storage/secure_store.dart';
 import 'package:echo_app/features/chat/data/chat_providers.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/presentation/chat_controller.dart';
@@ -9,16 +11,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../support/fake_session_store.dart';
+import '../../stickers/fakes.dart' as sticker_fakes;
 import '../fakes.dart';
 
 void main() {
-  testWidgets('shows the local greeting and static character placeholder', (
+  testWidgets('shows the local greeting and idle character artwork', (
     tester,
   ) async {
     await _pumpChat(tester, FakeChatRepository(), preferredName: '小叶');
 
     expect(find.text('嗨，小叶。我在呢，今天想聊点什么？'), findsOneWidget);
     expect(find.byKey(const Key('static-character-renderer')), findsOneWidget);
+    expect(find.byKey(const Key('character-idle-image')), findsOneWidget);
     expect(find.byKey(const Key('chat-input')), findsOneWidget);
   });
 
@@ -56,6 +61,58 @@ void main() {
     expect(find.text('发送'), findsOneWidget);
   });
 
+  testWidgets('opens saved stickers and sends the tapped item immediately', (
+    tester,
+  ) async {
+    final chatRepository = FakeChatRepository(
+      onSendSticker: (_, _) async => const ChatReply(reply: '收到你的表情啦。'),
+    );
+    final stickerRepository = sticker_fakes.FakeStickersRepository(
+      items: [
+        sticker_fakes.stickerFixture(
+          stickerId: 'wave',
+          url: 'https://cdn.example.test/wave.png',
+          description: '开心挥手',
+        ),
+      ],
+    );
+    await _pumpChat(
+      tester,
+      chatRepository,
+      stickerRepository: stickerRepository,
+    );
+
+    await tester.tap(find.byKey(const Key('chat-sticker-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+      find.byKey(const ValueKey<String>('send-sticker-wave')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('send-sticker-wave')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(chatRepository.sendStickerCalls, 1);
+    expect(chatRepository.sentStickers.single.stickerId, 'wave');
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatPage)),
+    );
+    expect(
+      container.read(chatControllerProvider).messages.last.content,
+      '收到你的表情啦。',
+    );
+    expect(
+      find.byKey(const ValueKey<String>('chat-sticker-image-2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('chat-text-bubble-2')),
+      findsNothing,
+    );
+  });
+
   testWidgets(
     'clear confirmation explains memory and restores restart greeting',
     (tester) async {
@@ -89,6 +146,7 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-expand-toggle')));
     await tester.pumpAndSettle();
     expect(find.text('▼ 收起聊天'), findsOneWidget);
+    expect(find.byKey(const Key('character-sitting-image')), findsOneWidget);
 
     for (var index = 0; index < 8; index += 1) {
       await tester.enterText(find.byKey(const Key('chat-input')), '消息 $index');
@@ -123,6 +181,7 @@ Future<void> _pumpChat(
   FakeChatRepository repository, {
   String preferredName = '',
   int unreadLetterCount = 0,
+  sticker_fakes.FakeStickersRepository? stickerRepository,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -130,6 +189,12 @@ Future<void> _pumpChat(
         chatRepositoryProvider.overrideWithValue(repository),
         chatPreferredNameProvider.overrideWithValue(preferredName),
         lettersUnreadCountProvider.overrideWithValue(unreadLetterCount),
+        if (stickerRepository != null)
+          secureStoreProvider.overrideWithValue(
+            FakeSessionStore(testSession()),
+          ),
+        if (stickerRepository != null)
+          stickersRepositoryProvider.overrideWithValue(stickerRepository),
       ],
       child: const MaterialApp(home: ChatPage()),
     ),

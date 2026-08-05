@@ -2,6 +2,7 @@ import 'package:echo_app/features/call/data/call_providers.dart';
 import 'package:echo_app/features/call/domain/call_models.dart';
 import 'package:echo_app/features/call/presentation/call_controller.dart';
 import 'package:echo_app/features/call/presentation/call_page.dart';
+import 'package:echo_app/shared/widgets/character_renderer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +18,14 @@ void main() {
 
     expect(find.text('按住下方按钮说话'), findsOneWidget);
     expect(find.byKey(const Key('call-character')), findsOneWidget);
+    expect(
+      tester
+          .widget<StaticCharacterRenderer>(
+            find.byKey(const Key('call-character')),
+          )
+          .state,
+      CharacterDisplayState.idle,
+    );
     expect(find.byKey(const Key('call-talk-button')), findsOneWidget);
 
     final container = ProviderScope.containerOf(
@@ -29,6 +38,14 @@ void main() {
     await tester.pump();
 
     expect(find.text('正在听你说'), findsOneWidget);
+    expect(
+      tester
+          .widget<StaticCharacterRenderer>(
+            find.byKey(const Key('call-character')),
+          )
+          .state,
+      CharacterDisplayState.listening,
+    );
     expect(find.text('你：这是一段临时字幕'), findsOneWidget);
     expect(find.text('松开发送'), findsOneWidget);
   });

@@ -1,3 +1,3 @@
-from features.agent.domain.entities import AgentEnrichment, SourceReference
+from features.agent.domain.entities import AgentTurnResult, SourceReference
 
-__all__ = ["AgentEnrichment", "SourceReference"]
+__all__ = ["AgentTurnResult", "SourceReference"]

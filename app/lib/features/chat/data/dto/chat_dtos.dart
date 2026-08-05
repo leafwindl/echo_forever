@@ -1,12 +1,31 @@
 class ChatRequestDto {
-  const ChatRequestDto({required this.message, this.mode = 'chat'});
+  const ChatRequestDto({
+    required this.message,
+    this.mode = 'chat',
+    this.contentParts = const <ChatRequestContentPartDto>[],
+  });
 
   final String message;
   final String mode;
+  final List<ChatRequestContentPartDto> contentParts;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'message': message,
     'mode': mode,
+    if (contentParts.isNotEmpty)
+      'content_parts': contentParts.map((part) => part.toJson()).toList(),
+  };
+}
+
+class ChatRequestContentPartDto {
+  const ChatRequestContentPartDto.sticker(this.stickerId) : type = 'sticker';
+
+  final String type;
+  final String stickerId;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'type': type,
+    'sticker_id': stickerId,
   };
 }
 

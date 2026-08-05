@@ -17,12 +17,24 @@ class ChatRepositoryImpl implements ChatRepository {
       ChatRequestDto(message: message),
       cancellation: cancellation,
     );
-    return ChatReply(
-      reply: response.reply,
-      audioUrls: response.audioUrls,
-      contentParts: response.contentParts.map(_toContentPart).toList(),
-      sources: response.sources.map(_toSource).toList(),
+    return _toReply(response);
+  }
+
+  @override
+  Future<ChatReply> sendSticker(
+    ChatSticker sticker, {
+    ChatCancellation? cancellation,
+  }) async {
+    final response = await _api.sendMessage(
+      ChatRequestDto(
+        message: '',
+        contentParts: <ChatRequestContentPartDto>[
+          ChatRequestContentPartDto.sticker(sticker.stickerId),
+        ],
+      ),
+      cancellation: cancellation,
     );
+    return _toReply(response);
   }
 
   @override
@@ -31,6 +43,15 @@ class ChatRepositoryImpl implements ChatRepository {
     return ClearChatResult(
       deletedMessages: response.deletedMessages,
       resetConversations: response.resetConversations,
+    );
+  }
+
+  ChatReply _toReply(ChatResponseDto response) {
+    return ChatReply(
+      reply: response.reply,
+      audioUrls: response.audioUrls,
+      contentParts: response.contentParts.map(_toContentPart).toList(),
+      sources: response.sources.map(_toSource).toList(),
     );
   }
 

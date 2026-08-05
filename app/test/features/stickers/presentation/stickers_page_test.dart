@@ -29,8 +29,22 @@ void main() {
 
     await tester.tap(find.byKey(const Key('choose-sticker-button')));
     await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('sticker-description-input')),
+      '开心挥手',
+    );
+    await tester.enterText(
+      find.byKey(const Key('sticker-tags-input')),
+      '开心, 挥手',
+    );
+    await tester.tap(find.byKey(const Key('confirm-sticker-metadata-button')));
+    await tester.pumpAndSettle();
 
     expect(repository.uploadedNames, <String>['wave.png']);
+    expect(repository.uploadedDescriptions, <String>['开心挥手']);
+    expect(repository.uploadedTags, <List<String>>[
+      <String>['开心', '挥手'],
+    ]);
     expect(repository.confirmedIds, <String>['uploaded-1']);
     expect(find.text('已存进私人库'), findsOneWidget);
     expect(find.text('saved sticker'), findsOneWidget);

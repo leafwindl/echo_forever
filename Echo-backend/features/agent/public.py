@@ -1,12 +1,26 @@
-from features.agent.domain.entities import AgentEnrichment
-from features.agent.infrastructure.container import get_chat_agent
 from shared.config import settings
 
-
-async def enrich_chat(user_id: str, message: str) -> AgentEnrichment:
-    if not settings.agent_enabled:
-        return AgentEnrichment()
-    return await get_chat_agent().execute(user_id, message)
+from features.agent.domain.entities import AgentTurnResult
+from features.agent.infrastructure.container import get_chat_agent
 
 
-__all__ = ["AgentEnrichment", "enrich_chat"]
+async def run_chat_agent(
+    user_id: str,
+    message: str,
+    messages: list[dict],
+    conversation_mode: str = "chat",
+    sticker_intent: str = "",
+    allow_proactive_stickers: bool = True,
+) -> AgentTurnResult:
+    return await get_chat_agent().execute(
+        user_id,
+        message,
+        messages,
+        conversation_mode=conversation_mode,
+        sticker_intent=sticker_intent,
+        allow_proactive_stickers=allow_proactive_stickers,
+        tools_enabled=settings.agent_enabled,
+    )
+
+
+__all__ = ["AgentTurnResult", "run_chat_agent"]

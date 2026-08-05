@@ -1,8 +1,11 @@
-from typing import Optional, Protocol
+from typing import Protocol
+
+from features.agent.domain.entities import ContentPart
+from features.chat.domain.entities import ChatReplyDeliveryResult, ChatRequestClaim
 
 
 class ChatConversationRepository(Protocol):
-    def ensure_conversation(self, user_id: str, conversation_id: Optional[str]) -> str: ...
+    def ensure_conversation(self, user_id: str, conversation_id: str | None) -> str: ...
 
     def get_or_create_active_conversation(self, user_id: str) -> str: ...
 
@@ -14,6 +17,8 @@ class ChatConversationRepository(Protocol):
         assistant_reply: str,
         user_message_type: str,
         assistant_message_type: str,
+        user_content_parts: tuple[ContentPart, ...] = (),
+        assistant_content_parts: tuple[ContentPart, ...] = (),
     ) -> tuple[int, int]: ...
 
     def count_user_messages(self, user_id: str, conversation_id: str) -> int: ...
@@ -28,3 +33,22 @@ class ChatConversationRepository(Protocol):
 
 class ChatContextRepository(Protocol):
     def clear_context(self, user_id: str) -> tuple[int, int]: ...
+
+
+class ChatRequestResultRepository(Protocol):
+    def claim(
+        self,
+        user_id: str,
+        request_id: str,
+        request_fingerprint: str,
+    ) -> ChatRequestClaim: ...
+
+    def complete(
+        self,
+        user_id: str,
+        request_id: str,
+        request_fingerprint: str,
+        result: ChatReplyDeliveryResult,
+    ) -> None: ...
+
+    def abandon(self, user_id: str, request_id: str, request_fingerprint: str) -> None: ...

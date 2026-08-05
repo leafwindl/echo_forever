@@ -88,6 +88,36 @@ class ChatController extends Notifier<ChatState> {
       return false;
     }
 
+    return _send(
+      userContent: message,
+      request: (cancellation) => ref
+          .read(chatRepositoryProvider)
+          .sendMessage(message, cancellation: cancellation),
+    );
+  }
+
+  Future<bool> sendSticker(ChatSticker sticker) async {
+    if (state.isBusy || sticker.stickerId.isEmpty || sticker.safeUri == null) {
+      return false;
+    }
+
+    return _send(
+      userSticker: sticker,
+      request: (cancellation) => ref
+          .read(chatRepositoryProvider)
+          .sendSticker(sticker, cancellation: cancellation),
+    );
+  }
+
+  Future<bool> _send({
+    String userContent = '',
+    ChatSticker? userSticker,
+    required Future<ChatReply> Function(ChatCancellation cancellation) request,
+  }) async {
+    if (state.isBusy) {
+      return false;
+    }
+
     final userMessageId = state.nextMessageId;
     final typingMessageId = userMessageId + 1;
     final cancellation = ChatCancellation();
@@ -98,7 +128,8 @@ class ChatController extends Notifier<ChatState> {
         ChatMessage(
           id: userMessageId,
           sender: ChatMessageSender.user,
-          content: message,
+          content: userContent,
+          sticker: userSticker,
         ),
         ChatMessage.typing(id: typingMessageId),
       ],
@@ -108,12 +139,12 @@ class ChatController extends Notifier<ChatState> {
     );
 
     try {
-      final reply = await ref
-          .read(chatRepositoryProvider)
-          .sendMessage(message, cancellation: cancellation);
+      final reply = await request(cancellation);
       if (_disposed || cancellation.isCancelled) {
         return false;
       }
+      final replySticker = reply.firstSticker;
+      final replyText = reply.reply.trim();
       final safeSources = reply.sources
           .where((source) => source.safeUri != null)
           .toList(growable: false);
@@ -124,8 +155,10 @@ class ChatController extends Notifier<ChatState> {
           ChatMessage(
             id: typingMessageId,
             sender: ChatMessageSender.assistant,
-            content: reply.reply.trim().isEmpty ? _emptyReply : reply.reply,
-            sticker: reply.firstSticker,
+            content: replyText.isEmpty && replySticker == null
+                ? _emptyReply
+                : reply.reply,
+            sticker: replySticker,
             sources: safeSources,
           ),
         ),

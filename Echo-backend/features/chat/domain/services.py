@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from features.agent.domain.entities import AgentEnrichment
+from features.agent.domain.entities import AgentTurnResult
 from features.chat.domain.entities import ChatContext, MemoryExtractionScheduleResult
 
 
@@ -14,12 +14,16 @@ class ChatContextProvider(Protocol):
     ) -> ChatContext: ...
 
 
-class ChatLLM(Protocol):
-    async def generate_reply(self, messages: list[dict]) -> str: ...
-
-
-class ChatAgentEnricher(Protocol):
-    async def enrich(self, user_id: str, message: str) -> AgentEnrichment: ...
+class ChatAgentOrchestrator(Protocol):
+    async def run(
+        self,
+        user_id: str,
+        message: str,
+        messages: list[dict],
+        conversation_mode: str = "chat",
+        sticker_intent: str = "",
+        allow_proactive_stickers: bool = True,
+    ) -> AgentTurnResult: ...
 
 
 class ConversationSummaryUpdater(Protocol):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 
 from db.postgres_connection import get_connection, transaction
@@ -75,10 +76,18 @@ class PostgresStickerRepository:
     def list(self, user_id: str, query: str = "", limit: int = 50) -> list[Sticker]:
         params: list[object] = [user_id]
         where = "status='active' AND (owner_type='echo' OR owner_user_id=%s)"
-        if query.strip():
-            where += " AND (description ILIKE %s OR semantic_tags::text ILIKE %s)"
-            term = f"%{query.strip()}%"
-            params.extend([term, term])
+        terms = [
+            term
+            for term in re.split(r"[\s,，、;；]+", query.strip())
+            if term and term != "表情包"
+        ][:8]
+        if terms:
+            predicates: list[str] = []
+            for term in terms:
+                predicates.append("(description ILIKE %s OR semantic_tags::text ILIKE %s)")
+                pattern = f"%{term}%"
+                params.extend([pattern, pattern])
+            where += " AND (" + " OR ".join(predicates) + ")"
         params.append(limit)
         with get_connection() as conn, conn.cursor() as cursor:
             cursor.execute(

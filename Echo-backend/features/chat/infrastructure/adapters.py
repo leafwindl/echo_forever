@@ -1,15 +1,24 @@
 import threading
 
-from features.agent.public import enrich_chat
-from providers.llm_provider import get_llm_provider
 from shared.config import settings
 
-from features.chat.domain.entities import ChatContext, MemoryExtractionScheduleResult
-from features.chat.domain.repositories import ChatContextRepository, ChatConversationRepository
+from features.agent.domain.entities import ContentPart, SourceReference
+from features.agent.public import run_chat_agent
+from features.chat.domain.entities import (
+    ChatContext,
+    ChatReplyDeliveryResult,
+    ChatRequestClaim,
+    ChatRequestClaimStatus,
+    MemoryExtractionScheduleResult,
+)
+from features.chat.domain.repositories import (
+    ChatContextRepository,
+    ChatConversationRepository,
+    ChatRequestResultRepository,
+)
 from features.chat.domain.services import (
+    ChatAgentOrchestrator,
     ChatContextProvider,
-    ChatAgentEnricher,
-    ChatLLM,
     ChatRequestGuard,
     ChatVoiceReplySynthesizer,
     ConversationSummaryUpdater,
@@ -24,9 +33,24 @@ from features.persona.public import get_persona
 from features.relationship.public import record_relationship_turn
 
 
-class ChatAgentEnricherAdapter(ChatAgentEnricher):
-    async def enrich(self, user_id: str, message: str):
-        return await enrich_chat(user_id, message)
+class ChatAgentOrchestratorAdapter(ChatAgentOrchestrator):
+    async def run(
+        self,
+        user_id: str,
+        message: str,
+        messages: list[dict],
+        conversation_mode: str = "chat",
+        sticker_intent: str = "",
+        allow_proactive_stickers: bool = True,
+    ):
+        return await run_chat_agent(
+            user_id,
+            message,
+            messages,
+            conversation_mode=conversation_mode,
+            sticker_intent=sticker_intent,
+            allow_proactive_stickers=allow_proactive_stickers,
+        )
 
 
 class InMemoryChatRequestGuard(ChatRequestGuard):
@@ -74,6 +98,8 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
         assistant_reply: str,
         user_message_type: str,
         assistant_message_type: str,
+        user_content_parts=(),
+        assistant_content_parts=(),
     ) -> tuple[int, int]:
         return postgres_repositories.add_chat_turn(
             user_id=user_id,
@@ -82,6 +108,8 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
             assistant_reply=assistant_reply,
             user_message_type=user_message_type,
             assistant_message_type=assistant_message_type,
+            user_content_parts=user_content_parts,
+            assistant_content_parts=assistant_content_parts,
         )
 
     def count_user_messages(self, user_id: str, conversation_id: str) -> int:
@@ -99,6 +127,65 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
 class ChatContextRepositoryAdapter(ChatContextRepository):
     def clear_context(self, user_id: str) -> tuple[int, int]:
         return postgres_repositories.clear_context(user_id)
+
+
+class PostgresChatRequestResultRepositoryAdapter(ChatRequestResultRepository):
+    def claim(
+        self,
+        user_id: str,
+        request_id: str,
+        request_fingerprint: str,
+    ) -> ChatRequestClaim:
+        status, payload = postgres_repositories.claim_chat_request(
+            user_id,
+            request_id,
+            request_fingerprint,
+        )
+        result = self._result_from_payload(payload) if payload is not None else None
+        return ChatRequestClaim(status=ChatRequestClaimStatus(status), result=result)
+
+    def complete(
+        self,
+        user_id: str,
+        request_id: str,
+        request_fingerprint: str,
+        result: ChatReplyDeliveryResult,
+    ) -> None:
+        postgres_repositories.complete_chat_request(
+            user_id,
+            request_id,
+            request_fingerprint,
+            {
+                "reply": result.reply,
+                "audio_urls": list(result.audio_urls),
+                "sources": [vars(source) for source in result.sources],
+                "content_parts": [vars(part) for part in result.content_parts],
+            },
+        )
+
+    def abandon(self, user_id: str, request_id: str, request_fingerprint: str) -> None:
+        postgres_repositories.abandon_chat_request(
+            user_id,
+            request_id,
+            request_fingerprint,
+        )
+
+    @staticmethod
+    def _result_from_payload(payload: dict[str, object]) -> ChatReplyDeliveryResult:
+        return ChatReplyDeliveryResult(
+            reply=str(payload.get("reply") or ""),
+            audio_urls=tuple(str(url) for url in payload.get("audio_urls") or []),
+            sources=tuple(
+                SourceReference(**item)
+                for item in payload.get("sources") or []
+                if isinstance(item, dict)
+            ),
+            content_parts=tuple(
+                ContentPart(**item)
+                for item in payload.get("content_parts") or []
+                if isinstance(item, dict)
+            ),
+        )
 
 
 class ChatContextProviderAdapter(ChatContextProvider):
@@ -122,13 +209,8 @@ class ChatContextProviderAdapter(ChatContextProvider):
             long_term_memories=context.long_term_memories,
             memory_retrieval_mode=context.memory_retrieval_mode,
             pause_followup_questions=context.pause_followup_questions,
+            allow_proactive_stickers=context.allow_proactive_stickers,
         )
-
-
-class ChatLLMAdapter(ChatLLM):
-    async def generate_reply(self, messages: list[dict]) -> str:
-        provider = get_llm_provider()
-        return await provider.chat_completion(messages=messages)
 
 
 class ConversationSummaryUpdaterAdapter(ConversationSummaryUpdater):

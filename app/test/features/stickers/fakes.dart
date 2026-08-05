@@ -22,6 +22,8 @@ class FakeStickersRepository implements StickersRepository {
   int deleteCalls = 0;
   final List<String> uploadedPaths = <String>[];
   final List<String> uploadedNames = <String>[];
+  final List<String> uploadedDescriptions = <String>[];
+  final List<List<String>> uploadedTags = <List<String>>[];
   final List<String> confirmedIds = <String>[];
   final List<String> deletedIds = <String>[];
 
@@ -45,6 +47,8 @@ class FakeStickersRepository implements StickersRepository {
     uploadCalls += 1;
     uploadedPaths.add(filePath);
     uploadedNames.add(fileName);
+    uploadedDescriptions.add(description);
+    uploadedTags.add(tags);
     if (uploadError != null) throw uploadError!;
     if (onUpload != null) {
       return onUpload!(filePath: filePath, fileName: fileName);

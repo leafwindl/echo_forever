@@ -33,6 +33,7 @@ class ChatContext:
     long_term_memories: list[dict[str, object]] = field(default_factory=list)
     memory_retrieval_mode: str = "none"
     pause_followup_questions: bool = False
+    allow_proactive_stickers: bool = True
 
 
 def _list_active_memories_for_context(user_id: str) -> list[dict[str, object]]:
@@ -104,6 +105,14 @@ async def build_chat_context(
         after_message_id=summary_message_id,
     )
     pause_followup_questions = should_pause_followup_questions(history, user_message)
+    allow_proactive_stickers = (
+        conversation_mode == "chat"
+        and not postgres_repositories.has_recent_assistant_sticker(
+            user_id,
+            conversation_id,
+            assistant_turns=4,
+        )
+    )
 
     try:
         persona = get_persona(user_id)
@@ -167,4 +176,5 @@ async def build_chat_context(
         long_term_memories=long_term_memories,
         memory_retrieval_mode=memory_retrieval_mode,
         pause_followup_questions=pause_followup_questions,
+        allow_proactive_stickers=allow_proactive_stickers,
     )

@@ -12,3 +12,4 @@ class AgentSchemaTests(unittest.TestCase):
         self.assertIn("UNIQUE(user_id, local_date, generation_version)", schema)
         self.assertIn("CREATE TABLE IF NOT EXISTS stickers", schema)
         self.assertIn("CREATE TABLE IF NOT EXISTS chat_message_attachments", schema)
+        self.assertIn("CREATE TABLE IF NOT EXISTS chat_request_results", schema)

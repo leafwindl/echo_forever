@@ -1,0 +1,33 @@
+from providers.llm_provider import LLMProviderTimeoutError, get_llm_provider
+
+from features.agent.domain.entities import AgentModelResponse, AgentToolCall
+from features.agent.domain.services import AgentModelTimeoutError
+
+
+class ProviderAgentConversationModel:
+    async def complete(
+        self,
+        messages: list[dict],
+        tools: tuple[dict, ...],
+    ) -> AgentModelResponse:
+        try:
+            response = await get_llm_provider().chat_completion_message(
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+            )
+        except LLMProviderTimeoutError as exc:
+            raise AgentModelTimeoutError("Conversation model request timed out") from exc
+        return AgentModelResponse(
+            text=response.content,
+            tool_calls=tuple(
+                AgentToolCall(
+                    call_id=call.call_id,
+                    tool_name=call.name,
+                    arguments=call.arguments,
+                )
+                for call in response.tool_calls
+            ),
+            finish_reason=response.finish_reason,
+            provider_request_id=response.request_id,
+        )

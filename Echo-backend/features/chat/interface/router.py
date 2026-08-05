@@ -1,11 +1,12 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from shared.config import settings
 from shared.interface.dependencies import CurrentUser, get_current_user
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
+from features.agent.domain.entities import ContentPart
 from features.chat.interface.schemas import (
     ChatContentPart,
     ChatRequest,
@@ -19,9 +20,11 @@ from features.chat.public import (
     clear_chat_context,
     send_chat_message,
 )
+from features.stickers.infrastructure.postgres_repository import PostgresStickerRepository
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
+sticker_repository = PostgresStickerRepository()
 
 
 def consume_chat_quota(user_id: str) -> None:
@@ -43,7 +46,8 @@ def consume_chat_quota(user_id: str) -> None:
 
 @router.post("/send", response_model=ChatResponse)
 async def chat_send(
-    request: ChatRequest,
+    body: ChatRequest,
+    request: Request,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ):
     """发送用户消息并获取 AI 回复，按需附带语音回复。"""
@@ -56,11 +60,39 @@ async def chat_send(
             headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
 
+    message = body.message.strip()
+    user_message_type = "text"
+    sticker_intent = ""
+    user_content_parts: tuple[ContentPart, ...] = ()
+    if body.content_parts:
+        sticker_id = body.content_parts[0].sticker_id.strip()
+        sticker = sticker_repository.get(current_user.user_id, sticker_id)
+        if sticker is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="表情包不存在或无权使用",
+            )
+        tags = "、".join(sticker.semantic_tags)
+        sticker_intent = " ".join(
+            part for part in (sticker.description, *sticker.semantic_tags) if part.strip()
+        )
+        message = (
+            f"用户发送了一张表情包。描述：{sticker.description}。语义标签：{tags or '未提供'}。"
+        )
+        user_message_type = "sticker"
+        user_content_parts = (
+            ContentPart(type="sticker", sticker_id=sticker.sticker_id, url=sticker.url),
+        )
+
     try:
         result = await send_chat_message(
             user_id=current_user.user_id,
-            message=request.message,
-            conversation_mode=request.mode,
+            message=message,
+            conversation_mode=body.mode,
+            user_message_type=user_message_type,
+            sticker_intent=sticker_intent,
+            user_content_parts=user_content_parts,
+            request_id=request.headers.get("X-Request-ID", "")[:80],
         )
     except ChatValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e

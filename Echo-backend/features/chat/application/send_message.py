@@ -1,13 +1,17 @@
+import hashlib
+import json
 import logging
 
+from features.agent.domain.entities import ContentPart
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.domain.entities import (
     CONVERSATION_MODES,
     ChatReplyDeliveryResult,
+    ChatRequestClaimStatus,
     ChatRequestInProgressError,
 )
+from features.chat.domain.repositories import ChatRequestResultRepository
 from features.chat.domain.services import ChatRequestGuard, ChatVoiceReplySynthesizer
-from features.agent.domain.entities import ContentPart
 
 logger = logging.getLogger(__name__)
 
@@ -21,36 +25,75 @@ class SendChatMessage:
         chat_reply_generator: GenerateChatReply,
         voice_reply_synthesizer: ChatVoiceReplySynthesizer,
         request_guard: ChatRequestGuard,
+        request_result_repository: ChatRequestResultRepository | None = None,
     ):
         self.chat_reply_generator = chat_reply_generator
         self.voice_reply_synthesizer = voice_reply_synthesizer
         self.request_guard = request_guard
+        self.request_result_repository = request_result_repository
 
     async def execute(
         self,
         user_id: str,
         message: str,
         conversation_mode: str = "chat",
+        user_message_type: str = "text",
+        sticker_intent: str = "",
+        user_content_parts: tuple[ContentPart, ...] = (),
+        request_id: str = "",
     ) -> ChatReplyDeliveryResult:
         clean_user_id = user_id.strip()
         clean_mode = conversation_mode.strip().lower()
         if clean_mode not in CONVERSATION_MODES:
             raise ValueError("conversation_mode must be chat or call")
 
-        if not self.request_guard.try_acquire(clean_user_id):
-            raise ChatRequestInProgressError("上一条消息还在处理中，请稍后再试")
-
         is_call = clean_mode == "call"
-        user_message_type = VOICE_USER_MESSAGE_TYPE if is_call else "text"
+        resolved_user_message_type = (
+            VOICE_USER_MESSAGE_TYPE if is_call else user_message_type.strip() or "text"
+        )
         assistant_message_type = VOICE_ASSISTANT_MESSAGE_TYPE if is_call else "text"
+        clean_request_id = request_id.strip()
+        request_fingerprint = self._request_fingerprint(
+            clean_user_id,
+            message,
+            clean_mode,
+            resolved_user_message_type,
+            sticker_intent,
+            user_content_parts,
+        )
+        claimed_request = False
+        if clean_request_id and self.request_result_repository is not None:
+            claim = self.request_result_repository.claim(
+                clean_user_id,
+                clean_request_id,
+                request_fingerprint,
+            )
+            if claim.status == ChatRequestClaimStatus.COMPLETED and claim.result is not None:
+                return claim.result
+            if claim.status == ChatRequestClaimStatus.CONFLICT:
+                raise ValueError("request_id cannot be reused with different chat content")
+            if claim.status == ChatRequestClaimStatus.IN_PROGRESS:
+                raise ChatRequestInProgressError("这条消息正在处理中，请稍后再试")
+            claimed_request = claim.status == ChatRequestClaimStatus.CLAIMED
+
+        if not self.request_guard.try_acquire(clean_user_id):
+            if claimed_request and self.request_result_repository is not None:
+                self.request_result_repository.abandon(
+                    clean_user_id,
+                    clean_request_id,
+                    request_fingerprint,
+                )
+            raise ChatRequestInProgressError("上一条消息还在处理中，请稍后再试")
 
         try:
             chat_result = await self.chat_reply_generator.execute(
                 user_id=clean_user_id,
                 message=message,
-                user_message_type=user_message_type,
+                user_message_type=resolved_user_message_type,
                 assistant_message_type=assistant_message_type,
                 conversation_mode=clean_mode,
+                sticker_intent=sticker_intent,
+                user_content_parts=user_content_parts,
             )
 
             audio_urls: tuple[str, ...] = ()
@@ -68,12 +111,53 @@ class SendChatMessage:
                     # TTS is an enhancement; text reply and persisted chat turn still stand.
                     logger.exception("Voice synthesis failed for chat response")
 
-            content_parts = (ContentPart(type="text", text=chat_result.reply), *chat_result.content_parts)
-            return ChatReplyDeliveryResult(
+            content_parts = (
+                ContentPart(type="text", text=chat_result.reply),
+                *(() if is_call else chat_result.content_parts),
+            )
+            result = ChatReplyDeliveryResult(
                 reply=chat_result.reply,
                 audio_urls=audio_urls,
                 sources=chat_result.sources,
                 content_parts=content_parts,
             )
+            if claimed_request and self.request_result_repository is not None:
+                self.request_result_repository.complete(
+                    clean_user_id,
+                    clean_request_id,
+                    request_fingerprint,
+                    result,
+                )
+            return result
+        except Exception:
+            if claimed_request and self.request_result_repository is not None:
+                self.request_result_repository.abandon(
+                    clean_user_id,
+                    clean_request_id,
+                    request_fingerprint,
+                )
+            raise
         finally:
             self.request_guard.release(clean_user_id)
+
+    @staticmethod
+    def _request_fingerprint(
+        user_id: str,
+        message: str,
+        conversation_mode: str,
+        user_message_type: str,
+        sticker_intent: str,
+        user_content_parts: tuple[ContentPart, ...],
+    ) -> str:
+        payload = {
+            "user_id": user_id,
+            "message": message,
+            "conversation_mode": conversation_mode,
+            "user_message_type": user_message_type,
+            "sticker_intent": sticker_intent,
+            "content_parts": [
+                {"type": part.type, "sticker_id": part.sticker_id} for part in user_content_parts
+            ],
+        }
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()

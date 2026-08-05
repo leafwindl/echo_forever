@@ -23,10 +23,15 @@ data/backups/
 .env
 *.pem
 *.key
+*.jks
+*.keystore
+key.properties
 node_modules/
 
 # Audio & binary files
 static/voices/*.mp3
+Echo-backend/static/stickers/
+Echo-backend/static/voices/
 *.mp3
 *.wav
 

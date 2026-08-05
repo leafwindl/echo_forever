@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from features.agent.domain.entities import AgentTurnResult, ContentPart
 from features.chat.application.clear_context import ClearChatContext
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.application.send_message import SendChatMessage
@@ -14,6 +15,8 @@ from features.chat.domain.dialogue_style import (
 )
 from features.chat.domain.entities import (
     ChatContext,
+    ChatRequestClaim,
+    ChatRequestClaimStatus,
     ChatRequestInProgressError,
     ChatValidationError,
     MemoryExtractionScheduleResult,
@@ -40,6 +43,8 @@ class FakeConversationRepository:
         assistant_reply,
         user_message_type,
         assistant_message_type,
+        user_content_parts=(),
+        assistant_content_parts=(),
     ):
         self.persisted_turns.append(
             {
@@ -49,6 +54,8 @@ class FakeConversationRepository:
                 "assistant_reply": assistant_reply,
                 "user_message_type": user_message_type,
                 "assistant_message_type": assistant_message_type,
+                "user_content_parts": user_content_parts,
+                "assistant_content_parts": assistant_content_parts,
             }
         )
         return 10, 11
@@ -80,19 +87,32 @@ class FakeContextProvider:
         )
 
 
-class FakeLLM:
-    async def generate_reply(self, messages):
-        return "hello from echo"
-
-
-class SequenceLLM:
+class SequenceAgentOrchestrator:
     def __init__(self, replies):
         self.replies = list(replies)
         self.calls = []
 
-    async def generate_reply(self, messages):
-        self.calls.append(messages)
-        return self.replies.pop(0)
+    async def run(
+        self,
+        user_id,
+        message,
+        messages,
+        conversation_mode="chat",
+        sticker_intent="",
+        allow_proactive_stickers=True,
+    ):
+        self.calls.append(
+            {
+                "user_id": user_id,
+                "message": message,
+                "messages": messages,
+                "conversation_mode": conversation_mode,
+                "sticker_intent": sticker_intent,
+                "allow_proactive_stickers": allow_proactive_stickers,
+            }
+        )
+        reply = self.replies.pop(0) if self.replies else "hello from echo"
+        return reply if isinstance(reply, AgentTurnResult) else AgentTurnResult(reply_text=reply)
 
 
 class FakeSummaryUpdater:
@@ -142,6 +162,28 @@ class FakeRelationshipRecorder:
         return self.result
 
 
+class FakeStickerAgentOrchestrator:
+    async def run(
+        self,
+        user_id,
+        message,
+        messages,
+        conversation_mode="chat",
+        sticker_intent="",
+        allow_proactive_stickers=True,
+    ):
+        return AgentTurnResult(
+            reply_text="给你，这张很适合现在。",
+            content_parts=(
+                ContentPart(
+                    type="sticker",
+                    sticker_id="stk_wave",
+                    url="https://example.test/wave.png",
+                ),
+            ),
+        )
+
+
 class FakeVoiceReplySynthesizer:
     def __init__(self):
         self.received_replies = []
@@ -170,6 +212,48 @@ class FakeChatRequestGuard:
         self.release_calls.append(user_id)
 
 
+class FakeChatRequestResultRepository:
+    def __init__(self):
+        self.records = {}
+        self.complete_calls = []
+        self.abandon_calls = []
+
+    def claim(self, user_id, request_id, request_fingerprint):
+        key = (user_id, request_id)
+        record = self.records.get(key)
+        if record is None:
+            self.records[key] = {
+                "fingerprint": request_fingerprint,
+                "status": "processing",
+                "result": None,
+            }
+            return ChatRequestClaim(status=ChatRequestClaimStatus.CLAIMED)
+        if record["fingerprint"] != request_fingerprint:
+            return ChatRequestClaim(status=ChatRequestClaimStatus.CONFLICT)
+        if record["status"] == "completed":
+            return ChatRequestClaim(
+                status=ChatRequestClaimStatus.COMPLETED,
+                result=record["result"],
+            )
+        return ChatRequestClaim(status=ChatRequestClaimStatus.IN_PROGRESS)
+
+    def complete(self, user_id, request_id, request_fingerprint, result):
+        key = (user_id, request_id)
+        self.records[key] = {
+            "fingerprint": request_fingerprint,
+            "status": "completed",
+            "result": result,
+        }
+        self.complete_calls.append(key)
+
+    def abandon(self, user_id, request_id, request_fingerprint):
+        key = (user_id, request_id)
+        record = self.records.get(key)
+        if record and record["fingerprint"] == request_fingerprint:
+            self.records.pop(key)
+        self.abandon_calls.append(key)
+
+
 class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
     async def test_clear_chat_context_uses_clean_authenticated_user_id(self):
         repository = FakeConversationRepository()
@@ -185,19 +269,25 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         use_case = GenerateChatReply(
             conversation_repository=repository,
             context_provider=FakeContextProvider(),
-            llm=FakeLLM(),
             summary_updater=FakeSummaryUpdater(),
             memory_scheduler=FakeMemoryScheduler(),
             relationship_recorder=relationship_recorder,
+            agent_orchestrator=SequenceAgentOrchestrator(["hello from echo"]),
         )
         return use_case, repository
 
-    def build_send_use_case(self, voice_synthesizer=None, request_guard=None):
+    def build_send_use_case(
+        self,
+        voice_synthesizer=None,
+        request_guard=None,
+        request_result_repository=None,
+    ):
         chat_reply_generator, repository = self.build_generate_use_case()
         use_case = SendChatMessage(
             chat_reply_generator=chat_reply_generator,
             voice_reply_synthesizer=voice_synthesizer or FakeVoiceReplySynthesizer(),
             request_guard=request_guard or FakeChatRequestGuard(),
+            request_result_repository=request_result_repository,
         )
         return use_case, repository
 
@@ -225,10 +315,10 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         use_case = GenerateChatReply(
             conversation_repository=repository,
             context_provider=FakeContextProvider(),
-            llm=FakeLLM(),
             summary_updater=FakeSummaryUpdater(),
             memory_scheduler=FakeMemoryScheduler(),
             relationship_recorder=recorder,
+            agent_orchestrator=SequenceAgentOrchestrator(["hello from echo"]),
         )
 
         await use_case.execute(user_id="user_a", message="今天赢球了")
@@ -246,9 +336,9 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         use_case = GenerateChatReply(
             conversation_repository=FakeConversationRepository(),
             context_provider=FakeContextProvider(),
-            llm=FakeLLM(),
             summary_updater=summary_updater,
             memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=SequenceAgentOrchestrator(["hello from echo"]),
             summary_update_in_background=True,
         )
 
@@ -262,39 +352,44 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         summary_updater.release.set()
         await asyncio.sleep(0)
 
-    async def test_generate_chat_reply_retries_stage_direction_once(self):
+    async def test_generate_chat_reply_applies_style_fallback_without_second_reply_path(self):
         repository = FakeConversationRepository()
-        llm = SequenceLLM(["（轻轻抱住你）别难过。", "听起来你真的很难受，我在这里听你说。"])
+        candidate = "（轻轻抱住你）别难过。"
+        agent = SequenceAgentOrchestrator([candidate])
         use_case = GenerateChatReply(
             conversation_repository=repository,
             context_provider=FakeContextProvider(),
-            llm=llm,
             summary_updater=FakeSummaryUpdater(),
             memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
         )
 
         result = await use_case.execute(user_id="user_a", message="我今天很难过")
 
-        self.assertEqual("听起来你真的很难受，我在这里听你说。", result.reply)
-        self.assertEqual(2, len(llm.calls))
-        self.assertIn("只输出直接对用户说的话", llm.calls[1][-1]["content"])
+        violations = find_dialogue_style_violations(candidate, "我今天很难过")
+        self.assertEqual(
+            apply_dialogue_fallback(candidate, "我今天很难过", violations),
+            result.reply,
+        )
+        self.assertEqual(1, len(agent.calls))
         self.assertEqual(result.reply, repository.persisted_turns[0]["assistant_reply"])
 
-    async def test_generate_chat_reply_sanitizes_second_style_violation(self):
+    async def test_generate_chat_reply_sanitizes_stage_direction(self):
         repository = FakeConversationRepository()
-        llm = SequenceLLM(["*拍拍你* 会好起来的。", "Echo：［轻轻点头］我会认真听。"])
+        candidate = "Echo：［轻轻点头］我会认真听。"
+        agent = SequenceAgentOrchestrator([candidate])
         use_case = GenerateChatReply(
             conversation_repository=repository,
             context_provider=FakeContextProvider(),
-            llm=llm,
             summary_updater=FakeSummaryUpdater(),
             memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
         )
 
         result = await use_case.execute(user_id="user_a", message="陪我说说话")
 
         self.assertEqual("我会认真听。", result.reply)
-        self.assertEqual(2, len(llm.calls))
+        self.assertEqual(1, len(agent.calls))
 
     async def test_generate_chat_reply_pauses_questions_after_two_question_turns(self):
         repository = FakeConversationRepository()
@@ -309,24 +404,28 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
             )
 
         context_provider.build_context = build_context
-        llm = SequenceLLM(
-            [
-                "这听起来挺有意思的。你还想说哪一部分？",
-                "这听起来挺有意思的，我先跟着你的节奏。",
-            ]
-        )
+        candidate = "这听起来挺有意思的。你还想说哪一部分？"
+        agent = SequenceAgentOrchestrator([candidate])
         use_case = GenerateChatReply(
             conversation_repository=repository,
             context_provider=context_provider,
-            llm=llm,
             summary_updater=FakeSummaryUpdater(),
             memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
         )
 
         result = await use_case.execute(user_id="user_a", message="我们平时会聊一点")
 
-        self.assertEqual("这听起来挺有意思的，我先跟着你的节奏。", result.reply)
-        self.assertEqual(2, len(llm.calls))
+        violations = find_dialogue_style_violations(
+            candidate,
+            "我们平时会聊一点",
+            pause_followup_questions=True,
+        )
+        self.assertEqual(
+            apply_dialogue_fallback(candidate, "我们平时会聊一点", violations),
+            result.reply,
+        )
+        self.assertEqual(1, len(agent.calls))
 
     async def test_every_fifth_user_turn_requests_batch_memory_review(self):
         repository = FakeConversationRepository()
@@ -335,9 +434,9 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         use_case = GenerateChatReply(
             conversation_repository=repository,
             context_provider=FakeContextProvider(),
-            llm=FakeLLM(),
             summary_updater=FakeSummaryUpdater(),
             memory_scheduler=scheduler,
+            agent_orchestrator=SequenceAgentOrchestrator(["hello from echo"]),
         )
 
         await use_case.execute(user_id="user_a", message="普通但可能有长期信息的一句话")
@@ -395,37 +494,37 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
-    async def test_generate_chat_reply_retries_unrequested_advice(self):
+    async def test_generate_chat_reply_applies_unrequested_advice_fallback(self):
         repository = FakeConversationRepository()
-        llm = SequenceLLM(["累了就歇会儿，别硬撑。", "听起来今天挺消耗人的。"])
+        agent = SequenceAgentOrchestrator(["累了就歇会儿，别硬撑。"])
         use_case = GenerateChatReply(
             conversation_repository=repository,
             context_provider=FakeContextProvider(),
-            llm=llm,
             summary_updater=FakeSummaryUpdater(),
             memory_scheduler=FakeMemoryScheduler(),
-        )
-
-        result = await use_case.execute(user_id="user_a", message="今天有点累。")
-
-        self.assertEqual("听起来今天挺消耗人的。", result.reply)
-        self.assertEqual(2, len(llm.calls))
-
-    async def test_generate_chat_reply_uses_narrow_fallback_after_failed_rewrite(self):
-        repository = FakeConversationRepository()
-        llm = SequenceLLM(["累了就歇会儿。", "今天别硬撑，好好休息吧。"])
-        use_case = GenerateChatReply(
-            conversation_repository=repository,
-            context_provider=FakeContextProvider(),
-            llm=llm,
-            summary_updater=FakeSummaryUpdater(),
-            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
         )
 
         result = await use_case.execute(user_id="user_a", message="今天有点累。")
 
         self.assertEqual("那今天就聊点不费脑子的。", result.reply)
-        self.assertEqual(2, len(llm.calls))
+        self.assertEqual(1, len(agent.calls))
+
+    async def test_generate_chat_reply_uses_narrow_fallback_for_single_agent_final(self):
+        repository = FakeConversationRepository()
+        agent = SequenceAgentOrchestrator(["累了就歇会儿。"])
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
+        )
+
+        result = await use_case.execute(user_id="user_a", message="今天有点累。")
+
+        self.assertEqual("那今天就聊点不费脑子的。", result.reply)
+        self.assertEqual(1, len(agent.calls))
 
     def test_dialogue_fallback_keeps_advice_and_voice_boundaries(self):
         self.assertEqual(
@@ -484,14 +583,84 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.persisted_turns[0]["user_message_type"], "text")
         self.assertEqual(repository.persisted_turns[0]["assistant_message_type"], "text")
 
+    async def test_sticker_message_type_is_persisted_and_echo_replies(self):
+        use_case, repository = self.build_send_use_case()
+        user_sticker = ContentPart(
+            type="sticker",
+            sticker_id="stk_user",
+            url="https://example.test/user.png",
+        )
+
+        result = await use_case.execute(
+            user_id="user_a",
+            message="用户发送了一张表情包。描述：开心挥手。语义标签：开心、挥手。",
+            user_message_type="sticker",
+            sticker_intent="开心 挥手",
+            user_content_parts=(user_sticker,),
+        )
+
+        self.assertEqual(result.reply, "hello from echo")
+        self.assertEqual(repository.persisted_turns[0]["user_message_type"], "sticker")
+        self.assertEqual(
+            repository.persisted_turns[0]["user_content_parts"],
+            (user_sticker,),
+        )
+
+    async def test_unified_agent_result_persists_natural_text_and_sticker(self):
+        repository = FakeConversationRepository()
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=FakeStickerAgentOrchestrator(),
+        )
+
+        result = await use_case.execute(user_id="user_a", message="发个表情包")
+
+        self.assertEqual(result.reply, "给你，这张很适合现在。")
+        self.assertEqual(result.content_parts[0].sticker_id, "stk_wave")
+        self.assertEqual(
+            repository.persisted_turns[0]["assistant_reply"],
+            "给你，这张很适合现在。",
+        )
+        self.assertEqual(
+            repository.persisted_turns[0]["assistant_content_parts"][0].sticker_id,
+            "stk_wave",
+        )
+
+    async def test_call_mode_drops_agent_sticker_before_persistence_and_delivery(self):
+        repository = FakeConversationRepository()
+        generator = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=FakeStickerAgentOrchestrator(),
+        )
+        use_case = SendChatMessage(
+            chat_reply_generator=generator,
+            voice_reply_synthesizer=FakeVoiceReplySynthesizer(),
+            request_guard=FakeChatRequestGuard(),
+        )
+
+        result = await use_case.execute(
+            user_id="user_a",
+            message="发一个表情包",
+            conversation_mode="call",
+        )
+
+        self.assertEqual([part.type for part in result.content_parts], ["text"])
+        self.assertEqual(repository.persisted_turns[0]["assistant_content_parts"], ())
+
     async def test_send_chat_message_passes_call_mode_to_context_provider(self):
         context_provider = FakeContextProvider()
         generator = GenerateChatReply(
             conversation_repository=FakeConversationRepository(),
             context_provider=context_provider,
-            llm=FakeLLM(),
             summary_updater=FakeSummaryUpdater(),
             memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=SequenceAgentOrchestrator(["hello from echo"]),
         )
         use_case = SendChatMessage(
             chat_reply_generator=generator,
@@ -531,6 +700,43 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(request_guard.try_calls, ["user_a"])
         self.assertEqual(request_guard.release_calls, ["user_a"])
+
+    async def test_chat_request_id_replays_completed_result_without_duplicate_turn(self):
+        request_results = FakeChatRequestResultRepository()
+        use_case, repository = self.build_send_use_case(request_result_repository=request_results)
+
+        first = await use_case.execute(
+            user_id="user_a",
+            message="hello",
+            request_id="request_same",
+        )
+        second = await use_case.execute(
+            user_id="user_a",
+            message="hello",
+            request_id="request_same",
+        )
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(repository.persisted_turns), 1)
+        self.assertEqual(request_results.complete_calls, [("user_a", "request_same")])
+
+    async def test_chat_request_id_rejects_different_content(self):
+        request_results = FakeChatRequestResultRepository()
+        use_case, repository = self.build_send_use_case(request_result_repository=request_results)
+        await use_case.execute(
+            user_id="user_a",
+            message="first",
+            request_id="request_conflict",
+        )
+
+        with self.assertRaisesRegex(ValueError, "request_id"):
+            await use_case.execute(
+                user_id="user_a",
+                message="second",
+                request_id="request_conflict",
+            )
+
+        self.assertEqual(len(repository.persisted_turns), 1)
 
 
 if __name__ == "__main__":

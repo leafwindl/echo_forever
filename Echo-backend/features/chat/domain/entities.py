@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 from features.agent.domain.entities import ContentPart, SourceReference
 
@@ -13,6 +14,13 @@ class ChatRequestInProgressError(RuntimeError):
     """Raised when the same user already has a chat request in progress."""
 
 
+class ChatRequestClaimStatus(StrEnum):
+    CLAIMED = "claimed"
+    COMPLETED = "completed"
+    IN_PROGRESS = "in_progress"
+    CONFLICT = "conflict"
+
+
 @dataclass(frozen=True)
 class ChatContext:
     messages: list[dict[str, str]]
@@ -21,6 +29,7 @@ class ChatContext:
     long_term_memories: list[dict[str, object]] = field(default_factory=list)
     memory_retrieval_mode: str = "none"
     pause_followup_questions: bool = False
+    allow_proactive_stickers: bool = True
 
 
 @dataclass(frozen=True)
@@ -54,6 +63,12 @@ class ChatReplyDeliveryResult:
     audio_urls: tuple[str, ...] = ()
     sources: tuple[SourceReference, ...] = ()
     content_parts: tuple[ContentPart, ...] = ()
+
+
+@dataclass(frozen=True)
+class ChatRequestClaim:
+    status: ChatRequestClaimStatus
+    result: ChatReplyDeliveryResult | None = None
 
 
 @dataclass(frozen=True)

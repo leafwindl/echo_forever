@@ -43,5 +43,10 @@ abstract interface class ChatRepository {
     ChatCancellation? cancellation,
   });
 
+  Future<ChatReply> sendSticker(
+    ChatSticker sticker, {
+    ChatCancellation? cancellation,
+  });
+
   Future<ClearChatResult> clearContext({ChatCancellation? cancellation});
 }

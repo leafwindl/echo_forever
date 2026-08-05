@@ -4,6 +4,12 @@ from datetime import datetime, timedelta
 from typing import Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from features.agent.domain.entities import AgentModelResponse
+
+
+class AgentModelTimeoutError(TimeoutError):
+    """The configured conversation model request timed out."""
+
 
 class Clock(Protocol):
     def now(self) -> datetime: ...
@@ -12,6 +18,14 @@ class Clock(Protocol):
 class SystemClock:
     def now(self) -> datetime:
         return datetime.now().astimezone()
+
+
+class AgentConversationModel(Protocol):
+    async def complete(
+        self,
+        messages: list[dict],
+        tools: tuple[dict, ...],
+    ) -> AgentModelResponse: ...
 
 
 def resolve_local_time(clock: Clock, timezone_name: str, day_offset: int = 0) -> dict[str, str]:
@@ -27,4 +41,3 @@ def resolve_local_time(clock: Clock, timezone_name: str, day_offset: int = 0) ->
         "utc_offset": local.strftime("%z"),
         "timezone": timezone_name,
     }
-

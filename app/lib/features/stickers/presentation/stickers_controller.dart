@@ -55,6 +55,8 @@ class StickersState {
     required this.saveStep,
     this.deletingId,
     this.pendingSelection,
+    this.pendingDescription = '',
+    this.pendingTags = const <String>[],
     this.uploadedSticker,
     this.error,
   });
@@ -65,6 +67,8 @@ class StickersState {
       saveStep = StickerSaveStep.idle,
       deletingId = null,
       pendingSelection = null,
+      pendingDescription = '',
+      pendingTags = const <String>[],
       uploadedSticker = null,
       error = null;
 
@@ -73,6 +77,8 @@ class StickersState {
   final StickerSaveStep saveStep;
   final String? deletingId;
   final StickerUploadSelection? pendingSelection;
+  final String pendingDescription;
+  final List<String> pendingTags;
   final StickerItem? uploadedSticker;
   final AppException? error;
 
@@ -95,6 +101,9 @@ class StickersState {
     bool clearDeletingId = false,
     StickerUploadSelection? pendingSelection,
     bool clearPendingSelection = false,
+    String? pendingDescription,
+    List<String>? pendingTags,
+    bool clearPendingMetadata = false,
     StickerItem? uploadedSticker,
     bool clearUploadedSticker = false,
     AppException? error,
@@ -108,6 +117,12 @@ class StickersState {
       pendingSelection: clearPendingSelection
           ? null
           : pendingSelection ?? this.pendingSelection,
+      pendingDescription: clearPendingMetadata
+          ? ''
+          : pendingDescription ?? this.pendingDescription,
+      pendingTags: clearPendingMetadata
+          ? const <String>[]
+          : pendingTags ?? this.pendingTags,
       uploadedSticker: clearUploadedSticker
           ? null
           : uploadedSticker ?? this.uploadedSticker,
@@ -159,24 +174,44 @@ class StickersController extends AsyncNotifier<StickersState> {
     }
   }
 
-  Future<bool> savePickedImage(StickerUploadSelection selection) async {
+  Future<bool> savePickedImage(
+    StickerUploadSelection selection, {
+    required String description,
+    required List<String> tags,
+  }) async {
     final current = _currentState();
     if (current == null || current.isBusy) {
       return false;
     }
-    final validationError = _validate(selection);
+    final cleanDescription = description.trim();
+    final cleanTags = tags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final validationError = _validate(
+      selection,
+      description: cleanDescription,
+      tags: cleanTags,
+    );
     if (validationError != null) {
       state = AsyncData(
         current.copyWith(
           saveStep: StickerSaveStep.failed,
           pendingSelection: selection,
+          pendingDescription: cleanDescription,
+          pendingTags: cleanTags,
           clearUploadedSticker: true,
           error: validationError,
         ),
       );
       return false;
     }
-    return _completeSave(selection: selection);
+    return _completeSave(
+      selection: selection,
+      description: cleanDescription,
+      tags: cleanTags,
+    );
   }
 
   Future<bool> retrySavePending() async {
@@ -187,6 +222,8 @@ class StickersController extends AsyncNotifier<StickersState> {
     return _completeSave(
       selection: current.pendingSelection,
       uploadedSticker: current.uploadedSticker,
+      description: current.pendingDescription,
+      tags: current.pendingTags,
     );
   }
 
@@ -223,6 +260,8 @@ class StickersController extends AsyncNotifier<StickersState> {
   Future<bool> _completeSave({
     StickerUploadSelection? selection,
     StickerItem? uploadedSticker,
+    required String description,
+    required List<String> tags,
   }) async {
     final current = _currentState();
     if (current == null || current.isBusy) {
@@ -235,6 +274,8 @@ class StickersController extends AsyncNotifier<StickersState> {
             ? StickerSaveStep.uploading
             : StickerSaveStep.confirming,
         pendingSelection: selection,
+        pendingDescription: description,
+        pendingTags: tags,
         uploadedSticker: upload,
         clearError: true,
       ),
@@ -251,6 +292,8 @@ class StickersController extends AsyncNotifier<StickersState> {
             .uploadSticker(
               filePath: safeSelection.path,
               fileName: safeSelection.name,
+              description: description,
+              tags: tags,
             );
         state = AsyncData(
           (_currentState() ?? current).copyWith(
@@ -265,6 +308,7 @@ class StickersController extends AsyncNotifier<StickersState> {
         next.copyWith(
           saveStep: StickerSaveStep.idle,
           clearPendingSelection: true,
+          clearPendingMetadata: true,
           clearUploadedSticker: true,
           clearError: true,
         ),
@@ -275,6 +319,8 @@ class StickersController extends AsyncNotifier<StickersState> {
         (_currentState() ?? current).copyWith(
           saveStep: StickerSaveStep.failed,
           pendingSelection: selection,
+          pendingDescription: description,
+          pendingTags: tags,
           uploadedSticker: upload,
           error: _asAppException(error),
         ),
@@ -305,7 +351,11 @@ class StickersController extends AsyncNotifier<StickersState> {
 
   StickersState? _currentState() => state.asData?.value;
 
-  static AppException? _validate(StickerUploadSelection selection) {
+  static AppException? _validate(
+    StickerUploadSelection selection, {
+    required String description,
+    required List<String> tags,
+  }) {
     final name = selection.name.isEmpty ? selection.path : selection.name;
     final lowerName = name.toLowerCase();
     final isAllowed = _allowedExtensions.any(lowerName.endsWith);
@@ -319,6 +369,24 @@ class StickersController extends AsyncNotifier<StickersState> {
       return const AppException(
         kind: AppExceptionKind.payloadTooLarge,
         detail: '图片不能超过 5 MB。',
+      );
+    }
+    if (description.isEmpty) {
+      return const AppException(
+        kind: AppExceptionKind.validation,
+        detail: '请填写表情包描述。',
+      );
+    }
+    if (description.length > 300) {
+      return const AppException(
+        kind: AppExceptionKind.validation,
+        detail: '表情包描述不能超过 300 个字。',
+      );
+    }
+    if (tags.isEmpty) {
+      return const AppException(
+        kind: AppExceptionKind.validation,
+        detail: '请至少填写一个语义标签。',
       );
     }
     return null;

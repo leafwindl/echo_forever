@@ -11,6 +11,8 @@ class AgentRunRepository(Protocol):
         arguments: dict,
         output: dict,
         error_code: str | None = None,
+        status: str | None = None,
+        tool_call_id: str | None = None,
     ) -> None: ...
 
     def finish(self, run_id: str, step_count: int, error_code: str | None = None) -> None: ...

@@ -22,6 +22,24 @@ void main() {
     });
   });
 
+  test('serializes a standalone sticker chat request by sticker id', () {
+    expect(
+      const ChatRequestDto(
+        message: '',
+        contentParts: <ChatRequestContentPartDto>[
+          ChatRequestContentPartDto.sticker('stk_wave'),
+        ],
+      ).toJson(),
+      <String, Object?>{
+        'message': '',
+        'mode': 'chat',
+        'content_parts': <Map<String, Object?>>[
+          <String, Object?>{'type': 'sticker', 'sticker_id': 'stk_wave'},
+        ],
+      },
+    );
+  });
+
   test('parses the complete backend chat response schema', () {
     final response = ChatResponseDto.fromJson(<String, dynamic>{
       'reply': '一起去散步吧。',

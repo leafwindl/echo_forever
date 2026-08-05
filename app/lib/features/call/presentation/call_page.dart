@@ -73,11 +73,11 @@ class _CallPageState extends ConsumerState<CallPage> {
                 style: Theme.of(context).textTheme.labelLarge,
               ),
             ),
-            const Expanded(
+            Expanded(
               flex: 5,
               child: StaticCharacterRenderer(
-                chatExpanded: false,
-                key: Key('call-character'),
+                state: _characterDisplayState(state.phase),
+                key: const Key('call-character'),
               ),
             ),
             Expanded(
@@ -182,6 +182,15 @@ class _CallPageState extends ConsumerState<CallPage> {
     CallPhase.error => '连接失败',
   };
 }
+
+CharacterDisplayState _characterDisplayState(CallPhase phase) =>
+    switch (phase) {
+      CallPhase.recording => CharacterDisplayState.listening,
+      CallPhase.recognizing ||
+      CallPhase.thinking => CharacterDisplayState.thinking,
+      CallPhase.speaking => CharacterDisplayState.speaking,
+      _ => CharacterDisplayState.idle,
+    };
 
 class _TalkButton extends StatelessWidget {
   const _TalkButton({

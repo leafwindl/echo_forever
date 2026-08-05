@@ -27,6 +27,8 @@ class PostgresAgentRunRepository:
         arguments: dict,
         output: dict,
         error_code: str | None = None,
+        status: str | None = None,
+        tool_call_id: str | None = None,
     ) -> None:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(
@@ -37,10 +39,10 @@ class PostgresAgentRunRepository:
                 ) VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, NOW(), NOW())
                 """,
                 (
-                    f"tool_{uuid.uuid4().hex}",
+                    tool_call_id or f"tool_{uuid.uuid4().hex}",
                     run_id,
                     tool_name,
-                    "failed" if error_code else "completed",
+                    status or ("failed" if error_code else "completed"),
                     json.dumps(arguments, ensure_ascii=False),
                     json.dumps(output, ensure_ascii=False),
                     error_code,
@@ -57,4 +59,3 @@ class PostgresAgentRunRepository:
                 """,
                 ("failed" if error_code else "completed", step_count, error_code, run_id),
             )
-

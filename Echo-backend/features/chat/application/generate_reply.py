@@ -2,18 +2,16 @@ import asyncio
 import logging
 import time
 
-from features.agent.domain.entities import AgentEnrichment
+from features.agent.domain.entities import ContentPart
 from features.chat.domain.dialogue_style import (
-    NATURAL_DIALOGUE_RETRY_INSTRUCTION,
     apply_dialogue_fallback,
     find_dialogue_style_violations,
 )
 from features.chat.domain.entities import ChatTurnResult, ChatValidationError
 from features.chat.domain.repositories import ChatConversationRepository
 from features.chat.domain.services import (
-    ChatAgentEnricher,
+    ChatAgentOrchestrator,
     ChatContextProvider,
-    ChatLLM,
     ConversationSummaryUpdater,
     MemoryExtractionScheduler,
     RelationshipTurnRecorder,
@@ -29,20 +27,18 @@ class GenerateChatReply:
         self,
         conversation_repository: ChatConversationRepository,
         context_provider: ChatContextProvider,
-        llm: ChatLLM,
         summary_updater: ConversationSummaryUpdater,
         memory_scheduler: MemoryExtractionScheduler,
         relationship_recorder: RelationshipTurnRecorder | None = None,
-        agent_enricher: ChatAgentEnricher | None = None,
+        agent_orchestrator: ChatAgentOrchestrator | None = None,
         summary_update_in_background: bool = False,
     ):
         self.conversation_repository = conversation_repository
         self.context_provider = context_provider
-        self.llm = llm
         self.summary_updater = summary_updater
         self.memory_scheduler = memory_scheduler
         self.relationship_recorder = relationship_recorder
-        self.agent_enricher = agent_enricher
+        self.agent_orchestrator = agent_orchestrator
         self.summary_update_in_background = summary_update_in_background
         self._summary_tasks: set[asyncio.Task[bool]] = set()
 
@@ -77,6 +73,8 @@ class GenerateChatReply:
         reply: str,
         user_message_type: str,
         assistant_message_type: str,
+        user_content_parts: tuple[ContentPart, ...],
+        assistant_content_parts: tuple[ContentPart, ...],
     ) -> ChatTurnResult:
         user_message_id, assistant_message_id = self.conversation_repository.add_chat_turn(
             user_id=clean_user_id,
@@ -85,6 +83,8 @@ class GenerateChatReply:
             assistant_reply=reply,
             user_message_type=user_message_type,
             assistant_message_type=assistant_message_type,
+            user_content_parts=user_content_parts,
+            assistant_content_parts=assistant_content_parts,
         )
 
         summary_updated = False
@@ -143,6 +143,8 @@ class GenerateChatReply:
         user_message_type: str = "text",
         assistant_message_type: str = "text",
         conversation_mode: str = "chat",
+        sticker_intent: str = "",
+        user_content_parts: tuple[ContentPart, ...] = (),
     ) -> ChatTurnResult:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -165,18 +167,22 @@ class GenerateChatReply:
             resolved_conversation_id,
             conversation_mode,
         )
-        agent_enrichment = (
-            await self.agent_enricher.enrich(clean_user_id, clean_message)
-            if self.agent_enricher is not None
-            else AgentEnrichment()
+        if self.agent_orchestrator is None:
+            raise RuntimeError("Unified Agent runtime is not configured")
+        agent_result = await self.agent_orchestrator.run(
+            clean_user_id,
+            clean_message,
+            context.messages,
+            conversation_mode=conversation_mode,
+            sticker_intent=sticker_intent,
+            allow_proactive_stickers=context.allow_proactive_stickers,
         )
         logger.info(
             "Chat context completed duration_ms=%.1f",
             (time.perf_counter() - context_started_at) * 1000,
         )
         llm_started_at = time.perf_counter()
-        llm_messages = [*context.messages, *agent_enrichment.system_messages]
-        reply = await self.llm.generate_reply(llm_messages)
+        reply = agent_result.reply_text
         style_violations = find_dialogue_style_violations(
             reply,
             clean_message,
@@ -184,34 +190,11 @@ class GenerateChatReply:
         )
         if style_violations:
             logger.warning(
-                "Dialogue style retry requested violation_types=%s",
+                "Dialogue style fallback applied violation_types=%s",
                 ",".join(style_violations),
             )
-            try:
-                reply = await self.llm.generate_reply(
-                    [
-                        *llm_messages,
-                        {"role": "system", "content": NATURAL_DIALOGUE_RETRY_INSTRUCTION},
-                    ]
-                )
-            except Exception:
-                logger.warning("Dialogue style retry failed", exc_info=True)
-
-            remaining_violations = find_dialogue_style_violations(
-                reply,
-                clean_message,
-                pause_followup_questions=context.pause_followup_questions,
-            )
-            if remaining_violations:
-                logger.warning(
-                    "Dialogue style fallback applied violation_types=%s",
-                    ",".join(remaining_violations),
-                )
-                reply = apply_dialogue_fallback(
-                    reply,
-                    clean_message,
-                    remaining_violations,
-                )
+            reply = apply_dialogue_fallback(reply, clean_message, style_violations)
+        assistant_content_parts = () if conversation_mode == "call" else agent_result.content_parts
         logger.info(
             "LLM reply generated for user_id=%s text_length=%s duration_ms=%.1f",
             clean_user_id,
@@ -226,7 +209,9 @@ class GenerateChatReply:
             reply=reply,
             user_message_type=user_message_type,
             assistant_message_type=assistant_message_type,
+            user_content_parts=user_content_parts,
+            assistant_content_parts=assistant_content_parts,
         )
-        result.sources = agent_enrichment.sources
-        result.content_parts = agent_enrichment.content_parts
+        result.sources = agent_result.sources
+        result.content_parts = assistant_content_parts
         return result
