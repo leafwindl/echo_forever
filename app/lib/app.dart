@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:echo_app/core/auth_session/session_controller.dart';
 import 'package:echo_app/core/routing/app_router.dart';
 import 'package:echo_app/core/theme/app_theme.dart';
+import 'package:echo_app/features/app_update/presentation/app_update_controller.dart';
+import 'package:echo_app/features/app_update/presentation/app_update_overlay.dart';
 import 'package:echo_app/features/letters/presentation/letters_controller.dart';
 import 'package:echo_app/features/persona/presentation/persona_controller.dart';
 import 'package:echo_app/features/push/data/push_providers.dart';
@@ -12,11 +14,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final echoScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
-class EchoApp extends ConsumerWidget {
+class EchoApp extends ConsumerStatefulWidget {
   const EchoApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EchoApp> createState() => _EchoAppState();
+}
+
+class _EchoAppState extends ConsumerState<EchoApp> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(ref.read(appUpdateControllerProvider.notifier).initialize());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
 
     void replayPendingRoute() {
@@ -99,6 +112,8 @@ class EchoApp extends ConsumerWidget {
       scaffoldMessengerKey: echoScaffoldMessengerKey,
       theme: AppTheme.light,
       routerConfig: router,
+      builder: (context, child) =>
+          AppUpdateOverlay(child: child ?? const SizedBox.shrink()),
     );
   }
 

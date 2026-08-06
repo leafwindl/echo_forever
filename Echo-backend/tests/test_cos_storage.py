@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from shared.storage.cos_storage import (
@@ -89,6 +91,27 @@ class CosObjectStorageTests(unittest.TestCase):
         storage = CosObjectStorage(storage_config(), client=FakeCosClient())
         with self.assertRaises(ValueError):
             storage.put_bytes("letters/letter-1.webp", b"data", "")
+
+    def test_put_file_streams_from_disk(self):
+        client = FakeCosClient()
+        storage = CosObjectStorage(storage_config(), client=client)
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "echo.apk"
+            path.write_bytes(b"apk-data")
+
+            object_key = storage.put_file(
+                "releases/android/internal/1.0.0+3/echo.apk",
+                path,
+                "application/vnd.android.package-archive",
+            )
+
+        self.assertEqual(
+            object_key,
+            "echo/releases/android/internal/1.0.0+3/echo.apk",
+        )
+        body = client.calls[0][1]["Body"]
+        self.assertNotIsInstance(body, bytes)
+        self.assertTrue(body.closed)
 
     def test_head_returns_normalized_metadata(self):
         storage = CosObjectStorage(storage_config(), client=FakeCosClient())

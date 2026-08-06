@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:echo_app/core/routing/route_names.dart';
+import 'package:echo_app/features/app_update/presentation/app_update_controller.dart';
 import 'package:echo_app/features/auth/presentation/auth_controller.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/presentation/chat_controller.dart';
@@ -22,6 +23,7 @@ enum _ChatMenuAction {
   memory,
   stickers,
   notificationSettings,
+  appUpdate,
   clearContext,
   logout,
 }
@@ -108,6 +110,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               PopupMenuItem<_ChatMenuAction>(
                 value: _ChatMenuAction.notificationSettings,
                 child: Text('通知设置'),
+              ),
+              PopupMenuItem<_ChatMenuAction>(
+                value: _ChatMenuAction.appUpdate,
+                child: Text('检查更新'),
               ),
               PopupMenuItem<_ChatMenuAction>(
                 value: _ChatMenuAction.clearContext,
@@ -219,6 +225,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         unawaited(context.pushNamed(RouteNames.stickers));
       case _ChatMenuAction.notificationSettings:
         unawaited(context.pushNamed(RouteNames.notificationSettings));
+      case _ChatMenuAction.appUpdate:
+        await _checkForUpdate();
       case _ChatMenuAction.clearContext:
         await _confirmAndClearContext();
       case _ChatMenuAction.logout:
@@ -230,6 +238,32 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         if (confirmed && mounted) {
           await ref.read(authControllerProvider.notifier).logout();
         }
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('正在检查更新…')));
+    final result = await ref
+        .read(appUpdateControllerProvider.notifier)
+        .checkForUpdate(manual: true);
+    if (!mounted) return;
+    messenger.hideCurrentSnackBar();
+    switch (result) {
+      case UpdateCheckResult.upToDate:
+        messenger.showSnackBar(const SnackBar(content: Text('当前已经是最新版本')));
+      case UpdateCheckResult.failed:
+        final updateState = ref.read(appUpdateControllerProvider);
+        messenger.showSnackBar(
+          SnackBar(content: Text(updateState.errorMessage ?? '检查更新失败，请稍后重试')),
+        );
+        ref.read(appUpdateControllerProvider.notifier).clearFailure();
+      case UpdateCheckResult.skipped:
+        messenger.showSnackBar(const SnackBar(content: Text('更新任务正在进行中')));
+      case UpdateCheckResult.available:
+        break;
     }
   }
 

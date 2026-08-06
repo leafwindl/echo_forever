@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from db.postgres_connection import transaction
 from shared.config import settings
+
+from db.postgres_connection import transaction
 
 
 def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
@@ -331,6 +332,30 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS app_releases (
+            id BIGSERIAL PRIMARY KEY,
+            release_id TEXT NOT NULL UNIQUE,
+            platform VARCHAR(24) NOT NULL,
+            channel VARCHAR(32) NOT NULL,
+            package_name TEXT NOT NULL,
+            version_name VARCHAR(80) NOT NULL,
+            version_code BIGINT NOT NULL CHECK (version_code > 0),
+            minimum_version_code BIGINT NOT NULL DEFAULT 1
+                CHECK (minimum_version_code > 0),
+            cos_object_key TEXT NOT NULL,
+            sha256 CHAR(64) NOT NULL,
+            size_bytes BIGINT NOT NULL CHECK (size_bytes > 0),
+            release_notes JSONB NOT NULL DEFAULT '[]'::jsonb,
+            mandatory BOOLEAN NOT NULL DEFAULT FALSE,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft'
+                CHECK (status IN ('draft', 'active', 'revoked')),
+            published_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(platform, channel, version_code)
+        )
+        """,
         "CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL",
         """
@@ -405,6 +430,11 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_sticker_jobs_status_created ON sticker_generation_jobs(status, created_at)",
         "CREATE INDEX IF NOT EXISTS idx_chat_attachments_message ON chat_message_attachments(message_id, position)",
         "CREATE INDEX IF NOT EXISTS idx_chat_request_results_updated ON chat_request_results(status, updated_at)",
+        """
+        CREATE INDEX IF NOT EXISTS idx_app_releases_latest
+        ON app_releases(platform, channel, version_code DESC)
+        WHERE status='active'
+        """,
     ]
 
 

@@ -4,25 +4,25 @@ import time
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
+from db.postgres_schema import init_db
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-
-from db.postgres_schema import init_db
-from features.auth.interface.router import router as auth_router
 from features.assistant_persona.public import get_assistant_persona
+from features.auth.interface.router import router as auth_router
 from features.chat.interface.router import router as chat_router
+from features.letters.interface.router import router as letters_router
+from features.letters.public import generate_due_letters
 from features.memory.interface.router import router as memory_router
 from features.memory.public import resume_pending_memory_extraction_jobs
 from features.persona.interface.router import router as persona_router
 from features.relationship.interface.router import router as relationship_router
+from features.releases.interface.router import router as releases_router
+from features.stickers.interface.router import router as stickers_router
+from features.stickers.public import generate_pending_stickers
 from features.system.interface.router import router as health_router
 from features.voice.interface.router import router as voice_router
 from features.voice.public import cleanup_expired_voice_audio
-from features.letters.interface.router import router as letters_router
-from features.letters.public import generate_due_letters
-from features.stickers.interface.router import router as stickers_router
-from features.stickers.public import generate_pending_stickers
 from shared.config import settings
 from shared.security import install_sensitive_data_filter
 
@@ -169,6 +169,7 @@ def create_app() -> FastAPI:
     app.include_router(voice_router)
     app.include_router(letters_router)
     app.include_router(stickers_router)
+    app.include_router(releases_router)
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     return app

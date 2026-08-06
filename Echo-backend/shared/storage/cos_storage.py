@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -160,6 +161,34 @@ class CosObjectStorage:
         if cache_control:
             request["CacheControl"] = cache_control
         self.client.put_object(**request)
+        return object_key
+
+    def put_file(
+        self,
+        relative_key: str,
+        file_path: str | Path,
+        content_type: str,
+        *,
+        cache_control: str | None = None,
+    ) -> str:
+        path = Path(file_path)
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        if path.stat().st_size <= 0:
+            raise ValueError("COS upload file must not be empty")
+        if not content_type.strip():
+            raise ValueError("COS upload content type must not be empty")
+        object_key = self.object_key(relative_key)
+        request: dict[str, Any] = {
+            "Bucket": self.bucket,
+            "Key": object_key,
+            "ContentType": content_type,
+        }
+        if cache_control:
+            request["CacheControl"] = cache_control
+        with path.open("rb") as body:
+            request["Body"] = body
+            self.client.put_object(**request)
         return object_key
 
     def head(self, relative_key: str) -> CosObjectMetadata:

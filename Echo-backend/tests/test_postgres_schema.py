@@ -62,6 +62,13 @@ class PostgresSchemaTests(unittest.TestCase):
         self.assertLess(add_phone, create_phone_index)
         self.assertLess(add_phone_verified_at, create_phone_index)
 
+    def test_schema_contains_direct_app_releases(self):
+        schema_text = build_postgres_schema_text(vector_dimension=1024)
+
+        self.assertIn("CREATE TABLE IF NOT EXISTS app_releases", schema_text)
+        self.assertIn("UNIQUE(platform, channel, version_code)", schema_text)
+        self.assertIn("idx_app_releases_latest", schema_text)
+
 
 if __name__ == "__main__":
     unittest.main()

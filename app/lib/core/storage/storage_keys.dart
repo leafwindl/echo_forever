@@ -5,4 +5,6 @@ class StorageKeys {
   static const deviceId = 'echo.device_id.v1';
   static const pendingRoute = 'echo.pending_route.v1';
   static const onboardingCompletedPrefix = 'echo.onboarding_completed.v1';
+  static const appUpdateLastAutomaticCheck =
+      'echo.app_update.last_automatic_check.v1';
 }

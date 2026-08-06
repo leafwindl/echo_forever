@@ -199,6 +199,22 @@ class Settings(BaseSettings):
         ge=1,
         le=120,
     )
+    release_download_url_expires_seconds: int = Field(
+        default=14400,
+        validation_alias="RELEASE_DOWNLOAD_URL_EXPIRES_SECONDS",
+        ge=7200,
+        le=21600,
+    )
+    release_rate_limit_requests: int = Field(
+        default=60,
+        validation_alias="RELEASE_RATE_LIMIT_REQUESTS",
+        ge=1,
+    )
+    release_rate_limit_window_seconds: int = Field(
+        default=60,
+        validation_alias="RELEASE_RATE_LIMIT_WINDOW_SECONDS",
+        ge=1,
+    )
     voice_generated_retention_seconds: int = Field(
         default=3600,
         validation_alias="VOICE_GENERATED_RETENTION_SECONDS",
