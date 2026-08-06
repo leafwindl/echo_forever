@@ -36,6 +36,64 @@ void main() {
     expect(find.text('3'), findsOneWidget);
   });
 
+  testWidgets('restores recent chat and accepts an older page', (
+    tester,
+  ) async {
+    final repository = FakeChatRepository(
+      onLoadHistory: (beforeId, _, _) async {
+        if (beforeId == null) {
+          return const ChatHistoryPage(
+            conversationId: 'conv-history',
+            messages: <ChatMessage>[
+              ChatMessage(
+                id: 11,
+                sender: ChatMessageSender.user,
+                content: '最近的消息',
+              ),
+              ChatMessage(
+                id: 12,
+                sender: ChatMessageSender.assistant,
+                content: '最近的回复',
+              ),
+            ],
+            hasMore: true,
+            nextBeforeId: 11,
+          );
+        }
+        return const ChatHistoryPage(
+          conversationId: 'conv-history',
+          messages: <ChatMessage>[
+            ChatMessage(
+              id: 1,
+              sender: ChatMessageSender.user,
+              content: '更早的消息',
+            ),
+          ],
+          hasMore: false,
+        );
+      },
+    );
+    await _pumpChat(tester, repository);
+
+    expect(find.text('嗨，我在呢。今天想聊点什么？'), findsNothing);
+    expect(find.text('最近的消息'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatPage)),
+    );
+    await container.read(chatControllerProvider.notifier).loadOlderMessages();
+    await tester.pumpAndSettle();
+
+    expect(
+      container
+          .read(chatControllerProvider)
+          .messages
+          .map((message) => message.content),
+      contains('更早的消息'),
+    );
+    expect(repository.historyBeforeIds, <int?>[null, 11]);
+  });
+
   testWidgets('shows typing immediately and replaces it with reply', (
     tester,
   ) async {

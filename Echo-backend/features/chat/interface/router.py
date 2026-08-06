@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from shared.config import settings
 from shared.interface.dependencies import CurrentUser, get_current_user
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
@@ -9,6 +9,8 @@ from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 from features.agent.domain.entities import ContentPart
 from features.chat.interface.schemas import (
     ChatContentPart,
+    ChatHistoryMessageResponse,
+    ChatHistoryResponse,
     ChatRequest,
     ChatResponse,
     ChatSource,
@@ -18,6 +20,7 @@ from features.chat.public import (
     ChatRequestInProgressError,
     ChatValidationError,
     clear_chat_context,
+    list_chat_messages,
     send_chat_message,
 )
 from features.stickers.infrastructure.postgres_repository import PostgresStickerRepository
@@ -41,6 +44,31 @@ def consume_chat_quota(user_id: str) -> None:
                 daily_requests=settings.global_daily_chat_request_limit,
             ),
         ]
+    )
+
+
+@router.get("/messages", response_model=ChatHistoryResponse)
+def chat_messages(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    before_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=10, ge=1, le=50),
+):
+    page = list_chat_messages(current_user.user_id, before_id=before_id, limit=limit)
+    return ChatHistoryResponse(
+        conversation_id=page.conversation_id,
+        items=[
+            ChatHistoryMessageResponse(
+                message_id=item.message_id,
+                role=item.role,
+                message_type=item.message_type,
+                content=item.content,
+                content_parts=[ChatContentPart(**vars(part)) for part in item.content_parts],
+                created_at=item.created_at,
+            )
+            for item in page.items
+        ],
+        has_more=page.has_more,
+        next_before_id=page.next_before_id,
     )
 
 

@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import base64
-from typing import Protocol
 
 import httpx
-
 from shared.config import settings
-
-
-class ImageGenerationProvider(Protocol):
-    async def generate(self, prompt: str) -> tuple[bytes, str]: ...
 
 
 class OpenAICompatibleImageGenerationProvider:

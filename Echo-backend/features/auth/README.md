@@ -1,49 +1,26 @@
 # Auth 模块
 
-## 1. 业务目标
+Auth 负责手机号验证码登录和内部用户会话。v1.0 不再保留微信登录、`openid` 或按请求传入 `user_id` 的兼容入口。
 
-负责用户登录与内部 `user_id` 生成。真实微信环境下用 `wx.login()` 的 code 换取 openid；本地开发环境未配置微信密钥时，使用 `client_id` 生成稳定 dev 用户。
+## 手机号登录流程
 
-## 2. 核心业务流程
+1. APP 生成并持久化设备 UUID，调用 `POST /login/phone`。
+2. 后端规范化大陆手机号，按手机号、设备和 IP 做限流，创建一次性验证码 challenge。
+3. 短信 provider 发送验证码；闭测环境可使用固定验证码配置，生产环境应切换真实短信 provider。
+4. APP 调用 `POST /login/verify` 提交 request_id、手机号、验证码和设备 UUID。
+5. 后端校验 challenge 的有效期、尝试次数、设备绑定和消费状态，创建或读取用户并签发 access token 与 refresh token。
+6. APP 将 token 写入安全存储。后续 API 只从 Bearer token 解析当前 `user_id`。
 
-1. 接收登录请求，读取微信临时 code 和可选的本地设备标识。
-2. 校验 code 是否为空；无效请求直接返回登录失败。
-3. 判断当前环境是否配置了微信密钥。
-4. 生产环境下，用 code 向微信换取 openid。
-5. 本地开发环境下，用设备标识或 code 生成稳定的开发 openid。
-6. 将 openid 转换为内部 `user_id`，避免业务数据直接暴露微信身份。
-7. 写入或更新用户记录。
-8. 返回内部 `user_id` 给前端，后续所有用户数据都按该 ID 隔离。
+## 会话维护
 
-## 3. 对外契约
+- access token 过期时，客户端通过 `POST /login/refresh` 轮换 refresh token。
+- refresh token 复用、撤销或过期会使会话失效，客户端回到登录页。
+- `POST /login/logout` 撤销当前设备的 refresh token。
 
-### HTTP API
+## 数据
 
-- `POST /login`
-  - Request: `LoginRequest`
-  - Response: `LoginResponse`
+- `users`：内部用户和手机号。
+- `sms_verification_challenges`：验证码 challenge，保存哈希，不保存明文验证码。
+- `auth_refresh_tokens`：refresh token 哈希、token family、设备和撤销状态。
 
-### 发布的事件
-
-- 当前无已落地事件。
-
-### 依赖的其它模块接口
-
-- 用户仓储：写入或更新用户记录。
-- 配置服务：读取微信登录密钥和请求超时时间。
-
-## 4. 数据库表
-
-- `users`
-
-## 5. 关键配置项
-
-- `WECHAT_APPID`
-- `WECHAT_SECRET`
-- `TIMEOUT`
-
-## 6. 注意事项
-
-- 不要在业务表中直接使用 openid，必须转换为内部 `user_id`。
-- 开发环境 dev 用户用于本地调试，生产环境应配置微信密钥。
-- 登录失败统一抛出 `AuthError`，由 Interface 映射为 HTTP 错误。
+认证错误统一返回 `code/detail/request_id`，日志只记录脱敏后的 request_id 和错误类别。

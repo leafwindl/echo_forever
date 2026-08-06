@@ -1,11 +1,13 @@
 from features.chat.application.clear_context import ClearChatContext
 from features.chat.application.generate_reply import GenerateChatReply
+from features.chat.application.list_messages import ListChatMessages
 from features.chat.application.send_message import SendChatMessage
 from features.chat.infrastructure.adapters import (
     ChatAgentOrchestratorAdapter,
     ChatContextProviderAdapter,
     ChatContextRepositoryAdapter,
     ChatConversationRepositoryAdapter,
+    ChatHistoryRepositoryAdapter,
     ConversationSummaryUpdaterAdapter,
     InMemoryChatRequestGuard,
     MemoryExtractionSchedulerAdapter,
@@ -17,6 +19,7 @@ from features.chat.infrastructure.adapters import (
 _generate_chat_reply_use_case: GenerateChatReply | None = None
 _send_chat_message_use_case: SendChatMessage | None = None
 _clear_chat_context_use_case: ClearChatContext | None = None
+_list_chat_messages_use_case: ListChatMessages | None = None
 
 
 def get_generate_chat_reply_use_case() -> GenerateChatReply:
@@ -55,9 +58,18 @@ def get_clear_chat_context_use_case() -> ClearChatContext:
     return _clear_chat_context_use_case
 
 
+def get_list_chat_messages_use_case() -> ListChatMessages:
+    global _list_chat_messages_use_case
+    if _list_chat_messages_use_case is None:
+        _list_chat_messages_use_case = ListChatMessages(ChatHistoryRepositoryAdapter())
+    return _list_chat_messages_use_case
+
+
 def reset_generate_chat_reply_use_case_for_tests():
     global _generate_chat_reply_use_case, _send_chat_message_use_case
     global _clear_chat_context_use_case
+    global _list_chat_messages_use_case
     _generate_chat_reply_use_case = None
     _send_chat_message_use_case = None
     _clear_chat_context_use_case = None
+    _list_chat_messages_use_case = None

@@ -55,6 +55,61 @@ class ChatResponseDto {
   final List<ChatSourceDto> sources;
 }
 
+class ChatHistoryResponseDto {
+  const ChatHistoryResponseDto({
+    required this.conversationId,
+    required this.items,
+    required this.hasMore,
+    this.nextBeforeId,
+  });
+
+  factory ChatHistoryResponseDto.fromJson(Map<String, dynamic> json) {
+    return ChatHistoryResponseDto(
+      conversationId: json['conversation_id'] as String? ?? '',
+      items: _mapList(json['items'], ChatHistoryMessageDto.fromJson),
+      hasMore: json['has_more'] as bool? ?? false,
+      nextBeforeId: json['next_before_id'] as int?,
+    );
+  }
+
+  final String conversationId;
+  final List<ChatHistoryMessageDto> items;
+  final bool hasMore;
+  final int? nextBeforeId;
+}
+
+class ChatHistoryMessageDto {
+  const ChatHistoryMessageDto({
+    required this.messageId,
+    required this.role,
+    required this.messageType,
+    required this.content,
+    required this.contentParts,
+    required this.createdAt,
+  });
+
+  factory ChatHistoryMessageDto.fromJson(Map<String, dynamic> json) {
+    return ChatHistoryMessageDto(
+      messageId: json['message_id'] as int,
+      role: json['role'] as String? ?? 'assistant',
+      messageType: json['message_type'] as String? ?? 'text',
+      content: json['content'] as String? ?? '',
+      contentParts: _mapList(
+        json['content_parts'],
+        ChatContentPartDto.fromJson,
+      ),
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+    );
+  }
+
+  final int messageId;
+  final String role;
+  final String messageType;
+  final String content;
+  final List<ChatContentPartDto> contentParts;
+  final DateTime? createdAt;
+}
+
 class ChatContentPartDto {
   const ChatContentPartDto({
     required this.type,

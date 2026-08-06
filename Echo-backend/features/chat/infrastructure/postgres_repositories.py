@@ -425,6 +425,61 @@ def get_conversation_messages(
     ]
 
 
+def list_messages_page(
+    user_id: str,
+    conversation_id: str,
+    before_id: int | None,
+    limit: int,
+) -> tuple[list[dict[str, object]], bool]:
+    params: list[object] = [user_id, conversation_id]
+    before_clause = ""
+    if before_id is not None:
+        before_clause = "AND id < %s"
+        params.append(before_id)
+    params.append(limit + 1)
+
+    with get_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT id, message_id, role, content, message_type, created_at
+                FROM chat_messages
+                WHERE user_id = %s
+                  AND conversation_id = %s
+                  AND status = 'active'
+                  {before_clause}
+                ORDER BY id DESC
+                LIMIT %s
+                """,
+                params,
+            )
+            rows = cursor.fetchall()
+        has_more = len(rows) > limit
+        page_rows = rows[:limit]
+        attachments = _load_message_attachments(
+            conn,
+            [str(row["message_id"] or "") for row in page_rows],
+        )
+
+    page_rows.reverse()
+    return (
+        [
+            {
+                "message_id": int(row["id"]),
+                "role": str(row["role"]),
+                "content": "" if row["message_type"] == "sticker" else str(row["content"]),
+                "message_type": str(row["message_type"]),
+                "content_parts": _history_content_parts(
+                    attachments.get(str(row["message_id"] or ""), ())
+                ),
+                "created_at": row["created_at"],
+            }
+            for row in page_rows
+        ],
+        has_more,
+    )
+
+
 def has_recent_assistant_sticker(
     user_id: str,
     conversation_id: str,
@@ -488,6 +543,24 @@ def _load_message_attachments(
             }
         )
     return {key: tuple(value) for key, value in grouped.items()}
+
+
+def _history_content_parts(
+    attachments: tuple[dict[str, object], ...],
+) -> tuple[ContentPart, ...]:
+    parts: list[ContentPart] = []
+    for attachment in attachments:
+        if attachment.get("type") != "sticker":
+            continue
+        metadata = attachment.get("metadata") or {}
+        parts.append(
+            ContentPart(
+                type="sticker",
+                sticker_id=str(attachment.get("resource_id") or ""),
+                url=str(metadata.get("url") or ""),
+            )
+        )
+    return tuple(parts)
 
 
 def _render_message_content(

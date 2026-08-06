@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -55,3 +56,19 @@ class ChatSource(BaseModel):
 class ClearChatResponse(BaseModel):
     deleted_messages: int
     reset_conversations: int
+
+
+class ChatHistoryMessageResponse(BaseModel):
+    message_id: int
+    role: Literal["user", "assistant"]
+    message_type: str
+    content: str
+    content_parts: list[ChatContentPart] = Field(default_factory=list)
+    created_at: datetime
+
+
+class ChatHistoryResponse(BaseModel):
+    conversation_id: str
+    items: list[ChatHistoryMessageResponse] = Field(default_factory=list)
+    has_more: bool
+    next_before_id: int | None = None

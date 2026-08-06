@@ -34,6 +34,7 @@ void main() {
       addTearDown(container.dispose);
       final subscription = _keepAlive(container);
       addTearDown(subscription.close);
+      await _initializeHistory(container);
       final controller = container.read(chatControllerProvider.notifier);
 
       final first = controller.sendMessage('  第一条  ');
@@ -82,6 +83,7 @@ void main() {
       addTearDown(container.dispose);
       final subscription = _keepAlive(container);
       addTearDown(subscription.close);
+      await _initializeHistory(container);
 
       final accepted = await container
           .read(chatControllerProvider.notifier)
@@ -111,6 +113,7 @@ void main() {
       addTearDown(container.dispose);
       final subscription = _keepAlive(container);
       addTearDown(subscription.close);
+      await _initializeHistory(container);
 
       final accepted = await container
           .read(chatControllerProvider.notifier)
@@ -132,6 +135,7 @@ void main() {
     addTearDown(container.dispose);
     final subscription = _keepAlive(container);
     addTearDown(subscription.close);
+    await _initializeHistory(container);
     final controller = container.read(chatControllerProvider.notifier);
     await controller.sendMessage('旧消息');
     controller.toggleChatExpanded();
@@ -157,6 +161,7 @@ void main() {
     addTearDown(container.dispose);
     final subscription = _keepAlive(container);
     addTearDown(subscription.close);
+    await _initializeHistory(container);
 
     final accepted = await container
         .read(chatControllerProvider.notifier)
@@ -189,6 +194,7 @@ void main() {
     );
     final container = _container(repository);
     final subscription = _keepAlive(container);
+    await _initializeHistory(container);
     final send = container
         .read(chatControllerProvider.notifier)
         .sendMessage('离开页面');
@@ -199,6 +205,105 @@ void main() {
     expect(repository.lastCancellation?.isCancelled, isTrue);
     expect(await send, isFalse);
     container.dispose();
+  });
+
+  test(
+    'restores the latest server messages instead of the local greeting',
+    () async {
+      final repository = FakeChatRepository(
+        onLoadHistory: (_, _, _) async => const ChatHistoryPage(
+          conversationId: 'conv-history',
+          messages: <ChatMessage>[
+            ChatMessage(
+              id: 41,
+              sender: ChatMessageSender.user,
+              content: '昨天的消息',
+            ),
+            ChatMessage(
+              id: 42,
+              sender: ChatMessageSender.assistant,
+              content: '昨天的回复',
+            ),
+          ],
+          hasMore: true,
+          nextBeforeId: 41,
+        ),
+      );
+      final container = _container(repository, preferredName: '小叶');
+      addTearDown(container.dispose);
+      final subscription = _keepAlive(container);
+      addTearDown(subscription.close);
+
+      await _initializeHistory(container);
+
+      final state = container.read(chatControllerProvider);
+      expect(state.historyInitialized, isTrue);
+      expect(state.messages.map((message) => message.content), <String>[
+        '昨天的消息',
+        '昨天的回复',
+      ]);
+      expect(state.nextMessageId, 43);
+      expect(state.hasMoreHistory, isTrue);
+      expect(state.nextBeforeId, 41);
+    },
+  );
+
+  test('prepends an older page and advances the before-id cursor', () async {
+    final repository = FakeChatRepository(
+      onLoadHistory: (beforeId, _, _) async {
+        if (beforeId == null) {
+          return const ChatHistoryPage(
+            conversationId: 'conv-history',
+            messages: <ChatMessage>[
+              ChatMessage(
+                id: 11,
+                sender: ChatMessageSender.user,
+                content: '较新的消息',
+              ),
+              ChatMessage(
+                id: 12,
+                sender: ChatMessageSender.assistant,
+                content: '较新的回复',
+              ),
+            ],
+            hasMore: true,
+            nextBeforeId: 11,
+          );
+        }
+        return const ChatHistoryPage(
+          conversationId: 'conv-history',
+          messages: <ChatMessage>[
+            ChatMessage(
+              id: 1,
+              sender: ChatMessageSender.user,
+              content: '最早的消息',
+            ),
+            ChatMessage(
+              id: 2,
+              sender: ChatMessageSender.assistant,
+              content: '最早的回复',
+            ),
+          ],
+          hasMore: false,
+        );
+      },
+    );
+    final container = _container(repository);
+    addTearDown(container.dispose);
+    final subscription = _keepAlive(container);
+    addTearDown(subscription.close);
+    await _initializeHistory(container);
+
+    final loaded = await container
+        .read(chatControllerProvider.notifier)
+        .loadOlderMessages();
+    final state = container.read(chatControllerProvider);
+
+    expect(loaded, isTrue);
+    expect(state.messages.map((message) => message.id), <int>[1, 2, 11, 12]);
+    expect(state.hasMoreHistory, isFalse);
+    expect(state.nextBeforeId, isNull);
+    expect(repository.historyBeforeIds, <int?>[null, 11]);
   });
 }
 
@@ -220,4 +325,9 @@ ProviderSubscription<ChatState> _keepAlive(ProviderContainer container) {
     (_, _) {},
     fireImmediately: true,
   );
+}
+
+Future<void> _initializeHistory(ProviderContainer container) async {
+  await container.pump();
+  await container.pump();
 }

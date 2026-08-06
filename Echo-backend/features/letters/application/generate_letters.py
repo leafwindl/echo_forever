@@ -1,23 +1,23 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from features.letters.domain.repositories import LetterRepository
-from providers.llm_provider import LLMProvider
+from features.letters.domain.services import LetterLanguageModel
 
 logger = logging.getLogger(__name__)
 
 
 class GenerateDueLetters:
-    def __init__(self, repository: LetterRepository, llm: LLMProvider):
+    def __init__(self, repository: LetterRepository, llm: LetterLanguageModel):
         self.repository = repository
         self.llm = llm
 
     async def execute(self) -> int:
         created = 0
         for user_id, preference, local_date in self.repository.due_users(
-            datetime.now(timezone.utc)
+            datetime.now(UTC)
         ):
             if self.repository.exists(user_id, local_date):
                 continue

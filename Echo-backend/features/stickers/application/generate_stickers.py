@@ -4,10 +4,8 @@ import logging
 import uuid
 from pathlib import Path
 
-from features.stickers.domain.services import validate_image
 from features.stickers.domain.repositories import StickerGenerationRepository
-from providers.image_generation_provider import ImageGenerationProvider
-from shared.config import settings
+from features.stickers.domain.services import ImageGenerator, validate_image
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +14,16 @@ class GeneratePendingStickers:
     def __init__(
         self,
         repository: StickerGenerationRepository,
-        provider: ImageGenerationProvider,
+        provider: ImageGenerator,
         static_root: Path,
+        maximum_bytes: int,
+        static_url_prefix: str,
     ):
         self.repository = repository
         self.provider = provider
         self.static_root = static_root
+        self.maximum_bytes = maximum_bytes
+        self.static_url_prefix = static_url_prefix
 
     async def execute(self) -> int:
         completed = 0
@@ -32,9 +34,7 @@ class GeneratePendingStickers:
                     + job["prompt"]
                 )
                 content, content_type = await self.provider.generate(prompt)
-                content_hash = validate_image(
-                    content, content_type, settings.sticker_upload_max_bytes
-                )
+                content_hash = validate_image(content, content_type, self.maximum_bytes)
                 self.static_root.mkdir(parents=True, exist_ok=True)
                 filename = f"{uuid.uuid4().hex}.png"
                 (self.static_root / filename).write_bytes(content)
@@ -42,7 +42,7 @@ class GeneratePendingStickers:
                     job["job_id"],
                     job["user_id"],
                     f"stickers/{filename}",
-                    f"{settings.static_url_prefix.rstrip('/')}/static/stickers/{filename}",
+                    f"{self.static_url_prefix.rstrip('/')}/static/stickers/{filename}",
                     content_type,
                     len(content),
                     content_hash,

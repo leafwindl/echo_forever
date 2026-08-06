@@ -23,6 +23,11 @@ class ChatState {
     required this.preferredName,
     this.isSending = false,
     this.isClearing = false,
+    this.isLoadingInitialHistory = true,
+    this.isLoadingMoreHistory = false,
+    this.historyInitialized = false,
+    this.hasMoreHistory = false,
+    this.nextBeforeId,
     this.chatExpanded = false,
     this.errorMessage,
   });
@@ -32,10 +37,19 @@ class ChatState {
   final String preferredName;
   final bool isSending;
   final bool isClearing;
+  final bool isLoadingInitialHistory;
+  final bool isLoadingMoreHistory;
+  final bool historyInitialized;
+  final bool hasMoreHistory;
+  final int? nextBeforeId;
   final bool chatExpanded;
   final String? errorMessage;
 
-  bool get isBusy => isSending || isClearing;
+  bool get isBusy =>
+      isSending ||
+      isClearing ||
+      isLoadingInitialHistory ||
+      isLoadingMoreHistory;
 
   ChatState copyWith({
     List<ChatMessage>? messages,
@@ -43,6 +57,12 @@ class ChatState {
     String? preferredName,
     bool? isSending,
     bool? isClearing,
+    bool? isLoadingInitialHistory,
+    bool? isLoadingMoreHistory,
+    bool? historyInitialized,
+    bool? hasMoreHistory,
+    int? nextBeforeId,
+    bool clearNextBeforeId = false,
     bool? chatExpanded,
     String? errorMessage,
     bool clearError = false,
@@ -53,6 +73,14 @@ class ChatState {
       preferredName: preferredName ?? this.preferredName,
       isSending: isSending ?? this.isSending,
       isClearing: isClearing ?? this.isClearing,
+      isLoadingInitialHistory:
+          isLoadingInitialHistory ?? this.isLoadingInitialHistory,
+      isLoadingMoreHistory: isLoadingMoreHistory ?? this.isLoadingMoreHistory,
+      historyInitialized: historyInitialized ?? this.historyInitialized,
+      hasMoreHistory: hasMoreHistory ?? this.hasMoreHistory,
+      nextBeforeId: clearNextBeforeId
+          ? null
+          : nextBeforeId ?? this.nextBeforeId,
       chatExpanded: chatExpanded ?? this.chatExpanded,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
@@ -61,6 +89,7 @@ class ChatState {
 
 class ChatController extends Notifier<ChatState> {
   ChatCancellation? _activeCancellation;
+  ChatCancellation? _historyCancellation;
   bool _disposed = false;
 
   @override
@@ -70,13 +99,115 @@ class ChatController extends Notifier<ChatState> {
       _disposed = true;
       _activeCancellation?.cancel();
       _activeCancellation = null;
+      _historyCancellation?.cancel();
+      _historyCancellation = null;
     });
     final preferredName = ref.watch(chatPreferredNameProvider).trim();
-    return ChatState(
+    final initialState = ChatState(
       messages: <ChatMessage>[_greeting(preferredName, 1)],
       nextMessageId: 2,
       preferredName: preferredName,
     );
+    Future<void>.microtask(_loadInitialHistory);
+    return initialState;
+  }
+
+  Future<void> _loadInitialHistory() async {
+    if (_disposed) {
+      return;
+    }
+    final cancellation = ChatCancellation();
+    _historyCancellation = cancellation;
+    try {
+      final page = await ref
+          .read(chatRepositoryProvider)
+          .loadHistory(limit: 10, cancellation: cancellation);
+      if (_disposed || cancellation.isCancelled) {
+        return;
+      }
+      final messages = page.messages.isEmpty
+          ? <ChatMessage>[_greeting(state.preferredName, 1)]
+          : page.messages;
+      state = state.copyWith(
+        messages: messages,
+        nextMessageId: _nextLocalMessageId(messages),
+        isLoadingInitialHistory: false,
+        historyInitialized: true,
+        hasMoreHistory: page.hasMore,
+        nextBeforeId: page.nextBeforeId,
+        clearNextBeforeId: page.nextBeforeId == null,
+        clearError: true,
+      );
+    } on Object catch (error) {
+      if (_disposed || cancellation.isCancelled) {
+        return;
+      }
+      state = state.copyWith(
+        isLoadingInitialHistory: false,
+        historyInitialized: true,
+        hasMoreHistory: false,
+        clearNextBeforeId: true,
+        errorMessage: _historyErrorMessage(_asAppException(error)),
+      );
+    } finally {
+      if (identical(_historyCancellation, cancellation)) {
+        _historyCancellation = null;
+      }
+    }
+  }
+
+  Future<bool> loadOlderMessages() async {
+    if (state.isBusy || !state.historyInitialized || !state.hasMoreHistory) {
+      return false;
+    }
+    final beforeId = state.nextBeforeId;
+    if (beforeId == null) {
+      return false;
+    }
+
+    final cancellation = ChatCancellation();
+    _historyCancellation = cancellation;
+    state = state.copyWith(isLoadingMoreHistory: true, clearError: true);
+    try {
+      final page = await ref
+          .read(chatRepositoryProvider)
+          .loadHistory(
+            beforeId: beforeId,
+            limit: 10,
+            cancellation: cancellation,
+          );
+      if (_disposed || cancellation.isCancelled) {
+        return false;
+      }
+      final existingIds = state.messages.map((message) => message.id).toSet();
+      final olderMessages = page.messages
+          .where((message) => !existingIds.contains(message.id))
+          .toList(growable: false);
+      state = state.copyWith(
+        messages: <ChatMessage>[...olderMessages, ...state.messages],
+        isLoadingMoreHistory: false,
+        hasMoreHistory: page.hasMore,
+        nextBeforeId: page.nextBeforeId,
+        clearNextBeforeId: page.nextBeforeId == null,
+      );
+      return olderMessages.isNotEmpty;
+    } on Object catch (error) {
+      if (_disposed || cancellation.isCancelled) {
+        return false;
+      }
+      state = state.copyWith(
+        isLoadingMoreHistory: false,
+        errorMessage: _historyErrorMessage(_asAppException(error)),
+      );
+      return false;
+    } finally {
+      if (!_disposed && state.isLoadingMoreHistory) {
+        state = state.copyWith(isLoadingMoreHistory: false);
+      }
+      if (identical(_historyCancellation, cancellation)) {
+        _historyCancellation = null;
+      }
+    }
   }
 
   Future<bool> sendMessage(String rawMessage) async {
@@ -213,6 +344,8 @@ class ChatController extends Notifier<ChatState> {
         messages: <ChatMessage>[_restartGreeting(state.preferredName, 1)],
         nextMessageId: 2,
         preferredName: state.preferredName,
+        isLoadingInitialHistory: false,
+        historyInitialized: true,
         chatExpanded: state.chatExpanded,
       );
       return true;
@@ -273,6 +406,16 @@ class ChatController extends Notifier<ChatState> {
         .toList(growable: false);
   }
 
+  static int _nextLocalMessageId(List<ChatMessage> messages) {
+    var maximumId = 0;
+    for (final message in messages) {
+      if (message.id > maximumId) {
+        maximumId = message.id;
+      }
+    }
+    return maximumId + 1;
+  }
+
   static AppException _asAppException(Object error) {
     return error is AppException
         ? error
@@ -296,6 +439,14 @@ class ChatController extends Notifier<ChatState> {
       AppExceptionKind.unauthorized => '登录状态已失效，请重新登录。',
       AppExceptionKind.networkUnavailable => '网络不可用，未清除聊天上下文。',
       _ => '清除失败，请重试。',
+    };
+  }
+
+  static String _historyErrorMessage(AppException exception) {
+    return switch (exception.kind) {
+      AppExceptionKind.unauthorized => '登录状态已失效，请重新登录。',
+      AppExceptionKind.networkUnavailable => '网络不可用，暂时没有加载聊天记录。',
+      _ => '聊天记录加载失败，可以稍后重试。',
     };
   }
 }

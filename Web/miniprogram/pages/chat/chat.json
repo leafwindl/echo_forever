@@ -1,8 +1,0 @@
-{
-  "navigationBarTitleText": "Echo",
-  "navigationBarBackgroundColor": "#FDEBF0",
-  "navigationBarTextStyle": "black",
-  "usingComponents": {
-    "character": "/components/character/character"
-  }
-}

@@ -6,6 +6,7 @@ from features.agent.domain.entities import ContentPart, SourceReference
 from features.agent.public import run_chat_agent
 from features.chat.domain.entities import (
     ChatContext,
+    ChatHistoryMessage,
     ChatReplyDeliveryResult,
     ChatRequestClaim,
     ChatRequestClaimStatus,
@@ -14,6 +15,7 @@ from features.chat.domain.entities import (
 from features.chat.domain.repositories import (
     ChatContextRepository,
     ChatConversationRepository,
+    ChatHistoryRepository,
     ChatRequestResultRepository,
 )
 from features.chat.domain.services import (
@@ -127,6 +129,29 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
 class ChatContextRepositoryAdapter(ChatContextRepository):
     def clear_context(self, user_id: str) -> tuple[int, int]:
         return postgres_repositories.clear_context(user_id)
+
+
+class ChatHistoryRepositoryAdapter(ChatHistoryRepository):
+    def get_or_create_active_conversation(self, user_id: str) -> str:
+        return postgres_repositories.get_or_create_active_conversation(user_id)
+
+    def list_messages_page(
+        self,
+        user_id: str,
+        conversation_id: str,
+        before_id: int | None,
+        limit: int,
+    ) -> tuple[tuple[ChatHistoryMessage, ...], bool]:
+        rows, has_more = postgres_repositories.list_messages_page(
+            user_id,
+            conversation_id,
+            before_id,
+            limit,
+        )
+        return (
+            tuple(ChatHistoryMessage(**row) for row in rows),
+            has_more,
+        )
 
 
 class PostgresChatRequestResultRepositoryAdapter(ChatRequestResultRepository):

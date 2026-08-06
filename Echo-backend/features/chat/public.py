@@ -1,6 +1,7 @@
 from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
     ChatContextClearResult,
+    ChatHistoryPage,
     ChatReplyDeliveryResult,
     ChatRequestInProgressError,
     ChatTurnResult,
@@ -9,12 +10,21 @@ from features.chat.domain.entities import (
 from features.chat.infrastructure.container import (
     get_clear_chat_context_use_case,
     get_generate_chat_reply_use_case,
+    get_list_chat_messages_use_case,
     get_send_chat_message_use_case,
 )
 
 
 def clear_chat_context(user_id: str) -> ChatContextClearResult:
     return get_clear_chat_context_use_case().execute(user_id)
+
+
+def list_chat_messages(
+    user_id: str,
+    before_id: int | None = None,
+    limit: int = 10,
+) -> ChatHistoryPage:
+    return get_list_chat_messages_use_case().execute(user_id, before_id, limit)
 
 
 async def generate_chat_reply(
@@ -63,11 +73,13 @@ async def send_chat_message(
 
 __all__ = [
     "ChatContextClearResult",
+    "ChatHistoryPage",
     "ChatReplyDeliveryResult",
     "ChatRequestInProgressError",
     "ChatTurnResult",
     "ChatValidationError",
     "clear_chat_context",
     "generate_chat_reply",
+    "list_chat_messages",
     "send_chat_message",
 ]

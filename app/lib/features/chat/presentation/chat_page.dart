@@ -11,6 +11,7 @@ import 'package:echo_app/features/stickers/presentation/stickers_controller.dart
 import 'package:echo_app/shared/widgets/character_renderer.dart';
 import 'package:echo_app/shared/widgets/confirm_action_sheet.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,6 +42,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _inputController = TextEditingController();
   final FocusNode _inputFocusNode = FocusNode();
   String _inputText = '';
+  String? _lastTailSignature;
+  bool _historyLoadInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
 
   @override
   void dispose() {
@@ -54,7 +63,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(chatControllerProvider);
     final unreadLetterCount = ref.watch(lettersUnreadCountProvider);
-    _scheduleScrollToBottom();
+    _scheduleScrollForState(state);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Echo'),
@@ -143,6 +152,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     .toggleChatExpanded(),
                 onDismissError: () =>
                     ref.read(chatControllerProvider.notifier).clearError(),
+                onLoadOlder: _loadOlderMessages,
                 onOpenSource: _openSource,
                 onCopySource: _copySource,
               ),
@@ -296,6 +306,71 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  void _handleScroll() {
+    if (!_scrollController.hasClients || _historyLoadInFlight) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (position.userScrollDirection == ScrollDirection.forward &&
+        position.pixels <= 80) {
+      unawaited(_loadOlderMessages());
+    }
+  }
+
+  Future<void> _loadOlderMessages() async {
+    final state = ref.read(chatControllerProvider);
+    if (_historyLoadInFlight ||
+        state.isBusy ||
+        !state.historyInitialized ||
+        !state.hasMoreHistory ||
+        !_scrollController.hasClients) {
+      return;
+    }
+    _historyLoadInFlight = true;
+    final oldMaximum = _scrollController.position.maxScrollExtent;
+    final oldOffset = _scrollController.position.pixels;
+    try {
+      final loaded = await ref
+          .read(chatControllerProvider.notifier)
+          .loadOlderMessages();
+      if (!loaded || !mounted) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) {
+          return;
+        }
+        final newMaximum = _scrollController.position.maxScrollExtent;
+        final target = (oldOffset + newMaximum - oldMaximum).clamp(
+          _scrollController.position.minScrollExtent,
+          newMaximum,
+        );
+        _scrollController.jumpTo(target);
+      });
+    } finally {
+      _historyLoadInFlight = false;
+    }
+  }
+
+  void _scheduleScrollForState(ChatState state) {
+    if (!state.historyInitialized || state.messages.isEmpty) {
+      return;
+    }
+    final tail = state.messages.last;
+    final signature = <Object?>[
+      tail.id,
+      tail.isTyping,
+      tail.content,
+      tail.sticker?.stickerId,
+      tail.sources.length,
+    ].join(':');
+    if (_lastTailSignature == signature) {
+      return;
+    }
+    _lastTailSignature = signature;
+    _scheduleScrollToBottom();
+  }
+
   void _scheduleScrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) {
@@ -324,6 +399,7 @@ class _ChatPanel extends StatelessWidget {
     required this.onOpenStickers,
     required this.onToggleExpanded,
     required this.onDismissError,
+    required this.onLoadOlder,
     required this.onOpenSource,
     required this.onCopySource,
   });
@@ -338,6 +414,7 @@ class _ChatPanel extends StatelessWidget {
   final VoidCallback onOpenStickers;
   final VoidCallback onToggleExpanded;
   final VoidCallback onDismissError;
+  final Future<void> Function() onLoadOlder;
   final ValueChanged<ChatSource> onOpenSource;
   final ValueChanged<ChatSource> onCopySource;
 
@@ -361,7 +438,8 @@ class _ChatPanel extends StatelessWidget {
               ),
             ),
           ),
-          if (state.isClearing) const LinearProgressIndicator(minHeight: 2),
+          if (state.isClearing || state.isLoadingInitialHistory)
+            const LinearProgressIndicator(minHeight: 2),
           if (state.errorMessage != null)
             _ChatErrorBanner(
               message: state.errorMessage!,
@@ -372,9 +450,20 @@ class _ChatPanel extends StatelessWidget {
               key: const Key('chat-message-list'),
               controller: scrollController,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              itemCount: state.messages.length,
+              itemCount:
+                  state.messages.length +
+                  (state.hasMoreHistory || state.isLoadingMoreHistory ? 1 : 0),
               itemBuilder: (context, index) {
-                final message = state.messages[index];
+                final hasHistoryControl =
+                    state.hasMoreHistory || state.isLoadingMoreHistory;
+                if (hasHistoryControl && index == 0) {
+                  return _HistoryLoader(
+                    isLoading: state.isLoadingMoreHistory,
+                    onLoad: onLoadOlder,
+                  );
+                }
+                final messageIndex = index - (hasHistoryControl ? 1 : 0);
+                final message = state.messages[messageIndex];
                 return _MessageBubble(
                   key: ValueKey<String>('chat-message-${message.id}'),
                   message: message,
@@ -395,6 +484,33 @@ class _ChatPanel extends StatelessWidget {
             onOpenStickers: onOpenStickers,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HistoryLoader extends StatelessWidget {
+  const _HistoryLoader({required this.isLoading, required this.onLoad});
+
+  final bool isLoading;
+  final Future<void> Function() onLoad;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: Center(
+        child: isLoading
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : TextButton.icon(
+                key: const Key('load-older-chat-messages'),
+                onPressed: onLoad,
+                icon: const Icon(Icons.history_rounded, size: 18),
+                label: const Text('加载更早消息'),
+              ),
       ),
     );
   }

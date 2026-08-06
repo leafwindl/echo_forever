@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 
 from features.agent.domain.entities import ContentPart, SourceReference
@@ -75,3 +76,21 @@ class ChatRequestClaim:
 class ChatContextClearResult:
     deleted_messages: int
     reset_conversations: int
+
+
+@dataclass(frozen=True)
+class ChatHistoryMessage:
+    message_id: int
+    role: str
+    message_type: str
+    content: str
+    content_parts: tuple[ContentPart, ...]
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class ChatHistoryPage:
+    conversation_id: str
+    items: tuple[ChatHistoryMessage, ...]
+    has_more: bool
+    next_before_id: int | None

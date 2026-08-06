@@ -175,21 +175,49 @@ class Settings(BaseSettings):
         default="http://localhost:8000",
         validation_alias="PUBLIC_BASE_URL",
     )
+    cos_enabled: bool = Field(default=False, validation_alias="COS_ENABLED")
+    cos_bucket: str = Field(default="", validation_alias="COS_BUCKET")
+    cos_region: str = Field(default="", validation_alias="COS_REGION")
+    cos_secret_id: str = Field(default="", validation_alias="COS_SECRET_ID")
+    cos_secret_key: str = Field(default="", validation_alias="COS_SECRET_KEY")
+    cos_reuse_tencent_credentials: bool = Field(
+        default=False,
+        validation_alias="COS_REUSE_TENCENT_CREDENTIALS",
+    )
+    cos_custom_domain: str = Field(default="", validation_alias="COS_CUSTOM_DOMAIN")
+    cos_private_read: bool = Field(default=True, validation_alias="COS_PRIVATE_READ")
+    cos_object_prefix: str = Field(default="echo", validation_alias="COS_OBJECT_PREFIX")
+    cos_signed_url_expires_seconds: int = Field(
+        default=900,
+        validation_alias="COS_SIGNED_URL_EXPIRES_SECONDS",
+        ge=60,
+        le=86400,
+    )
+    cos_timeout_seconds: int = Field(
+        default=30,
+        validation_alias="COS_TIMEOUT_SECONDS",
+        ge=1,
+        le=120,
+    )
     voice_generated_retention_seconds: int = Field(
-        default=86400,
+        default=3600,
         validation_alias="VOICE_GENERATED_RETENTION_SECONDS",
+        ge=0,
     )
     voice_upload_retention_seconds: int = Field(
         default=300,
         validation_alias="VOICE_UPLOAD_RETENTION_SECONDS",
+        ge=0,
     )
     voice_cleanup_interval_seconds: int = Field(
-        default=3600,
+        default=600,
         validation_alias="VOICE_CLEANUP_INTERVAL_SECONDS",
+        ge=0,
     )
     voice_cleanup_batch_size: int = Field(
         default=500,
         validation_alias="VOICE_CLEANUP_BATCH_SIZE",
+        ge=1,
     )
     auth_token_secret: str = Field(default="", validation_alias="AUTH_TOKEN_SECRET")
     auth_token_expires_seconds: int = Field(
@@ -434,6 +462,10 @@ class Settings(BaseSettings):
     )
     daily_letter_generation_version: str = Field(
         default="letter-v1", validation_alias="DAILY_LETTER_GENERATION_VERSION"
+    )
+    letter_image_generation_enabled: bool = Field(
+        default=False,
+        validation_alias="LETTER_IMAGE_GENERATION_ENABLED",
     )
     sticker_enabled: bool = Field(default=True, validation_alias="STICKER_ENABLED")
     sticker_upload_max_bytes: int = Field(

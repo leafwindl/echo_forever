@@ -1,7 +1,11 @@
 from typing import Protocol
 
 from features.agent.domain.entities import ContentPart
-from features.chat.domain.entities import ChatReplyDeliveryResult, ChatRequestClaim
+from features.chat.domain.entities import (
+    ChatHistoryMessage,
+    ChatReplyDeliveryResult,
+    ChatRequestClaim,
+)
 
 
 class ChatConversationRepository(Protocol):
@@ -33,6 +37,18 @@ class ChatConversationRepository(Protocol):
 
 class ChatContextRepository(Protocol):
     def clear_context(self, user_id: str) -> tuple[int, int]: ...
+
+
+class ChatHistoryRepository(Protocol):
+    def get_or_create_active_conversation(self, user_id: str) -> str: ...
+
+    def list_messages_page(
+        self,
+        user_id: str,
+        conversation_id: str,
+        before_id: int | None,
+        limit: int,
+    ) -> tuple[tuple[ChatHistoryMessage, ...], bool]: ...
 
 
 class ChatRequestResultRepository(Protocol):

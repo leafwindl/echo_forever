@@ -7,6 +7,7 @@ import 'package:echo_app/core/network/dio_client.dart';
 import 'package:echo_app/core/network/interceptors/auth_interceptor.dart';
 import 'package:echo_app/core/network/token_refresh_coordinator.dart';
 import 'package:echo_app/features/chat/data/chat_api.dart';
+import 'package:echo_app/features/chat/data/chat_repository_impl.dart';
 import 'package:echo_app/features/chat/data/dto/chat_dtos.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/domain/chat_repository.dart';
@@ -15,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('serializes POST /chat/send with mode=chat', () {
     expect(ChatApi.sendPath, '/chat/send');
+    expect(ChatApi.messagesPath, '/chat/messages');
     expect(ChatApi.clearPath, '/chat/clear');
     expect(const ChatRequestDto(message: '你好').toJson(), <String, Object?>{
       'message': '你好',
@@ -89,6 +91,24 @@ void main() {
     expect(response.sources, isEmpty);
     expect(cleared.deletedMessages, 7);
     expect(cleared.resetConversations, 2);
+  });
+
+  test('parses paged chat history with standalone sticker messages', () async {
+    final client = _CapturingDioClient();
+
+    final response = await ChatApi(client).loadHistory(beforeId: 42, limit: 10);
+    final page = await ChatRepositoryImpl(
+      ChatApi(client),
+    ).loadHistory(beforeId: 42, limit: 10);
+
+    expect(client.getPath, '/chat/messages');
+    expect(client.getQuery, <String, dynamic>{'limit': 10, 'before_id': 42});
+    expect(response.conversationId, 'conv-history');
+    expect(response.nextBeforeId, 20);
+    expect(page.messages.single.id, 20);
+    expect(page.messages.single.sender, ChatMessageSender.user);
+    expect(page.messages.single.content, isEmpty);
+    expect(page.messages.single.sticker?.stickerId, 'stk-wave');
   });
 
   test('only accepts http and https source URLs', () {
@@ -247,6 +267,47 @@ class _CapturingDioClient extends DioClient {
   _CapturingDioClient() : super(Dio());
 
   CancelToken? cancelToken;
+  String? getPath;
+  Map<String, dynamic>? getQuery;
+
+  @override
+  Future<Response<T>> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) {
+    getPath = path;
+    getQuery = queryParameters;
+    return Future<Response<T>>.value(
+      Response<T>(
+        data:
+            <String, dynamic>{
+                  'conversation_id': 'conv-history',
+                  'items': <Map<String, Object?>>[
+                    <String, Object?>{
+                      'message_id': 20,
+                      'role': 'user',
+                      'message_type': 'sticker',
+                      'content': '',
+                      'content_parts': <Map<String, Object?>>[
+                        <String, Object?>{
+                          'type': 'sticker',
+                          'sticker_id': 'stk-wave',
+                          'url': 'https://cdn.example.test/wave.png',
+                        },
+                      ],
+                      'created_at': '2026-08-06T08:00:00Z',
+                    },
+                  ],
+                  'has_more': true,
+                  'next_before_id': 20,
+                }
+                as T,
+        requestOptions: RequestOptions(path: path),
+      ),
+    );
+  }
 
   @override
   Future<Response<T>> post<T>(

@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
-
-from pydantic import BaseModel
+from typing import Any, Protocol
 
 from features.agent.domain.entities import (
     AgentToolResult,
@@ -41,13 +39,24 @@ class ToolExecutionContext:
         return ""
 
 
-ToolHandler = Callable[[ToolExecutionContext, BaseModel], Awaitable[AgentToolResult]]
+
+class ToolArgumentsModel(Protocol):
+    """Structural contract for an infrastructure-owned argument validator."""
+
+    @classmethod
+    def model_validate(cls, value: Any) -> Any: ...
+
+    @classmethod
+    def model_json_schema(cls) -> dict[str, Any]: ...
+
+
+ToolHandler = Callable[[ToolExecutionContext, Any], Awaitable[AgentToolResult]]
 
 
 @dataclass(frozen=True)
 class ToolDefinition:
     specification: ToolSpecification
-    arguments_model: type[BaseModel]
+    arguments_model: type[ToolArgumentsModel]
     handler: ToolHandler
 
     def model_description(self) -> dict[str, Any]:

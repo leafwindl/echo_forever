@@ -7,9 +7,27 @@ class ChatApi {
   const ChatApi(this._client);
 
   static const sendPath = '/chat/send';
+  static const messagesPath = '/chat/messages';
   static const clearPath = '/chat/clear';
 
   final DioClient _client;
+
+  Future<ChatHistoryResponseDto> loadHistory({
+    int? beforeId,
+    int limit = 10,
+    ChatCancellation? cancellation,
+  }) async {
+    final queryParameters = <String, dynamic>{'limit': limit};
+    if (beforeId != null) {
+      queryParameters['before_id'] = beforeId;
+    }
+    final response = await _client.get<Map<String, dynamic>>(
+      messagesPath,
+      queryParameters: queryParameters,
+      cancelToken: _bindCancellation(cancellation),
+    );
+    return ChatHistoryResponseDto.fromJson(response.data!);
+  }
 
   Future<ChatResponseDto> sendMessage(
     ChatRequestDto request, {

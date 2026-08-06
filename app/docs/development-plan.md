@@ -1,4 +1,6 @@
-# Echo 微信小程序迁移 Flutter APP 开发计划
+# Echo Flutter APP 迁移开发计划（历史归档）
+
+> 本文记录 Flutter 迁移过程中的设计和验收背景。Echo v1.0 已移除旧的 `Web/` 微信小程序目录，本文中关于 `Web/miniprogram`、微信登录和旧音频格式的路径/协议仅用于追溯历史，不应作为当前实现依据。当前业务流程和数据流以仓库根目录 `doc/Echo v1.0 业务流程与数据流.md` 为准。
 
 > 文档状态：开发基线草案  
 > 适用版本：Echo APP v2.0  
@@ -512,6 +514,7 @@ access JWT 至少包含：
 | 能力 | 复用接口 | 关键请求/响应 | 对齐文件 |
 | --- | --- | --- | --- |
 | 文本/电话对话 | `POST /chat/send` | `{message, mode: chat\|call}` → `reply/audio_urls/content_parts/sources` | `features/chat/interface/router.py`、`schemas.py` |
+| 聊天历史 | `GET /chat/messages?limit=&before_id=` | 初次读取最新 10 条；`message_id` 游标向前分页；返回 `items/has_more/next_before_id` | 同上 |
 | 清除上下文 | `POST /chat/clear` | → `deleted_messages/reset_conversations`，不清长期记忆 | 同上 |
 | Persona | `GET/PUT /persona/me`、`POST /persona/me/reset` | 完整偏好模型；更新是完整 PUT | `features/persona/interface/router.py`、`schemas.py` |
 | 长期记忆 | `GET /memory/list?status=&limit=`、`DELETE /memory/{id}`、`POST /memory/clear` | 软删除、批量清空 | `features/memory/interface/router.py`、`schemas.py` |
@@ -862,9 +865,11 @@ Authorization: Bearer <access_token>
 
 ### 8.2 chat 细节保持
 
-- 首次进入按 preferred name 生成本地问候；问候不是服务端消息，不写入后端。
+- 首次进入调用 `/chat/messages?limit=10` 恢复当前 active conversation；只有服务端没有历史时才按 preferred name 生成本地问候，问候不写入后端。
 - 发送后立即插入 user 消息和 Echo typing 占位；成功用 `reply`、第一个 sticker part 和全部 sources 替换。
-- 消息仍只保证当前页面/session 内可见。APP 被杀后不承诺恢复，因为现有 API 没有历史拉取；避免客户端显示与服务端上下文不一致的伪历史。
+- 消息使用服务端 `chat_messages.id` 作为游标；初次显示最新 10 条，向上滚动或点击顶部入口时每次再加载 10 条，并按 `message_id` 去重。
+- 旧页插入列表顶部时保持当前可见位置稳定；新发送消息和 Echo 回复滚动到底部。历史加载期间禁用发送，避免分页结果与乐观消息竞争。
+- 会话摘要只服务于 LLM 上下文压缩，不删除或替换具体聊天消息；历史接口始终从原始消息与附件表分页读取。
 - 清除上下文调用 `/chat/clear`，成功后清当前内存消息并显示重新开始问候；长期记忆不受影响。
 - URL 来源允许系统浏览器打开，并提供复制操作作为补充；仅允许 `http/https` scheme。
 

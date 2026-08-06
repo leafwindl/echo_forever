@@ -10,19 +10,52 @@ typedef SendStickerHandler =
     );
 typedef ClearChatHandler =
     Future<ClearChatResult> Function(ChatCancellation? cancellation);
+typedef LoadHistoryHandler =
+    Future<ChatHistoryPage> Function(
+      int? beforeId,
+      int limit,
+      ChatCancellation? cancellation,
+    );
 
 class FakeChatRepository implements ChatRepository {
-  FakeChatRepository({this.onSend, this.onSendSticker, this.onClear});
+  FakeChatRepository({
+    this.onLoadHistory,
+    this.onSend,
+    this.onSendSticker,
+    this.onClear,
+  });
 
+  LoadHistoryHandler? onLoadHistory;
   SendChatHandler? onSend;
   SendStickerHandler? onSendSticker;
   ClearChatHandler? onClear;
   int sendCalls = 0;
   int sendStickerCalls = 0;
   int clearCalls = 0;
+  int historyCalls = 0;
+  final List<int?> historyBeforeIds = <int?>[];
   final List<String> sentMessages = <String>[];
   final List<ChatSticker> sentStickers = <ChatSticker>[];
   ChatCancellation? lastCancellation;
+
+  @override
+  Future<ChatHistoryPage> loadHistory({
+    int? beforeId,
+    int limit = 10,
+    ChatCancellation? cancellation,
+  }) {
+    historyCalls += 1;
+    historyBeforeIds.add(beforeId);
+    lastCancellation = cancellation;
+    return onLoadHistory?.call(beforeId, limit, cancellation) ??
+        Future<ChatHistoryPage>.value(
+          const ChatHistoryPage(
+            conversationId: 'conv-fake',
+            messages: <ChatMessage>[],
+            hasMore: false,
+          ),
+        );
+  }
 
   @override
   Future<ChatReply> sendMessage(

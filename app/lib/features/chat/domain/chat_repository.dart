@@ -38,6 +38,12 @@ class ClearChatResult {
 }
 
 abstract interface class ChatRepository {
+  Future<ChatHistoryPage> loadHistory({
+    int? beforeId,
+    int limit = 10,
+    ChatCancellation? cancellation,
+  });
+
   Future<ChatReply> sendMessage(
     String message, {
     ChatCancellation? cancellation,

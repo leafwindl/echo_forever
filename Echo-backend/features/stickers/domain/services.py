@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-
+from typing import Protocol
 
 ALLOWED_SIGNATURES = {
     "image/png": (b"\x89PNG\r\n\x1a\n",),
@@ -9,6 +9,12 @@ ALLOWED_SIGNATURES = {
     "image/gif": (b"GIF87a", b"GIF89a"),
     "image/webp": (b"RIFF",),
 }
+
+
+class ImageGenerator(Protocol):
+    """Domain-facing contract for asynchronous sticker image generation."""
+
+    async def generate(self, prompt: str) -> tuple[bytes, str]: ...
 
 
 def validate_image(content: bytes, content_type: str, maximum_bytes: int) -> str:

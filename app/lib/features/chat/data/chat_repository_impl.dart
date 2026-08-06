@@ -9,6 +9,25 @@ class ChatRepositoryImpl implements ChatRepository {
   final ChatApi _api;
 
   @override
+  Future<ChatHistoryPage> loadHistory({
+    int? beforeId,
+    int limit = 10,
+    ChatCancellation? cancellation,
+  }) async {
+    final response = await _api.loadHistory(
+      beforeId: beforeId,
+      limit: limit,
+      cancellation: cancellation,
+    );
+    return ChatHistoryPage(
+      conversationId: response.conversationId,
+      messages: response.items.map(_toHistoryMessage).toList(growable: false),
+      hasMore: response.hasMore,
+      nextBeforeId: response.nextBeforeId,
+    );
+  }
+
+  @override
   Future<ChatReply> sendMessage(
     String message, {
     ChatCancellation? cancellation,
@@ -74,6 +93,26 @@ class ChatRepositoryImpl implements ChatRepository {
       publishedAt: dto.publishedAt == null
           ? null
           : DateTime.tryParse(dto.publishedAt!),
+    );
+  }
+
+  ChatMessage _toHistoryMessage(ChatHistoryMessageDto dto) {
+    ChatSticker? sticker;
+    for (final part in dto.contentParts) {
+      final mappedPart = _toContentPart(part);
+      if (mappedPart.sticker case final ChatSticker historySticker) {
+        sticker = historySticker;
+        break;
+      }
+    }
+    return ChatMessage(
+      id: dto.messageId,
+      sender: dto.role == 'user'
+          ? ChatMessageSender.user
+          : ChatMessageSender.assistant,
+      content: dto.messageType == 'sticker' ? '' : dto.content,
+      sticker: sticker,
+      createdAt: dto.createdAt,
     );
   }
 }

@@ -69,6 +69,20 @@ class ChatReply {
   }
 }
 
+class ChatHistoryPage {
+  const ChatHistoryPage({
+    required this.conversationId,
+    required this.messages,
+    required this.hasMore,
+    this.nextBeforeId,
+  });
+
+  final String conversationId;
+  final List<ChatMessage> messages;
+  final bool hasMore;
+  final int? nextBeforeId;
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
@@ -78,6 +92,7 @@ class ChatMessage {
     this.isError = false,
     this.sticker,
     this.sources = const <ChatSource>[],
+    this.createdAt,
   });
 
   factory ChatMessage.typing({required int id}) {
@@ -96,6 +111,7 @@ class ChatMessage {
   final bool isError;
   final ChatSticker? sticker;
   final List<ChatSource> sources;
+  final DateTime? createdAt;
 }
 
 Uri? _safeHttpUri(String value) {

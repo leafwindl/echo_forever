@@ -17,12 +17,10 @@ Required production overrides:
 
 ```dotenv
 PUBLIC_BASE_URL=https://api.echoaiforever.cn
-APP_VERSION=0.1.0
+APP_VERSION=1.0.0
 BUILD_REVISION=unknown
 
 ENABLE_API_DOCS=false
-ENABLE_LEGACY_USER_ID_AUTH=false
-ENABLE_ADMIN_DEBUG_API=false
 
 SMS_PROVIDER=log
 SMS_LOG_VERIFICATION_CODE=false
@@ -31,6 +29,11 @@ SMS_STUB_DELIVERY_ENABLED=true
 ```
 
 The fixed SMS code is for closed testing only. Replace it with a real provider before public release.
+
+COS is prepared but does not affect current app traffic until explicitly enabled. Configure the
+private bucket and run the storage smoke test by following
+`doc/deploy/COS 对象存储配置说明.md`. Keep `LETTER_IMAGE_GENERATION_ENABLED=false` until an
+image-generation provider is selected.
 
 ## Deploy
 
@@ -70,7 +73,7 @@ Build the production APK from `app/`:
 flutter build apk --release --no-pub `
   --dart-define=ECHO_ENV=production `
   --dart-define=ECHO_BASE_URL=https://api.echoaiforever.cn `
-  --dart-define=APP_VERSION=0.1.0
+  --dart-define=APP_VERSION=1.0.0
 ```
 
 The APK is written to `app/build/app/outputs/flutter-apk/app-release.apk`.

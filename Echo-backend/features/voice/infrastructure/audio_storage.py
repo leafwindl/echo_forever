@@ -12,7 +12,6 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 STATIC_VOICE_DIR = BASE_DIR / "static" / "voices"
 VOICE_UPLOAD_DIR = STATIC_VOICE_DIR / "uploads"
 VOICE_GENERATED_DIR = STATIC_VOICE_DIR / "generated"
-LEGACY_VOICE_GENERATED_DIR = STATIC_VOICE_DIR
 
 
 @dataclass(frozen=True)
@@ -29,11 +28,6 @@ class VoiceAudioCleanupResult:
             failed=self.failed + other.failed,
             released_bytes=self.released_bytes + other.released_bytes,
         )
-
-
-def get_voice_storage_dir() -> Path:
-    STATIC_VOICE_DIR.mkdir(parents=True, exist_ok=True)
-    return STATIC_VOICE_DIR
 
 
 def get_voice_upload_dir() -> Path:
@@ -97,15 +91,7 @@ def cleanup_expired_voice_audio_files(
             now=current_time,
         )
     )
-    return result.merge(
-        cleanup_expired_audio_files_in_dir(
-            directory=LEGACY_VOICE_GENERATED_DIR,
-            retention_seconds=settings.voice_generated_retention_seconds,
-            batch_size=cleanup_batch_size,
-            now=current_time,
-            include_nested=False,
-        )
-    )
+    return result
 
 
 def cleanup_expired_audio_files_in_dir(
@@ -114,7 +100,6 @@ def cleanup_expired_audio_files_in_dir(
     retention_seconds: int,
     batch_size: int,
     now: float | None = None,
-    include_nested: bool = False,
     patterns: tuple[str, ...] = ("*.mp3", "*.wav"),
 ) -> VoiceAudioCleanupResult:
     if retention_seconds < 0 or batch_size <= 0 or not directory.exists():
@@ -127,11 +112,7 @@ def cleanup_expired_audio_files_in_dir(
     failed = 0
     released_bytes = 0
 
-    paths = (
-        (path for pattern in patterns for path in directory.rglob(pattern))
-        if include_nested
-        else (path for pattern in patterns for path in directory.glob(pattern))
-    )
+    paths = (path for pattern in patterns for path in directory.glob(pattern))
     candidates = []
     for filepath in paths:
         try:
