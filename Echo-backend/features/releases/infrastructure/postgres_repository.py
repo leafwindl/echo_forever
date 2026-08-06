@@ -69,6 +69,15 @@ class PostgresReleaseRepository:
             row = cursor.fetchone()
         return _release(row) if row else None
 
+    def get_active_by_id(self, release_id: str) -> AppRelease | None:
+        with get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM app_releases WHERE release_id=%s AND status='active'",
+                (release_id,),
+            )
+            row = cursor.fetchone()
+        return _release(row) if row else None
+
     def publish(
         self,
         *,

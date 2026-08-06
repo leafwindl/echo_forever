@@ -15,6 +15,7 @@ from shared.storage.cos_storage import (
 class FakeCosClient:
     def __init__(self):
         self.calls = []
+        self.last_body = None
 
     def put_object(self, **kwargs):
         self.calls.append(("put", kwargs))
@@ -37,6 +38,32 @@ class FakeCosClient:
     def get_object_url(self, **kwargs):
         self.calls.append(("object_url", kwargs))
         return "https://example.test/public"
+
+    def get_object(self, **kwargs):
+        self.calls.append(("get", kwargs))
+        self.last_body = FakeStreamBody([b"ab", b"cd"])
+        return {"Body": self.last_body}
+
+
+class FakeRawStream:
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+class FakeStreamBody:
+    def __init__(self, chunks):
+        self.chunks = chunks
+        self.raw = FakeRawStream()
+
+    def get_stream(self, chunk_size):
+        del chunk_size
+        return iter(self.chunks)
+
+    def get_raw_stream(self):
+        return self.raw
 
 
 def storage_config(**overrides):
@@ -137,6 +164,17 @@ class CosObjectStorageTests(unittest.TestCase):
         storage = CosObjectStorage(storage_config(private_read=False), client=client)
         url = storage.download_url("letters/letter-1.webp")
         self.assertEqual(url, "https://example.test/public")
+
+    def test_stream_bytes_closes_the_cos_response(self):
+        client = FakeCosClient()
+        storage = CosObjectStorage(storage_config(), client=client)
+
+        content = b"".join(storage.stream_bytes("releases/echo.apk", chunk_size=2))
+
+        self.assertEqual(content, b"abcd")
+        self.assertEqual(client.calls[-1][0], "get")
+        self.assertTrue(client.calls[-1][1]["Key"].endswith("releases/echo.apk"))
+        self.assertTrue(client.last_body.raw.closed)
 
     def test_explicit_cos_credentials_take_precedence(self):
         with (

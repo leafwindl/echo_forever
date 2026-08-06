@@ -13,6 +13,7 @@ from features.releases.interface.router import (
     get_release_repository,
     router,
 )
+from shared.config import settings
 from shared.security import request_limiter
 from shared.storage import get_cos_object_storage
 
@@ -53,6 +54,11 @@ class FakeReleaseRepository:
             return release
         return None
 
+    def get_active_by_id(self, release_id: str) -> AppRelease | None:
+        if self.release and self.release.release_id == release_id:
+            return self.release
+        return None
+
 
 class FakeStorage:
     def __init__(self):
@@ -62,10 +68,16 @@ class FakeStorage:
         self.calls.append((object_key, expires_seconds))
         return "https://cos.example.test/signed-apk"
 
+    def stream_bytes(self, object_key: str):
+        self.calls.append(("stream", object_key))
+        return iter([b"x" * 1024])
+
 
 class ReleaseFeatureTests(unittest.TestCase):
     def setUp(self):
         request_limiter.reset()
+        self.previous_auth_secret = settings.auth_token_secret
+        settings.auth_token_secret = "release-test-signing-secret"
         self.repository = FakeReleaseRepository(release_fixture())
         self.storage = FakeStorage()
         app = FastAPI()
@@ -76,6 +88,7 @@ class ReleaseFeatureTests(unittest.TestCase):
 
     def tearDown(self):
         self.client.close()
+        settings.auth_token_secret = self.previous_auth_secret
 
     def test_latest_returns_metadata_without_download_url(self):
         response = self.client.get(
@@ -112,8 +125,10 @@ class ReleaseFeatureTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["download_url"], "https://cos.example.test/signed-apk")
-        self.assertEqual(self.storage.calls[0][0], self.repository.release.cos_object_key)
+        self.assertIn(
+            "/releases/release_test/artifact?",
+            response.json()["download_url"],
+        )
 
     def test_bootstrap_redirects_to_latest_signed_apk(self):
         response = self.client.get(
@@ -123,8 +138,35 @@ class ReleaseFeatureTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 307)
-        self.assertEqual(response.headers["location"], "https://cos.example.test/signed-apk")
+        self.assertIn(
+            "/releases/release_test/artifact?",
+            response.headers["location"],
+        )
         self.assertEqual(response.headers["cache-control"], "no-store")
+
+    def test_artifact_streams_apk_with_download_headers(self):
+        download = self.client.post(
+            "/releases/release_test/download",
+            json={"platform": "android", "channel": "internal", "version_code": 2},
+        ).json()
+
+        response = self.client.get(download["download_url"])
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"x" * 1024)
+        self.assertEqual(
+            response.headers["content-type"],
+            "application/vnd.android.package-archive",
+        )
+        self.assertEqual(response.headers["content-disposition"], 'attachment; filename="Echo.apk"')
+
+    def test_artifact_rejects_an_invalid_signature(self):
+        response = self.client.get(
+            "/releases/release_test/artifact",
+            params={"expires": 4102444800, "signature": "0" * 64},
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     def test_download_rejects_current_or_newer_client(self):
         response = self.client.post(

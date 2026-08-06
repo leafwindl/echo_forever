@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from shared.config import settings
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 from shared.storage import CosObjectStorage, get_cos_object_storage
@@ -70,6 +71,27 @@ def _response(release: AppRelease, current_version_code: int) -> ReleaseResponse
     )
 
 
+def _artifact_signature(release_id: str, expires_at: int) -> str:
+    secret = settings.auth_token_secret.strip()
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Release download signing is unavailable",
+        )
+    payload = f"release-artifact:{release_id}:{expires_at}".encode()
+    return hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+
+
+def _artifact_url(request: Request, release_id: str) -> str:
+    expires_at = int(datetime.now(UTC).timestamp()) + settings.release_download_url_expires_seconds
+    return str(
+        request.url_for("release_artifact", release_id=release_id).include_query_params(
+            expires=expires_at,
+            signature=_artifact_signature(release_id, expires_at),
+        )
+    )
+
+
 @router.get("/latest", response_model=LatestReleaseResponse)
 def latest_release(
     request: Request,
@@ -92,7 +114,6 @@ def latest_release(
 def bootstrap_android_release(
     request: Request,
     repository: Annotated[PostgresReleaseRepository, Depends(get_release_repository)],
-    storage: Annotated[CosObjectStorage, Depends(get_cos_object_storage)],
     channel: Literal["internal"] = Query(default="internal"),
 ) -> RedirectResponse:
     _consume_rate_limit(request, "bootstrap")
@@ -103,12 +124,48 @@ def bootstrap_android_release(
             detail="Release is unavailable",
         )
     return RedirectResponse(
-        storage.download_url(
-            release.cos_object_key,
-            expires_seconds=settings.release_download_url_expires_seconds,
-        ),
+        _artifact_url(request, release.release_id),
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/{release_id}/artifact", name="release_artifact")
+def release_artifact(
+    release_id: str,
+    request: Request,
+    repository: Annotated[PostgresReleaseRepository, Depends(get_release_repository)],
+    storage: Annotated[CosObjectStorage, Depends(get_cos_object_storage)],
+    expires: int = Query(gt=0),
+    signature: str = Query(min_length=64, max_length=64),
+) -> StreamingResponse:
+    _consume_rate_limit(request, "artifact")
+    now = int(datetime.now(UTC).timestamp())
+    maximum_expiry = now + settings.release_download_url_expires_seconds + 60
+    expected_signature = _artifact_signature(release_id, expires)
+    if expires < now or expires > maximum_expiry or not hmac.compare_digest(
+        signature,
+        expected_signature,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Release download link is invalid or expired",
+        )
+    release = repository.get_active_by_id(release_id)
+    if release is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Release is unavailable",
+        )
+    return StreamingResponse(
+        storage.stream_bytes(release.cos_object_key),
+        media_type="application/vnd.android.package-archive",
+        headers={
+            "Cache-Control": "private, no-store",
+            "Content-Disposition": 'attachment; filename="Echo.apk"',
+            "Content-Length": str(release.size_bytes),
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -118,7 +175,6 @@ def release_download(
     body: ReleaseDownloadRequest,
     request: Request,
     repository: Annotated[PostgresReleaseRepository, Depends(get_release_repository)],
-    storage: Annotated[CosObjectStorage, Depends(get_cos_object_storage)],
 ) -> ReleaseDownloadResponse:
     _consume_rate_limit(request, "download")
     release = repository.get_active(release_id, body.platform, body.channel)
@@ -130,9 +186,6 @@ def release_download(
     expires_seconds = settings.release_download_url_expires_seconds
     return ReleaseDownloadResponse(
         release_id=release.release_id,
-        download_url=storage.download_url(
-            release.cos_object_key,
-            expires_seconds=expires_seconds,
-        ),
+        download_url=_artifact_url(request, release.release_id),
         expires_at=datetime.now(UTC) + timedelta(seconds=expires_seconds),
     )

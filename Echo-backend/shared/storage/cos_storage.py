@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -205,6 +206,26 @@ class CosObjectStorage:
     def delete(self, relative_key: str) -> None:
         object_key = self.object_key(relative_key)
         self.client.delete_object(Bucket=self.bucket, Key=object_key)
+
+    def stream_bytes(
+        self,
+        relative_key: str,
+        *,
+        chunk_size: int = 1024 * 1024,
+    ) -> Iterator[bytes]:
+        if chunk_size <= 0:
+            raise ValueError("COS download chunk size must be positive")
+        object_key = self.object_key(relative_key)
+        response = self.client.get_object(Bucket=self.bucket, Key=object_key)
+        body = response["Body"]
+
+        def iterator() -> Iterator[bytes]:
+            try:
+                yield from body.get_stream(chunk_size=chunk_size)
+            finally:
+                body.get_raw_stream().close()
+
+        return iterator()
 
     def download_url(self, relative_key: str, expires_seconds: int | None = None) -> str:
         object_key = self.object_key(relative_key)
