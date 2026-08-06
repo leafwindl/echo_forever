@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import RedirectResponse
 from shared.config import settings
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 from shared.storage import CosObjectStorage, get_cos_object_storage
@@ -84,6 +85,30 @@ def latest_release(
     return LatestReleaseResponse(
         update_available=True,
         release=_response(release, version_code),
+    )
+
+
+@router.get("/bootstrap/android", response_class=RedirectResponse)
+def bootstrap_android_release(
+    request: Request,
+    repository: Annotated[PostgresReleaseRepository, Depends(get_release_repository)],
+    storage: Annotated[CosObjectStorage, Depends(get_cos_object_storage)],
+    channel: Literal["internal"] = Query(default="internal"),
+) -> RedirectResponse:
+    _consume_rate_limit(request, "bootstrap")
+    release = repository.find_latest("android", channel)
+    if release is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Release is unavailable",
+        )
+    return RedirectResponse(
+        storage.download_url(
+            release.cos_object_key,
+            expires_seconds=settings.release_download_url_expires_seconds,
+        ),
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        headers={"Cache-Control": "no-store"},
     )
 
 

@@ -115,6 +115,17 @@ class ReleaseFeatureTests(unittest.TestCase):
         self.assertEqual(response.json()["download_url"], "https://cos.example.test/signed-apk")
         self.assertEqual(self.storage.calls[0][0], self.repository.release.cos_object_key)
 
+    def test_bootstrap_redirects_to_latest_signed_apk(self):
+        response = self.client.get(
+            "/releases/bootstrap/android",
+            params={"channel": "internal"},
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 307)
+        self.assertEqual(response.headers["location"], "https://cos.example.test/signed-apk")
+        self.assertEqual(response.headers["cache-control"], "no-store")
+
     def test_download_rejects_current_or_newer_client(self):
         response = self.client.post(
             "/releases/release_test/download",
