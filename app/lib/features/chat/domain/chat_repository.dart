@@ -40,17 +40,25 @@ class ClearChatResult {
 abstract interface class ChatRepository {
   Future<ChatHistoryPage> loadHistory({
     int? beforeId,
+    int? afterId,
     int limit = 10,
     ChatCancellation? cancellation,
   });
 
-  Future<ChatReply> sendMessage(
-    String message, {
+  Future<ChatMessageAcceptance> acceptTextMessage(
+    String message,
+    String clientMessageId, {
     ChatCancellation? cancellation,
   });
 
-  Future<ChatReply> sendSticker(
+  Future<ChatMessageAcceptance> acceptStickerMessage(
     ChatSticker sticker, {
+    required String clientMessageId,
+    ChatCancellation? cancellation,
+  });
+
+  Stream<ChatEvent> watchEvents({
+    required int afterMessageId,
     ChatCancellation? cancellation,
   });
 

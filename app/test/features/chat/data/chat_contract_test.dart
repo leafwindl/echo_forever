@@ -14,30 +14,57 @@ import 'package:echo_app/features/chat/domain/chat_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('serializes POST /chat/send with mode=chat', () {
+  test('keeps POST /chat/send only for call delivery', () {
     expect(ChatApi.sendPath, '/chat/send');
     expect(ChatApi.messagesPath, '/chat/messages');
     expect(ChatApi.clearPath, '/chat/clear');
     expect(const ChatRequestDto(message: '你好').toJson(), <String, Object?>{
       'message': '你好',
-      'mode': 'chat',
+      'mode': 'call',
     });
   });
 
-  test('serializes a standalone sticker chat request by sticker id', () {
+  test('preserves UTF-8 characters split across SSE network chunks', () async {
+    const payload =
+        'event: chat.sync\n'
+        'data: {"conversation_id":"conv-sse","messages":[{"content":"你好"}]}\n\n';
+    final encoded = utf8.encode(payload);
+    final firstMultibyteByte = encoded.indexWhere((byte) => byte >= 0x80);
+    final client = _StreamingDioClient(<Uint8List>[
+      Uint8List.fromList(encoded.sublist(0, firstMultibyteByte + 1)),
+      Uint8List.fromList(encoded.sublist(firstMultibyteByte + 1)),
+    ]);
+
+    final events = await ChatApi(
+      client,
+    ).watchEvents(afterMessageId: 0).toList();
+
+    expect(events, hasLength(1));
+    final messages = events.single.data['messages'] as List<dynamic>;
+    expect((messages.single as Map<String, dynamic>)['content'], '你好');
+  });
+
+  test('serializes async text and sticker messages with client ids', () {
     expect(
-      const ChatRequestDto(
-        message: '',
-        contentParts: <ChatRequestContentPartDto>[
-          ChatRequestContentPartDto.sticker('stk_wave'),
-        ],
+      const AsyncChatMessageRequestDto.text(
+        clientMessageId: 'client-text',
+        text: '你好',
       ).toJson(),
       <String, Object?>{
-        'message': '',
-        'mode': 'chat',
-        'content_parts': <Map<String, Object?>>[
-          <String, Object?>{'type': 'sticker', 'sticker_id': 'stk_wave'},
-        ],
+        'client_message_id': 'client-text',
+        'message_type': 'text',
+        'text': '你好',
+      },
+    );
+    expect(
+      const AsyncChatMessageRequestDto.sticker(
+        clientMessageId: 'client-sticker',
+        stickerId: 'stk_wave',
+      ).toJson(),
+      <String, Object?>{
+        'client_message_id': 'client-sticker',
+        'message_type': 'sticker',
+        'sticker_id': 'stk_wave',
       },
     );
   });
@@ -126,11 +153,14 @@ void main() {
     );
   });
 
-  test('binds page cancellation to the Dio request token', () async {
+  test('binds async message cancellation to the Dio request token', () async {
     final client = _CapturingDioClient();
     final cancellation = ChatCancellation();
-    final response = ChatApi(client).sendMessage(
-      const ChatRequestDto(message: '你好'),
+    final response = ChatApi(client).acceptMessage(
+      const AsyncChatMessageRequestDto.text(
+        clientMessageId: '00000000-0000-4000-8000-000000000001',
+        text: '你好',
+      ),
       cancellation: cancellation,
     );
 
@@ -138,7 +168,7 @@ void main() {
 
     expect(client.cancelToken, isNotNull);
     expect(client.cancelToken!.isCancelled, isTrue);
-    expect((await response).reply, 'captured');
+    expect((await response).message.content, '你好');
   });
 
   test(
@@ -169,7 +199,7 @@ void main() {
 
       final response = await ChatApi(
         DioClient(dio),
-      ).sendMessage(const ChatRequestDto(message: '你好'));
+      ).sendMessage(const ChatRequestDto(message: '你好', mode: 'call'));
 
       expect(response.reply, 'Echo reply');
       expect(adapter.calls, 2);
@@ -206,7 +236,9 @@ void main() {
     );
 
     await expectLater(
-      ChatApi(DioClient(dio)).sendMessage(const ChatRequestDto(message: '你好')),
+      ChatApi(
+        DioClient(dio),
+      ).sendMessage(const ChatRequestDto(message: '你好', mode: 'call')),
       throwsA(anything),
     );
     expect(adapter.calls, 2);
@@ -263,6 +295,32 @@ class _QueueAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
+class _StreamingDioClient extends DioClient {
+  _StreamingDioClient(this.chunks) : super(Dio());
+
+  final List<Uint8List> chunks;
+
+  @override
+  Future<Response<T>> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) async {
+    final body = ResponseBody(
+      Stream<Uint8List>.fromIterable(chunks),
+      200,
+      headers: <String, List<String>>{
+        Headers.contentTypeHeader: <String>['text/event-stream'],
+      },
+    );
+    return Response<T>(
+      data: body as T,
+      requestOptions: RequestOptions(path: path),
+    );
+  }
+}
+
 class _CapturingDioClient extends DioClient {
   _CapturingDioClient() : super(Dio());
 
@@ -317,16 +375,35 @@ class _CapturingDioClient extends DioClient {
     CancelToken? cancelToken,
   }) {
     this.cancelToken = cancelToken;
+    final responseData = path == ChatApi.messagesPath
+        ? <String, dynamic>{
+            'conversation_id': 'conv-fake',
+            'message': <String, dynamic>{
+              'message_id': 30,
+              'stable_message_id': 'msg-30',
+              'client_message_id': '00000000-0000-4000-8000-000000000001',
+              'role': 'user',
+              'message_type': 'text',
+              'content': '你好',
+              'content_parts': <Object>[],
+              'sources': <Object>[],
+              'created_at': '2026-08-06T08:00:00Z',
+            },
+            'turn': <String, dynamic>{
+              'turn_id': 'turn-30',
+              'status': 'collecting',
+            },
+            'replayed': false,
+          }
+        : <String, dynamic>{
+            'reply': 'captured',
+            'audio_urls': <String>[],
+            'content_parts': <Object>[],
+            'sources': <Object>[],
+          };
     return Future<Response<T>>.value(
       Response<T>(
-        data:
-            <String, dynamic>{
-                  'reply': 'captured',
-                  'audio_urls': <String>[],
-                  'content_parts': <Object>[],
-                  'sources': <Object>[],
-                }
-                as T,
+        data: responseData as T,
         requestOptions: RequestOptions(path: path),
       ),
     );

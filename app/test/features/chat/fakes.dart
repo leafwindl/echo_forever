@@ -1,11 +1,18 @@
+import 'dart:async';
+
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/domain/chat_repository.dart';
 
-typedef SendChatHandler =
-    Future<ChatReply> Function(String message, ChatCancellation? cancellation);
-typedef SendStickerHandler =
-    Future<ChatReply> Function(
+typedef AcceptTextHandler =
+    Future<ChatMessageAcceptance> Function(
+      String message,
+      String clientMessageId,
+      ChatCancellation? cancellation,
+    );
+typedef AcceptStickerHandler =
+    Future<ChatMessageAcceptance> Function(
       ChatSticker sticker,
+      String clientMessageId,
       ChatCancellation? cancellation,
     );
 typedef ClearChatHandler =
@@ -13,6 +20,7 @@ typedef ClearChatHandler =
 typedef LoadHistoryHandler =
     Future<ChatHistoryPage> Function(
       int? beforeId,
+      int? afterId,
       int limit,
       ChatCancellation? cancellation,
     );
@@ -20,34 +28,42 @@ typedef LoadHistoryHandler =
 class FakeChatRepository implements ChatRepository {
   FakeChatRepository({
     this.onLoadHistory,
-    this.onSend,
-    this.onSendSticker,
+    this.onAcceptText,
+    this.onAcceptSticker,
     this.onClear,
   });
 
   LoadHistoryHandler? onLoadHistory;
-  SendChatHandler? onSend;
-  SendStickerHandler? onSendSticker;
+  AcceptTextHandler? onAcceptText;
+  AcceptStickerHandler? onAcceptSticker;
   ClearChatHandler? onClear;
-  int sendCalls = 0;
-  int sendStickerCalls = 0;
+  int acceptTextCalls = 0;
+  int acceptStickerCalls = 0;
   int clearCalls = 0;
   int historyCalls = 0;
+  int watchEventCalls = 0;
+  int nextServerMessageId = 1;
   final List<int?> historyBeforeIds = <int?>[];
+  final List<int?> historyAfterIds = <int?>[];
   final List<String> sentMessages = <String>[];
   final List<ChatSticker> sentStickers = <ChatSticker>[];
+  final List<String> clientMessageIds = <String>[];
+  final StreamController<ChatEvent> events =
+      StreamController<ChatEvent>.broadcast();
   ChatCancellation? lastCancellation;
 
   @override
   Future<ChatHistoryPage> loadHistory({
     int? beforeId,
+    int? afterId,
     int limit = 10,
     ChatCancellation? cancellation,
   }) {
     historyCalls += 1;
     historyBeforeIds.add(beforeId);
+    historyAfterIds.add(afterId);
     lastCancellation = cancellation;
-    return onLoadHistory?.call(beforeId, limit, cancellation) ??
+    return onLoadHistory?.call(beforeId, afterId, limit, cancellation) ??
         Future<ChatHistoryPage>.value(
           const ChatHistoryPage(
             conversationId: 'conv-fake',
@@ -58,28 +74,65 @@ class FakeChatRepository implements ChatRepository {
   }
 
   @override
-  Future<ChatReply> sendMessage(
-    String message, {
+  Future<ChatMessageAcceptance> acceptTextMessage(
+    String message,
+    String clientMessageId, {
     ChatCancellation? cancellation,
   }) {
-    sendCalls += 1;
+    acceptTextCalls += 1;
     sentMessages.add(message);
+    clientMessageIds.add(clientMessageId);
     lastCancellation = cancellation;
-    return onSend?.call(message, cancellation) ??
-        Future<ChatReply>.value(ChatReply(reply: '回复：$message'));
+    return onAcceptText?.call(message, clientMessageId, cancellation) ??
+        Future<ChatMessageAcceptance>.value(
+          _acceptance(
+            ChatMessage(
+              id: nextServerMessageId++,
+              sender: ChatMessageSender.user,
+              content: message,
+              clientMessageId: clientMessageId,
+              createdAt: DateTime.now(),
+            ),
+          ),
+        );
   }
 
   @override
-  Future<ChatReply> sendSticker(
+  Future<ChatMessageAcceptance> acceptStickerMessage(
     ChatSticker sticker, {
+    required String clientMessageId,
     ChatCancellation? cancellation,
   }) {
-    sendStickerCalls += 1;
+    acceptStickerCalls += 1;
     sentStickers.add(sticker);
+    clientMessageIds.add(clientMessageId);
     lastCancellation = cancellation;
-    return onSendSticker?.call(sticker, cancellation) ??
-        Future<ChatReply>.value(const ChatReply(reply: '收到这个表情包了'));
+    return onAcceptSticker?.call(sticker, clientMessageId, cancellation) ??
+        Future<ChatMessageAcceptance>.value(
+          _acceptance(
+            ChatMessage(
+              id: nextServerMessageId++,
+              sender: ChatMessageSender.user,
+              content: '',
+              sticker: sticker,
+              clientMessageId: clientMessageId,
+              createdAt: DateTime.now(),
+            ),
+          ),
+        );
   }
+
+  @override
+  Stream<ChatEvent> watchEvents({
+    required int afterMessageId,
+    ChatCancellation? cancellation,
+  }) {
+    watchEventCalls += 1;
+    lastCancellation = cancellation;
+    return events.stream;
+  }
+
+  void emit(ChatEvent event) => events.add(event);
 
   @override
   Future<ClearChatResult> clearContext({ChatCancellation? cancellation}) {
@@ -89,5 +142,13 @@ class FakeChatRepository implements ChatRepository {
         Future<ClearChatResult>.value(
           const ClearChatResult(deletedMessages: 2, resetConversations: 1),
         );
+  }
+
+  ChatMessageAcceptance _acceptance(ChatMessage message) {
+    return ChatMessageAcceptance(
+      conversationId: 'conv-fake',
+      message: message,
+      turn: const ChatAcceptedTurn(turnId: 'turn-fake', status: 'collecting'),
+    );
   }
 }

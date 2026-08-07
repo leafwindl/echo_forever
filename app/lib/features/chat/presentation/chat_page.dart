@@ -161,6 +161,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 onLoadOlder: _loadOlderMessages,
                 onOpenSource: _openSource,
                 onCopySource: _copySource,
+                onRetryMessage: (clientMessageId) => unawaited(
+                  ref
+                      .read(chatControllerProvider.notifier)
+                      .retryMessage(clientMessageId),
+                ),
               ),
             ),
           ],
@@ -172,7 +177,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void _send() {
     final state = ref.read(chatControllerProvider);
     final message = _inputController.text.trim();
-    if (state.isBusy || message.isEmpty || message.length > 2000) {
+    if (!state.canCompose || message.isEmpty || message.length > 2000) {
       return;
     }
     _inputController.clear();
@@ -181,7 +186,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   Future<void> _openStickerPicker() async {
-    if (ref.read(chatControllerProvider).isBusy) {
+    if (!ref.read(chatControllerProvider).canCompose) {
       return;
     }
     _inputFocusNode.unfocus();
@@ -397,6 +402,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       tail.content,
       tail.sticker?.stickerId,
       tail.sources.length,
+      tail.sendState,
+      state.echoTyping,
     ].join(':');
     if (_lastTailSignature == signature) {
       return;
@@ -436,6 +443,7 @@ class _ChatPanel extends StatelessWidget {
     required this.onLoadOlder,
     required this.onOpenSource,
     required this.onCopySource,
+    required this.onRetryMessage,
   });
 
   final ChatState state;
@@ -451,6 +459,7 @@ class _ChatPanel extends StatelessWidget {
   final Future<void> Function() onLoadOlder;
   final ValueChanged<ChatSource> onOpenSource;
   final ValueChanged<ChatSource> onCopySource;
+  final ValueChanged<String> onRetryMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -486,7 +495,8 @@ class _ChatPanel extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               itemCount:
                   state.messages.length +
-                  (state.hasMoreHistory || state.isLoadingMoreHistory ? 1 : 0),
+                  (state.hasMoreHistory || state.isLoadingMoreHistory ? 1 : 0) +
+                  (state.echoTyping ? 1 : 0),
               itemBuilder: (context, index) {
                 final hasHistoryControl =
                     state.hasMoreHistory || state.isLoadingMoreHistory;
@@ -497,12 +507,18 @@ class _ChatPanel extends StatelessWidget {
                   );
                 }
                 final messageIndex = index - (hasHistoryControl ? 1 : 0);
+                if (messageIndex == state.messages.length && state.echoTyping) {
+                  return const _TypingIndicatorBubble();
+                }
                 final message = state.messages[messageIndex];
                 return _MessageBubble(
                   key: ValueKey<String>('chat-message-${message.id}'),
                   message: message,
                   onOpenSource: onOpenSource,
                   onCopySource: onCopySource,
+                  onRetry: message.clientMessageId.isEmpty
+                      ? null
+                      : () => onRetryMessage(message.clientMessageId),
                 );
               },
             ),
@@ -510,8 +526,7 @@ class _ChatPanel extends StatelessWidget {
           _ChatInput(
             controller: inputController,
             focusNode: inputFocusNode,
-            enabled: !state.isBusy,
-            isSending: state.isSending,
+            enabled: state.canCompose,
             canSend: inputText.trim().isNotEmpty,
             onChanged: onInputChanged,
             onSend: onSend,
@@ -555,7 +570,6 @@ class _ChatInput extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.enabled,
-    required this.isSending,
     required this.canSend,
     required this.onChanged,
     required this.onSend,
@@ -565,7 +579,6 @@ class _ChatInput extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool enabled;
-  final bool isSending;
   final bool canSend;
   final ValueChanged<String> onChanged;
   final VoidCallback onSend;
@@ -615,7 +628,7 @@ class _ChatInput extends StatelessWidget {
             FilledButton(
               key: const Key('chat-send-button'),
               onPressed: enabled && canSend ? onSend : null,
-              child: Text(isSending ? '等待' : '发送'),
+              child: const Icon(Icons.send_rounded),
             ),
           ],
         ),
@@ -796,12 +809,14 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     required this.onOpenSource,
     required this.onCopySource,
+    required this.onRetry,
     super.key,
   });
 
   final ChatMessage message;
   final ValueChanged<ChatSource> onOpenSource;
   final ValueChanged<ChatSource> onCopySource;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -867,7 +882,52 @@ class _MessageBubble extends StatelessWidget {
                 ),
               ),
             ),
+          if (isUser && message.sendState != ChatSendState.sent)
+            Padding(
+              padding: const EdgeInsets.only(top: 2, bottom: 2),
+              child: switch (message.sendState) {
+                ChatSendState.sending => const SizedBox.square(
+                  dimension: 14,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                ),
+                ChatSendState.failed => IconButton(
+                  key: ValueKey<String>(
+                    'retry-chat-message-${message.clientMessageId}',
+                  ),
+                  tooltip: '重新发送',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onRetry,
+                  icon: Icon(
+                    Icons.error_outline_rounded,
+                    size: 18,
+                    color: colorScheme.error,
+                  ),
+                ),
+                ChatSendState.sent => const SizedBox.shrink(),
+              },
+            ),
         ],
+      ),
+    );
+  }
+}
+
+class _TypingIndicatorBubble extends StatelessWidget {
+  const _TypingIndicatorBubble();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: const _TypingIndicator(),
       ),
     );
   }

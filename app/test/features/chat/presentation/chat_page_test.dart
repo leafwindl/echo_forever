@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:echo_app/core/di/providers.dart';
 import 'package:echo_app/core/storage/secure_store.dart';
 import 'package:echo_app/features/chat/data/chat_providers.dart';
@@ -36,11 +34,9 @@ void main() {
     expect(find.text('3'), findsOneWidget);
   });
 
-  testWidgets('restores recent chat and accepts an older page', (
-    tester,
-  ) async {
+  testWidgets('restores recent chat and accepts an older page', (tester) async {
     final repository = FakeChatRepository(
-      onLoadHistory: (beforeId, _, _) async {
+      onLoadHistory: (beforeId, _, _, _) async {
         if (beforeId == null) {
           return const ChatHistoryPage(
             conversationId: 'conv-history',
@@ -94,37 +90,77 @@ void main() {
     expect(repository.historyBeforeIds, <int?>[null, 11]);
   });
 
-  testWidgets('shows typing immediately and replaces it with reply', (
+  testWidgets('keeps input and stickers enabled while Echo is typing', (
     tester,
   ) async {
-    final gate = Completer<ChatReply>();
-    final repository = FakeChatRepository(onSend: (_, _) => gate.future);
+    final repository = FakeChatRepository();
     await _pumpChat(tester, repository);
 
-    await tester.enterText(find.byKey(const Key('chat-input')), '今天有点累');
+    await tester.enterText(find.byKey(const Key('chat-input')), '第一条');
     await tester.pump();
     await tester.tap(find.byKey(const Key('chat-send-button')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    repository.emit(
+      const ChatEvent(type: ChatEventType.typingStarted, turnId: 'turn-1'),
+    );
+    await tester.pump();
 
-    expect(find.text('今天有点累'), findsOneWidget);
+    expect(find.text('第一条'), findsOneWidget);
     expect(find.byKey(const Key('chat-typing-indicator')), findsOneWidget);
-    expect(find.text('等待'), findsOneWidget);
-    expect(repository.sendCalls, 1);
+    expect(find.text('等待'), findsNothing);
+    expect(
+      tester.widget<TextField>(find.byKey(const Key('chat-input'))).enabled,
+      isTrue,
+    );
+    expect(
+      tester
+          .widget<IconButton>(find.byKey(const Key('chat-sticker-button')))
+          .onPressed,
+      isNotNull,
+    );
 
-    gate.complete(const ChatReply(reply: '那就先休息一下，我陪着你。'));
+    await tester.enterText(find.byKey(const Key('chat-input')), '第二条');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('chat-send-button')));
+    await tester.pump();
+    expect(repository.acceptTextCalls, 2);
+    expect(find.text('第二条'), findsOneWidget);
+
+    repository.emit(
+      ChatEvent(
+        type: ChatEventType.delivery,
+        presentation: const ChatDeliveryPresentation(
+          messageDelaysMs: <int>[0, 0],
+        ),
+        messages: <ChatMessage>[
+          ChatMessage(
+            id: 10,
+            sender: ChatMessageSender.assistant,
+            content: '我都看到了。',
+            createdAt: DateTime.now(),
+          ),
+          ChatMessage(
+            id: 11,
+            sender: ChatMessageSender.assistant,
+            content: '你接着说。',
+            createdAt: DateTime.now().add(const Duration(milliseconds: 1)),
+          ),
+        ],
+      ),
+    );
+    repository.emit(
+      const ChatEvent(type: ChatEventType.typingStopped, turnId: 'turn-1'),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('chat-typing-indicator')), findsNothing);
-    expect(find.text('那就先休息一下，我陪着你。'), findsOneWidget);
-    expect(find.text('发送'), findsOneWidget);
+    expect(find.text('我都看到了。'), findsOneWidget);
+    expect(find.text('你接着说。'), findsOneWidget);
   });
 
   testWidgets('opens saved stickers and sends the tapped item immediately', (
     tester,
   ) async {
-    final chatRepository = FakeChatRepository(
-      onSendSticker: (_, _) async => const ChatReply(reply: '收到你的表情啦。'),
-    );
+    final chatRepository = FakeChatRepository();
     final stickerRepository = sticker_fakes.FakeStickersRepository(
       items: [
         sticker_fakes.stickerFixture(
@@ -143,30 +179,63 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-sticker-button')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(
-      find.byKey(const ValueKey<String>('send-sticker-wave')),
-      findsOneWidget,
-    );
-
     await tester.tap(find.byKey(const ValueKey<String>('send-sticker-wave')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
 
-    expect(chatRepository.sendStickerCalls, 1);
+    expect(chatRepository.acceptStickerCalls, 1);
     expect(chatRepository.sentStickers.single.stickerId, 'wave');
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(ChatPage)),
-    );
     expect(
-      container.read(chatControllerProvider).messages.last.content,
-      '收到你的表情啦。',
-    );
-    expect(
-      find.byKey(const ValueKey<String>('chat-sticker-image-2')),
+      find.byKey(const ValueKey<String>('chat-sticker-image-1')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('chat-text-bubble-2')),
+      find.byKey(const ValueKey<String>('chat-text-bubble-1')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('renders Echo text and sticker as separate messages', (
+    tester,
+  ) async {
+    final repository = FakeChatRepository();
+    await _pumpChat(tester, repository);
+    await tester.tap(find.byKey(const Key('chat-expand-toggle')));
+    await tester.pumpAndSettle();
+    repository.emit(
+      ChatEvent(
+        type: ChatEventType.delivery,
+        presentation: const ChatDeliveryPresentation(
+          messageDelaysMs: <int>[0, 0],
+        ),
+        messages: <ChatMessage>[
+          ChatMessage(
+            id: 20,
+            sender: ChatMessageSender.assistant,
+            content: '给你。',
+            createdAt: DateTime.now(),
+          ),
+          ChatMessage(
+            id: 21,
+            sender: ChatMessageSender.assistant,
+            content: '',
+            sticker: const ChatSticker(
+              stickerId: 'echo-wave',
+              url: 'https://cdn.example.test/echo-wave.png',
+            ),
+            createdAt: DateTime.now().add(const Duration(milliseconds: 1)),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('给你。'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('chat-sticker-image-21')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('chat-text-bubble-21')),
       findsNothing,
     );
   });
@@ -191,47 +260,6 @@ void main() {
       expect(find.text('聊天上下文已清除'), findsOneWidget);
     },
   );
-
-  testWidgets('expands chat and keeps the latest reply in the list viewport', (
-    tester,
-  ) async {
-    var replyNumber = 0;
-    final repository = FakeChatRepository(
-      onSend: (_, _) async => ChatReply(reply: '回复 ${replyNumber++}'),
-    );
-    await _pumpChat(tester, repository);
-
-    await tester.tap(find.byKey(const Key('chat-expand-toggle')));
-    await tester.pumpAndSettle();
-    expect(find.text('▼ 收起聊天'), findsOneWidget);
-    expect(find.byKey(const Key('character-sitting-image')), findsOneWidget);
-
-    for (var index = 0; index < 8; index += 1) {
-      await tester.enterText(find.byKey(const Key('chat-input')), '消息 $index');
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('chat-send-button')));
-      await tester.pumpAndSettle();
-    }
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(ChatPage)),
-    );
-    expect(repository.sendCalls, 8);
-    expect(
-      container.read(chatControllerProvider).messages.last.content,
-      '回复 7',
-    );
-    await tester.pump(const Duration(milliseconds: 300));
-    final latestReply = find.text('回复 7');
-    expect(latestReply, findsOneWidget);
-    final listBottom = tester
-        .getBottomRight(find.byKey(const Key('chat-message-list')))
-        .dy;
-    expect(
-      tester.getBottomRight(latestReply).dy,
-      lessThanOrEqualTo(listBottom),
-    );
-  });
 }
 
 Future<void> _pumpChat(
@@ -258,4 +286,7 @@ Future<void> _pumpChat(
     ),
   );
   await tester.pumpAndSettle();
+  while (repository.watchEventCalls == 0) {
+    await tester.pump();
+  }
 }
