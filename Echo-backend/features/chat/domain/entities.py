@@ -44,6 +44,7 @@ class ChatContext:
     memory_retrieval_mode: str = "none"
     pause_followup_questions: bool = False
     allow_proactive_stickers: bool = True
+    proactive_sticker_due: bool = False
 
 
 @dataclass(frozen=True)

@@ -12,6 +12,7 @@ async def run_chat_agent(
     conversation_mode: str = "chat",
     sticker_intent: str = "",
     allow_proactive_stickers: bool = True,
+    proactive_sticker_due: bool = False,
 ) -> AgentTurnResult:
     return await get_chat_agent().execute(
         user_id,
@@ -21,6 +22,7 @@ async def run_chat_agent(
         conversation_mode=conversation_mode,
         sticker_intent=sticker_intent,
         allow_proactive_stickers=allow_proactive_stickers,
+        proactive_sticker_due=proactive_sticker_due,
         tools_enabled=settings.agent_enabled,
     )
 

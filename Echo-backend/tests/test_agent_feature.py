@@ -156,6 +156,19 @@ class AgentDomainTests(unittest.TestCase):
         self.assertNotIn("send_sticker", _tool_names(registry.model_descriptions("call")))
         self.assertNotIn("search_stickers", _tool_names(registry.model_descriptions("call")))
 
+    def test_due_turn_prioritizes_proactive_sticker_without_excluding_private_library(self):
+        messages = OrchestrateChatWithAgent._build_initial_messages(
+            messages=[{"role": "user", "content": "今天心情不错"}],
+            conversation_mode="chat",
+            sticker_intent="",
+            allow_proactive_stickers=True,
+            proactive_sticker_due=True,
+        )
+
+        instruction = messages[0]["content"]
+        self.assertIn("主动表情包优先窗口", instruction)
+        self.assertIn("官方和用户私人表情包都可以参与选择", instruction)
+
 
 class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
     async def test_http_timeout_is_preserved_as_provider_timeout(self):

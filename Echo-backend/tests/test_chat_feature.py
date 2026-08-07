@@ -21,6 +21,7 @@ from features.chat.domain.entities import (
     ChatValidationError,
     MemoryExtractionScheduleResult,
 )
+from features.chat.infrastructure.context_builder import should_prioritize_proactive_sticker
 
 
 class FakeConversationRepository:
@@ -100,6 +101,7 @@ class SequenceAgentOrchestrator:
         conversation_mode="chat",
         sticker_intent="",
         allow_proactive_stickers=True,
+        proactive_sticker_due=False,
     ):
         self.calls.append(
             {
@@ -109,6 +111,7 @@ class SequenceAgentOrchestrator:
                 "conversation_mode": conversation_mode,
                 "sticker_intent": sticker_intent,
                 "allow_proactive_stickers": allow_proactive_stickers,
+                "proactive_sticker_due": proactive_sticker_due,
             }
         )
         reply = self.replies.pop(0) if self.replies else "hello from echo"
@@ -171,6 +174,7 @@ class FakeStickerAgentOrchestrator:
         conversation_mode="chat",
         sticker_intent="",
         allow_proactive_stickers=True,
+        proactive_sticker_due=False,
     ):
         return AgentTurnResult(
             reply_text="给你，这张很适合现在。",
@@ -252,6 +256,33 @@ class FakeChatRequestResultRepository:
         if record and record["fingerprint"] == request_fingerprint:
             self.records.pop(key)
         self.abandon_calls.append(key)
+
+
+class ProactiveStickerCadenceTests(unittest.TestCase):
+    def test_third_turn_enters_priority_window(self):
+        self.assertFalse(
+            should_prioritize_proactive_sticker(
+                allow_proactive_stickers=True,
+                completed_turns_without_sticker=1,
+                target_turns=3,
+            )
+        )
+        self.assertTrue(
+            should_prioritize_proactive_sticker(
+                allow_proactive_stickers=True,
+                completed_turns_without_sticker=2,
+                target_turns=3,
+            )
+        )
+
+    def test_cooldown_blocks_priority_window(self):
+        self.assertFalse(
+            should_prioritize_proactive_sticker(
+                allow_proactive_stickers=False,
+                completed_turns_without_sticker=10,
+                target_turns=3,
+            )
+        )
 
 
 class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):

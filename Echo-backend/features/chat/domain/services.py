@@ -25,6 +25,7 @@ class ChatAgentOrchestrator(Protocol):
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         allow_proactive_stickers: bool = True,
+        proactive_sticker_due: bool = False,
     ) -> AgentTurnResult: ...
 
 

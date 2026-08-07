@@ -14,10 +14,15 @@ from features.stickers.infrastructure.postgres_repository import rank_sticker_ro
 from scripts.sync_echo_stickers import scan_assets  # noqa: E402
 
 
-def _row(sticker_id: str, priority: int, tag: str = "开心") -> dict[str, object]:
+def _row(
+    sticker_id: str,
+    priority: int,
+    tag: str = "开心",
+    owner_type: str = "echo",
+) -> dict[str, object]:
     return {
         "sticker_id": sticker_id,
-        "owner_type": "echo",
+        "owner_type": owner_type,
         "semantic_tags": [tag],
         "description": "",
         "priority": priority,
@@ -58,6 +63,26 @@ class StickerRankingTests(unittest.TestCase):
     def test_all_candidates_cooling_falls_back_to_highest_priority(self):
         ranked = self._rank(recent_ids={"stk_high", "stk_mid", "stk_low"})
         self.assertEqual(ranked[0]["sticker_id"], "stk_high")
+
+    def test_official_sticker_gets_small_bonus_on_semantic_tie(self):
+        self.rows = [
+            _row("stk_private", 100, owner_type="user"),
+            _row("stk_official", 100, owner_type="echo"),
+        ]
+
+        ranked = self._rank()
+
+        self.assertEqual(ranked[0]["sticker_id"], "stk_official")
+
+    def test_private_sticker_can_beat_weaker_official_match(self):
+        self.rows = [
+            _row("stk_private", 100, tag="开心", owner_type="user"),
+            _row("stk_official", 100, tag="很开心", owner_type="echo"),
+        ]
+
+        ranked = self._rank()
+
+        self.assertEqual(ranked[0]["sticker_id"], "stk_private")
 
 
 class EchoStickerAssetTests(unittest.TestCase):

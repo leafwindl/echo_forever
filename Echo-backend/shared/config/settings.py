@@ -429,47 +429,23 @@ class Settings(BaseSettings):
         ge=5,
         le=60,
     )
-    chat_typing_base_ms: int = Field(
-        default=600,
-        validation_alias="CHAT_TYPING_BASE_MS",
+    chat_followup_text_delay_ms: int = Field(
+        default=1200,
+        validation_alias="CHAT_FOLLOWUP_TEXT_DELAY_MS",
         ge=0,
         le=5000,
     )
-    chat_typing_per_grapheme_ms: int = Field(
-        default=32,
-        validation_alias="CHAT_TYPING_PER_GRAPHEME_MS",
-        ge=0,
-        le=200,
-    )
-    chat_typing_min_ms: int = Field(
-        default=800,
-        validation_alias="CHAT_TYPING_MIN_MS",
-        ge=0,
-        le=10000,
-    )
-    chat_typing_max_ms: int = Field(
-        default=4800,
-        validation_alias="CHAT_TYPING_MAX_MS",
-        ge=0,
-        le=15000,
-    )
-    chat_typing_extra_max_ms: int = Field(
-        default=2500,
-        validation_alias="CHAT_TYPING_EXTRA_MAX_MS",
-        ge=0,
-        le=10000,
-    )
-    chat_typing_segment_min_ms: int = Field(
-        default=300,
-        validation_alias="CHAT_TYPING_SEGMENT_MIN_MS",
+    chat_final_text_delay_ms: int = Field(
+        default=2000,
+        validation_alias="CHAT_FINAL_TEXT_DELAY_MS",
         ge=0,
         le=5000,
     )
-    chat_typing_segment_max_ms: int = Field(
-        default=1600,
-        validation_alias="CHAT_TYPING_SEGMENT_MAX_MS",
+    chat_sticker_delay_ms: int = Field(
+        default=1000,
+        validation_alias="CHAT_STICKER_DELAY_MS",
         ge=0,
-        le=10000,
+        le=5000,
     )
     chat_rate_limit_requests: int = Field(
         default=10,
@@ -586,6 +562,9 @@ class Settings(BaseSettings):
     )
     sticker_proactive_cooldown_turns: int = Field(
         default=2, validation_alias="STICKER_PROACTIVE_COOLDOWN_TURNS", ge=1
+    )
+    sticker_proactive_target_turns: int = Field(
+        default=3, validation_alias="STICKER_PROACTIVE_TARGET_TURNS", ge=1
     )
     sticker_proactive_min_interval_seconds: int = Field(
         default=30,

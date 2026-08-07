@@ -59,6 +59,7 @@ class OrchestrateChatWithAgent:
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         allow_proactive_stickers: bool = True,
+        proactive_sticker_due: bool = False,
         tools_enabled: bool = True,
     ) -> AgentTurnResult:
         run_id = self.repository.start(user_id, message, conversation_mode, self.max_steps)
@@ -67,6 +68,7 @@ class OrchestrateChatWithAgent:
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
             allow_proactive_stickers=allow_proactive_stickers,
+            proactive_sticker_due=proactive_sticker_due,
         )
         tool_results: list[AgentToolResult] = []
         content_parts: list[ContentPart] = []
@@ -259,11 +261,21 @@ class OrchestrateChatWithAgent:
         conversation_mode: str,
         sticker_intent: str,
         allow_proactive_stickers: bool,
+        proactive_sticker_due: bool,
     ) -> list[dict]:
         if conversation_mode == "call":
             sticker_rule = (
                 "当前是语音通话模式。不得搜索、选择或发送表情包，即使用户明确要求也不"
                 "执行图片发送；自然说明通话里先继续说话即可。"
+            )
+        elif allow_proactive_stickers and proactive_sticker_due:
+            sticker_rule = (
+                "聊天模式可以使用表情包。用户明确要求时，search_stickers 和 send_sticker "
+                "的 purpose 都使用 explicit_request。当前回合进入主动表情包优先窗口；如果当前"
+                "是轻松、日常或适合表达情绪的语境，"
+                "应主动调用 search_stickers 和 send_sticker，purpose 使用 proactive。官方和用户"
+                "私人表情包都可以参与选择。严肃、安全、医疗、冲突或明显悲伤的话题可以暂缓，"
+                "不要为了完成频率要求而破坏语境。"
             )
         elif allow_proactive_stickers:
             sticker_rule = (

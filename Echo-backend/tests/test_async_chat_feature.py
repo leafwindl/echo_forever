@@ -145,27 +145,26 @@ class AgentDeliveryPlanTests(unittest.TestCase):
 
 
 class DeliveryTimingPolicyTests(unittest.TestCase):
-    def test_longer_text_waits_longer_and_agent_time_is_deducted(self):
+    def test_delivery_uses_fixed_text_and_sticker_delays(self):
         policy = DeliveryTimingPolicy()
-        short = policy.build(
-            text_segments=("short",),
-            delivery_types=("text",),
-            agent_elapsed_ms=0,
-        )
-        long = policy.build(
-            text_segments=("x" * 100,),
-            delivery_types=("text",),
-            agent_elapsed_ms=0,
-        )
-        already_slow = policy.build(
-            text_segments=("x" * 100,),
-            delivery_types=("text",),
+        presentation = policy.build(
+            text_segments=("one", "two", "three"),
+            delivery_types=("text", "text", "sticker", "text"),
             agent_elapsed_ms=10_000,
         )
 
-        self.assertGreater(sum(long.message_delays_ms), sum(short.message_delays_ms))
-        self.assertEqual(already_slow.message_delays_ms, (0,))
-        self.assertLessEqual(sum(long.message_delays_ms), 2500)
+        self.assertEqual(presentation.initial_delay_ms, 0)
+        self.assertEqual(presentation.message_delays_ms, (0, 1200, 1000, 2000))
+        self.assertEqual(presentation.agent_elapsed_ms, 10_000)
+
+    def test_sticker_first_still_waits_before_reveal(self):
+        presentation = DeliveryTimingPolicy().build(
+            text_segments=("after sticker",),
+            delivery_types=("sticker", "text"),
+            agent_elapsed_ms=0,
+        )
+
+        self.assertEqual(presentation.message_delays_ms, (1000, 1200))
 
 
 class FakeTurnRepository:

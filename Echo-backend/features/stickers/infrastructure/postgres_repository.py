@@ -63,9 +63,7 @@ def rank_sticker_rows(
                 semantic_score += 60
             elif term in description:
                 semantic_score += 40
-        owner_score = 500 if row["owner_type"] == "echo" else 0
-        if purpose == "proactive" and row["owner_type"] == "echo":
-            owner_score += 250
+        owner_score = 10 if row["owner_type"] == "echo" else 0
         sticker_id = str(row["sticker_id"])
         last_used_at = last_used.get(sticker_id)
         within_time_cooldown = bool(

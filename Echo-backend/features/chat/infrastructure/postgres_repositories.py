@@ -612,6 +612,44 @@ def has_recent_assistant_sticker(
     return bool(row and row["has_sticker"])
 
 
+def count_recent_assistant_turns_without_sticker(
+    user_id: str,
+    conversation_id: str | None,
+    *,
+    maximum_turns: int,
+) -> int:
+    if not conversation_id or maximum_turns <= 0:
+        return 0
+    with get_connection() as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT COALESCE(NULLIF(message.reply_group_id, ''), message.message_id) AS group_id,
+                   MAX(message.id) AS latest_id,
+                   COALESCE(BOOL_OR(attachment.attachment_type = 'sticker'), FALSE)
+                       AS has_sticker
+            FROM chat_messages message
+            LEFT JOIN chat_message_attachments attachment
+              ON attachment.message_id = message.message_id
+            WHERE message.user_id = %s
+              AND message.conversation_id = %s
+              AND message.role = 'assistant'
+              AND message.status = 'active'
+            GROUP BY COALESCE(NULLIF(message.reply_group_id, ''), message.message_id)
+            ORDER BY latest_id DESC
+            LIMIT %s
+            """,
+            (user_id, conversation_id, maximum_turns),
+        )
+        rows = cursor.fetchall()
+
+    turns_without_sticker = 0
+    for row in rows:
+        if row["has_sticker"]:
+            break
+        turns_without_sticker += 1
+    return turns_without_sticker
+
+
 def get_conversation_timing(
     user_id: str,
     conversation_id: str | None,

@@ -45,6 +45,7 @@ class ChatAgentOrchestratorAdapter(ChatAgentOrchestrator):
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         allow_proactive_stickers: bool = True,
+        proactive_sticker_due: bool = False,
     ):
         return await run_chat_agent(
             user_id,
@@ -54,6 +55,7 @@ class ChatAgentOrchestratorAdapter(ChatAgentOrchestrator):
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
             allow_proactive_stickers=allow_proactive_stickers,
+            proactive_sticker_due=proactive_sticker_due,
         )
 
 
@@ -241,6 +243,7 @@ class ChatContextProviderAdapter(ChatContextProvider):
             memory_retrieval_mode=context.memory_retrieval_mode,
             pause_followup_questions=context.pause_followup_questions,
             allow_proactive_stickers=context.allow_proactive_stickers,
+            proactive_sticker_due=context.proactive_sticker_due,
         )
 
 

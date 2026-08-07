@@ -155,9 +155,11 @@ Agent 最终结果增加可选的结构化字段：
 
 文字已经生成完成后，Delivery Timing Policy 决定视觉上的“打字感”：
 
-- 第一段：短暂准备延迟，建议 400 至 900ms。
-- 段间延迟：根据上一段字数线性增加，建议 450ms 起步，单段不超过 2500ms。
-- 长回复最多三段，不把模型 API 等待时间重复叠加。
+- 第一段文字：Agent 完成后立即交付。
+- 第二段文字：固定延迟 1200ms。
+- 第三段及后续文字：固定延迟 2000ms。
+- 表情包：无论位于文字前后，固定延迟 1000ms。
+- 不按字数、字素或 Agent 耗时动态计算延迟。
 - APP 收到消息后立即显示已交付的段，不等待整个 Reply Group 全部完成。
 - 服务器不使用长时间阻塞数据库事务的 `sleep`；延迟应由可恢复的 delivery job 或事件计划实现。
 
@@ -258,7 +260,9 @@ COS:
 - 本回合尚未成功发送表情包。
 - `search_stickers` 返回候选且候选通过可见性和状态校验。
 
-建议把当前“4 个 assistant 回合冷却”调为“2 个 assistant 回合冷却 + 最短 30 秒间隔”，以降低体感上的触发难度；明确请求仍不受该冷却限制。该值先做成配置，不直接写死在提示词中。
+主动表情包采用“2 个 assistant 回合冷却 + 最短 30 秒间隔”。进入第三个可回复回合时标记为主动表情包优先窗口；轻松、日常或适合表达情绪的语境中，Agent 应优先搜索并发送一张，严肃、安全、医疗、冲突或明显悲伤的话题可以暂缓。明确请求仍不受该冷却限制。
+
+主动搜索同时包含 Echo 官方库和当前用户私人库。官方候选只增加 10 分轻量来源分，私人候选仍完整参与语义、人工优先级和冷却排序。
 
 ### 7.3 不允许的行为
 
@@ -353,10 +357,15 @@ CHAT_COLLECT_MAX_WAIT_MS=10000
 
 CHAT_REPLY_MAX_SEGMENTS=3
 CHAT_REPLY_SEGMENT_MIN_CHARS=24
-CHAT_REPLY_SEGMENT_MAX_DELAY_MS=2500
+CHAT_FOLLOWUP_TEXT_DELAY_MS=1200
+CHAT_FINAL_TEXT_DELAY_MS=2000
+CHAT_STICKER_DELAY_MS=1000
 
-ECHO_PROACTIVE_STICKER_COOLDOWN_TURNS=2
-ECHO_PROACTIVE_STICKER_MIN_INTERVAL_SECONDS=30
+STICKER_PROACTIVE_COOLDOWN_TURNS=2
+STICKER_PROACTIVE_TARGET_TURNS=3
+STICKER_PROACTIVE_MIN_INTERVAL_SECONDS=30
+STICKER_REUSE_COOLDOWN_TURNS=5
+STICKER_REUSE_COOLDOWN_MINUTES=5
 ECHO_STICKER_MAX_SUCCESS_PER_TURN=1
 
 ECHO_TIME_ACTIVE_MAX_SECONDS=120
@@ -381,7 +390,7 @@ ECHO_TIME_MAX_ACK_PER_DAY=1
 
 - 扩展 AgentTurnResult 的 `reply_segments` 协议。
 - 增加 Segment Planner 和句子边界兜底。
-- 增加按字数计算的 Delivery Timing Policy。
+- 增加按消息顺序和类型计算固定延迟的 Delivery Timing Policy。
 - 保持最多三段，工具、错误和敏感场景默认单段。
 
 ### Phase 3：官方表情包资源
@@ -394,7 +403,8 @@ ECHO_TIME_MAX_ACK_PER_DAY=1
 ### Phase 4：表情包触发校准
 
 - 先增加触发原因和拦截原因日志。
-- 将主动冷却从 4 回合调整为可配置的 2 回合 + 30 秒间隔，观察刷图率。
+- 使用 2 回合 + 30 秒冷却，并在第三个合适回合进入主动表情包优先窗口。
+- 官方和私人候选共同排序，官方来源只增加 10 分。
 - 明确请求继续免冷却，精确搜索无结果只允许一次分类回退。
 - 回归测试工具成功、无结果、失败、超时和重复请求。
 
@@ -431,10 +441,9 @@ ECHO_TIME_MAX_ACK_PER_DAY=1
 
 ## 12. 待确认事项
 
-以下是建议默认值，不在你确认前修改代码：
+以下是仍待后续产品确认的默认值：
 
-1. 主动表情包冷却是否从现行 4 个 Echo 回合调整为 2 个回合，并增加 30 秒最短间隔。
-2. “很久没回来”的初始阈值是否采用 30 分钟，超过 6 小时或跨自然日提高问候概率。
-3. 官方表情包第一阶段是否只导入静态 PNG/JPEG/WebP，不处理 GIF 动画。
-4. 官方表情包是否由你提供图片目录和 manifest，还是先由我按现有资源目录生成一份待补标签清单。
-5. `server_received_at` 是否作为唯一对话时间线，`client_sent_at` 仅保留用于延迟诊断。
+1. “很久没回来”的初始阈值是否采用 30 分钟，超过 6 小时或跨自然日提高问候概率。
+2. 官方表情包第一阶段是否只导入静态 PNG/JPEG/WebP，不处理 GIF 动画。
+3. 官方表情包是否由你提供图片目录和 manifest，还是先由我按现有资源目录生成一份待补标签清单。
+4. `server_received_at` 是否作为唯一对话时间线，`client_sent_at` 仅保留用于延迟诊断。

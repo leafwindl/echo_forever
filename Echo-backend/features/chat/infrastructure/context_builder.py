@@ -35,6 +35,7 @@ class ChatContext:
     memory_retrieval_mode: str = "none"
     pause_followup_questions: bool = False
     allow_proactive_stickers: bool = True
+    proactive_sticker_due: bool = False
 
 
 def _list_active_memories_for_context(user_id: str) -> list[dict[str, object]]:
@@ -82,6 +83,18 @@ async def _load_long_term_memories(
     )
 
 
+def should_prioritize_proactive_sticker(
+    *,
+    allow_proactive_stickers: bool,
+    completed_turns_without_sticker: int,
+    target_turns: int,
+) -> bool:
+    return allow_proactive_stickers and completed_turns_without_sticker >= max(
+        target_turns - 1,
+        0,
+    )
+
+
 async def build_chat_context(
     user_id: str,
     user_message: str,
@@ -116,6 +129,21 @@ async def build_chat_context(
             assistant_turns=settings.sticker_proactive_cooldown_turns,
             minimum_interval_seconds=settings.sticker_proactive_min_interval_seconds,
         )
+    )
+    completed_turns_before_due = max(settings.sticker_proactive_target_turns - 1, 0)
+    completed_turns_without_sticker = (
+        postgres_repositories.count_recent_assistant_turns_without_sticker(
+            user_id,
+            conversation_id,
+            maximum_turns=max(completed_turns_before_due, 1),
+        )
+        if allow_proactive_stickers
+        else 0
+    )
+    proactive_sticker_due = should_prioritize_proactive_sticker(
+        allow_proactive_stickers=allow_proactive_stickers,
+        completed_turns_without_sticker=completed_turns_without_sticker,
+        target_turns=settings.sticker_proactive_target_turns,
     )
     conversation_timing = postgres_repositories.get_conversation_timing(
         user_id,
@@ -199,4 +227,5 @@ async def build_chat_context(
         memory_retrieval_mode=memory_retrieval_mode,
         pause_followup_questions=pause_followup_questions,
         allow_proactive_stickers=allow_proactive_stickers,
+        proactive_sticker_due=proactive_sticker_due,
     )
