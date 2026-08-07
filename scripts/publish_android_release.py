@@ -141,6 +141,20 @@ def _validate_apk(apk: Path, tool: Path) -> tuple[str, str, int]:
     return package_name, version_name, version_code
 
 
+def _validate_declared_metadata(
+    package_name: str,
+    version_name: str,
+    version_code: int,
+) -> tuple[str, str, int]:
+    if package_name != EXPECTED_PACKAGE_NAME:
+        raise ValueError(
+            f"Unexpected package name: expected {EXPECTED_PACKAGE_NAME}, got {package_name}"
+        )
+    if not version_name.strip() or version_code <= 0:
+        raise ValueError("APK version metadata is invalid")
+    return package_name, version_name, version_code
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish an Echo Android direct-update release")
     parser.add_argument(
@@ -153,19 +167,37 @@ def main() -> int:
     parser.add_argument("--mandatory", action="store_true")
     parser.add_argument("--note", action="append", default=[])
     parser.add_argument("--apkanalyzer", default="")
+    parser.add_argument("--package-name")
+    parser.add_argument("--version-name")
+    parser.add_argument("--version-code", type=int)
     args = parser.parse_args()
 
     apk = args.apk.resolve()
     if not apk.is_file() or apk.stat().st_size <= 0:
         raise SystemExit(f"APK not found or empty: {apk}")
 
-    try:
-        package_name, version_name, version_code = _validate_apk(
-            apk,
-            _find_apkanalyzer(args.apkanalyzer),
-        )
-    except (FileNotFoundError, ValueError, subprocess.CalledProcessError) as exc:
-        raise SystemExit(f"APK validation failed: {exc}") from None
+    declared_metadata = (args.package_name, args.version_name, args.version_code)
+    if any(value is not None for value in declared_metadata):
+        if any(value is None for value in declared_metadata):
+            raise SystemExit(
+                "--package-name, --version-name and --version-code must be supplied together"
+            )
+        try:
+            package_name, version_name, version_code = _validate_declared_metadata(
+                args.package_name,
+                args.version_name,
+                args.version_code,
+            )
+        except ValueError as exc:
+            raise SystemExit(f"APK validation failed: {exc}") from None
+    else:
+        try:
+            package_name, version_name, version_code = _validate_apk(
+                apk,
+                _find_apkanalyzer(args.apkanalyzer),
+            )
+        except (FileNotFoundError, ValueError, subprocess.CalledProcessError) as exc:
+            raise SystemExit(f"APK validation failed: {exc}") from None
     if not 0 < args.minimum_version_code <= version_code:
         raise SystemExit("--minimum-version-code must be between 1 and the APK versionCode")
 
