@@ -14,7 +14,7 @@ flutter run -d <device> --dart-define=ECHO_BASE_URL=http://localhost:8000
 ```bash
 flutter build apk --release \
   --dart-define=ECHO_ENV=production \
-  --dart-define=ECHO_BASE_URL=https://api.example.com \
+  --dart-define=ECHO_BASE_URL=https://api.echoaiforever.cn \
   --dart-define=APP_VERSION=1.0.0
 ```
 

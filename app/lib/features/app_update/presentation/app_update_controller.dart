@@ -97,16 +97,19 @@ class AppUpdateController extends Notifier<AppUpdateState> {
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
-    await checkForUpdate(manual: false);
+    await checkForUpdate(manual: false, force: true);
   }
 
-  Future<UpdateCheckResult> checkForUpdate({required bool manual}) async {
-    if (state.isBusy || (!manual && state.release != null)) {
+  Future<UpdateCheckResult> checkForUpdate({
+    required bool manual,
+    bool force = false,
+  }) async {
+    if (state.isBusy || (!manual && !force && state.release != null)) {
       return UpdateCheckResult.skipped;
     }
     final preferences = ref.read(preferencesStoreProvider);
     final now = ref.read(appUpdateClockProvider)();
-    if (!manual && await _checkedRecently(preferences, now)) {
+    if (!manual && !force && await _checkedRecently(preferences, now)) {
       return UpdateCheckResult.skipped;
     }
 
@@ -334,11 +337,28 @@ class AppUpdateController extends Notifier<AppUpdateState> {
     }
     if (error is PlatformException) {
       return switch (error.code) {
+        'DOWNLOAD_INSUFFICIENT_SPACE' => '手机存储空间不足，无法下载更新包',
+        'DOWNLOAD_STORAGE_ERROR' => '更新包无法写入手机存储，请稍后重试',
+        'DOWNLOAD_HTTP_ERROR' => '更新包下载连接异常，请检查网络后重试',
+        'DOWNLOAD_CANNOT_RESUME' => '更新包下载已中断，请重新下载',
+        'DOWNLOAD_FAILED' => '更新包下载失败，请检查网络后重试',
+        'DOWNLOAD_NOT_FOUND' => '更新下载记录已失效，请重新下载',
+        'DOWNLOAD_URL_INVALID' => '更新下载地址无效，请稍后重试',
+        'DOWNLOAD_METADATA_INVALID' => '更新包信息无效，请稍后重试',
+        'DOWNLOAD_NOT_STARTED' => '更新下载任务未能启动，请稍后重试',
+        'DOWNLOAD_STATUS_UNAVAILABLE' => '无法读取更新下载进度，请稍后重试',
+        'STORAGE_UNAVAILABLE' => '手机存储当前不可用，无法下载更新',
         'APK_HASH_MISMATCH' => '安装包校验失败，请重新下载',
         'APK_SIZE_MISMATCH' => '安装包下载不完整，请重新下载',
+        'APK_PACKAGE_INVALID' => '安装包格式无效，已停止安装',
         'APK_SIGNATURE_MISMATCH' => '安装包签名不一致，已停止安装',
+        'APK_SIGNATURE_MISSING' => '安装包缺少签名，已停止安装',
         'APK_PACKAGE_MISMATCH' => '安装包不是 Echo，已停止安装',
         'APK_VERSION_INVALID' => '安装包版本无效，已停止安装',
+        'APK_VERIFICATION_FAILED' => '安装包校验失败，请重新下载',
+        'INSTALL_PERMISSION_REQUIRED' => '请先允许 Echo 安装未知来源应用',
+        'INSTALL_SESSION_FAILED' => '无法创建系统安装任务，请稍后重试',
+        'INSTALLER_UNAVAILABLE' => '无法打开系统安装确认页面，请稍后重试',
         _ => '无法启动系统安装程序，请稍后重试',
       };
     }

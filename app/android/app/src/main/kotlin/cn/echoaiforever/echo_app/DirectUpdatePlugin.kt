@@ -1,14 +1,17 @@
 package cn.echoaiforever.echo_app
 
 import android.app.DownloadManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.core.content.FileProvider
+import android.util.Log
+import android.widget.Toast
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -27,6 +30,9 @@ class DirectUpdatePlugin(private val activity: MainActivity) : MethodChannel.Met
         private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
         private const val PREFERENCES_NAME = "echo_direct_updates"
         private const val META_PREFIX = "download_"
+        private const val INSTALL_RESULT_ACTION =
+            "cn.echoaiforever.echo_app.UPDATE_INSTALL_RESULT"
+        private const val LOG_TAG = "EchoDirectUpdate"
     }
 
     private val downloadManager =
@@ -47,6 +53,39 @@ class DirectUpdatePlugin(private val activity: MainActivity) : MethodChannel.Met
             channel.setMethodCallHandler(null)
         }
         executor.shutdownNow()
+    }
+
+    fun handleInstallResult(intent: Intent?) {
+        if (intent?.action != INSTALL_RESULT_ACTION) return
+        intent.action = null
+        val status = intent.getIntExtra(
+            PackageInstaller.EXTRA_STATUS,
+            PackageInstaller.STATUS_FAILURE,
+        )
+        val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()
+        when (status) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                val confirmation = installConfirmationIntent(intent)
+                if (confirmation == null) {
+                    Log.e(LOG_TAG, "Installer confirmation intent is missing")
+                    showInstallFailure("系统没有返回安装确认页面")
+                    return
+                }
+                try {
+                    activity.startActivity(confirmation)
+                } catch (error: Exception) {
+                    Log.e(LOG_TAG, "Unable to launch installer confirmation", error)
+                    showInstallFailure(error.message ?: "无法打开系统安装确认页面")
+                }
+            }
+            PackageInstaller.STATUS_SUCCESS -> {
+                Log.i(LOG_TAG, "Package update installed successfully")
+            }
+            else -> {
+                Log.e(LOG_TAG, "Package installation failed: status=$status message=$message")
+                showInstallFailure(message.ifBlank { "系统安装失败（状态码 $status）" })
+            }
+        }
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -161,7 +200,9 @@ class DirectUpdatePlugin(private val activity: MainActivity) : MethodChannel.Met
                     val reason = cursor.getInt(
                         cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON),
                     )
-                    failureStatus("DOWNLOAD_FAILED", "DownloadManager reason=$reason")
+                    val code = downloadFailureCode(reason)
+                    Log.e(LOG_TAG, "APK download failed: code=$code reason=$reason")
+                    failureStatus(code, "DownloadManager reason=$reason")
                 }
                 else -> failureStatus("DOWNLOAD_FAILED", "Unknown download status=$status")
             }
@@ -210,31 +251,81 @@ class DirectUpdatePlugin(private val activity: MainActivity) : MethodChannel.Met
             try {
                 verifyApk(meta)
                 val apk = File(meta.filePath)
-                val uri = FileProvider.getUriForFile(
-                    activity,
-                    "${activity.packageName}.update_provider",
-                    apk,
-                )
-                val intent = Intent(Intent.ACTION_VIEW)
-                    .setDataAndType(uri, APK_MIME_TYPE)
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                activity.runOnUiThread {
-                    try {
-                        activity.startActivity(intent)
-                        result.success(null)
-                    } catch (error: Exception) {
-                        result.error("INSTALLER_UNAVAILABLE", error.message, null)
-                    }
-                }
+                commitInstallSession(apk, meta)
+                activity.runOnUiThread { result.success(null) }
             } catch (error: UpdateException) {
                 discardDownload(meta)
                 activity.runOnUiThread { result.error(error.code, error.message, null) }
             } catch (error: Exception) {
+                Log.e(LOG_TAG, "Unable to create or commit install session", error)
                 activity.runOnUiThread {
-                    result.error("INSTALLER_UNAVAILABLE", error.message, null)
+                    result.error("INSTALL_SESSION_FAILED", error.message, null)
                 }
             }
         }
+    }
+
+    private fun commitInstallSession(apk: File, meta: DownloadMeta) {
+        val installer = activity.packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(
+            PackageInstaller.SessionParams.MODE_FULL_INSTALL,
+        ).apply {
+            setAppPackageName(meta.packageName)
+            setSize(meta.sizeBytes)
+            setInstallReason(PackageManager.INSTALL_REASON_USER)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                setPackageSource(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE)
+            }
+        }
+        var sessionId: Int? = null
+        try {
+            sessionId = installer.createSession(params)
+            installer.openSession(sessionId).use { session ->
+                FileInputStream(apk).use { input ->
+                    session.openWrite("base.apk", 0, meta.sizeBytes).use { output ->
+                        input.copyTo(output, 1024 * 1024)
+                        session.fsync(output)
+                    }
+                }
+                val callbackIntent = Intent(activity, MainActivity::class.java).apply {
+                    action = INSTALL_RESULT_ACTION
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        PendingIntent.FLAG_MUTABLE
+                    } else {
+                        0
+                    }
+                val callback = PendingIntent.getActivity(
+                    activity,
+                    sessionId,
+                    callbackIntent,
+                    pendingFlags,
+                )
+                session.commit(callback.intentSender)
+            }
+            Log.i(LOG_TAG, "Install session committed: sessionId=$sessionId")
+        } catch (error: Exception) {
+            sessionId?.let { id -> runCatching { installer.abandonSession(id) } }
+            throw error
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun installConfirmationIntent(intent: Intent): Intent? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+        } else {
+            intent.getParcelableExtra(Intent.EXTRA_INTENT)
+        }
+    }
+
+    private fun showInstallFailure(message: String) {
+        Toast.makeText(activity, "Echo 更新安装失败：$message", Toast.LENGTH_LONG).show()
     }
 
     private fun verifyApk(meta: DownloadMeta) {
@@ -443,6 +534,19 @@ class DirectUpdatePlugin(private val activity: MainActivity) : MethodChannel.Met
         "downloadedBytes" to 0L,
         "totalBytes" to 0L,
     )
+
+    private fun downloadFailureCode(reason: Int): String = when (reason) {
+        DownloadManager.ERROR_INSUFFICIENT_SPACE -> "DOWNLOAD_INSUFFICIENT_SPACE"
+        DownloadManager.ERROR_DEVICE_NOT_FOUND,
+        DownloadManager.ERROR_FILE_ERROR,
+        -> "DOWNLOAD_STORAGE_ERROR"
+        DownloadManager.ERROR_UNHANDLED_HTTP_CODE,
+        DownloadManager.ERROR_HTTP_DATA_ERROR,
+        DownloadManager.ERROR_TOO_MANY_REDIRECTS,
+        -> "DOWNLOAD_HTTP_ERROR"
+        DownloadManager.ERROR_CANNOT_RESUME -> "DOWNLOAD_CANNOT_RESUME"
+        else -> "DOWNLOAD_FAILED"
+    }
 }
 
 private data class DownloadMeta(

@@ -8,9 +8,10 @@ class AppConfig {
   });
 
   factory AppConfig.fromEnvironment() {
+    const isReleaseBuild = bool.fromEnvironment('dart.vm.product');
     const environmentValue = String.fromEnvironment(
       'ECHO_ENV',
-      defaultValue: 'development',
+      defaultValue: isReleaseBuild ? 'production' : 'development',
     );
     const injectedBaseUrl = String.fromEnvironment('ECHO_BASE_URL');
     const appVersion = String.fromEnvironment(
@@ -18,11 +19,18 @@ class AppConfig {
       defaultValue: '0.1.0',
     );
     final environment = AppEnvironment.parse(environmentValue);
-    final defaultBaseUrl = environment == AppEnvironment.development
+    final defaultBaseUrl =
+        !isReleaseBuild && environment == AppEnvironment.development
         ? 'http://127.0.0.1:8000'
         : 'https://api.echoaiforever.cn';
-    final baseUrl = (injectedBaseUrl.isEmpty ? defaultBaseUrl : injectedBaseUrl)
+    var baseUrl = (injectedBaseUrl.isEmpty ? defaultBaseUrl : injectedBaseUrl)
         .replaceFirst(RegExp(r'/+$'), '');
+    final parsedInjectedUrl = Uri.tryParse(baseUrl);
+    if (isReleaseBuild &&
+        (parsedInjectedUrl?.host == 'localhost' ||
+            parsedInjectedUrl?.host == '127.0.0.1')) {
+      baseUrl = 'https://api.echoaiforever.cn';
+    }
     final uri = Uri.tryParse(baseUrl);
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
       throw StateError('ECHO_BASE_URL must be an absolute HTTP(S) URL.');

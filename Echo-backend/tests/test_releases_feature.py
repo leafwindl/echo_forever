@@ -77,7 +77,9 @@ class ReleaseFeatureTests(unittest.TestCase):
     def setUp(self):
         request_limiter.reset()
         self.previous_auth_secret = settings.auth_token_secret
+        self.previous_cos_custom_domain = settings.cos_custom_domain
         settings.auth_token_secret = "release-test-signing-secret"
+        settings.cos_custom_domain = ""
         self.repository = FakeReleaseRepository(release_fixture())
         self.storage = FakeStorage()
         app = FastAPI()
@@ -89,6 +91,7 @@ class ReleaseFeatureTests(unittest.TestCase):
     def tearDown(self):
         self.client.close()
         settings.auth_token_secret = self.previous_auth_secret
+        settings.cos_custom_domain = self.previous_cos_custom_domain
 
     def test_latest_returns_metadata_without_download_url(self):
         response = self.client.get(
@@ -128,6 +131,29 @@ class ReleaseFeatureTests(unittest.TestCase):
         self.assertIn(
             "/releases/release_test/artifact?",
             response.json()["download_url"],
+        )
+
+    def test_download_uses_cos_url_when_custom_domain_is_configured(self):
+        settings.cos_custom_domain = "download.echoaiforever.cn"
+
+        response = self.client.post(
+            "/releases/release_test/download",
+            json={"platform": "android", "channel": "internal", "version_code": 2},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["download_url"],
+            "https://cos.example.test/signed-apk",
+        )
+        self.assertEqual(
+            self.storage.calls,
+            [
+                (
+                    "echo/releases/android/internal/1.0.0+3/echo.apk",
+                    settings.release_download_url_expires_seconds,
+                )
+            ],
         )
 
     def test_bootstrap_redirects_to_latest_signed_apk(self):

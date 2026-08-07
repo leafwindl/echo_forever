@@ -4,6 +4,7 @@ import 'package:echo_app/features/app_update/data/app_update_api.dart';
 import 'package:echo_app/features/app_update/data/direct_update_bridge.dart';
 import 'package:echo_app/features/app_update/domain/app_release.dart';
 import 'package:echo_app/features/app_update/presentation/app_update_controller.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -32,6 +33,26 @@ void main() {
 
     expect(result, UpdateCheckResult.skipped);
     expect(platform.appInfoCalls, 0);
+  });
+
+  test('initialization ignores a stale automatic-check cooldown', () async {
+    final now = DateTime.utc(2026, 8, 6, 10);
+    final preferences = FakePreferencesStore(<String, Object?>{
+      StorageKeys.appUpdateLastAutomaticCheck: now
+          .subtract(const Duration(minutes: 1))
+          .toIso8601String(),
+    });
+    final api = FakeAppUpdateApi(release: releaseFixture());
+    final container = _container(api: api, preferences: preferences, now: now);
+    addTearDown(container.dispose);
+
+    await container.read(appUpdateControllerProvider.notifier).initialize();
+
+    expect(api.latestCalls, 1);
+    expect(
+      container.read(appUpdateControllerProvider).phase,
+      AppUpdatePhase.available,
+    );
   });
 
   test('automatic check resumes after the five-minute window', () async {
@@ -144,6 +165,47 @@ void main() {
     expect(state.phase, AppUpdatePhase.failed);
     expect(state.release, isNull);
   });
+
+  test('reports download failures as download errors', () async {
+    final api = FakeAppUpdateApi(release: releaseFixture());
+    final platform = FakeDirectUpdatePlatform();
+    platform.statuses.add(
+      const NativeDownloadStatus(
+        phase: NativeDownloadPhase.failed,
+        errorCode: 'DOWNLOAD_HTTP_ERROR',
+      ),
+    );
+    final container = _container(api: api, platform: platform);
+    addTearDown(container.dispose);
+    final controller = container.read(appUpdateControllerProvider.notifier);
+    await controller.checkForUpdate(manual: true);
+
+    await controller.startUpdate();
+
+    final state = container.read(appUpdateControllerProvider);
+    expect(state.phase, AppUpdatePhase.failed);
+    expect(state.errorMessage, '更新包下载连接异常，请检查网络后重试');
+  });
+
+  test('reports install session creation failures separately', () async {
+    final api = FakeAppUpdateApi(release: releaseFixture());
+    final platform = FakeDirectUpdatePlatform(
+      launchError: PlatformException(code: 'INSTALL_SESSION_FAILED'),
+    );
+    platform.statuses.add(
+      const NativeDownloadStatus(phase: NativeDownloadPhase.ready),
+    );
+    final container = _container(api: api, platform: platform);
+    addTearDown(container.dispose);
+    final controller = container.read(appUpdateControllerProvider.notifier);
+    await controller.checkForUpdate(manual: true);
+
+    await controller.startUpdate();
+
+    final state = container.read(appUpdateControllerProvider);
+    expect(state.phase, AppUpdatePhase.failed);
+    expect(state.errorMessage, '无法创建系统安装任务，请稍后重试');
+  });
 }
 
 ProviderContainer _container({
@@ -208,9 +270,10 @@ class FakeAppUpdateApi implements AppUpdateApi {
 }
 
 class FakeDirectUpdatePlatform implements DirectUpdatePlatform {
-  FakeDirectUpdatePlatform({this.canInstall = true});
+  FakeDirectUpdatePlatform({this.canInstall = true, this.launchError});
 
   bool canInstall;
+  final Object? launchError;
   int appInfoCalls = 0;
   int permissionSettingsCalls = 0;
   int startCalls = 0;
@@ -241,6 +304,7 @@ class FakeDirectUpdatePlatform implements DirectUpdatePlatform {
   @override
   Future<void> launchInstaller(int downloadId) async {
     launchCalls += 1;
+    if (launchError case final error?) throw error;
   }
 
   @override

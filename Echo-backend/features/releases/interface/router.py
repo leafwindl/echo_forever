@@ -92,6 +92,20 @@ def _artifact_url(request: Request, release_id: str) -> str:
     )
 
 
+def _download_url(
+    request: Request,
+    release: AppRelease,
+    storage: CosObjectStorage,
+) -> str:
+    expires_seconds = settings.release_download_url_expires_seconds
+    if settings.cos_custom_domain.strip():
+        return storage.download_url(
+            release.cos_object_key,
+            expires_seconds=expires_seconds,
+        )
+    return _artifact_url(request, release.release_id)
+
+
 @router.get("/latest", response_model=LatestReleaseResponse)
 def latest_release(
     request: Request,
@@ -114,6 +128,7 @@ def latest_release(
 def bootstrap_android_release(
     request: Request,
     repository: Annotated[PostgresReleaseRepository, Depends(get_release_repository)],
+    storage: Annotated[CosObjectStorage, Depends(get_cos_object_storage)],
     channel: Literal["internal"] = Query(default="internal"),
 ) -> RedirectResponse:
     _consume_rate_limit(request, "bootstrap")
@@ -124,7 +139,7 @@ def bootstrap_android_release(
             detail="Release is unavailable",
         )
     return RedirectResponse(
-        _artifact_url(request, release.release_id),
+        _download_url(request, release, storage),
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         headers={"Cache-Control": "no-store"},
     )
@@ -175,6 +190,7 @@ def release_download(
     body: ReleaseDownloadRequest,
     request: Request,
     repository: Annotated[PostgresReleaseRepository, Depends(get_release_repository)],
+    storage: Annotated[CosObjectStorage, Depends(get_cos_object_storage)],
 ) -> ReleaseDownloadResponse:
     _consume_rate_limit(request, "download")
     release = repository.get_active(release_id, body.platform, body.channel)
@@ -186,6 +202,6 @@ def release_download(
     expires_seconds = settings.release_download_url_expires_seconds
     return ReleaseDownloadResponse(
         release_id=release.release_id,
-        download_url=_artifact_url(request, release.release_id),
+        download_url=_download_url(request, release, storage),
         expires_at=datetime.now(UTC) + timedelta(seconds=expires_seconds),
     )
