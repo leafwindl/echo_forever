@@ -309,6 +309,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             height INTEGER,
             byte_size BIGINT NOT NULL DEFAULT 0,
             perceptual_hash TEXT,
+            priority INTEGER NOT NULL DEFAULT 100,
             description TEXT NOT NULL DEFAULT '',
             semantic_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
             status VARCHAR(16) NOT NULL DEFAULT 'processing',
@@ -490,6 +491,11 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_daily_letters_status_scheduled ON daily_letters(status, scheduled_at)",
         "CREATE INDEX IF NOT EXISTS idx_stickers_owner_status ON stickers(owner_user_id, status, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_stickers_hash ON stickers(perceptual_hash)",
+        "ALTER TABLE stickers ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 100",
+        """
+        CREATE INDEX IF NOT EXISTS idx_stickers_echo_priority
+        ON stickers(owner_type, status, priority DESC, created_at DESC)
+        """,
         "CREATE INDEX IF NOT EXISTS idx_sticker_jobs_status_created ON sticker_generation_jobs(status, created_at)",
         "CREATE INDEX IF NOT EXISTS idx_chat_attachments_message ON chat_message_attachments(message_id, position)",
         "CREATE INDEX IF NOT EXISTS idx_chat_request_results_updated ON chat_request_results(status, updated_at)",

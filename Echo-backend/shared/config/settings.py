@@ -382,13 +382,13 @@ class Settings(BaseSettings):
         validation_alias="CHAT_ASYNC_ENABLED",
     )
     chat_batch_quiet_window_ms: int = Field(
-        default=800,
+        default=2500,
         validation_alias="CHAT_BATCH_QUIET_WINDOW_MS",
         ge=100,
         le=5000,
     )
     chat_batch_max_window_ms: int = Field(
-        default=2500,
+        default=10000,
         validation_alias="CHAT_BATCH_MAX_WINDOW_MS",
         ge=500,
         le=10000,
@@ -585,7 +585,33 @@ class Settings(BaseSettings):
         le=20 * 1024 * 1024,
     )
     sticker_proactive_cooldown_turns: int = Field(
-        default=5, validation_alias="STICKER_PROACTIVE_COOLDOWN_TURNS", ge=1
+        default=2, validation_alias="STICKER_PROACTIVE_COOLDOWN_TURNS", ge=1
+    )
+    sticker_proactive_min_interval_seconds: int = Field(
+        default=30,
+        validation_alias="STICKER_PROACTIVE_MIN_INTERVAL_SECONDS",
+        ge=1,
+    )
+    sticker_reuse_cooldown_turns: int = Field(
+        default=5, validation_alias="STICKER_REUSE_COOLDOWN_TURNS", ge=1
+    )
+    sticker_reuse_cooldown_minutes: int = Field(
+        default=5, validation_alias="STICKER_REUSE_COOLDOWN_MINUTES", ge=1
+    )
+    conversation_active_max_seconds: int = Field(
+        default=120,
+        validation_alias="CONVERSATION_ACTIVE_MAX_SECONDS",
+        ge=1,
+    )
+    conversation_returned_min_seconds: int = Field(
+        default=1800,
+        validation_alias="CONVERSATION_RETURNED_MIN_SECONDS",
+        ge=60,
+    )
+    conversation_long_absence_seconds: int = Field(
+        default=21600,
+        validation_alias="CONVERSATION_LONG_ABSENCE_SECONDS",
+        ge=300,
     )
     sticker_generation_enabled: bool = Field(
         default=False, validation_alias="STICKER_GENERATION_ENABLED"

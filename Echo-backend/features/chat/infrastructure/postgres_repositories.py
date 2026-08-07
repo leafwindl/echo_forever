@@ -1,10 +1,13 @@
 import json
 import uuid
+from datetime import UTC, datetime
 
 from db.postgres_connection import get_connection, transaction
+from shared.config import settings
 
 from features.agent.domain.entities import ContentPart, SourceReference
 from features.auth.public import ensure_user_identity
+from features.stickers.public import resolve_sticker_asset_url
 
 
 def ensure_conversation(
@@ -548,32 +551,132 @@ def list_messages_page(
 def has_recent_assistant_sticker(
     user_id: str,
     conversation_id: str,
-    assistant_turns: int = 4,
+    assistant_turns: int = 2,
+    minimum_interval_seconds: int = 30,
 ) -> bool:
     with get_connection() as conn, conn.cursor() as cursor:
         cursor.execute(
             """
+            WITH recent_groups AS (
+                SELECT COALESCE(NULLIF(reply_group_id, ''), message_id) AS group_id,
+                       MAX(id) AS latest_id
+                FROM chat_messages
+                WHERE user_id = %s
+                  AND conversation_id = %s
+                  AND role = 'assistant'
+                  AND status = 'active'
+                GROUP BY COALESCE(NULLIF(reply_group_id, ''), message_id)
+                ORDER BY latest_id DESC
+                LIMIT %s
+            ), recent_messages AS (
+                SELECT message.message_id
+                FROM chat_messages message
+                JOIN recent_groups recent
+                  ON COALESCE(NULLIF(message.reply_group_id, ''), message.message_id)
+                   = recent.group_id
+                WHERE message.user_id = %s
+                  AND message.conversation_id = %s
+                  AND message.role = 'assistant'
+                  AND message.status = 'active'
+            )
             SELECT EXISTS (
-                SELECT 1
-                FROM (
-                    SELECT message_id
-                    FROM chat_messages
-                    WHERE user_id = %s
-                      AND conversation_id = %s
-                      AND role = 'assistant'
-                      AND status = 'active'
-                    ORDER BY id DESC
-                    LIMIT %s
-                ) recent
+                SELECT 1 FROM recent_messages recent
                 JOIN chat_message_attachments attachment
                   ON attachment.message_id = recent.message_id
                 WHERE attachment.attachment_type = 'sticker'
+                UNION ALL
+                SELECT 1
+                FROM chat_messages message
+                JOIN chat_message_attachments attachment
+                  ON attachment.message_id = message.message_id
+                WHERE message.user_id = %s
+                  AND message.conversation_id = %s
+                  AND message.role = 'assistant'
+                  AND message.status = 'active'
+                  AND attachment.attachment_type = 'sticker'
+                  AND message.created_at >= NOW() - (%s * INTERVAL '1 second')
             ) AS has_sticker
             """,
-            (user_id, conversation_id, assistant_turns),
+            (
+                user_id,
+                conversation_id,
+                assistant_turns,
+                user_id,
+                conversation_id,
+                user_id,
+                conversation_id,
+                minimum_interval_seconds,
+            ),
         )
         row = cursor.fetchone()
     return bool(row and row["has_sticker"])
+
+
+def get_conversation_timing(
+    user_id: str,
+    conversation_id: str | None,
+    *,
+    current_message_id: int | None = None,
+) -> dict[str, object] | None:
+    if not conversation_id:
+        return None
+    with get_connection() as conn, conn.cursor() as cursor:
+        current_at = datetime.now(UTC)
+        before_clause = ""
+        params: list[object] = [user_id, conversation_id]
+        if current_message_id is not None:
+            cursor.execute(
+                """
+                SELECT created_at
+                FROM chat_messages
+                WHERE user_id = %s AND conversation_id = %s AND id = %s
+                """,
+                (user_id, conversation_id, current_message_id),
+            )
+            current_row = cursor.fetchone()
+            if current_row is not None:
+                current_at = current_row["created_at"]
+            before_clause = "AND id < %s"
+            params.append(current_message_id)
+        cursor.execute(
+            f"""
+            SELECT created_at
+            FROM chat_messages
+            WHERE user_id = %s
+              AND conversation_id = %s
+              AND role = 'user'
+              AND status = 'active'
+              {before_clause}
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            params,
+        )
+        previous = cursor.fetchone()
+    if previous is None:
+        return None
+    previous_at = previous["created_at"]
+    if current_at.tzinfo is None:
+        current_at = current_at.replace(tzinfo=UTC)
+    if previous_at.tzinfo is None:
+        previous_at = previous_at.replace(tzinfo=UTC)
+    gap_seconds = max(int((current_at - previous_at).total_seconds()), 0)
+    state = classify_conversation_gap(gap_seconds)
+    return {
+        "gap_seconds": gap_seconds,
+        "state": state,
+        "should_acknowledge_gap": state in {"returned", "long_absence"},
+    }
+
+
+def classify_conversation_gap(gap_seconds: int) -> str:
+    if gap_seconds <= settings.conversation_active_max_seconds:
+        return "active"
+    if gap_seconds < settings.conversation_returned_min_seconds:
+        return "recent"
+    if gap_seconds < settings.conversation_long_absence_seconds:
+        return "returned"
+    return "long_absence"
 
 
 def _load_message_attachments(
@@ -586,10 +689,17 @@ def _load_message_attachments(
     with conn.cursor() as cursor:
         cursor.execute(
             """
-            SELECT message_id, attachment_type, resource_id, position, metadata
-            FROM chat_message_attachments
-            WHERE message_id = ANY(%s)
-            ORDER BY message_id, position, id
+            SELECT attachment.message_id, attachment.attachment_type,
+                   attachment.resource_id, attachment.position, attachment.metadata,
+                   sticker.source AS sticker_source,
+                   sticker.storage_key AS sticker_storage_key,
+                   sticker.public_url AS sticker_public_url
+            FROM chat_message_attachments attachment
+            LEFT JOIN stickers sticker
+              ON attachment.attachment_type = 'sticker'
+             AND sticker.sticker_id = attachment.resource_id
+            WHERE attachment.message_id = ANY(%s)
+            ORDER BY attachment.message_id, attachment.position, attachment.id
             """,
             (clean_ids,),
         )
@@ -599,6 +709,13 @@ def _load_message_attachments(
         metadata = row["metadata"] or {}
         if isinstance(metadata, str):
             metadata = json.loads(metadata)
+        metadata = dict(metadata)
+        if str(row["attachment_type"]) == "sticker" and row["sticker_storage_key"]:
+            metadata["url"] = resolve_sticker_asset_url(
+                source=str(row["sticker_source"] or ""),
+                storage_key=str(row["sticker_storage_key"] or ""),
+                public_url=str(row["sticker_public_url"] or metadata.get("url") or ""),
+            )
         grouped.setdefault(str(row["message_id"]), []).append(
             {
                 "type": str(row["attachment_type"]),
@@ -689,6 +806,8 @@ def _add_source_attachments(
 def _render_message_content(
     content: str,
     attachments: tuple[dict[str, object], ...],
+    *,
+    include_sticker_descriptions: bool = True,
 ) -> str:
     if not attachments:
         return content
@@ -697,12 +816,15 @@ def _render_message_content(
         if attachment.get("type") != "sticker":
             continue
         metadata = attachment.get("metadata") or {}
-        description = str(metadata.get("description") or "未提供")
+        description = str(metadata.get("description") or "").strip()
         tags = metadata.get("semantic_tags") or []
         tag_text = "、".join(str(tag) for tag in tags) or "未提供"
-        lines.append(
-            f"- 表情包 {attachment.get('resource_id')}：描述={description}；语义标签={tag_text}"
-        )
+        if include_sticker_descriptions and description:
+            lines.append(
+                f"- 表情包 {attachment.get('resource_id')}：描述={description}；语义标签={tag_text}"
+            )
+        else:
+            lines.append(f"- 表情包语义标签={tag_text}")
     return "\n".join(lines).strip()
 
 

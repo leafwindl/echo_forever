@@ -130,6 +130,19 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         raw = '{"text_segments":["one","two"]}'
         self.assertEqual(parse_agent_delivery_plan(raw, "call").text_segments, (raw,))
 
+    def test_plain_medium_reply_is_split_on_natural_sentence_boundaries(self):
+        reply = (
+            "今天听起来确实有点累，先不用急着把所有事情都处理完。"
+            "你可以慢一点，我会认真听你继续说。"
+        )
+        plan = parse_agent_delivery_plan(reply, "chat")
+        self.assertEqual(len(plan.text_segments), 2)
+        self.assertEqual("".join(plan.text_segments), reply)
+
+    def test_plain_reply_with_url_stays_in_one_segment(self):
+        reply = "先打开 https://example.test/docs 查看说明。确认以后再继续操作。"
+        self.assertEqual(parse_agent_delivery_plan(reply, "chat").text_segments, (reply,))
+
 
 class DeliveryTimingPolicyTests(unittest.TestCase):
     def test_longer_text_waits_longer_and_agent_time_is_deducted(self):

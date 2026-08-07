@@ -13,6 +13,7 @@ from features.agent.domain.entities import (
 @dataclass(frozen=True)
 class ToolExecutionContext:
     user_id: str
+    conversation_id: str | None = None
     conversation_mode: str = "chat"
     allow_proactive_stickers: bool = True
     prior_results: tuple[AgentToolResult, ...] = field(default_factory=tuple)

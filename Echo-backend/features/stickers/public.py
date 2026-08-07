@@ -1,9 +1,23 @@
-from features.stickers.infrastructure.postgres_repository import PostgresStickerRepository
 from features.stickers.infrastructure.container import get_sticker_generator
+from features.stickers.infrastructure.postgres_repository import PostgresStickerRepository
+from features.stickers.infrastructure.urls import resolve_sticker_url
 
 
-def search_stickers(user_id: str, intent: str, limit: int = 3):
-    return PostgresStickerRepository().list(user_id, intent, limit)
+def search_stickers(
+    user_id: str,
+    intent: str,
+    limit: int = 3,
+    *,
+    conversation_id: str | None = None,
+    purpose: str = "explicit_request",
+):
+    return PostgresStickerRepository().list(
+        user_id,
+        intent,
+        limit,
+        conversation_id=conversation_id,
+        purpose=purpose,
+    )
 
 
 def send_sticker(user_id: str, sticker_id: str):
@@ -18,4 +32,22 @@ async def generate_pending_stickers() -> int:
     return await get_sticker_generator().execute()
 
 
-__all__ = ["generate_pending_stickers", "search_stickers", "send_sticker"]
+def resolve_sticker_asset_url(
+    *,
+    source: str,
+    storage_key: str,
+    public_url: str,
+) -> str:
+    return resolve_sticker_url(
+        source=source,
+        storage_key=storage_key,
+        public_url=public_url,
+    )
+
+
+__all__ = [
+    "generate_pending_stickers",
+    "resolve_sticker_asset_url",
+    "search_stickers",
+    "send_sticker",
+]

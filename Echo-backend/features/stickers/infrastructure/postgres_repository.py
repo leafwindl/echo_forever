@@ -3,10 +3,14 @@ from __future__ import annotations
 import json
 import re
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from db.postgres_connection import get_connection, transaction
+from shared.config import settings
+
 from features.auth.public import ensure_user_identity
 from features.stickers.domain.entities import Sticker
+from features.stickers.infrastructure.urls import resolve_sticker_url
 
 
 def _sticker(row) -> Sticker:
@@ -17,13 +21,68 @@ def _sticker(row) -> Sticker:
         sticker_id=row["sticker_id"],
         owner_type=row["owner_type"],
         source=row["source"],
-        url=row["public_url"] or "",
+        url=resolve_sticker_url(
+            source=str(row["source"] or ""),
+            storage_key=str(row["storage_key"] or ""),
+            public_url=str(row["public_url"] or ""),
+        ),
         content_type=row["content_type"],
         description=row["description"],
         semantic_tags=tuple(tags),
         status=row["status"],
         created_at=row["created_at"],
+        priority=int(row.get("priority") or 100),
     )
+
+
+def rank_sticker_rows(
+    rows: list,
+    *,
+    terms: tuple[str, ...],
+    purpose: str,
+    recent_ids: set[str],
+    last_used: dict[str, datetime],
+    now: datetime,
+    cooldown: timedelta,
+) -> list:
+    terms_lower = tuple(term.lower() for term in terms)
+
+    def score(row) -> tuple[int, int, int, datetime]:
+        raw_tags = row["semantic_tags"] or []
+        if isinstance(raw_tags, str):
+            raw_tags = json.loads(raw_tags)
+        tags = tuple(str(tag).lower() for tag in raw_tags)
+        description = str(row["description"] or "").lower()
+        semantic_score = 0
+        for term in terms_lower:
+            if term in tags:
+                semantic_score += 100
+            elif any(term in tag for tag in tags):
+                semantic_score += 70
+            elif term == description:
+                semantic_score += 60
+            elif term in description:
+                semantic_score += 40
+        owner_score = 500 if row["owner_type"] == "echo" else 0
+        if purpose == "proactive" and row["owner_type"] == "echo":
+            owner_score += 250
+        sticker_id = str(row["sticker_id"])
+        last_used_at = last_used.get(sticker_id)
+        within_time_cooldown = bool(
+            last_used_at is not None and now - last_used_at < cooldown
+        )
+        cooling_penalty = -1 if sticker_id in recent_ids or within_time_cooldown else 0
+        created_at = row["created_at"] or datetime.min.replace(tzinfo=UTC)
+        return (
+            cooling_penalty,
+            semantic_score + owner_score,
+            int(row.get("priority") or 100),
+            created_at,
+        )
+
+    ordered = sorted(rows, key=score, reverse=True)
+    eligible = [row for row in ordered if score(row)[0] == 0]
+    return eligible or ordered
 
 
 class PostgresStickerRepository:
@@ -73,9 +132,29 @@ class PostgresStickerRepository:
             row = cursor.fetchone()
         return _sticker(row) if row else None
 
-    def list(self, user_id: str, query: str = "", limit: int = 50) -> list[Sticker]:
-        params: list[object] = [user_id]
-        where = "status='active' AND (owner_type='echo' OR owner_user_id=%s)"
+    def list(
+        self,
+        user_id: str,
+        query: str = "",
+        limit: int = 50,
+        *,
+        conversation_id: str | None = None,
+        purpose: str = "explicit_request",
+        include_echo: bool = True,
+        include_user: bool = True,
+    ) -> list[Sticker]:
+        if not include_echo and not include_user:
+            return []
+        params: list[object] = []
+        if include_echo and include_user:
+            owner_clause = "(owner_type='echo' OR owner_user_id=%s)"
+            params.append(user_id)
+        elif include_echo:
+            owner_clause = "owner_type='echo'"
+        else:
+            owner_clause = "owner_type='user' AND owner_user_id=%s"
+            params.append(user_id)
+        where = f"status='active' AND {owner_clause}"
         terms = [
             term
             for term in re.split(r"[\s,，、;；]+", query.strip())
@@ -88,14 +167,83 @@ class PostgresStickerRepository:
                 pattern = f"%{term}%"
                 params.extend([pattern, pattern])
             where += " AND (" + " OR ".join(predicates) + ")"
-        params.append(limit)
         with get_connection() as conn, conn.cursor() as cursor:
             cursor.execute(
-                f"SELECT * FROM stickers WHERE {where} ORDER BY created_at DESC LIMIT %s",
+                f"SELECT * FROM stickers WHERE {where}",
                 params,
             )
             rows = cursor.fetchall()
-        return [_sticker(row) for row in rows]
+            recent_ids, last_used = self._recent_usage(
+                conn,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                recent_turns=settings.sticker_reuse_cooldown_turns,
+            )
+
+        selected = rank_sticker_rows(
+            rows,
+            terms=tuple(terms),
+            purpose=purpose,
+            recent_ids=recent_ids,
+            last_used=last_used,
+            now=datetime.now(UTC),
+            cooldown=timedelta(minutes=settings.sticker_reuse_cooldown_minutes),
+        )
+        return [_sticker(row) for row in selected[:limit]]
+
+    @staticmethod
+    def _recent_usage(
+        conn,
+        *,
+        user_id: str,
+        conversation_id: str | None,
+        recent_turns: int,
+    ) -> tuple[set[str], dict[str, datetime]]:
+        clauses = [
+            "message.user_id = %s",
+            "message.role = 'assistant'",
+            "attachment.attachment_type = 'sticker'",
+        ]
+        params: list[object] = [user_id]
+        if conversation_id:
+            clauses.append("message.conversation_id = %s")
+            params.append(conversation_id)
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT message.message_id, message.reply_group_id,
+                       attachment.resource_id, message.created_at
+                FROM chat_messages message
+                JOIN chat_message_attachments attachment
+                  ON attachment.message_id = message.message_id
+                WHERE {' AND '.join(clauses)}
+                ORDER BY message.created_at DESC
+                LIMIT 100
+                """,
+                params,
+            )
+            rows = cursor.fetchall()
+
+        recent_ids: set[str] = set()
+        last_used: dict[str, datetime] = {}
+        seen_groups: list[str] = []
+        for row in rows:
+            sticker_id = str(row["resource_id"] or "")
+            if not sticker_id:
+                continue
+            created_at = row["created_at"]
+            if created_at is not None and created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=UTC)
+            if created_at is not None and (
+                sticker_id not in last_used or created_at > last_used[sticker_id]
+            ):
+                last_used[sticker_id] = created_at
+            group = str(row["reply_group_id"] or f"message:{row['message_id']}")
+            if group not in seen_groups and len(seen_groups) < recent_turns:
+                seen_groups.append(group)
+            if group in seen_groups:
+                recent_ids.add(sticker_id)
+        return recent_ids, last_used
 
     def get(self, user_id: str, sticker_id: str) -> Sticker | None:
         with get_connection() as conn, conn.cursor() as cursor:

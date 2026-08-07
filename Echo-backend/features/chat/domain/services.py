@@ -21,6 +21,7 @@ class ChatAgentOrchestrator(Protocol):
         user_id: str,
         message: str,
         messages: list[dict],
+        conversation_id: str | None = None,
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         allow_proactive_stickers: bool = True,

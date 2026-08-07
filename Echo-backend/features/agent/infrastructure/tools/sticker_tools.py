@@ -29,8 +29,29 @@ class SendStickerArguments(BaseModel):
     purpose: Literal["explicit_request", "proactive"] = "explicit_request"
 
 
-StickerSearch = Callable[[str, str, int], list[Sticker]]
+StickerSearch = Callable[..., list[Sticker]]
 StickerSend = Callable[[str, str], Sticker | None]
+
+
+def _search_with_context(
+    search: StickerSearch,
+    context: ToolExecutionContext,
+    query: str,
+    limit: int,
+    purpose: str,
+) -> list[Sticker]:
+    try:
+        return search(
+            context.user_id,
+            query,
+            limit,
+            conversation_id=context.conversation_id,
+            purpose=purpose,
+        )
+    except TypeError as exc:
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        return search(context.user_id, query, limit)
 
 
 def register_sticker_tools(
@@ -53,16 +74,29 @@ def register_sticker_tools(
                 error_code="proactive_sticker_cooldown",
             )
         requested_query = parsed.query.strip()
-        stickers = search(context.user_id, requested_query, parsed.limit)
+        stickers = _search_with_context(
+            search,
+            context,
+            requested_query,
+            parsed.limit,
+            parsed.purpose,
+        )
         fallback_used = False
         if not stickers and parsed.purpose == "explicit_request" and requested_query:
             fallback_used = True
-            stickers = search(context.user_id, "", parsed.limit)
+            stickers = _search_with_context(
+                search,
+                context,
+                "",
+                parsed.limit,
+                parsed.purpose,
+            )
         candidates = [
             {
                 "sticker_id": sticker.sticker_id,
                 "description": sticker.description,
                 "semantic_tags": list(sticker.semantic_tags),
+                "priority": sticker.priority,
             }
             for sticker in stickers
         ]

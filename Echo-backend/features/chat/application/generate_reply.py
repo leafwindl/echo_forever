@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import logging
 import time
 
@@ -215,13 +216,18 @@ class GenerateChatReply:
             )
         if self.agent_orchestrator is None:
             raise RuntimeError("Unified Agent runtime is not configured")
+        agent_kwargs = {
+            "conversation_mode": conversation_mode,
+            "sticker_intent": sticker_intent,
+            "allow_proactive_stickers": context.allow_proactive_stickers,
+        }
+        if "conversation_id" in inspect.signature(self.agent_orchestrator.run).parameters:
+            agent_kwargs["conversation_id"] = conversation_id
         agent_result = await self.agent_orchestrator.run(
             clean_user_id,
             clean_message,
             context.messages,
-            conversation_mode=conversation_mode,
-            sticker_intent=sticker_intent,
-            allow_proactive_stickers=context.allow_proactive_stickers,
+            **agent_kwargs,
         )
         logger.info(
             "Chat reply prepared duration_ms=%.1f",

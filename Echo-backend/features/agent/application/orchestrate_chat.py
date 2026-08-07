@@ -55,6 +55,7 @@ class OrchestrateChatWithAgent:
         user_id: str,
         message: str,
         messages: list[dict],
+        conversation_id: str | None = None,
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         allow_proactive_stickers: bool = True,
@@ -107,6 +108,7 @@ class OrchestrateChatWithAgent:
                                 self.executor.execute(
                                     ToolExecutionContext(
                                         user_id=user_id,
+                                        conversation_id=conversation_id,
                                         conversation_mode=conversation_mode,
                                         allow_proactive_stickers=allow_proactive_stickers,
                                         prior_results=tuple(tool_results),

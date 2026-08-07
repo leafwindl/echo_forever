@@ -1,3 +1,4 @@
+import json
 import logging
 from dataclasses import dataclass, field
 
@@ -112,8 +113,14 @@ async def build_chat_context(
         and not postgres_repositories.has_recent_assistant_sticker(
             user_id,
             conversation_id,
-            assistant_turns=4,
+            assistant_turns=settings.sticker_proactive_cooldown_turns,
+            minimum_interval_seconds=settings.sticker_proactive_min_interval_seconds,
         )
+    )
+    conversation_timing = postgres_repositories.get_conversation_timing(
+        user_id,
+        conversation_id,
+        current_message_id=history_before_message_id,
     )
 
     try:
@@ -157,6 +164,19 @@ async def build_chat_context(
             "content": render_turn_focus_guidance(pause_followup_questions),
         }
     )
+    if conversation_timing:
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "以下是服务端计算的对话时间状态，不要机械报时，也不要每次都提时间。"
+                    "active/recent 表示持续对话，不提离开；returned/long_absence 只在轻松闲聊、"
+                    "问候或分享近况时允许自然问候一次，事实问题、任务指令、报错和严肃话题不要插入。\n"
+                    "conversation_timing="
+                    + json.dumps(conversation_timing, ensure_ascii=False)
+                ),
+            }
+        )
     messages.extend(history)
     messages.append({"role": "user", "content": user_message})
 

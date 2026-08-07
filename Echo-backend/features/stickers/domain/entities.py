@@ -13,4 +13,5 @@ class Sticker:
     semantic_tags: tuple[str, ...]
     status: str
     created_at: datetime
+    priority: int = 100
 

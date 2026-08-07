@@ -35,7 +35,16 @@ def list_stickers(
     limit: int = Query(default=50, ge=1, le=100),
 ):
     return StickerListResponse(
-        items=[_response(item) for item in repository.list(current_user.user_id, query, limit)]
+        items=[
+            _response(item)
+            for item in repository.list(
+                current_user.user_id,
+                query,
+                limit,
+                include_echo=False,
+                include_user=True,
+            )
+        ]
     )
 
 

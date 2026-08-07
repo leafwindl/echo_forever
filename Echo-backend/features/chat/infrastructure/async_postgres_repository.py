@@ -245,10 +245,12 @@ class PostgresAsyncChatRepository:
             )
             for row in rows
         )
+        batch_has_text = any(message.content.strip() for message in messages)
         rendered = [
             postgres_repositories._render_message_content(
                 message.content,
                 attachments.get(message.stable_message_id, ()),
+                include_sticker_descriptions=not batch_has_text,
             )
             for message in messages
         ]
@@ -265,9 +267,11 @@ class PostgresAsyncChatRepository:
                 if attachment.get("type") != "sticker":
                     continue
                 metadata = attachment.get("metadata") or {}
-                description = str(metadata.get("description") or "").strip()
                 tags = " ".join(str(tag) for tag in metadata.get("semantic_tags") or [])
-                intent = " ".join(part for part in (description, tags) if part)
+                description = str(metadata.get("description") or "").strip()
+                intent = tags if batch_has_text else " ".join(
+                    part for part in (description, tags) if part
+                )
                 if intent:
                     sticker_intents.append(intent)
 

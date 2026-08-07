@@ -4,7 +4,9 @@
 .idea
 .vscode
 
-assets
+assets/*
+!assets/sticker/
+!assets/sticker/**
 doc
 data
 
