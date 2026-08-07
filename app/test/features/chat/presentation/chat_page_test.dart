@@ -1,5 +1,6 @@
 import 'package:echo_app/core/di/providers.dart';
 import 'package:echo_app/core/storage/secure_store.dart';
+import 'package:echo_app/features/app_update/presentation/app_update_controller.dart';
 import 'package:echo_app/features/chat/data/chat_providers.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/presentation/chat_controller.dart';
@@ -32,6 +33,20 @@ void main() {
 
     expect(find.byKey(const Key('open-letters-button')), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
+  });
+
+  testWidgets('shows only the public app version beside the title', (
+    tester,
+  ) async {
+    await _pumpChat(
+      tester,
+      FakeChatRepository(),
+      installedAppVersion: '1.0.5+10',
+    );
+
+    expect(find.byKey(const Key('app-version-badge')), findsOneWidget);
+    expect(find.text('v1.0.5'), findsOneWidget);
+    expect(find.textContaining('+10'), findsNothing);
   });
 
   testWidgets('restores recent chat and accepts an older page', (tester) async {
@@ -267,6 +282,7 @@ Future<void> _pumpChat(
   FakeChatRepository repository, {
   String preferredName = '',
   int unreadLetterCount = 0,
+  String installedAppVersion = '1.0.5',
   sticker_fakes.FakeStickersRepository? stickerRepository,
 }) async {
   await tester.pumpWidget(
@@ -275,6 +291,9 @@ Future<void> _pumpChat(
         chatRepositoryProvider.overrideWithValue(repository),
         chatPreferredNameProvider.overrideWithValue(preferredName),
         lettersUnreadCountProvider.overrideWithValue(unreadLetterCount),
+        installedAppVersionProvider.overrideWith(
+          (ref) async => installedAppVersion.split('+').first,
+        ),
         if (stickerRepository != null)
           secureStoreProvider.overrideWithValue(
             FakeSessionStore(testSession()),

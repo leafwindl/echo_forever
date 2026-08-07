@@ -64,6 +64,18 @@ final directUpdatePlatformProvider = Provider<DirectUpdatePlatform>((ref) {
   return const MethodChannelDirectUpdatePlatform();
 });
 
+final installedAppVersionProvider = FutureProvider<String?>((ref) async {
+  try {
+    final appInfo = await ref
+        .watch(directUpdatePlatformProvider)
+        .getInstalledAppInfo();
+    final versionName = appInfo.versionName.split('+').first.trim();
+    return versionName.isEmpty ? null : versionName;
+  } on PlatformException {
+    return null;
+  }
+});
+
 final appUpdateClockProvider = Provider<DateTime Function()>((ref) {
   return DateTime.now;
 });

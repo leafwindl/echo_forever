@@ -68,7 +68,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _scheduleScrollForState(state);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Echo'),
+        title: const _ChatTitle(),
         actions: <Widget>[
           IconButton(
             key: const Key('open-letters-button'),
@@ -425,6 +425,36 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ),
       );
     });
+  }
+}
+
+class _ChatTitle extends ConsumerWidget {
+  const _ChatTitle();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final versionName = ref.watch(installedAppVersionProvider).asData?.value;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        const Text('Echo'),
+        if (versionName != null) ...<Widget>[
+          const SizedBox(width: 6),
+          Container(
+            key: const Key('app-version-badge'),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              'v$versionName',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 

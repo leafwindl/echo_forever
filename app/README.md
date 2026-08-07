@@ -1,6 +1,6 @@
 # Echo App 1.0
 
-Echo 的 Flutter 客户端，当前发布目标为 Android APK `1.0.4+9`。客户端按 `core / features / shared` 分层，网络请求和会话由 core 统一管理，各业务模块在自己的 data/domain/presentation 目录内闭合。
+Echo 的 Flutter 客户端，当前发布目标为 Android APK `1.0.5+10`。客户端按 `core / features / shared` 分层，网络请求和会话由 core 统一管理，各业务模块在自己的 data/domain/presentation 目录内闭合。
 
 ## 本地运行
 
@@ -15,7 +15,7 @@ flutter run -d <device> --dart-define=ECHO_BASE_URL=http://localhost:8000
 flutter build apk --release \
   --dart-define=ECHO_ENV=production \
   --dart-define=ECHO_BASE_URL=https://api.echoaiforever.cn \
-  --dart-define=APP_VERSION=1.0.4
+  --dart-define=APP_VERSION=1.0.5
 ```
 
 ## 客户端约定

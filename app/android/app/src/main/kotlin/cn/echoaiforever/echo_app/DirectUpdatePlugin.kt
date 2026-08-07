@@ -163,7 +163,7 @@ class DirectUpdatePlugin(private val activity: MainActivity) : MethodChannel.Met
         destination.delete()
 
         val request = DownloadManager.Request(url)
-            .setTitle("Echo ${meta.versionCode}")
+            .setTitle("Echo")
             .setDescription("正在下载 Echo 更新")
             .setMimeType(APK_MIME_TYPE)
             .setAllowedOverMetered(true)
