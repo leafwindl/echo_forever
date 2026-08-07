@@ -76,11 +76,16 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         CREATE TABLE IF NOT EXISTS chat_messages (
             id BIGSERIAL PRIMARY KEY,
             message_id TEXT UNIQUE,
+            client_message_id TEXT,
             user_id TEXT NOT NULL,
             conversation_id TEXT,
             role TEXT NOT NULL,
             content TEXT NOT NULL,
             message_type TEXT NOT NULL DEFAULT 'text',
+            agent_turn_id TEXT,
+            reply_group_id TEXT,
+            sequence_in_group INTEGER NOT NULL DEFAULT 0,
+            in_reply_to_message_id BIGINT,
             source TEXT,
             status TEXT NOT NULL DEFAULT 'active',
             summarized_at TIMESTAMPTZ,
@@ -88,6 +93,14 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
+        "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS client_message_id TEXT",
+        "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS agent_turn_id TEXT",
+        "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_group_id TEXT",
+        """
+        ALTER TABLE chat_messages
+        ADD COLUMN IF NOT EXISTS sequence_in_group INTEGER NOT NULL DEFAULT 0
+        """,
+        "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS in_reply_to_message_id BIGINT",
         """
         CREATE TABLE IF NOT EXISTS chat_request_results (
             user_id TEXT NOT NULL,
@@ -333,6 +346,34 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS chat_turn_jobs (
+            id BIGSERIAL PRIMARY KEY,
+            turn_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            status VARCHAR(24) NOT NULL DEFAULT 'collecting'
+                CHECK (status IN (
+                    'collecting', 'queued', 'running', 'completed', 'failed', 'cancelled'
+                )),
+            input_first_message_id BIGINT NOT NULL,
+            input_last_message_id BIGINT NOT NULL,
+            message_count INTEGER NOT NULL DEFAULT 1 CHECK (message_count > 0),
+            character_count INTEGER NOT NULL DEFAULT 0 CHECK (character_count >= 0),
+            collect_until TIMESTAMPTZ NOT NULL,
+            collect_deadline TIMESTAMPTZ NOT NULL,
+            attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+            max_attempts INTEGER NOT NULL DEFAULT 2 CHECK (max_attempts > 0),
+            agent_run_id TEXT,
+            reply_group_id TEXT,
+            error_code TEXT,
+            lease_expires_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            started_at TIMESTAMPTZ,
+            completed_at TIMESTAMPTZ
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS app_releases (
             id BIGSERIAL PRIMARY KEY,
             release_id TEXT NOT NULL UNIQUE,
@@ -395,6 +436,28 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         """,
         "CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id)",
         "CREATE INDEX IF NOT EXISTS idx_chat_messages_user_created ON chat_messages(user_id, created_at DESC)",
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_messages_user_client_message
+        ON chat_messages(user_id, client_message_id)
+        WHERE client_message_id IS NOT NULL
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_turn_group
+        ON chat_messages(agent_turn_id, reply_group_id, sequence_in_group)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_chat_turn_jobs_due
+        ON chat_turn_jobs(status, collect_until, id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_chat_turn_jobs_user_conversation
+        ON chat_turn_jobs(user_id, conversation_id, status, id)
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_turn_jobs_one_running
+        ON chat_turn_jobs(conversation_id)
+        WHERE status = 'running'
+        """,
         "CREATE INDEX IF NOT EXISTS idx_user_memories_user_id ON user_memories(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_user_memories_user_status ON user_memories(user_id, status)",
         """

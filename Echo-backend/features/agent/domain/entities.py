@@ -78,6 +78,8 @@ class AgentTurnResult:
     run_id: str = ""
     model_steps: int = 0
     error_code: str | None = None
+    reply_segments: tuple[str, ...] = field(default_factory=tuple)
+    sticker_placement: str = "after_text"
 
 
 @dataclass(frozen=True)

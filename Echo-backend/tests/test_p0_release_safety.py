@@ -3,20 +3,25 @@ import json
 import logging
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 from pydantic import ValidationError
 from starlette.datastructures import UploadFile
-from starlette.requests import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.chat.domain.entities import ChatReplyDeliveryResult
-from features.chat.interface.router import chat_clear, chat_send
-from features.chat.interface.schemas import ChatRequest
+from features.agent.domain.entities import ContentPart
+from features.chat.domain.entities import (
+    ChatAcceptedTurn,
+    ChatHistoryMessage,
+    ChatMessageAcceptance,
+    ChatTurnStatus,
+)
+from features.chat.interface.router import accept_message, chat_clear
+from features.chat.interface.schemas import AsyncChatMessageRequest, ChatRequest
 from features.stickers.domain.entities import Sticker
 from features.system.interface.router import readiness_check
 from features.voice.interface.router import read_upload_with_limit
@@ -46,27 +51,19 @@ class RequestSafetyTests(unittest.IsolatedAsyncioTestCase):
         settings.chat_message_max_chars = 5
         try:
             with self.assertRaises(ValidationError):
-                ChatRequest(user_id="user-a", message="123456")
+                ChatRequest(message="123456")
             with self.assertRaises(ValidationError):
-                ChatRequest(user_id="user-a", message="   ")
+                ChatRequest(message="   ")
         finally:
             settings.chat_message_max_chars = original_limit
 
-    def test_chat_request_accepts_one_sticker_without_text(self):
-        request = ChatRequest(
-            message="",
-            content_parts=[{"type": "sticker", "sticker_id": "stk_wave"}],
-        )
-
-        self.assertEqual(request.content_parts[0].sticker_id, "stk_wave")
+    def test_chat_request_is_call_only(self):
+        request = ChatRequest(message="你好")
+        self.assertEqual(request.mode, "call")
         with self.assertRaises(ValidationError):
-            ChatRequest(
-                message="",
-                mode="call",
-                content_parts=[{"type": "sticker", "sticker_id": "stk_wave"}],
-            )
+            ChatRequest(message="你好", mode="chat")
 
-    async def test_sticker_chat_uses_server_metadata_and_still_generates_reply(self):
+    async def test_async_sticker_message_uses_server_metadata(self):
         sticker = Sticker(
             sticker_id="stk_wave",
             owner_type="user",
@@ -76,11 +73,12 @@ class RequestSafetyTests(unittest.IsolatedAsyncioTestCase):
             description="开心挥手",
             semantic_tags=("开心", "挥手"),
             status="active",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
-        request = ChatRequest(
-            message="",
-            content_parts=[{"type": "sticker", "sticker_id": "stk_wave"}],
+        request = AsyncChatMessageRequest(
+            client_message_id="00000000-0000-4000-8000-000000000001",
+            message_type="sticker",
+            sticker_id="stk_wave",
         )
         with (
             patch("features.chat.interface.router.consume_chat_quota"),
@@ -89,39 +87,59 @@ class RequestSafetyTests(unittest.IsolatedAsyncioTestCase):
                 return_value=sticker,
             ),
             patch(
-                "features.chat.interface.router.send_chat_message",
-                new_callable=AsyncMock,
-                return_value=ChatReplyDeliveryResult(reply="收到啦"),
-            ) as send_message,
+                "features.chat.interface.router.accept_chat_message",
+                return_value=ChatMessageAcceptance(
+                    conversation_id="conv-active",
+                    message=ChatHistoryMessage(
+                        message_id=1,
+                        role="user",
+                        message_type="sticker",
+                        content="",
+                        content_parts=(
+                            ContentPart(
+                                type="sticker",
+                                sticker_id="stk_wave",
+                                url="https://example.test/wave.png",
+                            ),
+                        ),
+                        created_at=datetime.now(UTC),
+                    ),
+                    turn=ChatAcceptedTurn(
+                        turn_id="turn-1",
+                        status=ChatTurnStatus.COLLECTING,
+                    ),
+                ),
+            ) as accept,
         ):
-            http_request = Request(
-                {
-                    "type": "http",
-                    "headers": [(b"x-request-id", b"request-test")],
-                }
-            )
-            result = await chat_send(
+            result = accept_message(
                 request,
-                http_request,
                 CurrentUser(user_id="user-a"),
             )
 
-        self.assertEqual(result.reply, "收到啦")
-        send_message.assert_awaited_once()
-        call = send_message.await_args.kwargs
-        self.assertEqual(call["user_message_type"], "sticker")
-        self.assertEqual(call["sticker_intent"], "开心挥手 开心 挥手")
-        self.assertIn("描述：开心挥手", call["message"])
-        self.assertEqual(call["request_id"], "request-test")
+        self.assertEqual(result.message.message_type, "sticker")
+        accept.assert_called_once()
+        call = accept.call_args.kwargs
+        self.assertEqual(call["message_type"], "sticker")
+        self.assertEqual(call["content_parts"][0].sticker_id, "stk_wave")
 
+    @patch("features.chat.interface.router.get_chat_event_broker")
+    @patch("features.chat.interface.router.list_chat_messages")
     @patch("features.chat.interface.router.clear_chat_context")
-    async def test_user_can_clear_only_authenticated_chat_context(self, clear_context):
+    async def test_user_can_clear_only_authenticated_chat_context(
+        self,
+        clear_context,
+        list_messages,
+        get_broker,
+    ):
         clear_context.return_value.deleted_messages = 7
         clear_context.return_value.reset_conversations = 1
+        list_messages.return_value.conversation_id = "conv-reset"
+        get_broker.return_value.publish = AsyncMock()
 
         result = await chat_clear(CurrentUser(user_id="user-a"))
 
         clear_context.assert_called_once_with("user-a")
+        get_broker.return_value.publish.assert_awaited_once()
         self.assertEqual(result.deleted_messages, 7)
         self.assertEqual(result.reset_conversations, 1)
 

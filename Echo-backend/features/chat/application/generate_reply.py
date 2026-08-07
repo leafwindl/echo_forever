@@ -7,7 +7,12 @@ from features.chat.domain.dialogue_style import (
     apply_dialogue_fallback,
     find_dialogue_style_violations,
 )
-from features.chat.domain.entities import ChatTurnResult, ChatValidationError
+from features.chat.domain.entities import (
+    ChatTurnResult,
+    ChatValidationError,
+    MemoryExtractionScheduleResult,
+    PreparedChatReply,
+)
 from features.chat.domain.repositories import ChatConversationRepository
 from features.chat.domain.services import (
     ChatAgentOrchestrator,
@@ -75,6 +80,8 @@ class GenerateChatReply:
         assistant_message_type: str,
         user_content_parts: tuple[ContentPart, ...],
         assistant_content_parts: tuple[ContentPart, ...],
+        reply_segments: tuple[str, ...] = (),
+        sticker_placement: str = "after_text",
     ) -> ChatTurnResult:
         user_message_id, assistant_message_id = self.conversation_repository.add_chat_turn(
             user_id=clean_user_id,
@@ -87,6 +94,37 @@ class GenerateChatReply:
             assistant_content_parts=assistant_content_parts,
         )
 
+        summary_updated, memory_gate = await self._run_post_persistence(
+            clean_user_id=clean_user_id,
+            clean_message=clean_message,
+            resolved_conversation_id=resolved_conversation_id,
+            reply=reply,
+            source_message_id=user_message_id,
+        )
+
+        return ChatTurnResult(
+            reply=reply,
+            user_message=clean_message,
+            user_message_id=user_message_id,
+            assistant_message_id=assistant_message_id,
+            conversation_id=resolved_conversation_id,
+            summary_updated=summary_updated,
+            memory_extraction_scheduled=memory_gate.should_extract,
+            memory_extraction_gate_reason=memory_gate.reason,
+            memory_extraction_job_id=memory_gate.job_id,
+            reply_segments=reply_segments,
+            sticker_placement=sticker_placement,
+        )
+
+    async def _run_post_persistence(
+        self,
+        *,
+        clean_user_id: str,
+        clean_message: str,
+        resolved_conversation_id: str,
+        reply: str,
+        source_message_id: int,
+    ) -> tuple[bool, MemoryExtractionScheduleResult]:
         summary_updated = False
         if self.summary_update_in_background:
             self._schedule_summary_update(clean_user_id, resolved_conversation_id)
@@ -109,7 +147,7 @@ class GenerateChatReply:
             user_id=clean_user_id,
             user_message=clean_message,
             assistant_reply=reply,
-            source_message_id=user_message_id,
+            source_message_id=source_message_id,
             candidate_user_messages=candidate_user_messages,
             force_batch_review=(user_message_count % 5 == 0),
         )
@@ -118,21 +156,106 @@ class GenerateChatReply:
             relationship_recorded = self.relationship_recorder.record(
                 user_id=clean_user_id,
                 user_message=clean_message,
-                source_message_id=user_message_id,
+                source_message_id=source_message_id,
             )
             if not relationship_recorded:
                 logger.warning("Relationship turn recording skipped for user_id=%s", clean_user_id)
 
-        return ChatTurnResult(
+        return summary_updated, memory_gate
+
+    async def finalize_persisted_turn(
+        self,
+        *,
+        user_id: str,
+        conversation_id: str,
+        user_message: str,
+        assistant_reply: str,
+        source_message_id: int,
+    ) -> None:
+        await self._run_post_persistence(
+            clean_user_id=user_id,
+            clean_message=user_message,
+            resolved_conversation_id=conversation_id,
+            reply=assistant_reply,
+            source_message_id=source_message_id,
+        )
+
+    async def prepare(
+        self,
+        *,
+        user_id: str,
+        message: str,
+        conversation_id: str,
+        conversation_mode: str = "chat",
+        sticker_intent: str = "",
+        history_before_message_id: int | None = None,
+    ) -> PreparedChatReply:
+        clean_user_id = user_id.strip()
+        clean_message = message.strip()
+        if not clean_user_id:
+            raise ChatValidationError("Missing user_id")
+        if not clean_message:
+            raise ChatValidationError("Empty message")
+
+        context_started_at = time.perf_counter()
+        if history_before_message_id is None:
+            context = await self.context_provider.build_context(
+                clean_user_id,
+                clean_message,
+                conversation_id,
+                conversation_mode,
+            )
+        else:
+            context = await self.context_provider.build_context(
+                clean_user_id,
+                clean_message,
+                conversation_id,
+                conversation_mode,
+                history_before_message_id=history_before_message_id,
+            )
+        if self.agent_orchestrator is None:
+            raise RuntimeError("Unified Agent runtime is not configured")
+        agent_result = await self.agent_orchestrator.run(
+            clean_user_id,
+            clean_message,
+            context.messages,
+            conversation_mode=conversation_mode,
+            sticker_intent=sticker_intent,
+            allow_proactive_stickers=context.allow_proactive_stickers,
+        )
+        logger.info(
+            "Chat reply prepared duration_ms=%.1f",
+            (time.perf_counter() - context_started_at) * 1000,
+        )
+        segments = tuple(
+            segment.strip()
+            for segment in agent_result.reply_segments
+            if segment.strip()
+        )
+        if not segments and agent_result.reply_text.strip():
+            segments = (agent_result.reply_text.strip(),)
+        reply = "\n".join(segments)
+        style_violations = find_dialogue_style_violations(
+            reply,
+            clean_message,
+            pause_followup_questions=context.pause_followup_questions,
+        )
+        if style_violations:
+            logger.warning(
+                "Dialogue style fallback applied violation_types=%s",
+                ",".join(style_violations),
+            )
+            reply = apply_dialogue_fallback(reply, clean_message, style_violations)
+            segments = (reply,) if reply else ()
+        assistant_content_parts = () if conversation_mode == "call" else agent_result.content_parts
+        return PreparedChatReply(
             reply=reply,
-            user_message=clean_message,
-            user_message_id=user_message_id,
-            assistant_message_id=assistant_message_id,
-            conversation_id=resolved_conversation_id,
-            summary_updated=summary_updated,
-            memory_extraction_scheduled=memory_gate.should_extract,
-            memory_extraction_gate_reason=memory_gate.reason,
-            memory_extraction_job_id=memory_gate.job_id,
+            reply_segments=segments,
+            sources=agent_result.sources,
+            content_parts=assistant_content_parts,
+            sticker_placement=agent_result.sticker_placement,
+            run_id=agent_result.run_id,
+            error_code=agent_result.error_code,
         )
 
     async def execute(
@@ -160,58 +283,33 @@ class GenerateChatReply:
             else self.conversation_repository.get_or_create_active_conversation(clean_user_id)
         )
 
-        context_started_at = time.perf_counter()
-        context = await self.context_provider.build_context(
-            clean_user_id,
-            clean_message,
-            resolved_conversation_id,
-            conversation_mode,
-        )
-        if self.agent_orchestrator is None:
-            raise RuntimeError("Unified Agent runtime is not configured")
-        agent_result = await self.agent_orchestrator.run(
-            clean_user_id,
-            clean_message,
-            context.messages,
+        prepare_started_at = time.perf_counter()
+        prepared = await self.prepare(
+            user_id=clean_user_id,
+            message=clean_message,
+            conversation_id=resolved_conversation_id,
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
-            allow_proactive_stickers=context.allow_proactive_stickers,
         )
-        logger.info(
-            "Chat context completed duration_ms=%.1f",
-            (time.perf_counter() - context_started_at) * 1000,
-        )
-        llm_started_at = time.perf_counter()
-        reply = agent_result.reply_text
-        style_violations = find_dialogue_style_violations(
-            reply,
-            clean_message,
-            pause_followup_questions=context.pause_followup_questions,
-        )
-        if style_violations:
-            logger.warning(
-                "Dialogue style fallback applied violation_types=%s",
-                ",".join(style_violations),
-            )
-            reply = apply_dialogue_fallback(reply, clean_message, style_violations)
-        assistant_content_parts = () if conversation_mode == "call" else agent_result.content_parts
         logger.info(
             "LLM reply generated for user_id=%s text_length=%s duration_ms=%.1f",
             clean_user_id,
-            len(reply),
-            (time.perf_counter() - llm_started_at) * 1000,
+            len(prepared.reply),
+            (time.perf_counter() - prepare_started_at) * 1000,
         )
 
         result = await self._complete_turn(
             clean_user_id=clean_user_id,
             clean_message=clean_message,
             resolved_conversation_id=resolved_conversation_id,
-            reply=reply,
+            reply=prepared.reply,
             user_message_type=user_message_type,
             assistant_message_type=assistant_message_type,
             user_content_parts=user_content_parts,
-            assistant_content_parts=assistant_content_parts,
+            assistant_content_parts=prepared.content_parts,
+            reply_segments=prepared.reply_segments,
+            sticker_placement=prepared.sticker_placement,
         )
-        result.sources = agent_result.sources
-        result.content_parts = assistant_content_parts
+        result.sources = prepared.sources
+        result.content_parts = prepared.content_parts
         return result

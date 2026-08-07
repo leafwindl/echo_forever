@@ -377,6 +377,100 @@ class Settings(BaseSettings):
         ge=1,
         le=10000,
     )
+    chat_async_enabled: bool = Field(
+        default=True,
+        validation_alias="CHAT_ASYNC_ENABLED",
+    )
+    chat_batch_quiet_window_ms: int = Field(
+        default=800,
+        validation_alias="CHAT_BATCH_QUIET_WINDOW_MS",
+        ge=100,
+        le=5000,
+    )
+    chat_batch_max_window_ms: int = Field(
+        default=2500,
+        validation_alias="CHAT_BATCH_MAX_WINDOW_MS",
+        ge=500,
+        le=10000,
+    )
+    chat_batch_max_messages: int = Field(
+        default=8,
+        validation_alias="CHAT_BATCH_MAX_MESSAGES",
+        ge=1,
+        le=50,
+    )
+    chat_batch_max_chars: int = Field(
+        default=6000,
+        validation_alias="CHAT_BATCH_MAX_CHARS",
+        ge=1,
+        le=50000,
+    )
+    chat_queue_max_messages: int = Field(
+        default=20,
+        validation_alias="CHAT_QUEUE_MAX_MESSAGES",
+        ge=1,
+        le=200,
+    )
+    chat_worker_poll_interval_ms: int = Field(
+        default=200,
+        validation_alias="CHAT_WORKER_POLL_INTERVAL_MS",
+        ge=50,
+        le=5000,
+    )
+    chat_turn_lease_seconds: int = Field(
+        default=180,
+        validation_alias="CHAT_TURN_LEASE_SECONDS",
+        ge=30,
+        le=900,
+    )
+    chat_sse_heartbeat_seconds: int = Field(
+        default=15,
+        validation_alias="CHAT_SSE_HEARTBEAT_SECONDS",
+        ge=5,
+        le=60,
+    )
+    chat_typing_base_ms: int = Field(
+        default=600,
+        validation_alias="CHAT_TYPING_BASE_MS",
+        ge=0,
+        le=5000,
+    )
+    chat_typing_per_grapheme_ms: int = Field(
+        default=32,
+        validation_alias="CHAT_TYPING_PER_GRAPHEME_MS",
+        ge=0,
+        le=200,
+    )
+    chat_typing_min_ms: int = Field(
+        default=800,
+        validation_alias="CHAT_TYPING_MIN_MS",
+        ge=0,
+        le=10000,
+    )
+    chat_typing_max_ms: int = Field(
+        default=4800,
+        validation_alias="CHAT_TYPING_MAX_MS",
+        ge=0,
+        le=15000,
+    )
+    chat_typing_extra_max_ms: int = Field(
+        default=2500,
+        validation_alias="CHAT_TYPING_EXTRA_MAX_MS",
+        ge=0,
+        le=10000,
+    )
+    chat_typing_segment_min_ms: int = Field(
+        default=300,
+        validation_alias="CHAT_TYPING_SEGMENT_MIN_MS",
+        ge=0,
+        le=5000,
+    )
+    chat_typing_segment_max_ms: int = Field(
+        default=1600,
+        validation_alias="CHAT_TYPING_SEGMENT_MAX_MS",
+        ge=0,
+        le=10000,
+    )
     chat_rate_limit_requests: int = Field(
         default=10,
         validation_alias="CHAT_RATE_LIMIT_REQUESTS",

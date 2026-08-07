@@ -1,14 +1,14 @@
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from shared.config import settings
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(default="", max_length=10000)
-    mode: Literal["chat", "call"] = "chat"
-    content_parts: list["ChatRequestContentPart"] = Field(default_factory=list, max_length=1)
+    message: str = Field(min_length=1, max_length=10000)
+    mode: Literal["call"] = "call"
 
     @field_validator("message")
     @classmethod
@@ -20,16 +20,32 @@ class ChatRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_content(self):
-        if not self.message.strip() and not self.content_parts:
-            raise ValueError("Message or content_parts must not be empty")
-        if self.content_parts and self.mode != "chat":
-            raise ValueError("Sticker messages are only supported in chat mode")
+        if not self.message.strip():
+            raise ValueError("Message must not be empty")
         return self
 
 
-class ChatRequestContentPart(BaseModel):
-    type: Literal["sticker"]
-    sticker_id: str = Field(min_length=1, max_length=200)
+class AsyncChatMessageRequest(BaseModel):
+    client_message_id: UUID
+    message_type: Literal["text", "sticker"]
+    text: str = Field(default="", max_length=10000)
+    sticker_id: str = Field(default="", max_length=200)
+
+    @model_validator(mode="after")
+    def validate_content(self):
+        clean_text = self.text.strip()
+        clean_sticker_id = self.sticker_id.strip()
+        if self.message_type == "text":
+            if not clean_text:
+                raise ValueError("Text message must not be empty")
+            if clean_sticker_id:
+                raise ValueError("Text message cannot include sticker_id")
+        else:
+            if not clean_sticker_id:
+                raise ValueError("Sticker message requires sticker_id")
+            if clean_text:
+                raise ValueError("Sticker message cannot include text")
+        return self
 
 
 class ChatResponse(BaseModel):
@@ -60,10 +76,17 @@ class ClearChatResponse(BaseModel):
 
 class ChatHistoryMessageResponse(BaseModel):
     message_id: int
+    stable_message_id: str = ""
+    client_message_id: str = ""
     role: Literal["user", "assistant"]
     message_type: str
     content: str
     content_parts: list[ChatContentPart] = Field(default_factory=list)
+    sources: list[ChatSource] = Field(default_factory=list)
+    agent_turn_id: str = ""
+    reply_group_id: str = ""
+    sequence_in_group: int = 0
+    in_reply_to_message_id: int | None = None
     created_at: datetime
 
 
@@ -72,3 +95,16 @@ class ChatHistoryResponse(BaseModel):
     items: list[ChatHistoryMessageResponse] = Field(default_factory=list)
     has_more: bool
     next_before_id: int | None = None
+    next_after_id: int | None = None
+
+
+class ChatAcceptedTurnResponse(BaseModel):
+    turn_id: str
+    status: str
+
+
+class ChatMessageAcceptedResponse(BaseModel):
+    conversation_id: str
+    message: ChatHistoryMessageResponse
+    turn: ChatAcceptedTurnResponse
+    replayed: bool = False

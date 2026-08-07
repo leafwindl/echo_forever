@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from features.assistant_persona.public import get_assistant_persona
 from features.auth.interface.router import router as auth_router
 from features.chat.interface.router import router as chat_router
+from features.chat.public import process_pending_chat_turn_once
 from features.letters.interface.router import router as letters_router
 from features.letters.public import generate_due_letters
 from features.memory.interface.router import router as memory_router
@@ -80,8 +81,22 @@ async def run_sticker_generation_loop() -> None:
         await asyncio.sleep(10)
 
 
+async def run_chat_turn_loop() -> None:
+    idle_delay = settings.chat_worker_poll_interval_ms / 1000
+    while True:
+        try:
+            processed = await process_pending_chat_turn_once()
+        except Exception:
+            logger.warning("Async chat worker failed", exc_info=True)
+            processed = False
+        if not processed:
+            await asyncio.sleep(idle_delay)
+        else:
+            await asyncio.sleep(0)
+
+
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     # Uvicorn installs its handlers after importing the app, so attach the filter again here.
     install_sensitive_data_filter()
     logger.info("Echo Backend 启动中...")
@@ -98,12 +113,15 @@ async def lifespan(app: FastAPI):
     voice_cleanup_task: asyncio.Task[None] | None = None
     daily_letter_task: asyncio.Task[None] | None = None
     sticker_generation_task: asyncio.Task[None] | None = None
+    chat_turn_task: asyncio.Task[None] | None = None
     if settings.voice_cleanup_interval_seconds > 0:
         voice_cleanup_task = asyncio.create_task(run_voice_audio_cleanup_loop())
     if settings.daily_letter_enabled:
         daily_letter_task = asyncio.create_task(run_daily_letter_loop())
     if settings.sticker_generation_enabled:
         sticker_generation_task = asyncio.create_task(run_sticker_generation_loop())
+    if settings.chat_async_enabled:
+        chat_turn_task = asyncio.create_task(run_chat_turn_loop())
 
     try:
         yield
@@ -120,6 +138,10 @@ async def lifespan(app: FastAPI):
             sticker_generation_task.cancel()
             with suppress(asyncio.CancelledError):
                 await sticker_generation_task
+        if chat_turn_task:
+            chat_turn_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await chat_turn_task
         logger.info("Echo Backend 已停止。")
 
 

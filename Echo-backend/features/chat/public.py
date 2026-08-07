@@ -2,15 +2,18 @@ from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
     ChatContextClearResult,
     ChatHistoryPage,
+    ChatMessageAcceptance,
     ChatReplyDeliveryResult,
     ChatRequestInProgressError,
     ChatTurnResult,
     ChatValidationError,
 )
 from features.chat.infrastructure.container import (
+    get_accept_chat_message_use_case,
     get_clear_chat_context_use_case,
     get_generate_chat_reply_use_case,
     get_list_chat_messages_use_case,
+    get_process_pending_chat_turns_use_case,
     get_send_chat_message_use_case,
 )
 
@@ -19,12 +22,39 @@ def clear_chat_context(user_id: str) -> ChatContextClearResult:
     return get_clear_chat_context_use_case().execute(user_id)
 
 
+def accept_chat_message(
+    *,
+    user_id: str,
+    client_message_id: str,
+    message_type: str,
+    text: str = "",
+    content_parts: tuple[ContentPart, ...] = (),
+) -> ChatMessageAcceptance:
+    return get_accept_chat_message_use_case().execute(
+        user_id=user_id,
+        client_message_id=client_message_id,
+        message_type=message_type,
+        text=text,
+        content_parts=content_parts,
+    )
+
+
+async def process_pending_chat_turn_once() -> bool:
+    return await get_process_pending_chat_turns_use_case().run_once()
+
+
 def list_chat_messages(
     user_id: str,
     before_id: int | None = None,
+    after_id: int | None = None,
     limit: int = 10,
 ) -> ChatHistoryPage:
-    return get_list_chat_messages_use_case().execute(user_id, before_id, limit)
+    return get_list_chat_messages_use_case().execute(
+        user_id,
+        before_id=before_id,
+        after_id=after_id,
+        limit=limit,
+    )
 
 
 async def generate_chat_reply(
@@ -74,12 +104,15 @@ async def send_chat_message(
 __all__ = [
     "ChatContextClearResult",
     "ChatHistoryPage",
+    "ChatMessageAcceptance",
     "ChatReplyDeliveryResult",
     "ChatRequestInProgressError",
     "ChatTurnResult",
     "ChatValidationError",
     "clear_chat_context",
+    "accept_chat_message",
     "generate_chat_reply",
     "list_chat_messages",
+    "process_pending_chat_turn_once",
     "send_chat_message",
 ]

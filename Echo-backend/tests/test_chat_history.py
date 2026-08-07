@@ -19,8 +19,8 @@ class FakeChatHistoryRepository:
         self.calls.append(("conversation", user_id))
         return "conv_active"
 
-    def list_messages_page(self, user_id, conversation_id, before_id, limit):
-        self.calls.append(("page", user_id, conversation_id, before_id, limit))
+    def list_messages_page(self, user_id, conversation_id, before_id, after_id, limit):
+        self.calls.append(("page", user_id, conversation_id, before_id, after_id, limit))
         return self.items, self.has_more
 
 
@@ -48,7 +48,10 @@ class ListChatMessagesTests(unittest.TestCase):
         self.assertEqual([item.message_id for item in result.items], [11, 12])
         self.assertTrue(result.has_more)
         self.assertEqual(result.next_before_id, 11)
-        self.assertEqual(repository.calls[-1], ("page", "user-a", "conv_active", None, 10))
+        self.assertEqual(
+            repository.calls[-1],
+            ("page", "user-a", "conv_active", None, None, 10),
+        )
 
     def test_last_page_has_no_next_cursor(self):
         result = ListChatMessages(
@@ -91,9 +94,19 @@ class ChatHistoryInterfaceTests(unittest.TestCase):
             next_before_id=None,
         )
 
-        response = chat_messages(CurrentUser(user_id="user-a"), before_id=None, limit=10)
+        response = chat_messages(
+            CurrentUser(user_id="user-a"),
+            before_id=None,
+            after_id=None,
+            limit=10,
+        )
 
-        list_messages.assert_called_once_with("user-a", before_id=None, limit=10)
+        list_messages.assert_called_once_with(
+            "user-a",
+            before_id=None,
+            after_id=None,
+            limit=10,
+        )
         self.assertEqual(response.items[0].content, "")
         self.assertEqual(response.items[0].content_parts[0].sticker_id, "stk_wave")
 

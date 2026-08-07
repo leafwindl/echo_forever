@@ -7,6 +7,7 @@ import uuid
 from contextlib import suppress
 
 from features.agent.application.execute_tool import ToolExecutor
+from features.agent.domain.delivery import parse_agent_delivery_plan
 from features.agent.domain.entities import (
     AgentModelResponse,
     AgentRunStatus,
@@ -122,16 +123,18 @@ class OrchestrateChatWithAgent:
                         self._collect_delivery(tool_result, content_parts, sources)
                     continue
 
-                reply_text = response.text.strip()
-                if reply_text:
+                delivery_plan = parse_agent_delivery_plan(response.text, conversation_mode)
+                if delivery_plan.text_segments or content_parts:
                     result = AgentTurnResult(
                         status=AgentRunStatus.COMPLETED,
-                        reply_text=reply_text,
+                        reply_text=delivery_plan.reply_text,
                         sources=tuple(sources),
                         content_parts=tuple(content_parts),
                         tool_results=tuple(tool_results),
                         run_id=run_id,
                         model_steps=model_steps,
+                        reply_segments=delivery_plan.text_segments,
+                        sticker_placement=delivery_plan.sticker_placement,
                     )
                     self.repository.finish(run_id, model_steps + tool_call_count)
                     return result
@@ -147,15 +150,18 @@ class OrchestrateChatWithAgent:
             )
             model_steps += 1
             if fallback:
+                delivery_plan = parse_agent_delivery_plan(fallback, conversation_mode)
                 result = AgentTurnResult(
                     status=AgentRunStatus.COMPLETED,
-                    reply_text=fallback,
+                    reply_text=delivery_plan.reply_text,
                     sources=tuple(sources),
                     content_parts=tuple(content_parts),
                     tool_results=tuple(tool_results),
                     run_id=run_id,
                     model_steps=model_steps,
                     error_code=final_error,
+                    reply_segments=delivery_plan.text_segments,
+                    sticker_placement=delivery_plan.sticker_placement,
                 )
                 self.repository.finish(run_id, model_steps + tool_call_count, final_error)
                 return result
@@ -179,6 +185,7 @@ class OrchestrateChatWithAgent:
             run_id=run_id,
             model_steps=model_steps,
             error_code=final_error,
+            reply_segments=(reply_text,),
         )
 
     async def _try_final_response(
@@ -267,6 +274,16 @@ class OrchestrateChatWithAgent:
                 "聊天模式可以响应用户明确的表情包请求，purpose 使用 explicit_request。"
                 "当前处于主动表情包冷却期，不得以 proactive 为 purpose 调用表情包工具。"
             )
+        delivery_rule = ""
+        if conversation_mode == "chat":
+            delivery_rule = (
+                "当你不再调用工具并准备给出最终回复时，只输出一个 JSON 对象："
+                '{"text_segments":["第一条消息","可选第二条消息"],'
+                '"sticker_placement":"after_text"}。text_segments 最多三条，'
+                "每条都要有完整自然语义；普通闲聊可以一条，不要为了分段而分段。"
+                "如果 send_sticker 已成功，可将 sticker_placement 设为 before_text 或 "
+                "after_text；不得在 JSON 中填写 sticker_id 或 URL。不要使用 Markdown 代码块。"
+            )
         instruction = {
             "role": "system",
             "content": (
@@ -277,7 +294,7 @@ class OrchestrateChatWithAgent:
                 "回复，最终文字不得声称不能发送；若失败则不得假装成功。不要向用户解释"
                 "Agent、工具、call id 或内部流程。explicit_request 的 search_stickers 会在"
                 "精确匹配为空时自动返回其他可用候选；拿到候选后直接选择发送，不要反复猜"
-                "测搜索关键词。" + sticker_rule
+                "测搜索关键词。" + sticker_rule + delivery_rule
             ),
         }
         result = [instruction, *messages]

@@ -2,9 +2,15 @@ from typing import Protocol
 
 from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
+    ChatBatchInput,
+    ChatDeliveryPresentation,
     ChatHistoryMessage,
+    ChatMessageAcceptance,
     ChatReplyDeliveryResult,
+    ChatReplyGroup,
     ChatRequestClaim,
+    ChatTurnJob,
+    PreparedChatReply,
 )
 
 
@@ -47,8 +53,45 @@ class ChatHistoryRepository(Protocol):
         user_id: str,
         conversation_id: str,
         before_id: int | None,
+        after_id: int | None,
         limit: int,
     ) -> tuple[tuple[ChatHistoryMessage, ...], bool]: ...
+
+
+class ChatIntakeRepository(Protocol):
+    def accept_message(
+        self,
+        *,
+        user_id: str,
+        client_message_id: str,
+        message_type: str,
+        content: str,
+        content_parts: tuple[ContentPart, ...],
+        quiet_window_ms: int,
+        maximum_window_ms: int,
+        maximum_batch_messages: int,
+        maximum_batch_characters: int,
+        maximum_queued_messages: int,
+    ) -> ChatMessageAcceptance: ...
+
+
+class ChatTurnRepository(Protocol):
+    def claim_due_turn(self, lease_seconds: int) -> ChatTurnJob | None: ...
+
+    def load_batch(self, turn: ChatTurnJob) -> ChatBatchInput: ...
+
+    def complete_turn(
+        self,
+        turn: ChatTurnJob,
+        reply: PreparedChatReply,
+        presentation: ChatDeliveryPresentation,
+    ) -> ChatReplyGroup | None: ...
+
+    def fail_turn(self, turn_id: str, error_code: str) -> bool: ...
+
+    def reschedule_turn(self, turn_id: str, delay_ms: int) -> bool: ...
+
+    def has_running_turn(self, user_id: str, conversation_id: str) -> bool: ...
 
 
 class ChatRequestResultRepository(Protocol):

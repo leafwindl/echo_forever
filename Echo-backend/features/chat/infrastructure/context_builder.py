@@ -86,6 +86,7 @@ async def build_chat_context(
     user_message: str,
     conversation_id: str | None = None,
     conversation_mode: str = "chat",
+    history_before_message_id: int | None = None,
 ) -> ChatContext:
     long_term_memories, memory_retrieval_mode = await _load_long_term_memories(
         user_id,
@@ -103,6 +104,7 @@ async def build_chat_context(
         limit=MAX_HISTORY_MESSAGES,
         conversation_id=conversation_id,
         after_message_id=summary_message_id,
+        before_message_id=history_before_message_id,
     )
     pause_followup_questions = should_pause_followup_questions(history, user_message)
     allow_proactive_stickers = (

@@ -3,7 +3,7 @@ import uuid
 
 from db.postgres_connection import get_connection, transaction
 
-from features.agent.domain.entities import ContentPart
+from features.agent.domain.entities import ContentPart, SourceReference
 from features.auth.public import ensure_user_identity
 
 
@@ -31,34 +31,35 @@ def ensure_conversation(
     return resolved_id
 
 
-def get_or_create_active_conversation(user_id: str) -> str:
-    with transaction() as conn:
-        ensure_user_identity(user_id=user_id, conn=conn)
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT conversation_id
-                FROM conversations
-                WHERE user_id = %s AND status = 'active'
-                ORDER BY updated_at DESC, id DESC
-                LIMIT 1
-                """,
-                (user_id,),
-            )
-            row = cursor.fetchone()
+def get_or_create_active_conversation(user_id: str, conn=None) -> str:
+    if conn is None:
+        with transaction() as tx:
+            return get_or_create_active_conversation(user_id, conn=tx)
 
-            conversation_id = (
-                row["conversation_id"] if row else ensure_conversation(user_id, conn=conn)
-            )
-            cursor.execute(
-                """
-                UPDATE chat_messages
-                SET conversation_id = %s
-                WHERE user_id = %s AND conversation_id IS NULL
-                """,
-                (conversation_id, user_id),
-            )
-        return conversation_id
+    ensure_user_identity(user_id=user_id, conn=conn)
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT conversation_id
+            FROM conversations
+            WHERE user_id = %s AND status = 'active'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        row = cursor.fetchone()
+
+        conversation_id = row["conversation_id"] if row else ensure_conversation(user_id, conn=conn)
+        cursor.execute(
+            """
+            UPDATE chat_messages
+            SET conversation_id = %s
+            WHERE user_id = %s AND conversation_id IS NULL
+            """,
+            (conversation_id, user_id),
+        )
+    return conversation_id
 
 
 def get_conversation_summary(user_id: str, conversation_id: str) -> dict[str, object]:
@@ -138,6 +139,11 @@ def _add_message_record(
     conversation_id: str | None,
     message_type: str,
     conn,
+    client_message_id: str | None = None,
+    agent_turn_id: str | None = None,
+    reply_group_id: str | None = None,
+    sequence_in_group: int = 0,
+    in_reply_to_message_id: int | None = None,
 ) -> tuple[int, str]:
     ensure_user_identity(user_id=user_id, conn=conn)
     message_id = f"msg_{uuid.uuid4().hex}"
@@ -145,12 +151,26 @@ def _add_message_record(
         cursor.execute(
             """
             INSERT INTO chat_messages (
-                message_id, user_id, conversation_id, role, content, message_type
+                message_id, client_message_id, user_id, conversation_id, role,
+                content, message_type, agent_turn_id, reply_group_id,
+                sequence_in_group, in_reply_to_message_id
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (message_id, user_id, conversation_id, role, content, message_type),
+            (
+                message_id,
+                client_message_id,
+                user_id,
+                conversation_id,
+                role,
+                content,
+                message_type,
+                agent_turn_id,
+                reply_group_id,
+                sequence_in_group,
+                in_reply_to_message_id,
+            ),
         )
         inserted_row = cursor.fetchone()
         if conversation_id:
@@ -305,6 +325,17 @@ def clear_context(user_id: str) -> tuple[int, int]:
     with transaction() as conn, conn.cursor() as cursor:
         cursor.execute(
             """
+            UPDATE chat_turn_jobs
+            SET status = 'cancelled', lease_expires_at = NULL,
+                completed_at = NOW(), updated_at = NOW(),
+                error_code = 'conversation_cleared'
+            WHERE user_id = %s
+              AND status IN ('collecting', 'queued', 'running')
+            """,
+            (user_id,),
+        )
+        cursor.execute(
+            """
                 DELETE FROM chat_message_attachments
                 WHERE user_id = %s
                    OR message_id IN (
@@ -336,35 +367,47 @@ def get_history(
     limit: int = 20,
     conversation_id: str | None = None,
     after_message_id: int = 0,
+    before_message_id: int | None = None,
 ) -> list[dict[str, str]]:
     with get_connection() as conn:
         with conn.cursor() as cursor:
+            before_clause = "AND id < %s" if before_message_id is not None else ""
             if conversation_id:
+                params: list[object] = [user_id, conversation_id, after_message_id]
+                if before_message_id is not None:
+                    params.append(before_message_id)
+                params.append(limit)
                 cursor.execute(
-                    """
+                    f"""
                     SELECT message_id, role, content
                     FROM chat_messages
                     WHERE user_id = %s
                       AND conversation_id = %s
                       AND id > %s
+                      {before_clause}
                       AND status = 'active'
                     ORDER BY id DESC
                     LIMIT %s
                     """,
-                    (user_id, conversation_id, after_message_id, limit),
+                    params,
                 )
             else:
+                params = [user_id, after_message_id]
+                if before_message_id is not None:
+                    params.append(before_message_id)
+                params.append(limit)
                 cursor.execute(
-                    """
+                    f"""
                     SELECT message_id, role, content
                     FROM chat_messages
                     WHERE user_id = %s
                       AND id > %s
+                      {before_clause}
                       AND status = 'active'
                     ORDER BY id DESC
                     LIMIT %s
                     """,
-                    (user_id, after_message_id, limit),
+                    params,
                 )
             rows = cursor.fetchall()
         attachments = _load_message_attachments(
@@ -429,26 +472,34 @@ def list_messages_page(
     user_id: str,
     conversation_id: str,
     before_id: int | None,
+    after_id: int | None,
     limit: int,
 ) -> tuple[list[dict[str, object]], bool]:
     params: list[object] = [user_id, conversation_id]
-    before_clause = ""
+    cursor_clause = ""
+    order_direction = "DESC"
     if before_id is not None:
-        before_clause = "AND id < %s"
+        cursor_clause = "AND id < %s"
         params.append(before_id)
+    elif after_id is not None:
+        cursor_clause = "AND id > %s"
+        order_direction = "ASC"
+        params.append(after_id)
     params.append(limit + 1)
 
     with get_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
                 f"""
-                SELECT id, message_id, role, content, message_type, created_at
+                SELECT id, message_id, client_message_id, role, content,
+                       message_type, agent_turn_id, reply_group_id,
+                       sequence_in_group, in_reply_to_message_id, created_at
                 FROM chat_messages
                 WHERE user_id = %s
                   AND conversation_id = %s
                   AND status = 'active'
-                  {before_clause}
-                ORDER BY id DESC
+                  {cursor_clause}
+                ORDER BY id {order_direction}
                 LIMIT %s
                 """,
                 params,
@@ -461,16 +512,30 @@ def list_messages_page(
             [str(row["message_id"] or "") for row in page_rows],
         )
 
-    page_rows.reverse()
+    if after_id is None:
+        page_rows.reverse()
     return (
         [
             {
                 "message_id": int(row["id"]),
+                "stable_message_id": str(row["message_id"] or ""),
+                "client_message_id": str(row["client_message_id"] or ""),
                 "role": str(row["role"]),
                 "content": "" if row["message_type"] == "sticker" else str(row["content"]),
                 "message_type": str(row["message_type"]),
                 "content_parts": _history_content_parts(
                     attachments.get(str(row["message_id"] or ""), ())
+                ),
+                "sources": _history_sources(
+                    attachments.get(str(row["message_id"] or ""), ())
+                ),
+                "agent_turn_id": str(row["agent_turn_id"] or ""),
+                "reply_group_id": str(row["reply_group_id"] or ""),
+                "sequence_in_group": int(row["sequence_in_group"] or 0),
+                "in_reply_to_message_id": (
+                    int(row["in_reply_to_message_id"])
+                    if row["in_reply_to_message_id"] is not None
+                    else None
                 ),
                 "created_at": row["created_at"],
             }
@@ -561,6 +626,64 @@ def _history_content_parts(
             )
         )
     return tuple(parts)
+
+
+def _history_sources(
+    attachments: tuple[dict[str, object], ...],
+) -> tuple[SourceReference, ...]:
+    sources: list[SourceReference] = []
+    for attachment in attachments:
+        if attachment.get("type") != "source":
+            continue
+        metadata = attachment.get("metadata") or {}
+        sources.append(
+            SourceReference(
+                title=str(metadata.get("title") or "来源"),
+                url=str(metadata.get("url") or ""),
+                snippet=str(metadata.get("snippet") or ""),
+                published_at=(
+                    str(metadata.get("published_at"))
+                    if metadata.get("published_at")
+                    else None
+                ),
+            )
+        )
+    return tuple(sources)
+
+
+def _add_source_attachments(
+    conn,
+    user_id: str,
+    message_id: str,
+    sources: tuple[SourceReference, ...],
+    position_offset: int = 0,
+) -> None:
+    if not sources:
+        return
+    with conn.cursor() as cursor:
+        for index, source in enumerate(sources, start=position_offset):
+            metadata = {
+                "title": source.title,
+                "url": source.url,
+                "snippet": source.snippet,
+                "published_at": source.published_at,
+            }
+            cursor.execute(
+                """
+                INSERT INTO chat_message_attachments (
+                    attachment_id, message_id, user_id, attachment_type,
+                    resource_id, position, metadata
+                ) VALUES (%s, %s, %s, 'source', %s, %s, %s::jsonb)
+                """,
+                (
+                    f"att_{uuid.uuid4().hex}",
+                    message_id,
+                    user_id,
+                    source.url,
+                    index,
+                    json.dumps(metadata, ensure_ascii=False),
+                ),
+            )
 
 
 def _render_message_content(

@@ -140,12 +140,14 @@ class ChatHistoryRepositoryAdapter(ChatHistoryRepository):
         user_id: str,
         conversation_id: str,
         before_id: int | None,
+        after_id: int | None,
         limit: int,
     ) -> tuple[tuple[ChatHistoryMessage, ...], bool]:
         rows, has_more = postgres_repositories.list_messages_page(
             user_id,
             conversation_id,
             before_id,
+            after_id,
             limit,
         )
         return (
@@ -220,12 +222,14 @@ class ChatContextProviderAdapter(ChatContextProvider):
         user_message: str,
         conversation_id: str,
         conversation_mode: str,
+        history_before_message_id: int | None = None,
     ) -> ChatContext:
         context = await build_chat_context(
             user_id,
             user_message,
             conversation_id=conversation_id,
             conversation_mode=conversation_mode,
+            history_before_message_id=history_before_message_id,
         )
         return ChatContext(
             messages=context.messages,

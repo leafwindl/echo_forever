@@ -1,28 +1,41 @@
 # Chat Feature
 
-Chat 负责一轮完整对话：构建上下文、调用 LLM、保存消息、更新摘要、调度记忆和关系事件，并在电话模式请求 TTS。
+Chat 负责两条明确分离的交付链路：异步文字聊天与同步语音通话。两条链路复用同一个统一 Agent、会话上下文、记忆、关系和执行门禁，但不复用 HTTP 交付协议。
 
-## 契约
+## 文字聊天
+
+```text
+POST /chat/messages
+  -> 立即持久化用户文字或表情包
+  -> 创建或追加 Chat Turn
+  -> 返回 202 ACK
+  -> Worker 串行运行统一 Agent
+  -> 持久化一至三条文字和最多一张表情包
+  -> GET /chat/events 通过 SSE 交付 typing 和 Reply Group
+```
+
+- APP 可在 Echo 处理期间继续发送文字或表情包。
+- `client_message_id` 提供单条消息幂等与失败重试。
+- `GET /chat/messages?before_id=...` 加载更早历史。
+- `GET /chat/messages?after_id=...` 为 SSE 重连补齐遗漏消息。
+- Echo 文字与表情包分别保存和展示。
+
+## 语音通话
 
 `POST /chat/send` 只接受：
 
 ```json
-{"message": "你好", "mode": "chat"}
+{"message": "你好", "mode": "call"}
 ```
 
-- `mode=chat`：即时通讯文字表达，消息类型为 `text`，不合成语音。
-- `mode=call`：口语化短句表达，消息类型为 `voice_asr` / `voice_reply`，返回 `audio_urls`。
+- 同步运行统一 Agent，并返回 `reply` 与 `audio_urls`。
+- 用户消息类型为 `voice_asr`，Echo 消息类型为 `voice_reply`。
+- 通话模式不允许发送或回复表情包。
+- 不支持 `/chat/send mode=chat`，也不维护旧 APK 文字聊天兼容层。
+
+## 共同约束
+
 - 用户身份只来自 Bearer Token。
-- 响应不包含旧的单值 `audio_url`，也没有 SSE 聊天接口。
-
-## 流程
-
-1. Interface 校验请求、鉴权和限流。
-2. Application 串行保护同一用户的一轮请求。
-3. Context Builder 按安全、产品人格、自然对话、渠道、关系、用户偏好、长期记忆、摘要、历史的顺序组装上下文。
-4. LLM 生成完整回复；自然度规则失败时只重写一次。
-5. 同一事务语义中保存用户和 Echo 消息。
-6. 更新会话摘要，调度记忆抽取并记录关系信号。
-7. 电话模式调用 Voice；TTS 失败时仍返回已保存的文字。
-
-Application 仅依赖 Domain Protocol。PostgreSQL、模型 Provider 和其它 feature 均由 Infrastructure 适配。
+- 同一用户的文字 Worker 与同步通话不能并行运行 Agent。
+- 摘要、长期记忆和关系信号在回复持久化后更新。
+- Application 只依赖 Domain Protocol；PostgreSQL、模型 Provider 和其他 feature 由 Infrastructure 适配。

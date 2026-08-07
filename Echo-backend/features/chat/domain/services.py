@@ -11,6 +11,7 @@ class ChatContextProvider(Protocol):
         user_message: str,
         conversation_id: str,
         conversation_mode: str,
+        history_before_message_id: int | None = None,
     ) -> ChatContext: ...
 
 
