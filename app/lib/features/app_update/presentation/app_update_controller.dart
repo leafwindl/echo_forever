@@ -74,7 +74,7 @@ final appUpdateControllerProvider =
     );
 
 class AppUpdateController extends Notifier<AppUpdateState> {
-  static const _automaticCheckInterval = Duration(hours: 24);
+  static const automaticCheckInterval = Duration(minutes: 5);
   static const _downloadPollInterval = Duration(milliseconds: 750);
   static const _maximumDownloadPolls = 2400;
   static const _expectedPackageName = 'cn.echoaiforever.echo_app';
@@ -83,6 +83,7 @@ class AppUpdateController extends Notifier<AppUpdateState> {
   bool _initialized = false;
   bool _disposed = false;
   int _operationId = 0;
+  int? _dismissedReleaseVersionCode;
 
   @override
   AppUpdateState build() {
@@ -100,7 +101,9 @@ class AppUpdateController extends Notifier<AppUpdateState> {
   }
 
   Future<UpdateCheckResult> checkForUpdate({required bool manual}) async {
-    if (state.isBusy) return UpdateCheckResult.skipped;
+    if (state.isBusy || (!manual && state.release != null)) {
+      return UpdateCheckResult.skipped;
+    }
     final preferences = ref.read(preferencesStoreProvider);
     final now = ref.read(appUpdateClockProvider)();
     if (!manual && await _checkedRecently(preferences, now)) {
@@ -128,6 +131,11 @@ class AppUpdateController extends Notifier<AppUpdateState> {
         return UpdateCheckResult.upToDate;
       }
       _validateRelease(release, appInfo);
+      if (!manual && _dismissedReleaseVersionCode == release.versionCode) {
+        state = const AppUpdateState();
+        return UpdateCheckResult.upToDate;
+      }
+      _dismissedReleaseVersionCode = null;
       state = AppUpdateState(
         phase: AppUpdatePhase.available,
         release: release,
@@ -215,6 +223,7 @@ class AppUpdateController extends Notifier<AppUpdateState> {
 
   void dismiss() {
     if (state.release?.mandatory == true || state.isBusy) return;
+    _dismissedReleaseVersionCode = state.release?.versionCode;
     _operationId += 1;
     state = const AppUpdateState();
   }
@@ -284,7 +293,7 @@ class AppUpdateController extends Notifier<AppUpdateState> {
     );
     final previous = DateTime.tryParse(raw ?? '');
     if (previous == null) return false;
-    return now.toUtc().isBefore(previous.toUtc().add(_automaticCheckInterval));
+    return now.toUtc().isBefore(previous.toUtc().add(automaticCheckInterval));
   }
 
   void _validateInstalledApp(InstalledAppInfo appInfo) {

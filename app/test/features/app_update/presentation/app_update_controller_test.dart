@@ -10,11 +10,11 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../../support/fake_preferences_store.dart';
 
 void main() {
-  test('automatic check is skipped for 24 hours', () async {
+  test('automatic check is skipped within the five-minute window', () async {
     final now = DateTime.utc(2026, 8, 6, 10);
     final preferences = FakePreferencesStore(<String, Object?>{
       StorageKeys.appUpdateLastAutomaticCheck: now
-          .subtract(const Duration(hours: 2))
+          .subtract(const Duration(minutes: 2))
           .toIso8601String(),
     });
     final platform = FakeDirectUpdatePlatform();
@@ -34,6 +34,32 @@ void main() {
     expect(platform.appInfoCalls, 0);
   });
 
+  test('automatic check resumes after the five-minute window', () async {
+    final now = DateTime.utc(2026, 8, 6, 10);
+    final preferences = FakePreferencesStore(<String, Object?>{
+      StorageKeys.appUpdateLastAutomaticCheck: now
+          .subtract(AppUpdateController.automaticCheckInterval)
+          .toIso8601String(),
+    });
+    final platform = FakeDirectUpdatePlatform();
+    final api = FakeAppUpdateApi();
+    final container = _container(
+      api: api,
+      platform: platform,
+      preferences: preferences,
+      now: now,
+    );
+    addTearDown(container.dispose);
+
+    final result = await container
+        .read(appUpdateControllerProvider.notifier)
+        .checkForUpdate(manual: false);
+
+    expect(result, UpdateCheckResult.upToDate);
+    expect(platform.appInfoCalls, 1);
+    expect(api.latestCalls, 1);
+  });
+
   test('manual check exposes a validated newer release', () async {
     final api = FakeAppUpdateApi(release: releaseFixture());
     final container = _container(api: api);
@@ -48,6 +74,26 @@ void main() {
     expect(state.phase, AppUpdatePhase.available);
     expect(state.release?.versionCode, 3);
   });
+
+  test(
+    'automatic checks do not reopen a release dismissed in this session',
+    () async {
+      final api = FakeAppUpdateApi(release: releaseFixture());
+      final container = _container(api: api);
+      addTearDown(container.dispose);
+      final controller = container.read(appUpdateControllerProvider.notifier);
+
+      await controller.checkForUpdate(manual: true);
+      controller.dismiss();
+
+      final automaticResult = await controller.checkForUpdate(manual: false);
+      expect(automaticResult, UpdateCheckResult.upToDate);
+      expect(container.read(appUpdateControllerProvider).release, isNull);
+
+      final manualResult = await controller.checkForUpdate(manual: true);
+      expect(manualResult, UpdateCheckResult.available);
+    },
+  );
 
   test(
     'requests permission then downloads, verifies and opens installer',

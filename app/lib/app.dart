@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:echo_app/core/auth_session/session_controller.dart';
+import 'package:echo_app/core/lifecycle/app_lifecycle_observer.dart';
 import 'package:echo_app/core/routing/app_router.dart';
 import 'package:echo_app/core/theme/app_theme.dart';
 import 'package:echo_app/features/app_update/presentation/app_update_controller.dart';
@@ -22,10 +23,42 @@ class EchoApp extends ConsumerStatefulWidget {
 }
 
 class _EchoAppState extends ConsumerState<EchoApp> {
+  Timer? _appUpdateTimer;
+  late final AppLifecycleObserver _lifecycleObserver;
+
   @override
   void initState() {
     super.initState();
-    unawaited(ref.read(appUpdateControllerProvider.notifier).initialize());
+    _lifecycleObserver = AppLifecycleObserver(_onAppLifecycleChanged);
+    WidgetsBinding.instance.addObserver(_lifecycleObserver);
+    final appUpdates = ref.read(appUpdateControllerProvider.notifier);
+    unawaited(appUpdates.initialize());
+    _appUpdateTimer = Timer.periodic(
+      AppUpdateController.automaticCheckInterval,
+      (_) => _checkForUpdateInBackground(),
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(_lifecycleObserver);
+    _appUpdateTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onAppLifecycleChanged(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkForUpdateInBackground();
+    }
+  }
+
+  void _checkForUpdateInBackground() {
+    if (!mounted) return;
+    unawaited(
+      ref
+          .read(appUpdateControllerProvider.notifier)
+          .checkForUpdate(manual: false),
+    );
   }
 
   @override
