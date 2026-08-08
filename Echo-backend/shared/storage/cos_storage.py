@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from qcloud_cos import CosConfig, CosS3Client
 
@@ -227,10 +227,28 @@ class CosObjectStorage:
 
         return iterator()
 
-    def download_url(self, relative_key: str, expires_seconds: int | None = None) -> str:
+    def download_url(
+        self,
+        relative_key: str,
+        expires_seconds: int | None = None,
+        *,
+        download_name: str | None = None,
+    ) -> str:
         object_key = self.object_key(relative_key)
+        response_params: dict[str, str] = {}
+        if download_name is not None:
+            candidate = download_name.strip()
+            if not candidate or not re.fullmatch(r"[A-Za-z0-9._-]+", candidate):
+                raise ValueError("COS download filename contains unsafe characters")
+            response_params["response-content-disposition"] = (
+                f'attachment; filename="{candidate}"'
+            )
         if not self.config.private_read:
-            return self.client.get_object_url(Bucket=self.bucket, Key=object_key)
+            url = self.client.get_object_url(Bucket=self.bucket, Key=object_key)
+            if not response_params:
+                return url
+            separator = "&" if "?" in url else "?"
+            return f"{url}{separator}{urlencode(response_params)}"
         expires = (
             self.config.signed_url_expires_seconds if expires_seconds is None else expires_seconds
         )
@@ -241,6 +259,7 @@ class CosObjectStorage:
             Key=object_key,
             Method="GET",
             Expired=expires,
+            Params=response_params,
         )
 
 

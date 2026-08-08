@@ -154,6 +154,33 @@ class CosObjectStorageTests(unittest.TestCase):
         self.assertEqual(url, "https://example.test/signed")
         self.assertEqual(client.calls[-1][1]["Expired"], 300)
 
+    def test_private_download_can_override_the_response_filename(self):
+        client = FakeCosClient()
+        storage = CosObjectStorage(storage_config(private_read=True), client=client)
+
+        storage.download_url(
+            "releases/echo.apk",
+            expires_seconds=300,
+            download_name="Echo-v1.0.6.apk",
+        )
+
+        self.assertEqual(
+            client.calls[-1][1]["Params"],
+            {
+                "response-content-disposition": (
+                    'attachment; filename="Echo-v1.0.6.apk"'
+                )
+            },
+        )
+
+    def test_download_filename_rejects_unsafe_characters(self):
+        storage = CosObjectStorage(storage_config(private_read=True), client=FakeCosClient())
+        with self.assertRaises(ValueError):
+            storage.download_url(
+                "releases/echo.apk",
+                download_name='Echo-v1.0.6\r\nunsafe.apk',
+            )
+
     def test_private_bucket_rejects_zero_expiration(self):
         storage = CosObjectStorage(storage_config(private_read=True), client=FakeCosClient())
         with self.assertRaises(ValueError):
@@ -164,6 +191,18 @@ class CosObjectStorageTests(unittest.TestCase):
         storage = CosObjectStorage(storage_config(private_read=False), client=client)
         url = storage.download_url("letters/letter-1.webp")
         self.assertEqual(url, "https://example.test/public")
+
+    def test_public_download_can_override_the_response_filename(self):
+        storage = CosObjectStorage(
+            storage_config(private_read=False),
+            client=FakeCosClient(),
+        )
+        url = storage.download_url(
+            "releases/echo.apk",
+            download_name="Echo-v1.0.6.apk",
+        )
+        self.assertIn("response-content-disposition=", url)
+        self.assertIn("Echo-v1.0.6.apk", url)
 
     def test_stream_bytes_closes_the_cos_response(self):
         client = FakeCosClient()

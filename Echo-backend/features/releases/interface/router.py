@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
@@ -92,6 +93,13 @@ def _artifact_url(request: Request, release_id: str) -> str:
     )
 
 
+def _download_filename(release: AppRelease) -> str:
+    version = re.sub(r"[^0-9A-Za-z._-]+", "-", release.version_name).strip(".-_")
+    if not version:
+        version = str(release.version_code)
+    return f"Echo-v{version}.apk"
+
+
 def _download_url(
     request: Request,
     release: AppRelease,
@@ -102,6 +110,7 @@ def _download_url(
         return storage.download_url(
             release.cos_object_key,
             expires_seconds=expires_seconds,
+            download_name=_download_filename(release),
         )
     return _artifact_url(request, release.release_id)
 
@@ -177,7 +186,9 @@ def release_artifact(
         media_type="application/vnd.android.package-archive",
         headers={
             "Cache-Control": "private, no-store",
-            "Content-Disposition": 'attachment; filename="Echo.apk"',
+            "Content-Disposition": (
+                f'attachment; filename="{_download_filename(release)}"'
+            ),
             "Content-Length": str(release.size_bytes),
             "X-Content-Type-Options": "nosniff",
         },

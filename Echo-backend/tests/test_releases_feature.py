@@ -64,8 +64,14 @@ class FakeStorage:
     def __init__(self):
         self.calls = []
 
-    def download_url(self, object_key: str, expires_seconds: int) -> str:
-        self.calls.append((object_key, expires_seconds))
+    def download_url(
+        self,
+        object_key: str,
+        expires_seconds: int,
+        *,
+        download_name: str | None = None,
+    ) -> str:
+        self.calls.append((object_key, expires_seconds, download_name))
         return "https://cos.example.test/signed-apk"
 
     def stream_bytes(self, object_key: str):
@@ -152,6 +158,7 @@ class ReleaseFeatureTests(unittest.TestCase):
                 (
                     "echo/releases/android/internal/1.0.0+3/echo.apk",
                     settings.release_download_url_expires_seconds,
+                    "Echo-v1.0.0.apk",
                 )
             ],
         )
@@ -184,7 +191,10 @@ class ReleaseFeatureTests(unittest.TestCase):
             response.headers["content-type"],
             "application/vnd.android.package-archive",
         )
-        self.assertEqual(response.headers["content-disposition"], 'attachment; filename="Echo.apk"')
+        self.assertEqual(
+            response.headers["content-disposition"],
+            'attachment; filename="Echo-v1.0.0.apk"',
+        )
 
     def test_artifact_rejects_an_invalid_signature(self):
         response = self.client.get(
