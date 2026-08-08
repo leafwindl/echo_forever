@@ -3,6 +3,7 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -10,6 +11,8 @@ from features.agent.application.execute_tool import ToolExecutor
 from features.agent.domain.entities import AgentToolCall, AgentToolStatus
 from features.agent.domain.tools import ToolExecutionContext, ToolRegistry
 from features.agent.infrastructure.tools.schedule_tools import register_schedule_tools
+from features.proactive_chat.application.worker import ProcessProactiveChatJobs
+from features.proactive_chat.domain.entities import ProactiveChatJob
 
 
 class FakeScheduleRepository:
@@ -116,6 +119,53 @@ class ProactiveScheduleToolTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.status, AgentToolStatus.FAILED)
         self.assertEqual(result.error_code, "echo_can_only_create_once")
+
+
+class _DeletedScheduleRepository:
+    def __init__(self):
+        self.job = ProactiveChatJob(
+            job_id="job_deleted",
+            schedule_id="schedule_deleted",
+            user_id="user_a",
+            conversation_id="conversation_a",
+            scheduled_for=datetime(2026, 8, 8, 12, tzinfo=UTC),
+            status="running",
+            attempt_count=1,
+            max_attempts=2,
+        )
+        self.suppressed = []
+
+    def claim_due_job(self, _lease_seconds):
+        return self.job
+
+    def load_job_context(self, _job):
+        return SimpleNamespace(enabled=True), None, "conversation_a"
+
+    def suppress_job(self, job_id, reason):
+        self.suppressed.append((job_id, reason))
+
+
+class ProactiveWorkerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_deleted_schedule_job_is_suppressed_without_generating_reply(self):
+        repository = _DeletedScheduleRepository()
+        reply_generator = SimpleNamespace(prepare=AsyncMock())
+        guard = SimpleNamespace(try_acquire=lambda _user_id: True, release=lambda _user_id: None)
+        broker = SimpleNamespace(publish=AsyncMock())
+        worker = ProcessProactiveChatJobs(
+            repository=repository,
+            reply_generator=reply_generator,
+            request_guard=guard,
+            event_broker=broker,
+            timing_policy=SimpleNamespace(),
+            lease_seconds=30,
+        )
+
+        processed = await worker.run_once()
+
+        self.assertTrue(processed)
+        self.assertEqual(repository.suppressed, [("job_deleted", "schedule_deleted")])
+        reply_generator.prepare.assert_not_awaited()
+        broker.publish.assert_not_awaited()
 
 
 if __name__ == "__main__":

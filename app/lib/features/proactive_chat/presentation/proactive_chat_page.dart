@@ -1,7 +1,9 @@
+import 'package:echo_app/core/routing/route_names.dart';
 import 'package:echo_app/features/proactive_chat/domain/proactive_chat.dart';
 import 'package:echo_app/features/proactive_chat/presentation/proactive_chat_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class ProactiveChatPage extends ConsumerWidget {
   const ProactiveChatPage({super.key});
@@ -16,7 +18,7 @@ class ProactiveChatPage extends ConsumerWidget {
     final preferences = state.preferences;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('主动聊天与提醒'),
+        title: const Text('主动聊天设置'),
         actions: <Widget>[
           IconButton(
             tooltip: '刷新',
@@ -124,23 +126,19 @@ class ProactiveChatPage extends ConsumerWidget {
                   ),
           ),
           const Divider(height: 32),
-          Text('已安排的任务', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          if (state.schedules.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('还没有任务。你可以在聊天里直接说“晚上八点提醒我喝水”。'),
+          ListTile(
+            key: const Key('open-scheduled-tasks'),
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.event_note_rounded),
+            title: const Text('定时任务管理'),
+            subtitle: Text(
+              state.schedules.isEmpty
+                  ? '查看 Echo 提醒和后续问候'
+                  : '${state.schedules.length} 个进行中或暂停的任务',
             ),
-          for (final schedule in state.schedules)
-            _ScheduleTile(
-              schedule: schedule,
-              busy: state.isSaving,
-              onToggle: () => controller.setScheduleStatus(
-                schedule,
-                schedule.isActive ? 'paused' : 'active',
-              ),
-              onDelete: () => controller.deleteSchedule(schedule),
-            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => context.pushNamed(RouteNames.scheduledTasks),
+          ),
           if (state.error != null) ...<Widget>[
             const SizedBox(height: 12),
             Text(
@@ -194,57 +192,4 @@ class ProactiveChatPage extends ConsumerWidget {
     ProactivityLevel.balanced => '至少 6 小时未互动，每天最多 4 次，最小间隔 6 小时。',
     ProactivityLevel.active => '至少 2 小时未互动，每天最多 6 次，最小间隔 2 小时。',
   };
-}
-
-class _ScheduleTile extends StatelessWidget {
-  const _ScheduleTile({
-    required this.schedule,
-    required this.busy,
-    required this.onToggle,
-    required this.onDelete,
-  });
-
-  final ChatSchedule schedule;
-  final bool busy;
-  final VoidCallback onToggle;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final next = schedule.nextRunAt;
-    final date = next == null
-        ? '时间待定'
-        : '${next.year}-${next.month.toString().padLeft(2, '0')}-${next.day.toString().padLeft(2, '0')} '
-              '${next.hour.toString().padLeft(2, '0')}:${next.minute.toString().padLeft(2, '0')}';
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(
-        schedule.displayLabel,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        '$date  ·  ${schedule.isActive ? '进行中' : schedule.status}',
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          IconButton(
-            tooltip: schedule.isActive ? '暂停' : '恢复',
-            onPressed: busy || schedule.status == 'cancelled' ? null : onToggle,
-            icon: Icon(
-              schedule.isActive
-                  ? Icons.pause_rounded
-                  : Icons.play_arrow_rounded,
-            ),
-          ),
-          IconButton(
-            tooltip: '删除',
-            onPressed: busy ? null : onDelete,
-            icon: const Icon(Icons.delete_outline_rounded),
-          ),
-        ],
-      ),
-    );
-  }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 Future<bool> showConfirmActionSheet(
   BuildContext context, {
   required String title,
+  String? message,
   required String actionLabel,
 }) async {
   return await showModalBottomSheet<bool>(
@@ -14,6 +15,14 @@ Future<bool> showConfirmActionSheet(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Text(title, style: Theme.of(context).textTheme.titleLarge),
+                if (message != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(true),

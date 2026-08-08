@@ -1,5 +1,12 @@
 # Echo production deployment
 
+## Current production
+
+- API: `https://api.echoaiforever.cn`
+- APK download: `https://download.echoaiforever.cn`
+- Repository: `/opt/echo/app`
+- Current release: Android `1.0.7+12`, backend branch `master`
+
 ## Server layout
 
 - Repository: `/opt/echo/app`
@@ -17,8 +24,8 @@ Required production overrides:
 
 ```dotenv
 PUBLIC_BASE_URL=https://api.echoaiforever.cn
-APP_VERSION=1.0.0
-BUILD_REVISION=unknown
+APP_VERSION=1.0.7
+BUILD_REVISION=<deployed-git-revision>
 
 ENABLE_API_DOCS=false
 
@@ -73,7 +80,11 @@ Build the production APK from `app/`:
 flutter build apk --release --no-pub `
   --dart-define=ECHO_ENV=production `
   --dart-define=ECHO_BASE_URL=https://api.echoaiforever.cn `
-  --dart-define=APP_VERSION=1.0.0
+  --dart-define=APP_VERSION=1.0.7
 ```
 
 The APK is written to `app/build/app/outputs/flutter-apk/app-release.apk`.
+
+The server does not build Android APKs. Build the signed APK on the development workstation,
+upload it to COS, and register the release metadata in the production database with
+`scripts/publish_android_release.py`. The server only pulls Git code and runs the backend.

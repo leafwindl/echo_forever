@@ -163,12 +163,36 @@ class PostgresProactiveChatRepository:
         return _preference(row)
 
     def list_schedules(self, user_id: str) -> tuple[ChatSchedule, ...]:
-        with get_connection() as conn, conn.cursor() as cursor:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                DELETE FROM chat_schedules schedule
+                WHERE schedule.user_id = %s
+                  AND (
+                    schedule.status IN ('cancelled', 'completed')
+                    OR (
+                      schedule.schedule_type = 'once'
+                      AND schedule.next_run_at < NOW() - CASE
+                        WHEN schedule.created_by = 'user_request'
+                          THEN INTERVAL '30 minutes'
+                        ELSE INTERVAL '60 minutes'
+                      END
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM proactive_chat_jobs job
+                        WHERE job.schedule_id = schedule.schedule_id
+                          AND job.status IN ('pending', 'retry_wait', 'running')
+                      )
+                    )
+                  )
+                """,
+                (user_id,),
+            )
             cursor.execute(
                 """
                 SELECT * FROM chat_schedules
-                WHERE user_id = %s
-                ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END,
+                WHERE user_id = %s AND status IN ('active', 'paused')
+                ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END,
                          next_run_at ASC, id ASC
                 """,
                 (user_id,),
@@ -316,8 +340,32 @@ class PostgresProactiveChatRepository:
         return _schedule(row)
 
     def delete_schedule(self, user_id: str, schedule_id: str) -> bool:
-        result = self.update_schedule(user_id, schedule_id, status="cancelled")
-        return result is not None
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT schedule_id FROM chat_schedules
+                WHERE user_id = %s AND schedule_id = %s
+                FOR UPDATE
+                """,
+                (user_id, schedule_id),
+            )
+            if cursor.fetchone() is None:
+                return False
+            cursor.execute(
+                """
+                UPDATE proactive_chat_jobs
+                SET status = 'suppressed', error_code = 'schedule_deleted',
+                    lease_expires_at = NULL, updated_at = NOW()
+                WHERE schedule_id = %s
+                  AND status IN ('pending', 'retry_wait', 'running')
+                """,
+                (schedule_id,),
+            )
+            cursor.execute(
+                "DELETE FROM chat_schedules WHERE user_id = %s AND schedule_id = %s",
+                (user_id, schedule_id),
+            )
+        return True
 
     def claim_due_job(self, lease_seconds: int) -> ProactiveChatJob | None:
         with transaction() as conn, conn.cursor() as cursor:
@@ -469,6 +517,14 @@ class PostgresProactiveChatRepository:
                     """,
                     (error_code[:120], job.job_id),
                 )
+                if job.schedule_id:
+                    cursor.execute(
+                        """
+                        DELETE FROM chat_schedules
+                        WHERE schedule_id = %s AND schedule_type = 'once'
+                        """,
+                        (job.schedule_id,),
+                    )
             else:
                 cursor.execute(
                     """
@@ -498,6 +554,28 @@ class PostgresProactiveChatRepository:
         sequence = 0
         with transaction() as conn:
             ensure_user_identity(user_id=job.user_id, conn=conn)
+            cursor = conn.cursor()
+            if schedule is not None:
+                cursor.execute(
+                    """
+                    SELECT status FROM chat_schedules
+                    WHERE user_id = %s AND schedule_id = %s
+                    FOR UPDATE
+                    """,
+                    (job.user_id, schedule.schedule_id),
+                )
+                current_schedule = cursor.fetchone()
+                if current_schedule is None or str(current_schedule["status"]) != "active":
+                    cursor.execute(
+                        """
+                        UPDATE proactive_chat_jobs
+                        SET status = 'suppressed', error_code = 'schedule_inactive',
+                            lease_expires_at = NULL, updated_at = NOW()
+                        WHERE job_id = %s
+                        """,
+                        (job.job_id,),
+                    )
+                    return []
 
             def insert_message(
                 content: str, message_type: str, parts: tuple[ContentPart, ...]
@@ -558,7 +636,6 @@ class PostgresProactiveChatRepository:
             first_message_id = str(messages[0]["stable_message_id"])
             body = "\n".join(reply_segments).strip() if preference.notification_preview else ""
             notification_id = f"notification_{uuid.uuid4().hex}"
-            cursor = conn.cursor()
             cursor.execute(
                 """
                 INSERT INTO notification_outbox (
@@ -686,13 +763,8 @@ class PostgresProactiveChatRepository:
     def _advance_schedule(self, cursor, schedule: ChatSchedule, now: datetime) -> None:
         if schedule.schedule_type == "once":
             cursor.execute(
-                """
-                UPDATE chat_schedules
-                SET status = 'completed', run_count = run_count + 1, last_run_at = %s,
-                    updated_at = NOW()
-                WHERE schedule_id = %s
-                """,
-                (now, schedule.schedule_id),
+                "DELETE FROM chat_schedules WHERE schedule_id = %s",
+                (schedule.schedule_id,),
             )
             return
         delta = timedelta(days=1 if schedule.schedule_type == "daily" else 7)

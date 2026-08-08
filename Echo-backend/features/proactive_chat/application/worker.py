@@ -47,6 +47,9 @@ class ProcessProactiveChatJobs:
 
         try:
             preference, schedule, conversation_id = self.repository.load_job_context(job)
+            if job.schedule_id is not None and schedule is None:
+                self.repository.suppress_job(job.job_id, "schedule_deleted")
+                return True
             if schedule is not None and schedule.status != "active":
                 self.repository.suppress_job(job.job_id, "schedule_inactive")
                 return True
@@ -123,6 +126,8 @@ class ProcessProactiveChatJobs:
                 sticker_placement=prepared.sticker_placement,
                 agent_turn_id=prepared.run_id,
             )
+            if not messages:
+                return True
             await self.event_broker.publish(
                 job.user_id,
                 ChatEvent(

@@ -14,4 +14,5 @@ class RouteNames {
   static const stickers = 'stickers';
   static const notificationSettings = 'notification-settings';
   static const proactiveChatSettings = 'proactive-chat-settings';
+  static const scheduledTasks = 'scheduled-tasks';
 }

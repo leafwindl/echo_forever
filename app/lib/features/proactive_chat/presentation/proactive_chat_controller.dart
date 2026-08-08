@@ -105,7 +105,15 @@ class ProactiveChatController extends AsyncNotifier<ProactiveChatState> {
       await ref
           .read(proactiveChatApiProvider)
           .deleteSchedule(schedule.scheduleId);
-      await refresh();
+      state = AsyncData(
+        current.copyWith(
+          schedules: current.schedules
+              .where((item) => item.scheduleId != schedule.scheduleId)
+              .toList(growable: false),
+          isSaving: false,
+          clearError: true,
+        ),
+      );
     } on Object catch (error) {
       state = AsyncData(
         current.copyWith(isSaving: false, error: _asAppException(error)),

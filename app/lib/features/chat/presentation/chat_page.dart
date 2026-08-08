@@ -24,6 +24,7 @@ enum _ChatMenuAction {
   stickers,
   notificationSettings,
   proactiveChatSettings,
+  scheduledTasks,
   appUpdate,
   clearContext,
   logout,
@@ -114,7 +115,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ),
               PopupMenuItem<_ChatMenuAction>(
                 value: _ChatMenuAction.proactiveChatSettings,
-                child: Text('主动聊天与提醒'),
+                child: Text('主动聊天设置'),
+              ),
+              PopupMenuItem<_ChatMenuAction>(
+                value: _ChatMenuAction.scheduledTasks,
+                child: Text('定时任务'),
               ),
               PopupMenuItem<_ChatMenuAction>(
                 value: _ChatMenuAction.appUpdate,
@@ -237,6 +242,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         unawaited(context.pushNamed(RouteNames.notificationSettings));
       case _ChatMenuAction.proactiveChatSettings:
         unawaited(context.pushNamed(RouteNames.proactiveChatSettings));
+      case _ChatMenuAction.scheduledTasks:
+        unawaited(context.pushNamed(RouteNames.scheduledTasks));
       case _ChatMenuAction.appUpdate:
         await _checkForUpdate();
       case _ChatMenuAction.clearContext:
