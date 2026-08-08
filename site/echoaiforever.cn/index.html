@@ -3,111 +3,672 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Echo AI</title>
-  <meta name="description" content="Echo AI 伴侣服务页" />
+  <meta name="theme-color" content="#f7f4ef" />
+  <title>Echo | 会记得，也会主动找你的 AI 陪伴</title>
+  <meta name="description" content="Echo 是一个有连续记忆、理解语境、也会在你允许的范围内主动联系你的 AI 陪伴应用。" />
+  <meta property="og:title" content="Echo | 会记得，也会主动找你的 AI 陪伴" />
+  <meta property="og:description" content="从一句聊天，到一次提醒、一段语音和一张刚好合适的表情包。" />
+  <meta property="og:image" content="assets/echo-portrait.jpg" />
+  <link rel="icon" type="image/jpeg" href="assets/echo-portrait.jpg" />
+  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     :root {
       color-scheme: light;
-      --text: #202124;
-      --muted: #646a73;
-      --line: #e7e8ec;
-      --accent: #d94f70;
-      --bg: #fbfbfd;
+      --paper: #f7f4ef;
+      --paper-deep: #eee9e1;
+      --white: #fffdf9;
+      --ink: #17232f;
+      --muted: #68727d;
+      --faint: #a3a9af;
+      --line: #ddd9d1;
+      --coral: #e8715b;
+      --coral-deep: #c95745;
+      --sky: #dfeef0;
+      --blue: #377a9d;
+      --butter: #f1d490;
+      --lavender: #e6e2f0;
+      --green: #4e8b73;
+      --radius: 8px;
+      --shadow: 0 22px 60px rgba(35, 42, 51, 0.12);
     }
 
-    * {
-      box-sizing: border-box;
-    }
-
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-      font-family:
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        "Microsoft YaHei",
-        sans-serif;
+      min-width: 320px;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
+    img { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button { font: inherit; }
 
-    main {
-      min-height: calc(100vh - 72px);
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(221, 217, 209, .88);
+      background: rgba(247, 244, 239, .93);
+      backdrop-filter: blur(16px);
+    }
+    .nav-inner {
+      width: min(1180px, calc(100% - 40px));
+      min-height: 74px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand { display: inline-flex; align-items: center; gap: 11px; font-weight: 760; letter-spacing: .02em; }
+    .brand-avatar {
+      width: 34px;
+      height: 34px;
+      overflow: hidden;
+      border: 2px solid var(--white);
+      border-radius: 50%;
+      box-shadow: 0 3px 10px rgba(23, 35, 47, .16);
+      background: var(--sky);
+    }
+    .brand-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 23%; }
+    .brand-name { font-size: 18px; }
+    .brand-sub { color: var(--muted); font-size: 12px; font-weight: 540; }
+    .nav-links { display: flex; align-items: center; gap: 27px; color: var(--muted); font-size: 13px; }
+    .nav-links a { transition: color .2s ease; }
+    .nav-links a:hover { color: var(--ink); }
+    .nav-version {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(255, 253, 249, .58);
+    }
+    .version-dot, .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(78, 139, 115, .13); }
+
+    main { overflow: hidden; }
+    .section-wrap { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    .hero {
+      position: relative;
+      min-height: 700px;
       display: grid;
-      place-items: center;
-      padding: 32px 20px;
-      text-align: center;
+      grid-template-columns: minmax(0, .96fr) minmax(460px, 1.04fr);
+      align-items: center;
+      gap: 42px;
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 83px 0 88px;
     }
-
-    .brand {
-      width: min(100%, 560px);
+    .hero:before {
+      content: "";
+      position: absolute;
+      left: -30vw;
+      right: -30vw;
+      top: 0;
+      bottom: 0;
+      z-index: -1;
+      background: #f7f4ef;
     }
-
-    h1 {
-      margin: 0 0 14px;
-      font-size: clamp(32px, 6vw, 52px);
-      line-height: 1.05;
-      font-weight: 720;
+    .hero-copy { max-width: 565px; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 22px;
+      color: var(--coral-deep);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .eyebrow-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--coral); }
+    h1, h2, h3, p { margin: 0; }
+    .hero h1 {
+      max-width: 580px;
+      font-size: 72px;
+      line-height: 1.07;
+      font-weight: 800;
       letter-spacing: 0;
     }
-
-    p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 17px;
-      line-height: 1.7;
-    }
-
-    .mark {
-      display: inline-grid;
-      place-items: center;
-      width: 56px;
-      height: 56px;
-      margin-bottom: 20px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: #fff;
-      color: var(--accent);
-      font-size: 26px;
-      font-weight: 700;
-    }
-
-    footer {
-      min-height: 72px;
-      display: grid;
-      place-items: center;
-      padding: 16px;
-      border-top: 1px solid var(--line);
-      background: #fff;
+    .hero h1 em { color: var(--coral-deep); font-style: normal; }
+    .hero-lede { max-width: 500px; margin-top: 25px; color: #56616c; font-size: 18px; line-height: 1.85; }
+    .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 11px; margin-top: 32px; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 46px;
+      padding: 0 17px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: var(--ink);
+      color: var(--white);
       font-size: 13px;
-      color: var(--muted);
-      text-align: center;
+      font-weight: 720;
+      transition: transform .2s ease, background .2s ease, border-color .2s ease;
     }
+    .button:hover { transform: translateY(-2px); background: #263745; }
+    .button svg { width: 16px; height: 16px; }
+    .button.secondary { border-color: var(--line); background: transparent; color: var(--ink); }
+    .button.secondary:hover { border-color: #b8b1a6; background: var(--white); }
+    .hero-note { display: flex; align-items: center; gap: 8px; margin-top: 19px; color: var(--muted); font-size: 12px; }
+    .hero-note svg { width: 15px; height: 15px; color: var(--green); }
 
-    a {
-      color: inherit;
-      text-decoration: none;
+    .hero-art { position: relative; min-height: 515px; }
+    .hero-art:before, .hero-art:after { content: ""; position: absolute; border: 1px solid rgba(55, 122, 157, .22); pointer-events: none; }
+    .hero-art:before { width: 310px; height: 310px; right: 25px; top: 23px; border-radius: 50%; }
+    .hero-art:after { width: 270px; height: 270px; left: 68px; bottom: 20px; border-radius: 50%; border-color: rgba(232, 113, 91, .22); }
+    .hero-frame {
+      position: absolute;
+      right: 28px;
+      top: 15px;
+      width: min(420px, 74%);
+      height: 485px;
+      overflow: hidden;
+      border: 10px solid rgba(255, 253, 249, .86);
+      border-radius: 210px 210px 20px 20px;
+      background: var(--sky);
+      box-shadow: var(--shadow);
     }
+    .hero-frame img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+    .hero-frame:after { content: ""; position: absolute; inset: 0; background: rgba(22, 34, 45, .035); pointer-events: none; }
+    .presence-badge {
+      position: absolute;
+      top: 76px;
+      left: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 13px;
+      border: 1px solid rgba(221, 217, 209, .9);
+      border-radius: 999px;
+      background: rgba(255, 253, 249, .94);
+      color: var(--ink);
+      box-shadow: 0 10px 26px rgba(23, 35, 47, .11);
+      font-size: 12px;
+      font-weight: 720;
+    }
+    .presence-badge .live-dot { width: 7px; height: 7px; }
+    .chat-preview {
+      position: absolute;
+      right: 0;
+      bottom: 21px;
+      width: 295px;
+      padding: 15px;
+      border: 1px solid rgba(221, 217, 209, .95);
+      border-radius: var(--radius);
+      background: rgba(255, 253, 249, .96);
+      box-shadow: 0 19px 38px rgba(23, 35, 47, .16);
+    }
+    .preview-label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; color: var(--faint); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .preview-label span:last-child { color: var(--green); letter-spacing: 0; text-transform: none; }
+    .preview-msg { display: flex; gap: 8px; margin-top: 10px; font-size: 12px; line-height: 1.55; }
+    .preview-msg.user { justify-content: flex-end; }
+    .preview-bubble { max-width: 208px; padding: 9px 11px; border-radius: 10px; background: var(--paper-deep); }
+    .preview-msg.user .preview-bubble { background: var(--ink); color: var(--white); }
+    .preview-msg.echo .preview-bubble { background: var(--sky); }
+    .preview-avatar { width: 22px; height: 22px; flex: 0 0 22px; overflow: hidden; border-radius: 50%; background: var(--butter); }
+    .preview-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; }
 
-    a:hover {
-      color: var(--accent);
-      text-decoration: underline;
+    .signal-band { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--white); }
+    .signal-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .signal-item { min-height: 112px; display: flex; align-items: center; gap: 14px; padding: 20px 26px; border-right: 1px solid var(--line); }
+    .signal-item:first-child { padding-left: 0; }
+    .signal-item:last-child { border-right: 0; padding-right: 0; }
+    .signal-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: var(--sky); color: var(--blue); }
+    .signal-item:nth-child(2) .signal-icon { background: var(--lavender); color: #685f87; }
+    .signal-item:nth-child(3) .signal-icon { background: #f9e4ce; color: var(--coral-deep); }
+    .signal-icon svg { width: 18px; height: 18px; }
+    .signal-item strong { display: block; font-size: 15px; }
+    .signal-item span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
+
+    .section { padding: 132px 0; }
+    .section-kicker { margin-bottom: 15px; color: var(--coral-deep); font-size: 12px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+    .section-title { max-width: 700px; font-size: 48px; line-height: 1.15; letter-spacing: 0; font-weight: 790; }
+    .section-intro { max-width: 620px; margin-top: 18px; color: var(--muted); font-size: 16px; line-height: 1.8; }
+    .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 36px; margin-bottom: 45px; }
+    .section-head .section-intro { margin-top: 0; max-width: 390px; }
+
+    .demo-shell { overflow: hidden; border: 1px solid #d8dce0; border-radius: var(--radius); background: var(--white); box-shadow: 0 18px 42px rgba(23, 35, 47, .08); }
+    .demo-topline { min-height: 57px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 20px; border-bottom: 1px solid var(--line); }
+    .demo-topline-label { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; font-weight: 720; }
+    .demo-topline-label .live-dot { width: 6px; height: 6px; background: var(--coral); box-shadow: 0 0 0 4px rgba(232, 113, 91, .13); }
+    .plain-action { display: inline-flex; align-items: center; gap: 6px; padding: 7px 0; border: 0; background: transparent; color: var(--coral-deep); cursor: pointer; font-size: 12px; font-weight: 760; }
+    .plain-action svg { width: 15px; height: 15px; }
+    .demo-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); }
+    .demo-chat { min-height: 445px; display: flex; flex-direction: column; padding: 22px; border-right: 1px solid var(--line); background: #fcfbf8; }
+    .demo-chat-head { display: flex; align-items: center; gap: 10px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .demo-avatar { width: 34px; height: 34px; overflow: hidden; border-radius: 50%; background: var(--sky); }
+    .demo-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 23%; }
+    .demo-chat-head strong { display: block; font-size: 14px; }
+    .demo-chat-head span { display: block; margin-top: 2px; color: var(--green); font-size: 11px; }
+    .demo-stream { flex: 1; padding: 24px 7px 12px; }
+    .message { display: flex; gap: 10px; margin: 0 0 20px; opacity: 0; transform: translateY(8px); transition: opacity .35s ease, transform .35s ease; }
+    .message.is-visible { opacity: 1; transform: translateY(0); }
+    .message.user { justify-content: flex-end; }
+    .message.user .message-bubble { order: 1; background: var(--ink); color: var(--white); }
+    .message.echo .message-bubble { background: var(--sky); }
+    .message-bubble { max-width: 72%; padding: 11px 13px; border-radius: 10px; font-size: 13px; line-height: 1.65; }
+    .message-meta { margin-top: 7px; color: var(--faint); font-size: 10px; }
+    .message.user .message-meta { text-align: right; }
+    .message-sticker { width: 95px; height: 95px; margin-top: 8px; overflow: hidden; border-radius: 7px; border: 1px solid rgba(221, 217, 209, .9); background: #fff; }
+    .message-sticker img { width: 100%; height: 100%; object-fit: cover; }
+    .typing { display: inline-flex; align-items: center; gap: 4px; min-height: 27px; padding: 0 10px; border-radius: 999px; background: var(--paper-deep); }
+    .typing i { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); animation: blink 1.1s infinite ease-in-out; }
+    .typing i:nth-child(2) { animation-delay: .16s; }
+    .typing i:nth-child(3) { animation-delay: .32s; }
+    @keyframes blink { 0%, 60%, 100% { opacity: .28; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+    .demo-input { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 45px; padding: 0 11px 0 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); color: var(--faint); font-size: 12px; }
+    .demo-input button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 0; border-radius: 6px; background: var(--coral); color: #fff; cursor: pointer; font-size: 11px; font-weight: 760; }
+    .demo-input button:hover { background: var(--coral-deep); }
+    .demo-input svg { width: 14px; height: 14px; }
+    .demo-side { padding: 27px 26px; background: #f5f8f8; }
+    .side-label { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .timeline { position: relative; margin-top: 24px; }
+    .timeline:before { content: ""; position: absolute; top: 7px; bottom: 7px; left: 5px; width: 1px; background: #cbd7d8; }
+    .timeline-item { position: relative; display: grid; grid-template-columns: 12px 1fr; gap: 13px; min-height: 82px; }
+    .timeline-point { position: relative; z-index: 1; width: 11px; height: 11px; margin-top: 3px; border: 2px solid #f5f8f8; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 1px #a8c4ca; }
+    .timeline-item:nth-child(2) .timeline-point { background: var(--coral); box-shadow: 0 0 0 1px #e5afa2; }
+    .timeline-item:nth-child(3) .timeline-point { background: var(--green); box-shadow: 0 0 0 1px #acd0c0; }
+    .timeline-item strong { display: block; font-size: 13px; }
+    .timeline-item p { margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .timeline-time { display: inline-block; margin-top: 8px; color: var(--faint); font-size: 10px; }
+
+    .feature-section { padding: 138px 0 120px; background: var(--ink); color: var(--white); }
+    .feature-section .section-kicker { color: var(--butter); }
+    .feature-section .section-title { max-width: 780px; }
+    .feature-section .section-intro { color: #b9c4cb; }
+    .feature-list { margin-top: 62px; border-top: 1px solid rgba(255,255,255,.16); }
+    .feature-row { display: grid; grid-template-columns: 80px minmax(220px, .8fr) minmax(250px, 1fr) 190px; gap: 24px; align-items: center; min-height: 145px; border-bottom: 1px solid rgba(255,255,255,.16); }
+    .feature-number { align-self: start; padding-top: 24px; color: #7f919c; font-size: 13px; font-weight: 740; }
+    .feature-main { display: flex; align-items: center; gap: 14px; }
+    .feature-icon { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 42px; border-radius: 50%; color: var(--ink); background: var(--butter); }
+    .feature-row:nth-child(2) .feature-icon { background: var(--sky); color: var(--blue); }
+    .feature-row:nth-child(3) .feature-icon { background: var(--lavender); color: #675b89; }
+    .feature-row:nth-child(4) .feature-icon { background: #f9e4ce; color: var(--coral-deep); }
+    .feature-row:nth-child(5) .feature-icon { background: #d6eadf; color: var(--green); }
+    .feature-row:nth-child(6) .feature-icon { background: #f3d6d4; color: #9e514e; }
+    .feature-icon svg { width: 19px; height: 19px; }
+    .feature-main h3 { font-size: 20px; font-weight: 760; }
+    .feature-main small { display: block; margin-top: 4px; color: #94a4ae; font-size: 11px; }
+    .feature-copy { color: #bcc8cf; font-size: 13px; line-height: 1.75; }
+    .feature-tags { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+    .feature-tags span { padding: 5px 8px; border: 1px solid rgba(255,255,255,.16); border-radius: 999px; color: #cbd5db; font-size: 10px; }
+
+    .control-section { padding: 132px 0; background: #f0ede7; }
+    .control-grid { display: grid; grid-template-columns: minmax(0, .88fr) minmax(440px, 1.12fr); gap: 72px; align-items: center; }
+    .control-copy { max-width: 480px; }
+    .control-copy .section-title { font-size: 45px; }
+    .control-list { margin-top: 31px; display: grid; gap: 13px; }
+    .control-list li { display: flex; align-items: flex-start; gap: 10px; color: #59646e; font-size: 13px; }
+    .control-list svg { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; color: var(--green); }
+    .settings-panel { border: 1px solid #d5d1c8; border-radius: var(--radius); background: var(--white); box-shadow: 0 18px 40px rgba(23, 35, 47, .09); }
+    .settings-head { display: flex; align-items: center; justify-content: space-between; padding: 19px 21px; border-bottom: 1px solid var(--line); }
+    .settings-head strong { font-size: 14px; }
+    .settings-head span { color: var(--muted); font-size: 11px; }
+    .settings-body { padding: 21px; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 58px; border-bottom: 1px solid #ece8e1; }
+    .setting-row:last-child { border-bottom: 0; }
+    .setting-label strong { display: block; font-size: 13px; }
+    .setting-label span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .switch { position: relative; width: 42px; height: 24px; flex: 0 0 42px; border: 0; border-radius: 999px; background: #c9cbc9; cursor: pointer; transition: background .2s ease; }
+    .switch:after { content: ""; position: absolute; top: 4px; left: 4px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .2s ease; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+    .switch[aria-checked="true"] { background: var(--green); }
+    .switch[aria-checked="true"]:after { left: 22px; }
+    .segmented { display: inline-flex; gap: 2px; padding: 3px; border-radius: 7px; background: #eeebe5; }
+    .segmented button { padding: 6px 9px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 10px; }
+    .segmented button[aria-pressed="true"] { background: var(--ink); color: var(--white); }
+    .task-line { position: relative; margin-top: 19px; padding: 14px 15px 14px 41px; border: 1px solid #e2ddd4; border-radius: 7px; background: #fcfaf6; }
+    .task-line:before { content: ""; position: absolute; left: 20px; top: 16px; width: 9px; height: 9px; border: 2px solid var(--coral); border-radius: 50%; background: var(--white); }
+    .task-line:after { content: ""; position: absolute; left: 24px; top: 29px; bottom: -20px; width: 1px; background: #e8c0b7; }
+    .task-line:last-child:after { display: none; }
+    .task-line strong { font-size: 12px; }
+    .task-line p { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .task-line time { display: block; margin-top: 7px; color: var(--coral-deep); font-size: 10px; font-weight: 740; }
+    .task-status { float: right; padding: 3px 6px; border-radius: 999px; background: #e4f0ea; color: var(--green); font-size: 9px; font-weight: 800; }
+
+    .release-section { padding: 130px 0 118px; background: var(--white); }
+    .release-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(390px, 1.05fr); gap: 80px; align-items: start; }
+    .release-card { padding: 25px 27px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+    .release-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+    .release-card h3 { font-size: 30px; font-weight: 790; }
+    .release-card p { margin-top: 6px; color: var(--muted); font-size: 12px; }
+    .release-badge { padding: 7px 9px; border-radius: 999px; background: var(--butter); color: #614e20; font-size: 10px; font-weight: 800; }
+    .release-meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 25px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .release-meta span { display: block; color: var(--muted); font-size: 10px; }
+    .release-meta strong { display: block; margin-top: 3px; font-size: 13px; }
+    .release-foot { display: flex; align-items: center; gap: 9px; margin-top: 22px; color: var(--muted); font-size: 11px; }
+    .release-foot svg { width: 15px; height: 15px; color: var(--green); }
+    .download-modal { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; padding: 20px; background: rgba(23, 35, 47, .56); }
+    .download-modal.is-open { display: grid; }
+    .download-dialog { position: relative; width: min(380px, 100%); padding: 28px 25px 24px; border: 1px solid rgba(221, 217, 209, .95); border-radius: var(--radius); background: var(--white); box-shadow: 0 28px 80px rgba(23, 35, 47, .28); text-align: center; }
+    .download-close { position: absolute; top: 13px; right: 13px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+    .download-close:hover { background: var(--paper-deep); color: var(--ink); }
+    .download-close svg { width: 17px; height: 17px; }
+    .download-kicker { color: var(--coral-deep); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .download-dialog h3 { margin-top: 8px; font-size: 25px; font-weight: 790; }
+    .download-dialog p { margin: 9px auto 0; max-width: 280px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .qr-frame { width: 244px; height: 244px; display: grid; place-items: center; margin: 20px auto 16px; padding: 11px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
+    .qr-frame img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+    .download-direct { display: inline-flex; align-items: center; gap: 7px; color: var(--coral-deep); font-size: 12px; font-weight: 760; }
+    .download-direct:hover { color: var(--ink); }
+    .download-direct svg { width: 15px; height: 15px; }
+    .download-note { margin-top: 12px; color: var(--faint); font-size: 10px; }
+    .faq-list { border-top: 1px solid var(--line); }
+    .faq-item { border-bottom: 1px solid var(--line); }
+    .faq-button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 17px 0; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-size: 13px; font-weight: 730; }
+    .faq-button svg { width: 17px; height: 17px; color: var(--muted); transition: transform .2s ease; }
+    .faq-answer { max-height: 0; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.7; transition: max-height .25s ease, padding .25s ease; }
+    .faq-item.is-open .faq-answer { max-height: 100px; padding: 0 31px 17px 0; }
+    .faq-item.is-open .faq-button svg { transform: rotate(45deg); }
+
+    footer { padding: 25px 0 33px; border-top: 1px solid var(--line); background: var(--paper); }
+    .footer-inner { color: var(--muted); font-size: 11px; }
+    .footer-top { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .footer-brand { display: flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 760; }
+    .footer-brand .brand-avatar { width: 24px; height: 24px; border-width: 1px; }
+    .footer-tagline { color: var(--muted); }
+    .icp-link { display: flex; justify-content: center; margin-top: 17px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); }
+    .icp-link:hover { color: var(--ink); }
+
+    @media (max-width: 920px) {
+      .hero { grid-template-columns: 1fr; padding-top: 72px; }
+      .hero-copy { max-width: 690px; }
+      .hero-art { min-height: 540px; margin-top: 5px; }
+      .hero-frame { left: 50%; right: auto; transform: translateX(-50%); width: min(420px, 65%); }
+      .chat-preview { right: 5%; }
+      .section-head, .control-grid, .release-grid { grid-template-columns: 1fr; display: grid; align-items: start; gap: 25px; }
+      .section-head { margin-bottom: 34px; }
+      .section-head .section-intro { max-width: 560px; }
+      .control-grid, .release-grid { gap: 46px; }
+      .feature-row { grid-template-columns: 56px minmax(200px, .8fr) minmax(230px, 1fr); }
+      .feature-tags { grid-column: 2 / -1; justify-content: flex-start; padding-bottom: 22px; }
+    }
+    @media (max-width: 680px) {
+      .nav-inner, .section-wrap, .hero { width: min(100% - 28px, 560px); }
+      .nav-inner { min-height: 65px; }
+      .nav-links a:not(.nav-version) { display: none; }
+      .brand-sub { display: none; }
+      .hero { min-height: auto; padding: 58px 0 62px; }
+      .hero h1 { font-size: 48px; }
+      .hero-lede { font-size: 15px; line-height: 1.75; }
+      .hero-art { min-height: 420px; }
+      .hero-frame { width: 69%; height: 390px; border-width: 8px; }
+      .hero-art:before { width: 220px; height: 220px; right: 4px; top: 9px; }
+      .hero-art:after { width: 190px; height: 190px; left: 9px; bottom: 8px; }
+      .presence-badge { top: 45px; left: 0; }
+      .chat-preview { right: 0; bottom: 8px; width: 245px; padding: 12px; }
+      .preview-bubble { max-width: 170px; font-size: 11px; }
+      .signal-grid { grid-template-columns: 1fr; }
+      .signal-item, .signal-item:first-child, .signal-item:last-child { min-height: 78px; padding: 14px 0; border-right: 0; border-bottom: 1px solid var(--line); }
+      .signal-item:last-child { border-bottom: 0; }
+      .section, .feature-section, .control-section, .release-section { padding: 84px 0; }
+      .section-title, .control-copy .section-title { font-size: 36px; }
+      .demo-grid { grid-template-columns: 1fr; }
+      .demo-chat { min-height: 420px; border-right: 0; border-bottom: 1px solid var(--line); padding: 17px; }
+      .demo-side { padding: 22px 17px; }
+      .feature-list { margin-top: 42px; }
+      .feature-row { grid-template-columns: 42px minmax(0, 1fr); gap: 13px; padding: 18px 0; }
+      .feature-number { padding-top: 5px; }
+      .feature-main { align-items: flex-start; }
+      .feature-main h3 { font-size: 18px; }
+      .feature-copy { grid-column: 2; }
+      .feature-tags { grid-column: 2; padding-bottom: 0; }
+      .settings-body { padding: 15px; }
+      .setting-row { min-height: 67px; }
+      .release-grid { gap: 35px; }
+      .release-card { padding: 20px; }
+      .footer-top { align-items: flex-start; flex-direction: column; gap: 10px; }
+      .icp-link { justify-content: flex-start; }
     }
   </style>
 </head>
 <body>
+  <header class="site-nav">
+    <div class="nav-inner">
+      <a class="brand" href="#top" aria-label="Echo 首页">
+        <span class="brand-avatar"><img src="assets/echo-portrait.jpg" alt="Echo" /></span>
+        <span class="brand-name">Echo</span>
+        <span class="brand-sub">AI 陪伴</span>
+      </a>
+      <nav class="nav-links" aria-label="页面导航">
+        <a href="#experience">体验</a>
+        <a href="#features">能力</a>
+        <a href="#control">控制权</a>
+        <a href="#release">版本</a>
+        <a class="nav-version" href="#release"><span class="version-dot"></span>v1.0.6</a>
+      </nav>
+    </div>
+  </header>
+
   <main>
-    <section class="brand" aria-labelledby="site-title">
-      <div class="mark" aria-hidden="true">E</div>
-      <h1 id="site-title">Echo AI</h1>
-      <p>服务建设中</p>
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="eyebrow-dot"></span>连续记忆 · 主动陪伴 · v1.0.6</div>
+        <h1>会记得，<br /><em>也会主动找你。</em></h1>
+        <p class="hero-lede">Echo 不是只回答问题的聊天框。它会把每一次对话、每一个提醒和每一段语音，慢慢织成一段有回应的日常。</p>
+        <div class="hero-actions">
+          <a class="button" href="#experience"><i data-lucide="play"></i>看看 Echo 如何陪伴</a>
+          <a class="button secondary" href="#release"><i data-lucide="download"></i>了解最新版本</a>
+        </div>
+        <div class="hero-note"><i data-lucide="shield-check"></i>消息先保存，通知只是回到聊天的入口。</div>
+      </div>
+
+      <div class="hero-art" aria-label="Echo 人物与聊天预览">
+        <div class="hero-frame"><img src="assets/echo-portrait.jpg" alt="Echo 头部与肩部形象" /></div>
+        <div class="presence-badge"><span class="live-dot"></span>Echo 在线 · 正在听你说</div>
+        <div class="chat-preview">
+          <div class="preview-label"><span>刚刚的对话</span><span>已连接</span></div>
+          <div class="preview-msg user"><div class="preview-bubble">我下午要去面试，有点紧张</div></div>
+          <div class="preview-msg echo"><div class="preview-avatar"><img src="assets/echo-portrait.jpg" alt="" /></div><div class="preview-bubble">先深呼吸，你已经准备了很久。结束后告诉我结果，好吗？</div></div>
+          <div class="preview-msg echo"><div class="preview-avatar"><img src="assets/echo-portrait.jpg" alt="" /></div><div class="preview-bubble">今晚 20:00，我再来问问你。</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="signal-band" aria-label="Echo 核心特点">
+      <div class="section-wrap signal-grid">
+        <div class="signal-item"><span class="signal-icon"><i data-lucide="history"></i></span><div><strong>有时间感</strong><span>知道你刚说了什么，也知道你隔了多久回来</span></div></div>
+        <div class="signal-item"><span class="signal-icon"><i data-lucide="brain"></i></span><div><strong>有连续性</strong><span>聊天、摘要、记忆与关系状态分开保存</span></div></div>
+        <div class="signal-item"><span class="signal-icon"><i data-lucide="sparkles"></i></span><div><strong>有行动能力</strong><span>需要时调用时间、表情包和提醒工具</span></div></div>
+      </div>
+    </section>
+
+    <section class="section" id="experience">
+      <div class="section-wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-kicker">01 / A continuous moment</div>
+            <h2 class="section-title">一条消息，继续往下走。</h2>
+          </div>
+          <p class="section-intro">文字会分段到达，表情包独立出现，任务和时间线也在同一段对话里保持可见。</p>
+        </div>
+        <div class="demo-shell">
+          <div class="demo-topline">
+            <div class="demo-topline-label"><span class="live-dot"></span>静态演示 · 自然聊天与后续提醒</div>
+            <button class="plain-action" id="play-demo" type="button"><i data-lucide="rotate-cw"></i>重新播放</button>
+          </div>
+          <div class="demo-grid">
+            <div class="demo-chat">
+              <div class="demo-chat-head"><div class="demo-avatar"><img src="assets/echo-portrait.jpg" alt="Echo" /></div><div><strong>Echo</strong><span>正在陪你聊</span></div></div>
+              <div class="demo-stream" id="demo-stream">
+                <div class="message user is-visible" data-step="1"><div><div class="message-bubble">今天终于把事情做完了。</div><div class="message-meta">你 · 18:42</div></div></div>
+                <div class="message echo" data-step="2"><div><div class="message-bubble">辛苦了。把最后一件事放下的感觉，应该很轻吧？</div><div class="message-meta">Echo · 18:42</div></div></div>
+                <div class="message echo" data-step="3"><div><div class="message-bubble">今晚先好好吃饭，剩下的明天再说。</div><div class="message-meta">Echo · 18:42</div><div class="message-sticker"><img src="assets/sticker-happy.png" alt="开心表情包" /></div></div></div>
+                <div class="message echo" data-step="4"><div><div class="typing" aria-label="Echo 正在输入"><i></i><i></i><i></i></div><div class="message-meta">Echo 正在输入…</div></div></div>
+              </div>
+              <div class="demo-input"><span>继续说点什么…</span><button id="next-message" type="button"><i data-lucide="send"></i>继续发送</button></div>
+            </div>
+            <aside class="demo-side">
+              <div class="side-label">一条消息会如何继续</div>
+              <div class="timeline">
+                <div class="timeline-item"><span class="timeline-point"></span><div><strong>先保留原话</strong><p>消息先写入聊天记录，退出后仍能从最近一页回来。</p><span class="timeline-time">18:42 · 已保存</span></div></div>
+                <div class="timeline-item"><span class="timeline-point"></span><div><strong>再理解上下文</strong><p>Agent 结合对话、摘要、记忆和关系状态组织回复。</p><span class="timeline-time">18:42 · 已交付</span></div></div>
+                <div class="timeline-item"><span class="timeline-point"></span><div><strong>最后留下下一步</strong><p>需要时创建后续提醒，通知只是回到这段聊天的入口。</p><span class="timeline-time">20:00 · 已安排</span></div></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="feature-section" id="features">
+      <div class="section-wrap">
+        <div class="section-kicker">02 / Built for continuity</div>
+        <h2 class="section-title">不是六个按钮，<br />是一条会回应的陪伴链路。</h2>
+        <p class="section-intro">Echo 把聊天、行动和表达放在同一套关系上下文里；每项能力都有边界，也都由你决定何时打开。</p>
+        <div class="feature-list">
+          <article class="feature-row"><div class="feature-number">01</div><div class="feature-main"><span class="feature-icon"><i data-lucide="messages-square"></i></span><div><h3>连续聊天</h3><small>Async chat · SSE delivery</small></div></div><p class="feature-copy">可以连续发消息，不必等上一轮结束。分段回复、历史分页和断线补偿，让聊天保持自然节奏。</p><div class="feature-tags"><span>异步发送</span><span>历史可回溯</span><span>断线补偿</span></div></article>
+          <article class="feature-row"><div class="feature-number">02</div><div class="feature-main"><span class="feature-icon"><i data-lucide="workflow"></i></span><div><h3>Agent 行动</h3><small>Tools before words</small></div></div><p class="feature-copy">需要时间、提醒或表情包时，Agent 先调用对应工具，再把结果组织成一条完整回复。</p><div class="feature-tags"><span>可靠时间</span><span>提醒任务</span><span>可选联网</span></div></article>
+          <article class="feature-row"><div class="feature-number">03</div><div class="feature-main"><span class="feature-icon"><i data-lucide="memory-stick"></i></span><div><h3>记忆与关系</h3><small>Separate, manageable states</small></div></div><p class="feature-copy">原始消息、摘要、长期记忆和关系状态各自保存。你可以查看、删除，也可以把主动联系关掉。</p><div class="feature-tags"><span>长期记忆</span><span>关系阶段</span><span>用户可控</span></div></article>
+          <article class="feature-row"><div class="feature-number">04</div><div class="feature-main"><span class="feature-icon"><i data-lucide="smile-plus"></i></span><div><h3>表情包表达</h3><small>Meaningful, never noisy</small></div></div><p class="feature-copy">你点一下就能发送；Echo 根据语境、标签、优先级和冷却机制，最多选一张刚好合适的表情包。</p><div class="feature-tags"><span>独立消息</span><span>语义检索</span><span>冷却门禁</span></div></article>
+          <article class="feature-row"><div class="feature-number">05</div><div class="feature-main"><span class="feature-icon"><i data-lucide="mic-2"></i></span><div><h3>语音通话</h3><small>PCM ASR · CosyVoice</small></div></div><p class="feature-copy">从录音、实时识别到语音回复，是一条独立的通话流程，不发送表情包，也不触发主动通知。</p><div class="feature-tags"><span>流式识别</span><span>语音播放</span><span>独立链路</span></div></article>
+          <article class="feature-row"><div class="feature-number">06</div><div class="feature-main"><span class="feature-icon"><i data-lucide="bell-ring"></i></span><div><h3>主动联系</h3><small>At your pace</small></div></div><p class="feature-copy">设置频率、时区和安静时段，Echo 在允许的范围内发起自然问候；每个任务都可查看、暂停或取消。</p><div class="feature-tags"><span>一次性</span><span>每日 / 每周</span><span>安静时段</span></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="control-section" id="control">
+      <div class="section-wrap control-grid">
+        <div class="control-copy">
+          <div class="section-kicker">03 / Your boundaries</div>
+          <h2 class="section-title">陪伴可以靠近，<br />边界始终在你手里。</h2>
+          <p class="section-intro">主动联系不是默认打开的打扰。Echo 把频率、安静时段、通知正文和记忆管理都交还给你。</p>
+          <ul class="control-list">
+            <li><i data-lucide="check"></i><span>主动聊天开关与保守 / 平衡 / 主动频率档位</span></li>
+            <li><i data-lucide="check"></i><span>安静时段内不主动创建联系任务</span></li>
+            <li><i data-lucide="check"></i><span>长期记忆支持单条删除和全部清空</span></li>
+            <li><i data-lucide="check"></i><span>通知失败不等于消息丢失，聊天历史才是准绳</span></li>
+          </ul>
+        </div>
+        <div class="settings-panel" aria-label="Echo 设置演示">
+          <div class="settings-head"><strong>主动联系设置</strong><span>演示状态 · 不会修改真实账号</span></div>
+          <div class="settings-body">
+            <div class="setting-row"><div class="setting-label"><strong>允许 Echo 主动聊天</strong><span>仅在你允许的时段联系</span></div><button class="switch" type="button" role="switch" aria-checked="true" aria-label="允许 Echo 主动聊天"></button></div>
+            <div class="setting-row"><div class="setting-label"><strong>联系频率</strong><span>最少 6 小时未互动</span></div><div class="segmented" role="group" aria-label="联系频率"><button type="button" aria-pressed="false">保守</button><button type="button" aria-pressed="true">平衡</button><button type="button" aria-pressed="false">主动</button></div></div>
+            <div class="setting-row"><div class="setting-label"><strong>安静时段</strong><span>22:30 - 08:00</span></div><span class="release-badge">已开启</span></div>
+            <div class="setting-row"><div class="setting-label"><strong>通知正文</strong><span id="notification-copy">隐藏消息内容</span></div><button class="switch" id="notification-switch" type="button" role="switch" aria-checked="false" aria-label="显示通知正文"></button></div>
+            <div class="task-line"><span class="task-status">已安排</span><strong>今晚再问问面试结果</strong><p>Echo 会在允许的时间回到同一段聊天</p><time>今天 20:00 · 一次性任务</time></div>
+            <div class="task-line"><strong>周日早安问候</strong><p>每周一次 · 可随时暂停或取消</p><time>周日 08:30 · 每周任务</time></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="release-section" id="release">
+      <div class="section-wrap release-grid">
+        <div>
+          <div class="section-kicker">04 / Current release</div>
+          <h2 class="section-title">现在的 Echo，<br />已经可以陪你走很远。</h2>
+          <p class="section-intro">展示站只写当前代码已经具备的能力。部分厂商离线推送仍在接入，表情包图片生成也保持默认关闭。</p>
+        </div>
+        <div>
+          <div class="release-card">
+            <div class="release-card-top"><div><h3>v1.0.6</h3><p>Android 测试版 · 当前生产版本</p></div><span class="release-badge">已实现能力</span></div>
+            <div class="release-meta"><div><span>登录方式</span><strong>手机号验证码</strong></div><div><span>聊天交付</span><strong>SSE 实时分段</strong></div><div><span>语音链路</span><strong>PCM + CosyVoice</strong></div><div><span>关系能力</span><strong>记忆与主动联系</strong></div></div>
+            <div class="hero-actions"><a class="button" href="#top"><i data-lucide="arrow-up"></i>回到首页</a><button class="button secondary" id="download-trigger" type="button"><i data-lucide="qr-code"></i>扫码下载测试版</button></div>
+          </div>
+          <div class="faq-list" aria-label="Echo 常见问题">
+            <div class="faq-item is-open"><button class="faq-button" type="button">Echo 和普通聊天机器人有什么不同？<i data-lucide="plus"></i></button><div class="faq-answer">Echo 会结合当前对话、摘要、长期记忆、偏好和关系状态回应，并在你允许的范围内主动联系。</div></div>
+            <div class="faq-item"><button class="faq-button" type="button">我能在 Echo 回复前继续发送消息吗？<i data-lucide="plus"></i></button><div class="faq-answer">可以。文字聊天是异步的，你可以连续发送，服务端会按用户串行处理待完成回合。</div></div>
+            <div class="faq-item"><button class="faq-button" type="button">退出 APP 后，聊天记录还在吗？<i data-lucide="plus"></i></button><div class="faq-answer">还在。重新进入时先显示最近一页，向上滚动可以继续加载更早的历史。</div></div>
+            <div class="faq-item"><button class="faq-button" type="button">语音通话和文字聊天有什么边界？<i data-lucide="plus"></i></button><div class="faq-answer">语音通话是独立流程，不发送表情包、不创建主动聊天任务，也不产生后台通知。</div></div>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
+
   <footer>
-    <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
-      鄂ICP备2026034314号
-    </a>
+    <div class="section-wrap footer-inner">
+      <div class="footer-top"><div class="footer-brand"><span class="brand-avatar"><img src="assets/echo-portrait.jpg" alt="Echo" /></span><span>Echo AI 陪伴应用</span></div><span class="footer-tagline">把每一次回来，都接在上一句之后。</span></div>
+      <a class="icp-link" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鄂ICP备2026034314号</a>
+    </div>
   </footer>
+
+  <div class="download-modal" id="download-modal" hidden>
+    <div class="download-dialog" role="dialog" aria-modal="true" aria-labelledby="download-title">
+      <button class="download-close" id="download-close" type="button" aria-label="关闭二维码"><i data-lucide="x"></i></button>
+      <div class="download-kicker">Android 测试版</div>
+      <h3 id="download-title">扫码下载 Echo</h3>
+      <p>用手机相机或微信扫一扫，获取当前可用的安装包。</p>
+      <div class="qr-frame"><img src="assets/echo-download-qr.png" alt="Echo Android 下载二维码" /></div>
+      <a class="download-direct" href="https://api.echoaiforever.cn/releases/bootstrap/android" target="_blank" rel="noopener noreferrer"><i data-lucide="smartphone"></i>手机端直接下载</a>
+      <div class="download-note">二维码会自动获取最新可用版本</div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    const messages = [...document.querySelectorAll('#demo-stream .message')];
+    let currentStep = 1;
+    function revealStep(step) {
+      const next = messages.find((message) => Number(message.dataset.step) === step);
+      if (next) next.classList.add('is-visible');
+    }
+    function replayDemo() {
+      currentStep = 1;
+      messages.forEach((message) => message.classList.toggle('is-visible', Number(message.dataset.step) === 1));
+      setTimeout(() => { revealStep(2); }, 450);
+      setTimeout(() => { revealStep(3); }, 1050);
+      setTimeout(() => { revealStep(4); }, 1700);
+    }
+    document.querySelector('#play-demo').addEventListener('click', replayDemo);
+    document.querySelector('#next-message').addEventListener('click', () => {
+      if (currentStep < 4) { currentStep += 1; revealStep(currentStep); }
+      else replayDemo();
+    });
+    setTimeout(() => { revealStep(2); }, 650);
+    setTimeout(() => { revealStep(3); }, 1300);
+    setTimeout(() => { revealStep(4); }, 1900);
+
+    document.querySelectorAll('.switch').forEach((switchButton) => {
+      switchButton.addEventListener('click', () => {
+        const active = switchButton.getAttribute('aria-checked') === 'true';
+        switchButton.setAttribute('aria-checked', String(!active));
+        if (switchButton.id === 'notification-switch') {
+          document.querySelector('#notification-copy').textContent = active ? '隐藏消息内容' : '显示消息内容';
+        }
+      });
+    });
+    document.querySelectorAll('.segmented button').forEach((button) => {
+      button.addEventListener('click', () => {
+        button.parentElement.querySelectorAll('button').forEach((item) => item.setAttribute('aria-pressed', 'false'));
+        button.setAttribute('aria-pressed', 'true');
+      });
+    });
+    document.querySelectorAll('.faq-button').forEach((button) => {
+      button.addEventListener('click', () => button.closest('.faq-item').classList.toggle('is-open'));
+    });
+
+    const downloadModal = document.querySelector('#download-modal');
+    const downloadTrigger = document.querySelector('#download-trigger');
+    const downloadClose = document.querySelector('#download-close');
+    function setDownloadModal(open) {
+      downloadModal.hidden = !open;
+      downloadModal.classList.toggle('is-open', open);
+      document.body.style.overflow = open ? 'hidden' : '';
+      if (open) downloadClose.focus();
+    }
+    downloadTrigger.addEventListener('click', () => setDownloadModal(true));
+    downloadClose.addEventListener('click', () => setDownloadModal(false));
+    downloadModal.addEventListener('click', (event) => {
+      if (event.target === downloadModal) setDownloadModal(false);
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !downloadModal.hidden) setDownloadModal(false);
+    });
+  </script>
 </body>
 </html>
