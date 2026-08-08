@@ -6,7 +6,7 @@ class PushApi {
 
   final DioClient _client;
 
-  /// TODO(M5b): Echo-backend does not currently expose this endpoint.
+  /// Registers the current account's Getui CID with Echo-backend.
   Future<void> registerToken({
     required String deviceId,
     required String platform,
@@ -30,7 +30,7 @@ class PushApi {
     );
   }
 
-  /// TODO(M5b): wire this when the backend DELETE contract is available.
+  /// Revokes the current device's push target during sign-out.
   Future<void> unregisterToken(String deviceId) {
     return _client.delete<void>(Endpoints.pushTokenForDevice(deviceId));
   }

@@ -1,8 +1,8 @@
+import 'package:echo_app/features/push/data/getui_push_gateway.dart';
 import 'package:echo_app/features/push/data/push_providers.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class NotificationSettingsPage extends ConsumerWidget {
   const NotificationSettingsPage({super.key});
@@ -13,7 +13,7 @@ class NotificationSettingsPage extends ConsumerWidget {
     final status = state.permission;
     final enabled = state.isEnabled;
     final needsSystemSettings =
-        status == AuthorizationStatus.denied || enabled;
+        status == PushPermissionStatus.denied || enabled;
     return Scaffold(
       appBar: AppBar(title: const Text('通知设置')),
       body: ListView(
@@ -53,17 +53,14 @@ class NotificationSettingsPage extends ConsumerWidget {
     );
   }
 
-  String _statusLabel(AuthorizationStatus? status) => switch (status) {
-    AuthorizationStatus.authorized => '已允许',
-    AuthorizationStatus.provisional => '临时允许',
-    AuthorizationStatus.denied => '已拒绝，可前往系统设置修改',
-    AuthorizationStatus.notDetermined || null => '尚未设置',
+  String _statusLabel(PushPermissionStatus status) => switch (status) {
+    PushPermissionStatus.authorized => '已允许',
+    PushPermissionStatus.denied => '已拒绝，可前往系统设置修改',
+    PushPermissionStatus.unsupported => '当前设备暂不支持',
+    PushPermissionStatus.unknown => '尚未设置',
   };
 
   Future<void> _openSystemSettings() async {
-    await launchUrl(
-      Uri.parse('app-settings:'),
-      mode: LaunchMode.externalApplication,
-    );
+    await openAppSettings();
   }
 }

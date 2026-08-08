@@ -375,6 +375,110 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS proactive_chat_preferences (
+            user_id TEXT PRIMARY KEY,
+            enabled BOOLEAN NOT NULL DEFAULT FALSE,
+            allow_echo_scheduling BOOLEAN NOT NULL DEFAULT TRUE,
+            allow_spontaneous_chat BOOLEAN NOT NULL DEFAULT FALSE,
+            proactivity_level VARCHAR(16) NOT NULL DEFAULT 'balanced'
+                CHECK (proactivity_level IN ('conservative', 'balanced', 'active')),
+            timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',
+            quiet_start TIME NOT NULL DEFAULT '22:30',
+            quiet_end TIME NOT NULL DEFAULT '08:00',
+            explicit_reminder_quiet_policy VARCHAR(16) NOT NULL DEFAULT 'defer'
+                CHECK (explicit_reminder_quiet_policy IN ('honor', 'defer')),
+            notification_preview BOOLEAN NOT NULL DEFAULT FALSE,
+            proactive_count INTEGER NOT NULL DEFAULT 0,
+            window_started_at TIMESTAMPTZ,
+            last_proactive_at TIMESTAMPTZ,
+            consecutive_unanswered INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS chat_schedules (
+            id BIGSERIAL PRIMARY KEY,
+            schedule_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            conversation_id TEXT,
+            created_by VARCHAR(24) NOT NULL
+                CHECK (created_by IN ('user_request', 'echo_agent', 'system_policy')),
+            schedule_type VARCHAR(16) NOT NULL
+                CHECK (schedule_type IN ('once', 'daily', 'weekly')),
+            intent TEXT NOT NULL,
+            user_visible_label TEXT NOT NULL DEFAULT '',
+            timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',
+            next_run_at TIMESTAMPTZ NOT NULL,
+            recurrence_rule JSONB NOT NULL DEFAULT '{}'::jsonb,
+            status VARCHAR(16) NOT NULL DEFAULT 'active'
+                CHECK (status IN ('active', 'paused', 'completed', 'cancelled')),
+            run_count INTEGER NOT NULL DEFAULT 0,
+            max_runs INTEGER,
+            last_run_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS proactive_chat_jobs (
+            id BIGSERIAL PRIMARY KEY,
+            job_id TEXT NOT NULL UNIQUE,
+            schedule_id TEXT,
+            user_id TEXT NOT NULL,
+            conversation_id TEXT,
+            scheduled_for TIMESTAMPTZ NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'running', 'succeeded', 'retry_wait', 'failed', 'suppressed', 'missed')),
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            max_attempts INTEGER NOT NULL DEFAULT 2,
+            lease_expires_at TIMESTAMPTZ,
+            error_code TEXT,
+            message_id TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(schedule_id, scheduled_for)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS push_targets (
+            id BIGSERIAL PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            platform VARCHAR(24) NOT NULL,
+            provider VARCHAR(24) NOT NULL DEFAULT 'getui',
+            token TEXT NOT NULL,
+            app_version TEXT NOT NULL DEFAULT '',
+            environment TEXT NOT NULL DEFAULT '',
+            locale TEXT NOT NULL DEFAULT '',
+            status VARCHAR(16) NOT NULL DEFAULT 'active',
+            last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_success_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(user_id, device_id)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS notification_outbox (
+            id BIGSERIAL PRIMARY KEY,
+            notification_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            message_id TEXT,
+            notification_type VARCHAR(32) NOT NULL,
+            title TEXT NOT NULL DEFAULT 'Echo',
+            body_policy VARCHAR(16) NOT NULL DEFAULT 'hidden',
+            body TEXT NOT NULL DEFAULT '',
+            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            status VARCHAR(16) NOT NULL DEFAULT 'pending',
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_error_code TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS app_releases (
             id BIGSERIAL PRIMARY KEY,
             release_id TEXT NOT NULL UNIQUE,
@@ -459,6 +563,12 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         ON chat_turn_jobs(conversation_id)
         WHERE status = 'running'
         """,
+        "CREATE INDEX IF NOT EXISTS idx_chat_schedules_user_status_next ON chat_schedules(user_id, status, next_run_at)",
+        "CREATE INDEX IF NOT EXISTS idx_proactive_jobs_due ON proactive_chat_jobs(status, scheduled_for, id)",
+        "CREATE INDEX IF NOT EXISTS idx_proactive_jobs_user ON proactive_chat_jobs(user_id, created_at DESC)",
+        "ALTER TABLE push_targets ALTER COLUMN provider SET DEFAULT 'getui'",
+        "CREATE INDEX IF NOT EXISTS idx_push_targets_user_status ON push_targets(user_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_notification_outbox_due ON notification_outbox(status, next_attempt_at, id)",
         "CREATE INDEX IF NOT EXISTS idx_user_memories_user_id ON user_memories(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_user_memories_user_status ON user_memories(user_id, status)",
         """

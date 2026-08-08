@@ -429,6 +429,42 @@ class Settings(BaseSettings):
         ge=5,
         le=60,
     )
+    proactive_chat_enabled: bool = Field(
+        default=True,
+        validation_alias="PROACTIVE_CHAT_ENABLED",
+    )
+    proactive_chat_worker_interval_seconds: int = Field(
+        default=30,
+        validation_alias="PROACTIVE_CHAT_WORKER_INTERVAL_SECONDS",
+        ge=5,
+        le=300,
+    )
+    proactive_chat_job_lease_seconds: int = Field(
+        default=180,
+        validation_alias="PROACTIVE_CHAT_JOB_LEASE_SECONDS",
+        ge=30,
+        le=900,
+    )
+    push_enabled: bool = Field(
+        default=False,
+        validation_alias="PUSH_ENABLED",
+    )
+    getui_app_id: str = Field(default="", validation_alias="GETUI_APP_ID")
+    getui_app_key: str = Field(default="", validation_alias="GETUI_APP_KEY")
+    getui_master_secret: str = Field(
+        default="",
+        validation_alias="GETUI_MASTER_SECRET",
+    )
+    getui_api_base_url: str = Field(
+        default="https://restapi.getui.com/v2",
+        validation_alias="GETUI_API_BASE_URL",
+    )
+    push_worker_interval_seconds: int = Field(
+        default=15,
+        validation_alias="PUSH_WORKER_INTERVAL_SECONDS",
+        ge=5,
+        le=300,
+    )
     chat_followup_text_delay_ms: int = Field(
         default=1200,
         validation_alias="CHAT_FOLLOWUP_TEXT_DELAY_MS",

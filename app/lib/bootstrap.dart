@@ -29,10 +29,13 @@ class _PushBootstrapState extends ConsumerState<_PushBootstrap> {
   }
 
   Future<void> _restoreSessionThenInitializePush() async {
-    // Restore secure session first so the initial FCM token can be registered
-    // for the correct account.
+    // Restore the secure session before Getui starts so the CID is only bound
+    // after the user has accepted the login terms.
     await ref.read(sessionControllerProvider.future);
-    await ref.read(pushControllerProvider.notifier).initialize();
+    final session = ref.read(sessionControllerProvider).asData?.value;
+    if (session?.isAuthenticated ?? false) {
+      await ref.read(pushControllerProvider.notifier).initialize();
+    }
   }
 
   @override

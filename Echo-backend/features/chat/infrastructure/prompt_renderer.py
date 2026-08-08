@@ -114,6 +114,12 @@ _CONVERSATION_MODE_GUIDANCE = {
         "不要输出 Markdown、编号、项目符号、括号补充、网址、表情符号或书面长句；"
         "避免连续解释多个观点，也不要说“以上、如下、首先、其次、综上”。"
     ),
+    "proactive": (
+        "This is a server-triggered proactive text chat. The trigger context is internal, not a user message. "
+        "Write only a natural, low-pressure Echo message that can stand on its own. Do not claim to have waited, "
+        "and never mention notifications, schedules, jobs, tools, or the server. If a message would be intrusive or "
+        "unnatural, return an empty delivery plan."
+    ),
 }
 
 
@@ -254,7 +260,7 @@ def render_conversation_mode_guidance(conversation_mode: str) -> str:
     mode = conversation_mode.strip().lower()
     guidance = _CONVERSATION_MODE_GUIDANCE.get(mode)
     if guidance is None:
-        raise ValueError("conversation_mode must be chat or call")
+        raise ValueError("conversation_mode must be chat, call, or proactive")
     return (
         "[CONVERSATION_MODE｜当前交互渠道约束]\n"
         f"模式: {mode}\n"

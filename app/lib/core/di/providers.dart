@@ -145,7 +145,8 @@ final lettersRepositoryProvider = Provider<LettersRepository>((ref) {
   return LettersRepositoryImpl(ref.watch(lettersApiProvider));
 });
 
-// Initializes Firebase lazily so builds without google-services.json remain usable.
+// Initializes the domestic Getui gateway lazily after the authenticated session
+// has been restored.
 final pushInitializationProvider = FutureProvider<void>((ref) async {
   await ref.read(pushControllerProvider.notifier).initialize();
 });

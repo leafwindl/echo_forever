@@ -122,7 +122,7 @@ async def build_chat_context(
     )
     pause_followup_questions = should_pause_followup_questions(history, user_message)
     allow_proactive_stickers = (
-        conversation_mode == "chat"
+        conversation_mode in {"chat", "proactive"}
         and not postgres_repositories.has_recent_assistant_sticker(
             user_id,
             conversation_id,

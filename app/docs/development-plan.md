@@ -2,6 +2,8 @@
 
 > 本文记录 Flutter 迁移过程中的设计和验收背景。Echo v1.0 已移除旧的 `Web/` 微信小程序目录，本文中关于 `Web/miniprogram`、微信登录和旧音频格式的路径/协议仅用于追溯历史，不应作为当前实现依据。当前业务流程和数据流以仓库根目录 `doc/Echo v1.0 业务流程与数据流.md` 为准。
 
+> 2026-08-08 更新：国内 Android 系统通知已改用个推 CID 与 RestAPI V2；下文遗留的 Firebase/FCM 内容仅保留历史设计背景，当前配置以 `app/GETUI_SETUP.md` 为准。
+
 > 文档状态：开发基线草案  
 > 适用版本：Echo APP v2.0  
 > 目标平台：Android 优先，随后开启 iOS  
@@ -34,7 +36,7 @@ v2.0 的目标如下：
 - 文本聊天、消息来源、表情内容、清除上下文和电话模式。
 - 麦克风采集、WebSocket 流式 ASR、HTTP 整段 ASR 降级、分段音频播放、音频焦点、后台播放与通知栏控制。
 - Persona、关系进度、长期记忆、表情包、Echo 来信和首次个性化引导。
-- APNs、FCM、推送 token 上报、通知点击路由。
+- 国内个推、厂商通道、推送 CID 上报、通知点击路由。
 - 本地安全存储、偏好缓存、测试基础设施、监控埋点和发布验收。
 
 后端范围包括：
@@ -102,7 +104,7 @@ v2.0 的目标如下：
 | 播放 | `just_audio` | 支持 URL/播放列表、预加载、音频焦点协作和低延迟顺序播放 |
 | 后台音频 | `audio_service` | Android 前台服务、通知栏媒体控制及 iOS 后台音频入口，是 APP 相对小程序的核心增量 |
 | 音频会话 | `audio_session` | 统一录音/播放切换、音频焦点、耳机和系统中断处理，避免采播互相抢占 |
-| 推送 | `firebase_core`、`firebase_messaging` | Android 通过 FCM；iOS 由 Firebase Messaging 对接 APNs token/消息回调，Dart 层共享处理入口 |
+| 推送 | `getuiflut`、`permission_handler` | Android 国内使用个推 CID 与厂商通道；iOS 后续单独评估 APNs，Dart 层保留统一通知入口 |
 | 安全存储 | `flutter_secure_storage` | access/refresh token、设备标识等敏感数据使用 Android Keystore 与 iOS Keychain |
 | 轻量偏好 | `shared_preferences` | 保存非敏感、可丢失的 UI 偏好和 schema version；不存 token 或聊天正文 |
 | 权限 | `permission_handler` | 统一麦克风和通知权限查询、申请及跳转系统设置 |
@@ -129,7 +131,7 @@ v2.0 的目标如下：
 
 ### 2.3 平台配置边界
 
-- Android 首期完成 package name、签名占位、网络安全配置、麦克风/通知/前台服务权限、Firebase 配置和音频服务声明。
+- Android 首期完成 package name、签名占位、网络安全配置、麦克风/通知/前台服务权限、个推 AppID 和音频服务声明。
 - iOS 工程随 Flutter 一起保留，但在 Android 一期通过后才配置 bundle ID、证书、APNs key、Background Modes、隐私说明和 TestFlight。
 - `google-services.json`、`GoogleService-Info.plist`、APNs `.p8`、短信服务密钥和后端服务账号均不提交公开仓库；通过 CI secret 与环境注入管理。
 

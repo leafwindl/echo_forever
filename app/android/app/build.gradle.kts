@@ -6,13 +6,18 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val enableFirebase = providers.gradleProperty("echo.enableFirebase").orNull == "true"
-if (enableFirebase) {
-    // 待 Firebase 项目配置后启用：仅在存在 google-services.json 时应用插件。
-    require(file("google-services.json").exists()) {
-        "echo.enableFirebase=true requires android/app/google-services.json"
-    }
-    apply(plugin = "com.google.gms.google-services")
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use(localProperties::load)
+}
+val getuiAppId =
+    providers.gradleProperty("echo.getuiAppId").orNull
+        ?: localProperties.getProperty("echo.getuiAppId")
+        ?: System.getenv("ECHO_GETUI_APP_ID")
+        ?: ""
+require(getuiAppId.isNotBlank()) {
+    "Getui AppID is required. Set echo.getuiAppId in android/local.properties or ECHO_GETUI_APP_ID."
 }
 
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -41,6 +46,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["GETUI_APPID"] = getuiAppId
     }
 
     signingConfigs {
@@ -80,4 +86,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("com.getui:gtsdk:3.3.12.0")
+    implementation("com.getui:gtc:3.2.18.0")
 }

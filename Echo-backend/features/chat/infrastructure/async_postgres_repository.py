@@ -113,6 +113,15 @@ class PostgresAsyncChatRepository:
                 content_parts,
                 position_offset=1 if visible_content else 0,
             )
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE proactive_chat_preferences
+                    SET consecutive_unanswered = 0, updated_at = NOW()
+                    WHERE user_id = %s
+                    """,
+                    (user_id,),
+                )
 
             character_count = len(content)
             turn_id, turn_status = self._append_or_create_turn(

@@ -12,6 +12,7 @@ import 'package:echo_app/features/memory/presentation/memory_page.dart';
 import 'package:echo_app/features/onboarding/presentation/onboarding_page.dart';
 import 'package:echo_app/features/persona/presentation/persona_controller.dart';
 import 'package:echo_app/features/persona/presentation/persona_page.dart';
+import 'package:echo_app/features/proactive_chat/presentation/proactive_chat_page.dart';
 import 'package:echo_app/features/push/presentation/notification_settings_page.dart';
 import 'package:echo_app/features/stickers/presentation/stickers_page.dart';
 import 'package:echo_app/shared/widgets/echo_error_view.dart';
@@ -128,6 +129,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/notification-settings',
         name: RouteNames.notificationSettings,
         builder: (context, state) => const NotificationSettingsPage(),
+      ),
+      GoRoute(
+        path: '/proactive-chat-settings',
+        name: RouteNames.proactiveChatSettings,
+        builder: (context, state) => const ProactiveChatPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

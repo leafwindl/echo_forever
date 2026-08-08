@@ -1,19 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:echo_app/core/auth_session/session_controller.dart';
 import 'package:echo_app/core/di/providers.dart';
 import 'package:echo_app/core/routing/pending_route_store.dart';
+import 'package:echo_app/features/push/data/getui_push_gateway.dart';
 import 'package:echo_app/features/push/data/push_api.dart';
 import 'package:echo_app/features/push/domain/push_notification.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-const _firebaseNotConfigured = 'Firebase 项目尚未配置，FCM 暂不可用';
+const _pushUnavailable = '当前设备暂不支持 Echo 系统通知';
 
 final pushApiProvider = Provider<PushApi>((ref) {
   return PushApi(ref.watch(authenticatedDioClientProvider));
+});
+
+final pushGatewayProvider = Provider<PushGateway>((ref) {
+  return GetuiPushGateway();
 });
 
 final pushControllerProvider = NotifierProvider<PushController, PushState>(
@@ -23,25 +27,23 @@ final pushControllerProvider = NotifierProvider<PushController, PushState>(
 class PushState {
   const PushState({
     this.initialized = false,
-    this.permission,
+    this.permission = PushPermissionStatus.unknown,
     this.error,
     this.pending,
     this.foregroundNotification,
   });
 
   final bool initialized;
-  final AuthorizationStatus? permission;
+  final PushPermissionStatus permission;
   final String? error;
   final PushNotification? pending;
   final PushNotification? foregroundNotification;
 
-  bool get isEnabled =>
-      permission == AuthorizationStatus.authorized ||
-      permission == AuthorizationStatus.provisional;
+  bool get isEnabled => permission == PushPermissionStatus.authorized;
 
   PushState copyWith({
     bool? initialized,
-    AuthorizationStatus? permission,
+    PushPermissionStatus? permission,
     String? error,
     bool clearError = false,
     PushNotification? pending,
@@ -59,36 +61,19 @@ class PushState {
   );
 }
 
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  try {
-    await Firebase.initializeApp();
-  } on Object {
-    // Firebase options are supplied by google-services.json after release setup.
-  }
-}
-
 class PushController extends Notifier<PushState> {
-  StreamSubscription<String>? _tokenSubscription;
-  StreamSubscription<RemoteMessage>? _openedSubscription;
-  StreamSubscription<RemoteMessage>? _messageSubscription;
-  bool _firebaseAvailable = false;
+  String? _clientId;
   String? _lastRegistrationKey;
   final Set<String> _handledClickIds = <String>{};
   final Set<String> _seenForegroundIds = <String>{};
   Future<void>? _initializationFuture;
 
   @override
-  PushState build() {
-    ref.onDispose(() {
-      unawaited(_tokenSubscription?.cancel());
-      unawaited(_openedSubscription?.cancel());
-      unawaited(_messageSubscription?.cancel());
-    });
-    return const PushState();
-  }
+  PushState build() => const PushState();
 
   Future<void> initialize() {
+    final session = ref.read(sessionControllerProvider).asData?.value;
+    if (session?.isAuthenticated != true) return Future<void>.value();
     if (state.initialized) return Future<void>.value();
     final running = _initializationFuture;
     if (running != null) return running;
@@ -99,53 +84,47 @@ class PushController extends Notifier<PushState> {
 
   Future<void> _initialize() async {
     try {
-      await Firebase.initializeApp();
-      _firebaseAvailable = true;
+      final gateway = ref.read(pushGatewayProvider);
+      final permission = await gateway.initialize(
+        PushGatewayCallbacks(
+          onClientId: _registerClientId,
+          onNotificationArrived: _handleForegroundEvent,
+          onNotificationClicked: _handleClickedEvent,
+          onPayload: _handleForegroundEvent,
+        ),
+      );
+      state = state.copyWith(
+        initialized: true,
+        permission: permission,
+        error: permission == PushPermissionStatus.unsupported
+            ? _pushUnavailable
+            : null,
+        clearError: permission != PushPermissionStatus.unsupported,
+      );
+      _clientId = await gateway.clientId();
+      if (_clientId != null) await _registerClientId(_clientId!);
     } on Object {
-      state = state.copyWith(initialized: true, error: _firebaseNotConfigured);
-      return;
-    }
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    final messaging = FirebaseMessaging.instance;
-    _tokenSubscription = messaging.onTokenRefresh.listen(_registerToken);
-    _messageSubscription = FirebaseMessaging.onMessage.listen(
-      (message) => _handleForegroundMessage(message),
-    );
-    _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
-      (message) => handleMessage(message.data),
-    );
-    final initial = await messaging.getInitialMessage();
-    if (initial != null) {
-      handleMessage(initial.data);
-    }
-    final settings = await messaging.getNotificationSettings();
-    state = state.copyWith(
-      initialized: true,
-      permission: settings.authorizationStatus,
-    );
-    final session = ref.read(sessionControllerProvider).asData?.value;
-    if (session?.isAuthenticated ?? false) {
-      final token = await messaging.getToken();
-      if (token != null) await _registerToken(token);
+      state = state.copyWith(initialized: true, error: _pushUnavailable);
     }
   }
 
   Future<void> requestPermission() async {
-    if (!_firebaseAvailable) {
-      await initialize();
-      if (!_firebaseAvailable) return;
-    }
-    final settings = await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-    state = state.copyWith(permission: settings.authorizationStatus);
-    if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-        settings.authorizationStatus == AuthorizationStatus.provisional) {
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) await _registerToken(token);
+    await initialize();
+    if (!state.initialized) return;
+    try {
+      final permission = await ref.read(pushGatewayProvider).requestPermission();
+      state = state.copyWith(
+        permission: permission,
+        error: permission == PushPermissionStatus.unsupported
+            ? _pushUnavailable
+            : null,
+        clearError: permission != PushPermissionStatus.unsupported,
+      );
+      if (permission == PushPermissionStatus.authorized) {
+        await registerCurrentToken();
+      }
+    } on Object {
+      state = state.copyWith(error: '通知权限请求失败，请前往系统设置重试');
     }
   }
 
@@ -164,31 +143,14 @@ class PushController extends Notifier<PushState> {
         .remember(notification.navigationLocation);
   }
 
-  void _handleForegroundMessage(RemoteMessage message) {
-    final notification = PushNotification.fromData(message.data);
-    if (notification == null) return;
-    if (!_seenForegroundIds.add(notification.notificationId)) {
-      return;
-    }
-    if (_seenForegroundIds.length > 64) {
-      _seenForegroundIds.remove(_seenForegroundIds.first);
-    }
-    state = state.copyWith(foregroundNotification: notification);
-  }
-
   void dismissForegroundNotification() {
     state = state.copyWith(clearForegroundNotification: true);
   }
 
   Future<void> registerCurrentToken() async {
-    if (!_firebaseAvailable) {
-      await initialize();
-    }
-    if (!_firebaseAvailable) return;
-    final token = await FirebaseMessaging.instance.getToken();
-    if (token != null) {
-      await _registerToken(token);
-    }
+    await initialize();
+    final clientId = _clientId ?? await ref.read(pushGatewayProvider).clientId();
+    if (clientId != null) await _registerClientId(clientId);
   }
 
   PushNotification? takePending() {
@@ -204,19 +166,22 @@ class PushController extends Notifier<PushState> {
     if (deviceId == null) return;
     try {
       await ref.read(pushApiProvider).unregisterToken(deviceId);
+      _lastRegistrationKey = null;
     } on Object {
       // Local sign-out must not be blocked by an unavailable push endpoint.
     }
   }
 
-  Future<void> _registerToken(String token) async {
-    if (!_firebaseAvailable) return;
+  Future<void> _registerClientId(String clientId) async {
+    final normalized = clientId.trim();
+    if (normalized.isEmpty) return;
+    _clientId = normalized;
     final snapshot = ref.read(sessionControllerProvider).asData?.value;
     if (!(snapshot?.isAuthenticated ?? false)) return;
     final config = ref.read(appConfigProvider);
     final deviceId = snapshot!.deviceId!;
     final registrationKey =
-        '${snapshot.userId}|$deviceId|$token|${config.appVersion}|${config.environment.name}';
+        '${snapshot.userId}|$deviceId|$normalized|${config.appVersion}|${config.environment.name}';
     if (registrationKey == _lastRegistrationKey) return;
     try {
       await ref
@@ -224,15 +189,50 @@ class PushController extends Notifier<PushState> {
           .registerToken(
             deviceId: deviceId,
             platform: defaultTargetPlatform.name,
-            provider: 'fcm',
-            token: token,
+            provider: 'getui',
+            token: normalized,
             appVersion: config.appVersion,
             environment: config.environment.name,
             locale: PlatformDispatcher.instance.locale.toLanguageTag(),
           );
       _lastRegistrationKey = registrationKey;
     } on Object {
-      // Endpoint is intentionally optional until Echo-backend adds push_tokens.
+      // The CID callback can repeat; a later callback or app resume retries it.
     }
+  }
+
+  Future<void> _handleClickedEvent(Map<String, dynamic> event) async {
+    final data = _notificationData(event);
+    if (data != null) handleMessage(data);
+  }
+
+  Future<void> _handleForegroundEvent(Map<String, dynamic> event) async {
+    final data = _notificationData(event);
+    final notification = data == null ? null : PushNotification.fromData(data);
+    if (notification == null) return;
+    if (!_seenForegroundIds.add(notification.notificationId)) return;
+    if (_seenForegroundIds.length > 64) {
+      _seenForegroundIds.remove(_seenForegroundIds.first);
+    }
+    state = state.copyWith(foregroundNotification: notification);
+  }
+
+  Map<String, dynamic>? _notificationData(Map<String, dynamic> event) {
+    for (final key in const <String>['payload', 'content']) {
+      final value = event[key];
+      if (value is Map) {
+        return value.map((key, value) => MapEntry(key.toString(), value));
+      }
+      if (value is! String || value.trim().isEmpty) continue;
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map) {
+          return decoded.map((key, value) => MapEntry(key.toString(), value));
+        }
+      } on FormatException {
+        continue;
+      }
+    }
+    return null;
   }
 }

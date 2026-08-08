@@ -1,7 +1,7 @@
 name: echo_app
 description: Echo mobile application.
 publish_to: none
-version: 1.0.5+10
+version: 1.0.6+11
 
 environment:
   sdk: ^3.12.0
@@ -15,11 +15,11 @@ dependencies:
   cached_network_image: ^3.4.1
   cupertino_icons: ^1.0.9
   dio: ^5.11.0
-  firebase_core: ^4.12.1
-  firebase_messaging: ^16.4.3
   flutter_riverpod: ^3.4.2
   flutter_secure_storage: ^10.3.1
   go_router: ^17.3.0
+  getuiflut:
+    path: third_party/getuiflut
   image_picker: ^1.2.3
   json_annotation: ^4.12.0
   just_audio: ^0.10.6

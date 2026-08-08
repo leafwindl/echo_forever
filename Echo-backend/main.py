@@ -17,6 +17,10 @@ from features.letters.public import generate_due_letters
 from features.memory.interface.router import router as memory_router
 from features.memory.public import resume_pending_memory_extraction_jobs
 from features.persona.interface.router import router as persona_router
+from features.proactive_chat.interface.router import router as proactive_chat_router
+from features.proactive_chat.public import process_proactive_chat_once
+from features.push.interface.router import router as push_router
+from features.push.public import send_pending_notification_once
 from features.relationship.interface.router import router as relationship_router
 from features.releases.interface.router import router as releases_router
 from features.stickers.interface.router import router as stickers_router
@@ -95,6 +99,32 @@ async def run_chat_turn_loop() -> None:
             await asyncio.sleep(0)
 
 
+async def run_proactive_chat_loop() -> None:
+    while True:
+        try:
+            processed = await process_proactive_chat_once()
+        except Exception:
+            logger.warning("Proactive chat worker failed", exc_info=True)
+            processed = False
+        if not processed:
+            await asyncio.sleep(settings.proactive_chat_worker_interval_seconds)
+        else:
+            await asyncio.sleep(0)
+
+
+async def run_push_notification_loop() -> None:
+    while True:
+        try:
+            processed = await send_pending_notification_once()
+        except Exception:
+            logger.warning("Push notification worker failed", exc_info=True)
+            processed = False
+        if not processed:
+            await asyncio.sleep(settings.push_worker_interval_seconds)
+        else:
+            await asyncio.sleep(0)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Uvicorn installs its handlers after importing the app, so attach the filter again here.
@@ -114,6 +144,8 @@ async def lifespan(_app: FastAPI):
     daily_letter_task: asyncio.Task[None] | None = None
     sticker_generation_task: asyncio.Task[None] | None = None
     chat_turn_task: asyncio.Task[None] | None = None
+    proactive_chat_task: asyncio.Task[None] | None = None
+    push_notification_task: asyncio.Task[None] | None = None
     if settings.voice_cleanup_interval_seconds > 0:
         voice_cleanup_task = asyncio.create_task(run_voice_audio_cleanup_loop())
     if settings.daily_letter_enabled:
@@ -122,6 +154,10 @@ async def lifespan(_app: FastAPI):
         sticker_generation_task = asyncio.create_task(run_sticker_generation_loop())
     if settings.chat_async_enabled:
         chat_turn_task = asyncio.create_task(run_chat_turn_loop())
+    if settings.proactive_chat_enabled:
+        proactive_chat_task = asyncio.create_task(run_proactive_chat_loop())
+    if settings.push_enabled:
+        push_notification_task = asyncio.create_task(run_push_notification_loop())
 
     try:
         yield
@@ -142,6 +178,14 @@ async def lifespan(_app: FastAPI):
             chat_turn_task.cancel()
             with suppress(asyncio.CancelledError):
                 await chat_turn_task
+        if proactive_chat_task:
+            proactive_chat_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await proactive_chat_task
+        if push_notification_task:
+            push_notification_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await push_notification_task
         logger.info("Echo Backend 已停止。")
 
 
@@ -187,6 +231,8 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(memory_router)
     app.include_router(persona_router)
+    app.include_router(proactive_chat_router)
+    app.include_router(push_router)
     app.include_router(relationship_router)
     app.include_router(voice_router)
     app.include_router(letters_router)

@@ -24,7 +24,7 @@ void main() {
     await api.registerToken(
       deviceId: 'device-1',
       platform: 'android',
-      provider: 'fcm',
+      provider: 'getui',
       token: 'secret-token',
       appVersion: '2.0.0',
       environment: 'production',
@@ -36,7 +36,7 @@ void main() {
     expect(captured.data, <String, dynamic>{
       'device_id': 'device-1',
       'platform': 'android',
-      'provider': 'fcm',
+      'provider': 'getui',
       'token': 'secret-token',
       'app_version': '2.0.0',
       'environment': 'production',

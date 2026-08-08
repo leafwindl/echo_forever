@@ -112,6 +112,7 @@ class OrchestrateChatWithAgent:
                                         user_id=user_id,
                                         conversation_id=conversation_id,
                                         conversation_mode=conversation_mode,
+                                        trigger_message=message,
                                         allow_proactive_stickers=allow_proactive_stickers,
                                         prior_results=tuple(tool_results),
                                     ),
@@ -268,6 +269,11 @@ class OrchestrateChatWithAgent:
                 "当前是语音通话模式。不得搜索、选择或发送表情包，即使用户明确要求也不"
                 "执行图片发送；自然说明通话里先继续说话即可。"
             )
+        elif conversation_mode == "proactive":
+            sticker_rule = (
+                "This is a proactive text chat. Use at most one fitting sticker only when it naturally improves a "
+                "light, everyday check-in. Never use a sticker to force warmth or compensate for a weak topic."
+            )
         elif allow_proactive_stickers and proactive_sticker_due:
             sticker_rule = (
                 "聊天模式可以使用表情包。用户明确要求时，search_stickers 和 send_sticker "
@@ -289,7 +295,7 @@ class OrchestrateChatWithAgent:
                 "当前处于主动表情包冷却期，不得以 proactive 为 purpose 调用表情包工具。"
             )
         delivery_rule = ""
-        if conversation_mode == "chat":
+        if conversation_mode in {"chat", "proactive"}:
             delivery_rule = (
                 "当你不再调用工具并准备给出最终回复时，只输出一个 JSON 对象："
                 '{"text_segments":["第一条消息","可选第二条消息"],'

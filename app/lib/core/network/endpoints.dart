@@ -7,6 +7,11 @@ class Endpoints {
   static const logout = '/login/logout';
   static const health = '/health';
   static const pushTokensMe = '/push/tokens/me';
+  static const proactivePreferences = '/proactive/preferences';
+  static const proactiveSchedules = '/proactive/schedules';
+
+  static String proactiveSchedule(String scheduleId) =>
+      '/proactive/schedules/${Uri.encodeComponent(scheduleId)}';
   static const latestRelease = '/releases/latest';
 
   static String pushTokenForDevice(String deviceId) =>
