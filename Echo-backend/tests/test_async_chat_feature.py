@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 from features.agent.domain.delivery import parse_agent_delivery_plan
 from features.agent.domain.entities import ContentPart
-from features.chat.application.accept_message import AcceptChatMessage
+from features.chat.application.accept_message import AcceptChatMessage, ChatIntakePolicy
 from features.chat.application.process_turns import ProcessPendingChatTurns
 from features.chat.domain.delivery_timing import DeliveryTimingPolicy
 from features.chat.domain.entities import (
@@ -32,6 +32,25 @@ def _message(message_id: int, role: str, content: str) -> ChatHistoryMessage:
     )
 
 
+def _intake_policy() -> ChatIntakePolicy:
+    return ChatIntakePolicy(
+        message_max_chars=10000,
+        quiet_window_ms=2500,
+        maximum_window_ms=10000,
+        maximum_batch_messages=20,
+        maximum_batch_characters=6000,
+        maximum_queued_messages=20,
+    )
+
+
+def _timing_policy() -> DeliveryTimingPolicy:
+    return DeliveryTimingPolicy(
+        followup_text_delay_ms=1200,
+        final_text_delay_ms=2000,
+        sticker_delay_ms=1000,
+    )
+
+
 class FakeIntakeRepository:
     def __init__(self):
         self.calls = []
@@ -52,7 +71,7 @@ class AcceptChatMessageTests(unittest.TestCase):
     def test_accepts_text_and_passes_queue_limits(self):
         repository = FakeIntakeRepository()
 
-        result = AcceptChatMessage(repository).execute(
+        result = AcceptChatMessage(repository, _intake_policy()).execute(
             user_id=" user-1 ",
             client_message_id="00000000-0000-4000-8000-000000000001",
             message_type="text",
@@ -65,7 +84,7 @@ class AcceptChatMessageTests(unittest.TestCase):
         self.assertGreater(call["maximum_queued_messages"], 0)
 
     def test_validates_sticker_shape_and_client_id(self):
-        use_case = AcceptChatMessage(FakeIntakeRepository())
+        use_case = AcceptChatMessage(FakeIntakeRepository(), _intake_policy())
         with self.assertRaises(ChatValidationError):
             use_case.execute(
                 user_id="user-1",
@@ -94,7 +113,7 @@ class AcceptChatMessageTests(unittest.TestCase):
         repository = FakeIntakeRepository()
         repository.error = ChatQueueFullError("full")
         with self.assertRaises(ChatQueueFullError):
-            AcceptChatMessage(repository).execute(
+            AcceptChatMessage(repository, _intake_policy()).execute(
                 user_id="user-1",
                 client_message_id="00000000-0000-4000-8000-000000000004",
                 message_type="text",
@@ -105,8 +124,7 @@ class AcceptChatMessageTests(unittest.TestCase):
 class AgentDeliveryPlanTests(unittest.TestCase):
     def test_parses_structured_delivery_and_limits_segments(self):
         plan = parse_agent_delivery_plan(
-            '{"text_segments":["one","two","three","four"],'
-            '"sticker_placement":"before_text"}',
+            '{"text_segments":["one","two","three","four"],"sticker_placement":"before_text"}',
             "chat",
         )
         self.assertEqual(plan.text_segments, ("one", "two", "three"))
@@ -132,8 +150,7 @@ class AgentDeliveryPlanTests(unittest.TestCase):
 
     def test_plain_medium_reply_is_split_on_natural_sentence_boundaries(self):
         reply = (
-            "今天听起来确实有点累，先不用急着把所有事情都处理完。"
-            "你可以慢一点，我会认真听你继续说。"
+            "今天听起来确实有点累，先不用急着把所有事情都处理完。你可以慢一点，我会认真听你继续说。"
         )
         plan = parse_agent_delivery_plan(reply, "chat")
         self.assertEqual(len(plan.text_segments), 2)
@@ -146,9 +163,8 @@ class AgentDeliveryPlanTests(unittest.TestCase):
 
 class DeliveryTimingPolicyTests(unittest.TestCase):
     def test_delivery_uses_fixed_text_and_sticker_delays(self):
-        policy = DeliveryTimingPolicy()
+        policy = _timing_policy()
         presentation = policy.build(
-            text_segments=("one", "two", "three"),
             delivery_types=("text", "text", "sticker", "text"),
             agent_elapsed_ms=10_000,
         )
@@ -158,8 +174,7 @@ class DeliveryTimingPolicyTests(unittest.TestCase):
         self.assertEqual(presentation.agent_elapsed_ms, 10_000)
 
     def test_sticker_first_still_waits_before_reveal(self):
-        presentation = DeliveryTimingPolicy().build(
-            text_segments=("after sticker",),
+        presentation = _timing_policy().build(
             delivery_types=("sticker", "text"),
             agent_elapsed_ms=0,
         )
@@ -281,7 +296,7 @@ class ProcessPendingChatTurnsTests(unittest.IsolatedAsyncioTestCase):
             reply_generator=generator,
             request_guard=guard,
             event_broker=broker,
-            timing_policy=DeliveryTimingPolicy(),
+            timing_policy=_timing_policy(),
             lease_seconds=180,
         )
         return worker, repository, generator, guard, broker

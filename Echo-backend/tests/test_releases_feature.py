@@ -110,6 +110,26 @@ class ReleaseFeatureTests(unittest.TestCase):
         self.assertTrue(body["update_available"])
         self.assertEqual(body["release"]["version_code"], 3)
         self.assertNotIn("download_url", body["release"])
+        self.assertEqual(response.headers["cache-control"], "no-store")
+
+    def test_latest_allows_the_public_site_origin_only(self):
+        allowed = self.client.get(
+            "/releases/latest",
+            params={"version_code": 2},
+            headers={"Origin": "https://echoaiforever.cn"},
+        )
+        denied = self.client.get(
+            "/releases/latest",
+            params={"version_code": 2},
+            headers={"Origin": "https://untrusted.example"},
+        )
+
+        self.assertEqual(
+            allowed.headers["access-control-allow-origin"],
+            "https://echoaiforever.cn",
+        )
+        self.assertEqual(allowed.headers["vary"], "Origin")
+        self.assertNotIn("access-control-allow-origin", denied.headers)
 
     def test_minimum_version_makes_update_mandatory(self):
         response = self.client.get(

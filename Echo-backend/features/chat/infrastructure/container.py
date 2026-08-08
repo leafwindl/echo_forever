@@ -1,6 +1,6 @@
 from shared.config import settings
 
-from features.chat.application.accept_message import AcceptChatMessage
+from features.chat.application.accept_message import AcceptChatMessage, ChatIntakePolicy
 from features.chat.application.clear_context import ClearChatContext
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.application.list_messages import ListChatMessages
@@ -31,6 +31,18 @@ _clear_chat_context_use_case: ClearChatContext | None = None
 _list_chat_messages_use_case: ListChatMessages | None = None
 _accept_chat_message_use_case: AcceptChatMessage | None = None
 _process_pending_chat_turns_use_case: ProcessPendingChatTurns | None = None
+_delivery_timing_policy: DeliveryTimingPolicy | None = None
+
+
+def get_delivery_timing_policy() -> DeliveryTimingPolicy:
+    global _delivery_timing_policy
+    if _delivery_timing_policy is None:
+        _delivery_timing_policy = DeliveryTimingPolicy(
+            followup_text_delay_ms=settings.chat_followup_text_delay_ms,
+            final_text_delay_ms=settings.chat_final_text_delay_ms,
+            sticker_delay_ms=settings.chat_sticker_delay_ms,
+        )
+    return _delivery_timing_policy
 
 
 def get_generate_chat_reply_use_case() -> GenerateChatReply:
@@ -79,7 +91,17 @@ def get_list_chat_messages_use_case() -> ListChatMessages:
 def get_accept_chat_message_use_case() -> AcceptChatMessage:
     global _accept_chat_message_use_case
     if _accept_chat_message_use_case is None:
-        _accept_chat_message_use_case = AcceptChatMessage(PostgresAsyncChatRepository())
+        _accept_chat_message_use_case = AcceptChatMessage(
+            PostgresAsyncChatRepository(),
+            ChatIntakePolicy(
+                message_max_chars=settings.chat_message_max_chars,
+                quiet_window_ms=settings.chat_batch_quiet_window_ms,
+                maximum_window_ms=settings.chat_batch_max_window_ms,
+                maximum_batch_messages=settings.chat_batch_max_messages,
+                maximum_batch_characters=settings.chat_batch_max_chars,
+                maximum_queued_messages=settings.chat_queue_max_messages,
+            ),
+        )
     return _accept_chat_message_use_case
 
 
@@ -91,7 +113,7 @@ def get_process_pending_chat_turns_use_case() -> ProcessPendingChatTurns:
             reply_generator=get_generate_chat_reply_use_case(),
             request_guard=InMemoryChatRequestGuard(),
             event_broker=get_chat_event_broker(),
-            timing_policy=DeliveryTimingPolicy(),
+            timing_policy=get_delivery_timing_policy(),
             lease_seconds=settings.chat_turn_lease_seconds,
         )
     return _process_pending_chat_turns_use_case
@@ -106,9 +128,11 @@ def reset_generate_chat_reply_use_case_for_tests():
     global _clear_chat_context_use_case
     global _list_chat_messages_use_case
     global _accept_chat_message_use_case, _process_pending_chat_turns_use_case
+    global _delivery_timing_policy
     _generate_chat_reply_use_case = None
     _send_chat_message_use_case = None
     _clear_chat_context_use_case = None
     _list_chat_messages_use_case = None
     _accept_chat_message_use_case = None
     _process_pending_chat_turns_use_case = None
+    _delivery_timing_policy = None

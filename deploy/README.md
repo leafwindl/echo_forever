@@ -88,3 +88,18 @@ The APK is written to `app/build/app/outputs/flutter-apk/app-release.apk`.
 The server does not build Android APKs. Build the signed APK on the development workstation,
 upload it to COS, and register the release metadata in the production database with
 `scripts/publish_android_release.py`. The server only pulls Git code and runs the backend.
+
+## Showcase site
+
+The static site is served from `/var/www/echoaiforever.cn`. After pulling the repository, sync the
+tracked site files and reload Nginx:
+
+```bash
+sudo rsync -a --delete site/echoaiforever.cn/ /var/www/echoaiforever.cn/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+The page uses `GET https://api.echoaiforever.cn/releases/latest` to render the public Android
+version, publication date, and release notes at runtime. The HTML contains the current version as a
+fallback, so a temporary API failure does not leave the version area blank.

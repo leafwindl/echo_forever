@@ -72,7 +72,6 @@ class ProcessPendingChatTurns:
             if not delivery_types:
                 delivery_types.append("text")
             presentation = self.timing_policy.build(
-                text_segments=prepared.reply_segments,
                 delivery_types=tuple(delivery_types),
                 agent_elapsed_ms=elapsed_ms,
             )

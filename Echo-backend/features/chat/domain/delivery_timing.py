@@ -1,33 +1,33 @@
 from __future__ import annotations
 
-from shared.config import settings
+from dataclasses import dataclass
 
 from features.chat.domain.entities import ChatDeliveryPresentation
 
 
+@dataclass(frozen=True)
 class DeliveryTimingPolicy:
+    followup_text_delay_ms: int
+    final_text_delay_ms: int
+    sticker_delay_ms: int
+
     def build(
         self,
         *,
-        text_segments: tuple[str, ...],
         delivery_types: tuple[str, ...],
         agent_elapsed_ms: int,
     ) -> ChatDeliveryPresentation:
         delays: list[int] = []
         for delivery_index, delivery_type in enumerate(delivery_types):
             if delivery_type == "sticker":
-                delays.append(settings.chat_sticker_delay_ms)
+                delays.append(self.sticker_delay_ms)
                 continue
 
             if delivery_index == 0:
                 delays.append(0)
                 continue
 
-            delay = (
-                settings.chat_final_text_delay_ms
-                if delivery_index >= 2
-                else settings.chat_followup_text_delay_ms
-            )
+            delay = self.final_text_delay_ms if delivery_index >= 2 else self.followup_text_delay_ms
             delays.append(delay)
 
         return ChatDeliveryPresentation(

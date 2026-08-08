@@ -198,4 +198,4 @@ python -B ../scripts/check_architecture.py
 python -m pytest -q
 ```
 
-当前发布结果：240 项后端测试和 7 个子测试通过。
+当前发布结果：242 项后端测试和 7 个子测试通过，架构检查通过。

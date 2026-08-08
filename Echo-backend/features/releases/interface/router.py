@@ -6,7 +6,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse, StreamingResponse
 from shared.config import settings
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
@@ -22,6 +22,10 @@ from features.releases.interface.schemas import (
 )
 
 router = APIRouter(prefix="/releases", tags=["releases"])
+_PUBLIC_SITE_ORIGINS = {
+    "https://echoaiforever.cn",
+    "https://www.echoaiforever.cn",
+}
 
 
 def get_release_repository() -> PostgresReleaseRepository:
@@ -53,6 +57,14 @@ def _consume_rate_limit(request: Request, action: str) -> None:
             detail="Too many release requests",
             headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
+
+
+def _allow_public_site_release_read(request: Request, response: Response) -> None:
+    origin = request.headers.get("Origin", "").strip()
+    if origin in _PUBLIC_SITE_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+    response.headers["Cache-Control"] = "no-store"
 
 
 def _response(release: AppRelease, current_version_code: int) -> ReleaseResponse:
@@ -118,11 +130,13 @@ def _download_url(
 @router.get("/latest", response_model=LatestReleaseResponse)
 def latest_release(
     request: Request,
+    response: Response,
     repository: Annotated[PostgresReleaseRepository, Depends(get_release_repository)],
     platform: Literal["android"] = Query(default="android"),
     channel: Literal["internal"] = Query(default="internal"),
     version_code: int = Query(gt=0),
 ) -> LatestReleaseResponse:
+    _allow_public_site_release_read(request, response)
     _consume_rate_limit(request, "latest")
     release = repository.find_latest(platform, channel)
     if release is None or release.version_code <= version_code:
@@ -167,9 +181,13 @@ def release_artifact(
     now = int(datetime.now(UTC).timestamp())
     maximum_expiry = now + settings.release_download_url_expires_seconds + 60
     expected_signature = _artifact_signature(release_id, expires)
-    if expires < now or expires > maximum_expiry or not hmac.compare_digest(
-        signature,
-        expected_signature,
+    if (
+        expires < now
+        or expires > maximum_expiry
+        or not hmac.compare_digest(
+            signature,
+            expected_signature,
+        )
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -186,9 +204,7 @@ def release_artifact(
         media_type="application/vnd.android.package-archive",
         headers={
             "Cache-Control": "private, no-store",
-            "Content-Disposition": (
-                f'attachment; filename="{_download_filename(release)}"'
-            ),
+            "Content-Disposition": (f'attachment; filename="{_download_filename(release)}"'),
             "Content-Length": str(release.size_bytes),
             "X-Content-Type-Options": "nosniff",
         },

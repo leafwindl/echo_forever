@@ -17,9 +17,11 @@ def get_proactive_worker() -> ProcessProactiveChatJobs:
     if _worker is None:
         from shared.config import settings
 
-        from features.chat.domain.delivery_timing import DeliveryTimingPolicy
         from features.chat.infrastructure.adapters import InMemoryChatRequestGuard
-        from features.chat.infrastructure.container import get_generate_chat_reply_use_case
+        from features.chat.infrastructure.container import (
+            get_delivery_timing_policy,
+            get_generate_chat_reply_use_case,
+        )
         from features.chat.infrastructure.events import get_chat_event_broker
 
         _worker = ProcessProactiveChatJobs(
@@ -27,7 +29,7 @@ def get_proactive_worker() -> ProcessProactiveChatJobs:
             reply_generator=get_generate_chat_reply_use_case(),
             request_guard=InMemoryChatRequestGuard(),
             event_broker=get_chat_event_broker(),
-            timing_policy=DeliveryTimingPolicy(),
+            timing_policy=get_delivery_timing_policy(),
             lease_seconds=settings.proactive_chat_job_lease_seconds,
         )
     return _worker

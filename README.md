@@ -29,6 +29,7 @@ Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter 客户端和 F
 - 个推通知：前台提醒、后台通知、点击进入聊天；消息先落库，通知只是到达提醒。
 - 应用内更新：服务端发布版本元数据，客户端校验包名、版本号、SHA-256 后请求 Android 安装器。
 - Echo 人物显示：使用 `app/assets/character/` 中的 idle 和 sit 素材。
+- 产品展示站：实时读取公开 Android 发布记录，展示当前版本、发布日期和更新说明。
 
 ## 仓库结构
 
@@ -38,6 +39,7 @@ Echo-backend/           FastAPI 服务端
 assets/                 官方表情包、Echo 品牌和设计素材
 doc/                    业务流程、展示说明、部署和测试文档
 deploy/                 Docker、Nginx 和发布说明
+site/                   Echo 产品展示站
 scripts/                架构检查、COS 和 APK 发布脚本
 docker-compose.yml      PostgreSQL、后端和备份服务编排
 ```
@@ -111,7 +113,7 @@ flutter analyze
 flutter test
 ```
 
-当前发布检查结果：Flutter analyze 0 issues，客户端 111 项测试通过，后端 240 项测试和 7 个子测试通过。
+当前发布检查结果：Flutter analyze 0 issues，客户端 111 项测试通过，后端 242 项测试和 7 个子测试通过，架构检查通过。
 
 ## 文档入口
 

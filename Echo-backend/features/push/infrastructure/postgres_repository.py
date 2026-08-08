@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from db.postgres_connection import get_connection, transaction
 
+from features.auth.public import ensure_user_identity
+
 
 @dataclass(frozen=True)
 class NotificationOutboxItem:
@@ -23,6 +25,61 @@ class PushTarget:
 
 
 class PostgresPushRepository:
+    def register_target(
+        self,
+        *,
+        user_id: str,
+        device_id: str,
+        platform: str,
+        provider: str,
+        token: str,
+        app_version: str,
+        environment: str,
+        locale: str,
+    ) -> None:
+        with transaction() as conn:
+            ensure_user_identity(user_id=user_id, conn=conn)
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO push_targets (
+                        user_id, device_id, platform, provider, token,
+                        app_version, environment, locale, status, last_seen_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active', NOW())
+                    ON CONFLICT (user_id, device_id) DO UPDATE SET
+                        platform = EXCLUDED.platform,
+                        provider = EXCLUDED.provider,
+                        token = EXCLUDED.token,
+                        app_version = EXCLUDED.app_version,
+                        environment = EXCLUDED.environment,
+                        locale = EXCLUDED.locale,
+                        status = 'active',
+                        last_seen_at = NOW(),
+                        updated_at = NOW()
+                    """,
+                    (
+                        user_id,
+                        device_id,
+                        platform,
+                        provider,
+                        token,
+                        app_version,
+                        environment,
+                        locale,
+                    ),
+                )
+
+    def revoke_target(self, *, user_id: str, device_id: str) -> None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE push_targets
+                SET status = 'revoked', updated_at = NOW()
+                WHERE user_id = %s AND device_id = %s
+                """,
+                (user_id, device_id),
+            )
+
     def claim_due(self) -> NotificationOutboxItem | None:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(

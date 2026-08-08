@@ -112,7 +112,6 @@ class ProcessProactiveChatJobs:
                 else:
                     delivery_types.append("sticker")
             presentation = self.timing_policy.build(
-                text_segments=prepared.reply_segments,
                 delivery_types=tuple(delivery_types or ["text"]),
                 agent_elapsed_ms=int((time.perf_counter() - started) * 1000),
             )

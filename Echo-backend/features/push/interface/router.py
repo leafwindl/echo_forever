@@ -2,15 +2,19 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from db.postgres_connection import transaction
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 from shared.interface.dependencies import CurrentUser, get_current_user
 
-from features.auth.public import ensure_user_identity
+from features.push.application.manage_targets import ManagePushTargets
+from features.push.public import get_push_target_manager
 
 router = APIRouter(prefix="/push", tags=["push"])
 CurrentUserDependency = Annotated[CurrentUser, Depends(get_current_user)]
+PushTargetManagerDependency = Annotated[
+    ManagePushTargets,
+    Depends(get_push_target_manager),
+]
 
 
 class PushTokenRequest(BaseModel):
@@ -24,48 +28,27 @@ class PushTokenRequest(BaseModel):
 
 
 @router.put("/tokens/me", status_code=status.HTTP_204_NO_CONTENT)
-def register_token(request: PushTokenRequest, current_user: CurrentUserDependency):
-    with transaction() as conn:
-        ensure_user_identity(user_id=current_user.user_id, conn=conn)
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO push_targets (
-                    user_id, device_id, platform, provider, token,
-                    app_version, environment, locale, status, last_seen_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active', NOW())
-                ON CONFLICT (user_id, device_id) DO UPDATE SET
-                    platform = EXCLUDED.platform,
-                    provider = EXCLUDED.provider,
-                    token = EXCLUDED.token,
-                    app_version = EXCLUDED.app_version,
-                    environment = EXCLUDED.environment,
-                    locale = EXCLUDED.locale,
-                    status = 'active',
-                    last_seen_at = NOW(),
-                    updated_at = NOW()
-                """,
-                (
-                    current_user.user_id,
-                    request.device_id,
-                    request.platform,
-                    request.provider,
-                    request.token,
-                    request.app_version,
-                    request.environment,
-                    request.locale,
-                ),
-            )
+def register_token(
+    request: PushTokenRequest,
+    current_user: CurrentUserDependency,
+    manager: PushTargetManagerDependency,
+):
+    manager.register(
+        user_id=current_user.user_id,
+        device_id=request.device_id,
+        platform=request.platform,
+        provider=request.provider,
+        token=request.token,
+        app_version=request.app_version,
+        environment=request.environment,
+        locale=request.locale,
+    )
 
 
 @router.delete("/tokens/me/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
-def unregister_token(device_id: str, current_user: CurrentUserDependency):
-    with transaction() as conn, conn.cursor() as cursor:
-        cursor.execute(
-            """
-            UPDATE push_targets
-            SET status = 'revoked', updated_at = NOW()
-            WHERE user_id = %s AND device_id = %s
-            """,
-            (current_user.user_id, device_id),
-        )
+def unregister_token(
+    device_id: str,
+    current_user: CurrentUserDependency,
+    manager: PushTargetManagerDependency,
+):
+    manager.unregister(user_id=current_user.user_id, device_id=device_id)

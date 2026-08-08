@@ -347,6 +347,9 @@
     .release-meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 25px; padding-top: 18px; border-top: 1px solid var(--line); }
     .release-meta span { display: block; color: var(--muted); font-size: 10px; }
     .release-meta strong { display: block; margin-top: 3px; font-size: 13px; }
+    .release-notes { display: grid; gap: 9px; margin: 22px 0 0; padding: 18px 0 0; border-top: 1px solid var(--line); list-style: none; }
+    .release-notes li { display: flex; align-items: flex-start; gap: 9px; color: var(--ink); font-size: 12px; line-height: 1.65; }
+    .release-notes li::before { content: ""; width: 6px; height: 6px; margin-top: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--green); }
     .release-foot { display: flex; align-items: center; gap: 9px; margin-top: 22px; color: var(--muted); font-size: 11px; }
     .release-foot svg { width: 15px; height: 15px; color: var(--green); }
     .download-modal { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; padding: 20px; background: rgba(23, 35, 47, .56); }
@@ -446,7 +449,7 @@
         <a href="#features">能力</a>
         <a href="#control">控制权</a>
         <a href="#release">版本</a>
-        <a class="nav-version" href="#release"><span class="version-dot"></span>v1.0.6</a>
+        <a class="nav-version" href="#release"><span class="version-dot"></span><span data-release-version>v1.0.7</span></a>
       </nav>
     </div>
   </header>
@@ -454,7 +457,7 @@
   <main>
     <section class="hero" id="top">
       <div class="hero-copy">
-        <div class="eyebrow"><span class="eyebrow-dot"></span>连续记忆 · 主动陪伴 · v1.0.6</div>
+        <div class="eyebrow"><span class="eyebrow-dot"></span>连续记忆 · 主动陪伴 · <span data-release-version>v1.0.7</span></div>
         <h1>会记得，<br /><em>也会主动找你。</em></h1>
         <p class="hero-lede">Echo 不是只回答问题的聊天框。它会把每一次对话、每一个提醒和每一段语音，慢慢织成一段有回应的日常。</p>
         <div class="hero-actions">
@@ -574,8 +577,13 @@
         </div>
         <div>
           <div class="release-card">
-            <div class="release-card-top"><div><h3>v1.0.6</h3><p>Android 测试版 · 当前生产版本</p></div><span class="release-badge">已实现能力</span></div>
+            <div class="release-card-top"><div><h3 data-release-version>v1.0.7</h3><p id="release-summary">Android 测试版 · 当前生产版本</p></div><span class="release-badge">已实现能力</span></div>
             <div class="release-meta"><div><span>登录方式</span><strong>手机号验证码</strong></div><div><span>聊天交付</span><strong>SSE 实时分段</strong></div><div><span>语音链路</span><strong>PCM + CosyVoice</strong></div><div><span>关系能力</span><strong>记忆与主动联系</strong></div></div>
+            <ul class="release-notes" id="release-notes" aria-label="当前版本更新说明">
+              <li>新增独立定时任务页面</li>
+              <li>修复任务删除与一次性任务自动清理</li>
+              <li>更新 Echo 功能与业务说明</li>
+            </ul>
             <div class="hero-actions"><a class="button" href="#top"><i data-lucide="arrow-up"></i>回到首页</a><button class="button secondary" id="download-trigger" type="button"><i data-lucide="qr-code"></i>扫码下载测试版</button></div>
           </div>
           <div class="faq-list" aria-label="Echo 常见问题">
@@ -610,6 +618,47 @@
 
   <script>
     lucide.createIcons();
+
+    const releaseEndpoint = 'https://api.echoaiforever.cn/releases/latest?platform=android&channel=internal&version_code=1';
+    async function syncCurrentRelease() {
+      const response = await fetch(releaseEndpoint, {
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) throw new Error(`release request failed: ${response.status}`);
+      const payload = await response.json();
+      const release = payload?.release;
+      if (!payload?.update_available || !release?.version_name) return;
+
+      const publicVersion = `v${release.version_name}`;
+      document.querySelectorAll('[data-release-version]').forEach((element) => {
+        element.textContent = publicVersion;
+      });
+
+      const publishedAt = release.published_at ? new Date(release.published_at) : null;
+      if (publishedAt && !Number.isNaN(publishedAt.getTime())) {
+        const date = new Intl.DateTimeFormat('zh-CN', {
+          timeZone: 'Asia/Shanghai',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(publishedAt);
+        document.querySelector('#release-summary').textContent = `Android 测试版 · ${date} 发布`;
+      }
+
+      const notes = Array.isArray(release.release_notes)
+        ? release.release_notes.filter((note) => typeof note === 'string' && note.trim()).slice(0, 5)
+        : [];
+      if (notes.length > 0) {
+        const list = document.querySelector('#release-notes');
+        list.replaceChildren(...notes.map((note) => {
+          const item = document.createElement('li');
+          item.textContent = note.trim();
+          return item;
+        }));
+      }
+    }
+    syncCurrentRelease().catch(() => {});
 
     const messages = [...document.querySelectorAll('#demo-stream .message')];
     let currentStep = 1;

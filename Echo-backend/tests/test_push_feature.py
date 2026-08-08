@@ -9,6 +9,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from features.push.application.manage_targets import ManagePushTargets
 from features.push.infrastructure.getui_sender import GetuiNotificationSender
 from features.push.infrastructure.postgres_repository import (
     NotificationOutboxItem,
@@ -56,6 +57,42 @@ class FakePushRepository:
 
     def invalidate_target(self, device_id):
         self.invalidated.append(device_id)
+
+
+class FakePushTargetWriter:
+    def __init__(self):
+        self.registered = None
+        self.revoked = None
+
+    def register_target(self, **kwargs):
+        self.registered = kwargs
+
+    def revoke_target(self, **kwargs):
+        self.revoked = kwargs
+
+
+class ManagePushTargetsTests(unittest.TestCase):
+    def test_registers_and_revokes_through_repository_port(self):
+        repository = FakePushTargetWriter()
+        manager = ManagePushTargets(repository)
+
+        manager.register(
+            user_id="user-1",
+            device_id="device-1",
+            platform="android",
+            provider="getui",
+            token="cid-1",
+            app_version="1.0.7",
+            environment="production",
+            locale="zh-CN",
+        )
+        manager.unregister(user_id="user-1", device_id="device-1")
+
+        self.assertEqual(repository.registered["token"], "cid-1")
+        self.assertEqual(
+            repository.revoked,
+            {"user_id": "user-1", "device_id": "device-1"},
+        )
 
 
 class FakeAsyncClient:
@@ -106,9 +143,7 @@ class GetuiNotificationSenderTests(unittest.IsolatedAsyncioTestCase):
 
         auth_path, auth_request = client.requests[0]
         self.assertEqual(auth_path, "/auth")
-        expected_sign = hashlib.sha256(
-            b"app-key1000000master-secret"
-        ).hexdigest()
+        expected_sign = hashlib.sha256(b"app-key1000000master-secret").hexdigest()
         self.assertEqual(auth_request["json"]["sign"], expected_sign)
 
         push_path, push_request = client.requests[1]
