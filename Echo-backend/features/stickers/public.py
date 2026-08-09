@@ -1,9 +1,14 @@
 from features.stickers.infrastructure.container import get_sticker_generator
 from features.stickers.infrastructure.postgres_repository import PostgresStickerRepository
 from features.stickers.infrastructure.urls import resolve_sticker_url
+from features.stickers.infrastructure.vector_index import (
+    backfill_sticker_embeddings,
+    safe_upsert_sticker_embedding,
+    search_sticker_embeddings,
+)
 
 
-def search_stickers(
+async def search_stickers(
     user_id: str,
     intent: str,
     limit: int = 3,
@@ -11,7 +16,7 @@ def search_stickers(
     conversation_id: str | None = None,
     purpose: str = "explicit_request",
 ):
-    return PostgresStickerRepository().list(
+    return await search_sticker_embeddings(
         user_id,
         intent,
         limit,
@@ -46,8 +51,10 @@ def resolve_sticker_asset_url(
 
 
 __all__ = [
+    "backfill_sticker_embeddings",
     "generate_pending_stickers",
     "resolve_sticker_asset_url",
+    "safe_upsert_sticker_embedding",
     "search_stickers",
     "send_sticker",
 ]

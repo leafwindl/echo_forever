@@ -9,7 +9,11 @@ PROJECT_ROOT = BACKEND_ROOT.parent
 sys.path.insert(0, str(BACKEND_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from features.stickers.infrastructure.postgres_repository import rank_sticker_rows  # noqa: E402
+from features.stickers.infrastructure.postgres_repository import (  # noqa: E402
+    filter_semantically_close_rows,
+    rank_sticker_rows,
+    sticker_row_visible_to_user,
+)
 
 from scripts.sync_echo_stickers import scan_assets  # noqa: E402
 
@@ -83,6 +87,46 @@ class StickerRankingTests(unittest.TestCase):
         ranked = self._rank()
 
         self.assertEqual(ranked[0]["sticker_id"], "stk_private")
+
+    def test_compound_query_can_boost_an_embedded_known_tag(self):
+        self.rows = [
+            _row("stk_encourage", 100, tag="加油"),
+            _row("stk_happy", 100, tag="开心"),
+        ]
+
+        ranked = rank_sticker_rows(
+            self.rows,
+            terms=("辛苦了加油",),
+            purpose="proactive",
+            recent_ids=set(),
+            last_used={},
+            now=self.now,
+            cooldown=timedelta(minutes=5),
+        )
+
+        self.assertEqual(ranked[0]["sticker_id"], "stk_encourage")
+
+    def test_private_sticker_visibility_is_scoped_to_owner(self):
+        official = {"owner_type": "echo", "owner_user_id": None}
+        user_a = {"owner_type": "user", "owner_user_id": "user_a"}
+
+        self.assertTrue(sticker_row_visible_to_user(official, "user_b"))
+        self.assertTrue(sticker_row_visible_to_user(user_a, "user_a"))
+        self.assertFalse(sticker_row_visible_to_user(user_a, "user_b"))
+
+    def test_vector_candidates_keep_only_semantically_close_alternatives(self):
+        rows = [
+            {"sticker_id": "best", "similarity_score": 0.72},
+            {"sticker_id": "similar", "similarity_score": 0.70},
+            {"sticker_id": "unrelated", "similarity_score": 0.61},
+        ]
+
+        filtered = filter_semantically_close_rows(rows, maximum_score_gap=0.04)
+
+        self.assertEqual(
+            [row["sticker_id"] for row in filtered],
+            ["best", "similar"],
+        )
 
 
 class EchoStickerAssetTests(unittest.TestCase):

@@ -32,7 +32,31 @@ def _sticker(row) -> Sticker:
         status=row["status"],
         created_at=row["created_at"],
         priority=int(row.get("priority") or 100),
+        similarity_score=(
+            float(row["similarity_score"])
+            if row.get("similarity_score") is not None
+            else None
+        ),
     )
+
+
+def _vector_literal(vector: list[float]) -> str:
+    return "[" + ",".join(str(float(value)) for value in vector) + "]"
+
+
+def sticker_row_visible_to_user(row, user_id: str) -> bool:
+    return row.get("owner_type") == "echo" or row.get("owner_user_id") == user_id
+
+
+def filter_semantically_close_rows(rows: list, maximum_score_gap: float) -> list:
+    if not rows:
+        return []
+    best_score = max(float(row.get("similarity_score") or 0.0) for row in rows)
+    return [
+        row
+        for row in rows
+        if best_score - float(row.get("similarity_score") or 0.0) <= maximum_score_gap
+    ]
 
 
 def rank_sticker_rows(
@@ -45,7 +69,9 @@ def rank_sticker_rows(
     now: datetime,
     cooldown: timedelta,
 ) -> list:
+    del purpose
     terms_lower = tuple(term.lower() for term in terms)
+    normalized_query = " ".join(terms_lower)
 
     def score(row) -> tuple[int, int, int, datetime]:
         raw_tags = row["semantic_tags"] or []
@@ -53,7 +79,8 @@ def rank_sticker_rows(
             raw_tags = json.loads(raw_tags)
         tags = tuple(str(tag).lower() for tag in raw_tags)
         description = str(row["description"] or "").lower()
-        semantic_score = 0
+        similarity = float(row.get("similarity_score") or 0.0)
+        semantic_score = int(similarity * 1000)
         for term in terms_lower:
             if term in tags:
                 semantic_score += 100
@@ -63,6 +90,11 @@ def rank_sticker_rows(
                 semantic_score += 60
             elif term in description:
                 semantic_score += 40
+        for tag in tags:
+            if tag and tag in normalized_query:
+                semantic_score += 100
+        if description and description in normalized_query:
+            semantic_score += 60
         owner_score = 10 if row["owner_type"] == "echo" else 0
         sticker_id = str(row["sticker_id"])
         last_used_at = last_used.get(sticker_id)
@@ -170,7 +202,11 @@ class PostgresStickerRepository:
                 f"SELECT * FROM stickers WHERE {where}",
                 params,
             )
-            rows = cursor.fetchall()
+            rows = [
+                row
+                for row in cursor.fetchall()
+                if sticker_row_visible_to_user(row, user_id)
+            ]
             recent_ids, last_used = self._recent_usage(
                 conn,
                 user_id=user_id,
@@ -188,6 +224,131 @@ class PostgresStickerRepository:
             cooldown=timedelta(minutes=settings.sticker_reuse_cooldown_minutes),
         )
         return [_sticker(row) for row in selected[:limit]]
+
+    def list_vector_matches(
+        self,
+        user_id: str,
+        query: str,
+        query_embedding: list[float],
+        embedding_model: str,
+        limit: int,
+        *,
+        conversation_id: str | None = None,
+        purpose: str = "explicit_request",
+        score_threshold: float = 0.25,
+        maximum_score_gap: float = 0.04,
+    ) -> list[Sticker]:
+        if not query_embedding:
+            return []
+        vector = _vector_literal(query_embedding)
+        with get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT sticker.*,
+                       1 - (embedding.embedding <=> %s::vector) AS similarity_score
+                FROM sticker_embeddings embedding
+                JOIN stickers sticker ON sticker.sticker_id = embedding.sticker_id
+                WHERE embedding.embedding_model = %s
+                  AND sticker.status = 'active'
+                  AND (sticker.owner_type = 'echo' OR sticker.owner_user_id = %s)
+                  AND 1 - (embedding.embedding <=> %s::vector) >= %s
+                ORDER BY embedding.embedding <=> %s::vector,
+                         sticker.priority DESC,
+                         sticker.created_at DESC
+                LIMIT %s
+                """,
+                (
+                    vector,
+                    embedding_model,
+                    user_id,
+                    vector,
+                    score_threshold,
+                    vector,
+                    max(limit, 1),
+                ),
+            )
+            rows = [
+                row
+                for row in cursor.fetchall()
+                if sticker_row_visible_to_user(row, user_id)
+            ]
+            rows = filter_semantically_close_rows(rows, maximum_score_gap)
+            recent_ids, last_used = self._recent_usage(
+                conn,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                recent_turns=settings.sticker_reuse_cooldown_turns,
+            )
+
+        terms = tuple(
+            term
+            for term in re.split(r"[\s,，、;；]+", query.strip())
+            if term
+        )[:8]
+        selected = rank_sticker_rows(
+            rows,
+            terms=terms or (query.strip(),),
+            purpose=purpose,
+            recent_ids=recent_ids,
+            last_used=last_used,
+            now=datetime.now(UTC),
+            cooldown=timedelta(minutes=settings.sticker_reuse_cooldown_minutes),
+        )
+        return [_sticker(row) for row in selected[:limit]]
+
+    def list_active_for_embedding(self, limit: int) -> list[Sticker]:
+        with get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT * FROM stickers
+                WHERE status = 'active'
+                ORDER BY id
+                LIMIT %s
+                """,
+                (max(limit, 1),),
+            )
+            rows = cursor.fetchall()
+        return [_sticker(row) for row in rows]
+
+    def list_embedding_metadata(self, embedding_model: str) -> dict[str, str]:
+        with get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT sticker_id, semantic_text
+                FROM sticker_embeddings
+                WHERE embedding_model = %s
+                """,
+                (embedding_model,),
+            )
+            rows = cursor.fetchall()
+        return {str(row["sticker_id"]): str(row["semantic_text"]) for row in rows}
+
+    def upsert_embedding(
+        self,
+        sticker_id: str,
+        embedding_model: str,
+        semantic_text: str,
+        embedding: list[float],
+    ) -> None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO sticker_embeddings (
+                    sticker_id, embedding_model, semantic_text, embedding
+                ) VALUES (%s, %s, %s, %s::vector)
+                ON CONFLICT(sticker_id) DO UPDATE SET
+                    embedding_model = EXCLUDED.embedding_model,
+                    semantic_text = EXCLUDED.semantic_text,
+                    embedding = EXCLUDED.embedding,
+                    updated_at = NOW()
+                """,
+                (
+                    sticker_id,
+                    embedding_model,
+                    semantic_text,
+                    _vector_literal(embedding),
+                ),
+            )
 
     @staticmethod
     def _recent_usage(
@@ -253,7 +414,7 @@ class PostgresStickerRepository:
                 (sticker_id, user_id),
             )
             row = cursor.fetchone()
-        return _sticker(row) if row else None
+        return _sticker(row) if row and sticker_row_visible_to_user(row, user_id) else None
 
     def delete(self, user_id: str, sticker_id: str) -> str | None:
         with transaction() as conn, conn.cursor() as cursor:
@@ -266,6 +427,11 @@ class PostgresStickerRepository:
                 (sticker_id, user_id),
             )
             row = cursor.fetchone()
+            if row:
+                cursor.execute(
+                    "DELETE FROM sticker_embeddings WHERE sticker_id = %s",
+                    (sticker_id,),
+                )
         return row["storage_key"] if row else None
 
     def create_generation_job(self, user_id: str, prompt: str, intent: str) -> str:

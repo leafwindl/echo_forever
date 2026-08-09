@@ -4,12 +4,23 @@ import uuid
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from shared.config import settings
 from shared.interface.dependencies import CurrentUser, get_current_user
 
 from features.stickers.domain.services import normalize_tags, validate_image
 from features.stickers.infrastructure.postgres_repository import PostgresStickerRepository
+from features.stickers.infrastructure.vector_index import safe_upsert_sticker_embedding
 from features.stickers.interface.schemas import (
     StickerGenerationRequest,
     StickerGenerationResponse,
@@ -92,13 +103,15 @@ async def upload_sticker(
 
 
 @router.post("/{sticker_id}/confirm-save", response_model=StickerResponse)
-def confirm_sticker(
+async def confirm_sticker(
     sticker_id: str,
+    background_tasks: BackgroundTasks,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ):
     item = repository.confirm(current_user.user_id, sticker_id)
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="表情包不存在")
+    background_tasks.add_task(safe_upsert_sticker_embedding, item)
     return _response(item)
 
 

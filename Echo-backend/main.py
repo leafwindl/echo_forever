@@ -24,7 +24,7 @@ from features.push.public import send_pending_notification_once
 from features.relationship.interface.router import router as relationship_router
 from features.releases.interface.router import router as releases_router
 from features.stickers.interface.router import router as stickers_router
-from features.stickers.public import generate_pending_stickers
+from features.stickers.public import backfill_sticker_embeddings, generate_pending_stickers
 from features.system.interface.router import router as health_router
 from features.voice.interface.router import router as voice_router
 from features.voice.public import cleanup_expired_voice_audio
@@ -82,10 +82,19 @@ async def run_daily_letter_loop() -> None:
 async def run_sticker_generation_loop() -> None:
     while True:
         try:
-            await generate_pending_stickers()
+            generated = await generate_pending_stickers()
+            if generated:
+                await backfill_sticker_embeddings()
         except Exception:
             logger.warning("Sticker generation worker failed", exc_info=True)
         await asyncio.sleep(10)
+
+
+async def run_sticker_embedding_backfill_once() -> None:
+    try:
+        await backfill_sticker_embeddings()
+    except Exception:
+        logger.warning("Sticker embedding backfill failed", exc_info=True)
 
 
 async def run_chat_turn_loop() -> None:
@@ -149,6 +158,9 @@ async def lifespan(_app: FastAPI):
     chat_turn_task: asyncio.Task[None] | None = None
     proactive_chat_task: asyncio.Task[None] | None = None
     push_notification_task: asyncio.Task[None] | None = None
+    sticker_embedding_backfill_task = asyncio.create_task(
+        run_sticker_embedding_backfill_once()
+    )
     if settings.voice_cleanup_interval_seconds > 0:
         voice_cleanup_task = asyncio.create_task(run_voice_audio_cleanup_loop())
     if settings.daily_letter_enabled:
@@ -189,6 +201,10 @@ async def lifespan(_app: FastAPI):
             push_notification_task.cancel()
             with suppress(asyncio.CancelledError):
                 await push_notification_task
+        if not sticker_embedding_backfill_task.done():
+            sticker_embedding_backfill_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await sticker_embedding_backfill_task
         logger.info("Echo Backend 已停止。")
 
 

@@ -92,4 +92,5 @@ class ToolSpecification:
     allowed_modes: tuple[str, ...] = ("chat", "call")
     max_calls_per_turn: int = 4
     max_successful_calls_per_turn: int | None = None
+    count_no_result_toward_call_limit: bool = True
     allow_proactive: bool = False

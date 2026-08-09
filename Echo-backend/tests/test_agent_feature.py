@@ -328,6 +328,41 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.content_parts, ())
         self.assertEqual(repository.tool_calls[0]["status"], "no_result")
 
+    async def test_search_no_result_does_not_consume_search_call_limit(self):
+        registry = ToolRegistry()
+        register_sticker_tools(
+            registry,
+            search=lambda _user_id, _query, _limit: [],
+        )
+        executor = ToolExecutor(registry)
+        prior_results = []
+
+        for index in range(3):
+            result = await executor.execute(
+                ToolExecutionContext(
+                    user_id="user_a",
+                    prior_results=tuple(prior_results),
+                ),
+                AgentToolCall(
+                    call_id=f"search_{index}",
+                    tool_name="search_stickers",
+                    arguments={
+                        "query": f"intent_{index}",
+                        "purpose": "proactive",
+                    },
+                ),
+            )
+            prior_results.append(result)
+
+        self.assertEqual(
+            [result.status for result in prior_results],
+            [AgentToolStatus.NO_RESULT] * 3,
+        )
+        self.assertNotIn(
+            "tool_call_limit",
+            [result.error_code for result in prior_results],
+        )
+
     async def test_explicit_sticker_search_falls_back_to_any_available_sticker(self):
         sticker = _sticker()
         searches = []

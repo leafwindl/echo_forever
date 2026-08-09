@@ -31,3 +31,29 @@ def validate_image(content: bytes, content_type: str, maximum_bytes: int) -> str
 def normalize_tags(tags: list[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(tag.strip().lower()[:30] for tag in tags if tag.strip()))[:12]
 
+
+def build_sticker_semantic_text(description: str, tags: tuple[str, ...]) -> str:
+    clean_description = description.strip()
+    clean_tags = tuple(tag.strip() for tag in tags if tag.strip())
+    parts: list[str] = []
+    if clean_tags:
+        parts.append(
+            "This chat sticker expresses these semantic tags, emotions, attitudes, or "
+            "response intents: " + ", ".join(clean_tags)
+        )
+    if clean_description:
+        parts.append("Its usage description is: " + clean_description)
+    return ". ".join(parts)
+
+
+def build_sticker_query_text(query: str) -> str:
+    clean_query = query.strip()
+    if not clean_query:
+        return ""
+    return (
+        "Instruct: Given a conversational context and desired reaction, retrieve the sticker "
+        "whose emotion, attitude, and usage scenario best match the query.\n"
+        "Query: "
+        + clean_query
+    )
+

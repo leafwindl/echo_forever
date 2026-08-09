@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ load_dotenv(BACKEND_ROOT / ".env", override=False)
 
 from db.postgres_connection import transaction  # noqa: E402
 from features.stickers.domain.services import validate_image  # noqa: E402
+from features.stickers.public import backfill_sticker_embeddings  # noqa: E402
 from shared.config import settings  # noqa: E402
 from shared.storage import get_cos_object_storage  # noqa: E402
 
@@ -157,6 +159,8 @@ def main() -> None:
     if not 0 <= args.priority <= 10000:
         raise SystemExit("--priority must be between 0 and 10000")
     report = sync_assets(args.asset_root, apply=args.apply, priority=args.priority)
+    if args.apply:
+        report["embeddings_backfilled"] = asyncio.run(backfill_sticker_embeddings())
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

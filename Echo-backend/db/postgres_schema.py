@@ -423,6 +423,16 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
+        f"""
+        CREATE TABLE IF NOT EXISTS sticker_embeddings (
+            sticker_id TEXT PRIMARY KEY,
+            embedding_model TEXT NOT NULL,
+            semantic_text TEXT NOT NULL,
+            embedding vector({dimension}) NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
         """
         CREATE TABLE IF NOT EXISTS sticker_generation_jobs (
             id BIGSERIAL PRIMARY KEY,
@@ -707,6 +717,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_daily_letters_status_publish ON daily_letters(status, publish_at)",
         "CREATE INDEX IF NOT EXISTS idx_stickers_owner_status ON stickers(owner_user_id, status, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_stickers_hash ON stickers(perceptual_hash)",
+        """
+        CREATE INDEX IF NOT EXISTS idx_sticker_embeddings_model
+        ON sticker_embeddings(embedding_model)
+        """,
         "ALTER TABLE stickers ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 100",
         """
         CREATE INDEX IF NOT EXISTS idx_stickers_echo_priority

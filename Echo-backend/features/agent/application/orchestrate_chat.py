@@ -120,7 +120,13 @@ class OrchestrateChatWithAgent:
                                 ),
                                 timeout=self._remaining_timeout(deadline),
                             )
-                            tool_call_count += 1
+                            definition = self.registry.get(call.tool_name)
+                            if not (
+                                definition is not None
+                                and not definition.specification.count_no_result_toward_call_limit
+                                and tool_result.status == AgentToolStatus.NO_RESULT
+                            ):
+                                tool_call_count += 1
 
                         tool_results.append(tool_result)
                         self._record_tool_result(run_id, call, tool_result)

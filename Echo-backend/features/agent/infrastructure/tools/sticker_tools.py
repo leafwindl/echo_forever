@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import inspect
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -29,11 +30,11 @@ class SendStickerArguments(BaseModel):
     purpose: Literal["explicit_request", "proactive"] = "explicit_request"
 
 
-StickerSearch = Callable[..., list[Sticker]]
+StickerSearch = Callable[..., list[Sticker] | Awaitable[list[Sticker]]]
 StickerSend = Callable[[str, str], Sticker | None]
 
 
-def _search_with_context(
+async def _search_with_context(
     search: StickerSearch,
     context: ToolExecutionContext,
     query: str,
@@ -41,7 +42,7 @@ def _search_with_context(
     purpose: str,
 ) -> list[Sticker]:
     try:
-        return search(
+        result = search(
             context.user_id,
             query,
             limit,
@@ -51,7 +52,10 @@ def _search_with_context(
     except TypeError as exc:
         if "unexpected keyword argument" not in str(exc):
             raise
-        return search(context.user_id, query, limit)
+        result = search(context.user_id, query, limit)
+    if inspect.isawaitable(result):
+        return await result
+    return result
 
 
 def register_sticker_tools(
@@ -74,7 +78,7 @@ def register_sticker_tools(
                 error_code="proactive_sticker_cooldown",
             )
         requested_query = parsed.query.strip()
-        stickers = _search_with_context(
+        stickers = await _search_with_context(
             search,
             context,
             requested_query,
@@ -84,7 +88,7 @@ def register_sticker_tools(
         fallback_used = False
         if not stickers and parsed.purpose == "explicit_request" and requested_query:
             fallback_used = True
-            stickers = _search_with_context(
+            stickers = await _search_with_context(
                 search,
                 context,
                 "",
@@ -97,6 +101,7 @@ def register_sticker_tools(
                 "description": sticker.description,
                 "semantic_tags": list(sticker.semantic_tags),
                 "priority": sticker.priority,
+                "similarity_score": sticker.similarity_score,
             }
             for sticker in stickers
         ]
@@ -195,14 +200,16 @@ def register_sticker_tools(
             specification=ToolSpecification(
                 name="search_stickers",
                 description=(
-                    "按语义查询当前用户可见的 Echo 或私人表情包候选。explicit_request "
-                    "精确匹配为空时工具会自动回退到任意可用候选，不要连续猜测关键词"
+                    "根据当前语境中想表达的情绪、态度和使用场景，语义查询当前用户可见的 "
+                    "Echo 或私人表情包候选。query 应使用自然语言描述表达意图，不要只堆砌关键词。"
+                    "explicit_request 没有语义候选时会回退到其他可用候选。"
                 ),
                 risk_level=ToolRisk.READ,
                 timeout_seconds=5,
                 is_idempotent=True,
                 allowed_modes=("chat", "proactive"),
                 max_calls_per_turn=2,
+                count_no_result_toward_call_limit=False,
                 allow_proactive=True,
             ),
             arguments_model=SearchStickersArguments,

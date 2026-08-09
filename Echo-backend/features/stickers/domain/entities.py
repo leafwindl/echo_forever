@@ -14,4 +14,5 @@ class Sticker:
     status: str
     created_at: datetime
     priority: int = 100
+    similarity_score: float | None = None
 

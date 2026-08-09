@@ -14,6 +14,8 @@ class PostgresSchemaTests(unittest.TestCase):
         self.assertIn("CREATE EXTENSION IF NOT EXISTS vector", schema_text)
         self.assertIn("embedding vector(1024) NOT NULL", schema_text)
         self.assertIn("CREATE TABLE IF NOT EXISTS memory_embeddings", schema_text)
+        self.assertIn("CREATE TABLE IF NOT EXISTS sticker_embeddings", schema_text)
+        self.assertIn("semantic_text TEXT NOT NULL", schema_text)
 
     def test_schema_contains_chat_lifecycle_and_voice_files(self):
         schema_text = build_postgres_schema_text(vector_dimension=1024)

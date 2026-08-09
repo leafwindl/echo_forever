@@ -683,6 +683,34 @@ class Settings(BaseSettings):
     sticker_reuse_cooldown_minutes: int = Field(
         default=5, validation_alias="STICKER_REUSE_COOLDOWN_MINUTES", ge=1
     )
+    sticker_vector_search_enabled: bool = Field(
+        default=True,
+        validation_alias="STICKER_VECTOR_SEARCH_ENABLED",
+    )
+    sticker_vector_top_k: int = Field(
+        default=12,
+        validation_alias="STICKER_VECTOR_TOP_K",
+        ge=3,
+        le=100,
+    )
+    sticker_vector_score_threshold: float = Field(
+        default=0.55,
+        validation_alias="STICKER_VECTOR_SCORE_THRESHOLD",
+        ge=-1.0,
+        le=1.0,
+    )
+    sticker_vector_max_score_gap: float = Field(
+        default=0.04,
+        validation_alias="STICKER_VECTOR_MAX_SCORE_GAP",
+        ge=0.0,
+        le=1.0,
+    )
+    sticker_embedding_backfill_limit: int = Field(
+        default=500,
+        validation_alias="STICKER_EMBEDDING_BACKFILL_LIMIT",
+        ge=1,
+        le=10000,
+    )
     conversation_active_max_seconds: int = Field(
         default=120,
         validation_alias="CONVERSATION_ACTIVE_MAX_SECONDS",
