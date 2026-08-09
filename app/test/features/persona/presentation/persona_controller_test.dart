@@ -1,4 +1,5 @@
 import 'package:echo_app/core/auth_session/session_controller.dart';
+import 'package:echo_app/core/auth_session/session_snapshot.dart';
 import 'package:echo_app/core/di/providers.dart';
 import 'package:echo_app/core/storage/onboarding_completion_store.dart';
 import 'package:echo_app/core/storage/secure_store.dart';
@@ -72,6 +73,54 @@ void main() {
     },
   );
 
+  test('token rotation keeps persona and active chat state', () async {
+    final repository = FakePersonaRepository(
+      persona: personaFixture(preferredName: 'Leaf'),
+    );
+    final chatRepository = FakeChatRepository();
+    final container = _container(repository, chatRepository: chatRepository);
+    addTearDown(container.dispose);
+
+    await _loadSession(container);
+    await container.read(personaControllerProvider.future);
+    final chatSubscription = container.listen<ChatState>(
+      chatControllerProvider,
+      (_, _) {},
+      fireImmediately: true,
+    );
+    addTearDown(chatSubscription.close);
+    await container.pump();
+    await container
+        .read(chatControllerProvider.notifier)
+        .sendMessage('这条消息不能因为刷新 token 丢失');
+
+    final historyCallsBeforeRefresh = chatRepository.historyCalls;
+    await container
+        .read(sessionControllerProvider.notifier)
+        .establish(
+          SessionSnapshot.authenticated(
+            userId: 'user-1',
+            accessToken: 'rotated-access-token',
+            refreshToken: 'rotated-refresh-token',
+            tokenType: 'bearer',
+            accessExpiresAt: DateTime.utc(2026, 8, 10, 12),
+            refreshExpiresAt: DateTime.utc(2026, 9, 10, 12),
+            deviceId: 'device-id',
+          ),
+        );
+    await container.pump();
+
+    expect(repository.getPersonaCalls, 1);
+    expect(chatRepository.historyCalls, historyCallsBeforeRefresh);
+    expect(
+      container
+          .read(chatControllerProvider)
+          .messages
+          .map((item) => item.content),
+      contains('这条消息不能因为刷新 token 丢失'),
+    );
+  });
+
   test('resetRelationship invalidates relationship state provider', () async {
     final repository = FakePersonaRepository(
       relationship: relationshipFixture(stage: 'close', stageLabel: 'Close'),
@@ -105,6 +154,7 @@ void main() {
 ProviderContainer _container(
   FakePersonaRepository repository, {
   FakeOnboardingCompletionStore? onboarding,
+  FakeChatRepository? chatRepository,
 }) {
   return ProviderContainer(
     overrides: [
@@ -113,7 +163,9 @@ ProviderContainer _container(
       onboardingCompletionStoreProvider.overrideWithValue(
         onboarding ?? FakeOnboardingCompletionStore(),
       ),
-      chatRepositoryProvider.overrideWithValue(FakeChatRepository()),
+      chatRepositoryProvider.overrideWithValue(
+        chatRepository ?? FakeChatRepository(),
+      ),
     ],
   );
 }

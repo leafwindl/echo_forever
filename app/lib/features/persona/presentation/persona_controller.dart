@@ -48,15 +48,18 @@ class PersonaState {
 class PersonaController extends AsyncNotifier<PersonaState> {
   @override
   Future<PersonaState> build() async {
-    final session = ref.watch(sessionControllerProvider).asData?.value;
-    if (session?.isAuthenticated != true) {
+    final userId = ref.watch(
+      sessionControllerProvider.select(
+        (session) => session.asData?.value.userId,
+      ),
+    );
+    if (userId == null) {
       return const PersonaState(
         persona: UserPersona.defaults(),
         isLoading: false,
         isSaving: false,
       );
     }
-    final userId = session!.userId!;
     final localOnboardingCompleted = await ref
         .read(onboardingCompletionStoreProvider)
         .isCompleted(userId);
