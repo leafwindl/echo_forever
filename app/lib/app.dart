@@ -49,6 +49,10 @@ class _EchoAppState extends ConsumerState<EchoApp> {
   void _onAppLifecycleChanged(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkForUpdateInBackground();
+      final session = ref.read(sessionControllerProvider).asData?.value;
+      if (session?.isAuthenticated == true) {
+        ref.invalidate(lettersControllerProvider);
+      }
     }
   }
 

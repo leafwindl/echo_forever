@@ -1,6 +1,6 @@
 # Echo App
 
-Echo App 是 Echo 的 Flutter 客户端。当前生产 APK 为 `1.0.7+12`，用户可见版本显示为 `v1.0.7`；`+12` 是 Android 用于判断升级顺序的内部 `versionCode`，不会显示在聊天界面。
+Echo App 是 Echo 的 Flutter 客户端。当前生产 APK 为 `1.0.8+13`，用户可见版本显示为 `v1.0.8`；`+13` 是 Android 用于判断升级顺序的内部 `versionCode`，不会显示在聊天界面。
 
 | 项目 | 当前值 |
 | --- | --- |
@@ -110,7 +110,7 @@ flutter run -d <device> --dart-define=ECHO_BASE_URL=http://localhost:8000
 flutter build apk --release --no-pub `
   --dart-define=ECHO_ENV=production `
   --dart-define=ECHO_BASE_URL=https://api.echoaiforever.cn `
-  --dart-define=APP_VERSION=1.0.7
+  --dart-define=APP_VERSION=1.0.8
 ```
 
 `android/key.properties`、`android/local.properties` 和 COS/个推服务端密钥都被 Git 忽略。发布脚本会校验包名、版本号、文件大小和 SHA-256，然后上传 COS 并登记 `app_releases`。

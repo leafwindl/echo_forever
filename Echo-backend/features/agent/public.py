@@ -1,7 +1,7 @@
 from shared.config import settings
 
 from features.agent.domain.entities import AgentTurnResult
-from features.agent.infrastructure.container import get_chat_agent
+from features.agent.infrastructure.container import get_chat_agent, get_daily_letter_agent
 
 
 async def run_chat_agent(
@@ -27,4 +27,19 @@ async def run_chat_agent(
     )
 
 
-__all__ = ["AgentTurnResult", "run_chat_agent"]
+async def run_daily_letter_agent(
+    user_id: str,
+    objective: str,
+    messages: list[dict],
+) -> AgentTurnResult:
+    """Run the shared Agent core with the restricted daily-letter policy."""
+    return await get_daily_letter_agent().execute(
+        user_id,
+        objective,
+        messages,
+        conversation_mode="daily_letter",
+        tools_enabled=False,
+    )
+
+
+__all__ = ["AgentTurnResult", "run_chat_agent", "run_daily_letter_agent"]

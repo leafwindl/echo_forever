@@ -13,7 +13,7 @@ from features.auth.interface.router import router as auth_router
 from features.chat.interface.router import router as chat_router
 from features.chat.public import process_pending_chat_turn_once
 from features.letters.interface.router import router as letters_router
-from features.letters.public import generate_due_letters
+from features.letters.public import generate_due_letters, publish_due_letters
 from features.memory.interface.router import router as memory_router
 from features.memory.public import resume_pending_memory_extraction_jobs
 from features.persona.interface.router import router as persona_router
@@ -71,6 +71,9 @@ async def run_daily_letter_loop() -> None:
             created = await generate_due_letters()
             if created:
                 logger.info("Daily letter generation finished created=%s", created)
+            published = await asyncio.to_thread(publish_due_letters)
+            if published:
+                logger.info("Daily letter publication finished published=%s", published)
         except Exception:
             logger.warning("Daily letter worker failed", exc_info=True)
         await asyncio.sleep(settings.daily_letter_worker_interval_seconds)

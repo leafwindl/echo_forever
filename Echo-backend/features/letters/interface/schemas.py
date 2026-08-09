@@ -10,6 +10,9 @@ class LetterResponse(BaseModel):
     status: str
     subject: str
     content: str
+    image_url: str = ""
+    image_width: int | None = None
+    image_height: int | None = None
     published_at: datetime | None = None
     read_at: datetime | None = None
 

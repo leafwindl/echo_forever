@@ -582,12 +582,82 @@ class Settings(BaseSettings):
     daily_letter_worker_interval_seconds: int = Field(
         default=60, validation_alias="DAILY_LETTER_WORKER_INTERVAL_SECONDS", ge=10
     )
+    daily_letter_worker_batch_size: int = Field(
+        default=20,
+        validation_alias="DAILY_LETTER_WORKER_BATCH_SIZE",
+        ge=1,
+        le=200,
+    )
     daily_letter_generation_version: str = Field(
-        default="letter-v1", validation_alias="DAILY_LETTER_GENERATION_VERSION"
+        default="letter-agent-v2", validation_alias="DAILY_LETTER_GENERATION_VERSION"
+    )
+    daily_letter_max_attempts: int = Field(
+        default=3, validation_alias="DAILY_LETTER_MAX_ATTEMPTS", ge=1, le=5
+    )
+    daily_letter_retry_offsets_seconds: str = Field(
+        default="300,720",
+        validation_alias="DAILY_LETTER_RETRY_OFFSETS_SECONDS",
+    )
+    daily_letter_agent_timeout_seconds: int = Field(
+        default=120,
+        validation_alias="DAILY_LETTER_AGENT_TIMEOUT_SECONDS",
+        ge=10,
+        le=300,
+    )
+    daily_letter_agent_max_steps: int = Field(
+        default=2,
+        validation_alias="DAILY_LETTER_AGENT_MAX_STEPS",
+        ge=1,
+        le=4,
+    )
+    daily_letter_target_min_chars: int = Field(
+        default=600,
+        validation_alias="DAILY_LETTER_TARGET_MIN_CHARS",
+        ge=100,
+        le=2000,
+    )
+    daily_letter_target_max_chars: int = Field(
+        default=1000,
+        validation_alias="DAILY_LETTER_TARGET_MAX_CHARS",
+        ge=200,
+        le=4000,
+    )
+    daily_letter_context_version: str = Field(
+        default="daily-letter-context-v2",
+        validation_alias="DAILY_LETTER_CONTEXT_VERSION",
     )
     letter_image_generation_enabled: bool = Field(
         default=False,
         validation_alias="LETTER_IMAGE_GENERATION_ENABLED",
+    )
+    minimax_image_api_key: str = Field(
+        default="", validation_alias="MINIMAX_IMAGE_API_KEY"
+    )
+    minimax_image_base_url: str = Field(
+        default="https://api.minimaxi.com/v1/image_generation",
+        validation_alias="MINIMAX_IMAGE_BASE_URL",
+    )
+    minimax_image_model: str = Field(
+        default="image-01",
+        validation_alias="MINIMAX_IMAGE_MODEL",
+    )
+    minimax_image_timeout_seconds: int = Field(
+        default=120, validation_alias="MINIMAX_IMAGE_TIMEOUT_SECONDS", ge=10, le=300
+    )
+    letter_image_aspect_ratio: str = Field(
+        default="4:3", validation_alias="LETTER_IMAGE_ASPECT_RATIO"
+    )
+    letter_image_max_attempts: int = Field(
+        default=2, validation_alias="LETTER_IMAGE_MAX_ATTEMPTS", ge=1, le=3
+    )
+    letter_image_max_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        validation_alias="LETTER_IMAGE_MAX_BYTES",
+        ge=1024,
+        le=20 * 1024 * 1024,
+    )
+    letter_image_reference_asset: str = Field(
+        default="", validation_alias="LETTER_IMAGE_REFERENCE_ASSET"
     )
     sticker_enabled: bool = Field(default=True, validation_alias="STICKER_ENABLED")
     sticker_upload_max_bytes: int = Field(

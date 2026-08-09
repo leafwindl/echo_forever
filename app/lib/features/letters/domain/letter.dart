@@ -31,6 +31,9 @@ class DailyLetter {
     required this.status,
     required this.subject,
     required this.content,
+    this.imageUrl = '',
+    this.imageWidth,
+    this.imageHeight,
     this.publishedAt,
     this.readAt,
   });
@@ -43,6 +46,9 @@ class DailyLetter {
       status: LetterStatus.fromJson(json['status']),
       subject: json['subject'] as String? ?? '',
       content: json['content'] as String? ?? '',
+      imageUrl: json['image_url'] as String? ?? '',
+      imageWidth: json['image_width'] as int?,
+      imageHeight: json['image_height'] as int?,
       publishedAt: json['published_at'] as String?,
       readAt: json['read_at'] as String?,
     );
@@ -54,6 +60,9 @@ class DailyLetter {
   final LetterStatus status;
   final String subject;
   final String content;
+  final String imageUrl;
+  final int? imageWidth;
+  final int? imageHeight;
   final String? publishedAt;
   final String? readAt;
 }

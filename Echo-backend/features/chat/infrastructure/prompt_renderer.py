@@ -120,6 +120,12 @@ _CONVERSATION_MODE_GUIDANCE = {
         "and never mention notifications, schedules, jobs, tools, or the server. If a message would be intrusive or "
         "unnatural, return an empty delivery plan."
     ),
+    "daily_letter": (
+        "当前是每日来信生成模式。来信是 Echo 对昨日真实交流再次思考后的独立文字内容，"
+        "不是聊天气泡、流水账或对用户下达任务。需要在事实回顾之外写出有依据的观察和 Echo 自己的想法；"
+        "不得虚构 Echo 的离线活动、身体体验、所在地点或用户没有表达过的事实。最终必须严格输出约定的 JSON，"
+        "不得输出 Markdown 代码块或 JSON 之外的解释。"
+    ),
 }
 
 
@@ -260,7 +266,7 @@ def render_conversation_mode_guidance(conversation_mode: str) -> str:
     mode = conversation_mode.strip().lower()
     guidance = _CONVERSATION_MODE_GUIDANCE.get(mode)
     if guidance is None:
-        raise ValueError("conversation_mode must be chat, call, or proactive")
+        raise ValueError("conversation_mode must be chat, call, proactive, or daily_letter")
     return (
         "[CONVERSATION_MODE｜当前交互渠道约束]\n"
         f"模式: {mode}\n"

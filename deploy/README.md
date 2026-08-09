@@ -5,7 +5,7 @@
 - API: `https://api.echoaiforever.cn`
 - APK download: `https://download.echoaiforever.cn`
 - Repository: `/opt/echo/app`
-- Current release: Android `1.0.7+12`, backend branch `master`
+- Current release: Android `1.0.8+13`, backend branch `master`
 
 ## Server layout
 
@@ -24,7 +24,7 @@ Required production overrides:
 
 ```dotenv
 PUBLIC_BASE_URL=https://api.echoaiforever.cn
-APP_VERSION=1.0.7
+APP_VERSION=1.0.8
 BUILD_REVISION=<deployed-git-revision>
 
 ENABLE_API_DOCS=false
@@ -80,7 +80,7 @@ Build the production APK from `app/`:
 flutter build apk --release --no-pub `
   --dart-define=ECHO_ENV=production `
   --dart-define=ECHO_BASE_URL=https://api.echoaiforever.cn `
-  --dart-define=APP_VERSION=1.0.7
+  --dart-define=APP_VERSION=1.0.8
 ```
 
 The APK is written to `app/build/app/outputs/flutter-apk/app-release.apk`.

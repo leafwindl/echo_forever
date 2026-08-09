@@ -18,6 +18,9 @@ void main() {
           'status': 'ready',
           'subject': '写给你的信',
           'content': '我们聊过的事，会在这里慢慢沉淀下来。',
+          'image_url': 'https://example.com/letter.webp',
+          'image_width': 1200,
+          'image_height': 900,
           'published_at': '2026-08-04T08:00:00Z',
           'read_at': null,
         },
@@ -31,6 +34,9 @@ void main() {
     expect(letter.localDate, '2026-08-04');
     expect(letter.status, LetterStatus.ready);
     expect(letter.status.isUnread, isTrue);
+    expect(letter.imageUrl, 'https://example.com/letter.webp');
+    expect(letter.imageWidth, 1200);
+    expect(letter.imageHeight, 900);
     expect(letter.readAt, isNull);
   });
 
@@ -43,5 +49,7 @@ void main() {
     expect(letter.status, LetterStatus.unknown);
     expect(letter.status.isUnread, isFalse);
     expect(letter.subject, '');
+    expect(letter.imageUrl, '');
+    expect(letter.imageWidth, isNull);
   });
 }

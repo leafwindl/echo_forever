@@ -270,21 +270,126 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             user_id TEXT NOT NULL,
             local_date DATE NOT NULL,
             timezone TEXT NOT NULL,
-            status VARCHAR(32) NOT NULL DEFAULT 'pending',
+            status VARCHAR(32) NOT NULL DEFAULT 'pending'
+                CHECK (status IN (
+                    'pending', 'generating', 'retry_wait', 'ready_to_publish',
+                    'ready', 'read', 'skipped', 'failed'
+                )),
             subject TEXT NOT NULL DEFAULT '',
             content TEXT NOT NULL DEFAULT '',
             source_message_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+            source_memory_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
             generation_version TEXT NOT NULL,
+            agent_run_id TEXT NOT NULL DEFAULT '',
+            context_version TEXT NOT NULL DEFAULT '',
+            context_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
             scheduled_at TIMESTAMPTZ,
+            publish_at TIMESTAMPTZ,
             generated_at TIMESTAMPTZ,
             published_at TIMESTAMPTZ,
             read_at TIMESTAMPTZ,
             failure_code TEXT,
+            reflection TEXT NOT NULL DEFAULT '',
+            mood VARCHAR(80) NOT NULL DEFAULT '',
+            image_brief JSONB NOT NULL DEFAULT '{}'::jsonb,
+            image_storage_key TEXT NOT NULL DEFAULT '',
+            image_content_type TEXT NOT NULL DEFAULT '',
+            image_width INTEGER,
+            image_height INTEGER,
+            image_byte_size BIGINT,
+            image_provider VARCHAR(64) NOT NULL DEFAULT '',
+            image_model VARCHAR(128) NOT NULL DEFAULT '',
+            image_reference_version VARCHAR(128) NOT NULL DEFAULT '',
+            image_generation_status VARCHAR(32) NOT NULL DEFAULT 'disabled',
+            image_failure_code TEXT,
+            generation_attempt_count INTEGER NOT NULL DEFAULT 0,
+            max_attempts INTEGER NOT NULL DEFAULT 3,
+            next_attempt_at TIMESTAMPTZ,
+            lease_expires_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(user_id, local_date, generation_version)
         )
         """,
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "source_memory_ids JSONB NOT NULL DEFAULT '[]'::jsonb"
+        ),
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "agent_run_id TEXT NOT NULL DEFAULT ''"
+        ),
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "context_version TEXT NOT NULL DEFAULT ''"
+        ),
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "context_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb"
+        ),
+        "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS publish_at TIMESTAMPTZ",
+        "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS reflection TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS mood VARCHAR(80) NOT NULL DEFAULT ''",
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "image_brief JSONB NOT NULL DEFAULT '{}'::jsonb"
+        ),
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "image_storage_key TEXT NOT NULL DEFAULT ''"
+        ),
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "image_content_type TEXT NOT NULL DEFAULT ''"
+        ),
+        "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS image_width INTEGER",
+        "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS image_height INTEGER",
+        "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS image_byte_size BIGINT",
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "image_provider VARCHAR(64) NOT NULL DEFAULT ''"
+        ),
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "image_model VARCHAR(128) NOT NULL DEFAULT ''"
+        ),
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "image_reference_version VARCHAR(128) NOT NULL DEFAULT ''"
+        ),
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "image_generation_status VARCHAR(32) NOT NULL DEFAULT 'disabled'"
+        ),
+        "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS image_failure_code TEXT",
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "generation_attempt_count INTEGER NOT NULL DEFAULT 0"
+        ),
+        (
+            "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS "
+            "max_attempts INTEGER NOT NULL DEFAULT 3"
+        ),
+        "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ",
+        "ALTER TABLE daily_letters ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ",
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'daily_letters_status_check'
+                  AND conrelid = 'daily_letters'::regclass
+            ) THEN
+                ALTER TABLE daily_letters
+                    ADD CONSTRAINT daily_letters_status_check
+                    CHECK (status IN (
+                        'pending', 'generating', 'retry_wait', 'ready_to_publish',
+                        'ready', 'read', 'skipped', 'failed'
+                    )) NOT VALID;
+            END IF;
+        END $$
+        """,
+        "ALTER TABLE daily_letters VALIDATE CONSTRAINT daily_letters_status_check",
         """
         CREATE TABLE IF NOT EXISTS letter_preferences (
             user_id TEXT PRIMARY KEY,
@@ -599,6 +704,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_agent_tool_calls_run_created ON agent_tool_calls(run_id, created_at)",
         "CREATE INDEX IF NOT EXISTS idx_daily_letters_user_published ON daily_letters(user_id, published_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_daily_letters_status_scheduled ON daily_letters(status, scheduled_at)",
+        "CREATE INDEX IF NOT EXISTS idx_daily_letters_status_publish ON daily_letters(status, publish_at)",
         "CREATE INDEX IF NOT EXISTS idx_stickers_owner_status ON stickers(owner_user_id, status, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_stickers_hash ON stickers(perceptual_hash)",
         "ALTER TABLE stickers ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 100",

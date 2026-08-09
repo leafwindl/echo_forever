@@ -33,3 +33,17 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
         max_tool_calls=settings.agent_max_tool_calls,
         run_timeout_seconds=settings.agent_run_timeout_seconds,
     )
+
+
+@lru_cache(maxsize=1)
+def get_daily_letter_agent() -> OrchestrateChatWithAgent:
+    registry = ToolRegistry()
+    return OrchestrateChatWithAgent(
+        repository=PostgresAgentRunRepository(),
+        model=ProviderAgentConversationModel(),
+        registry=registry,
+        executor=ToolExecutor(registry),
+        max_steps=settings.daily_letter_agent_max_steps,
+        max_tool_calls=1,
+        run_timeout_seconds=settings.daily_letter_agent_timeout_seconds,
+    )

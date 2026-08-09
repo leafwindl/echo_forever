@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:echo_app/features/letters/domain/letter.dart';
 import 'package:echo_app/features/letters/presentation/letters_controller.dart';
 import 'package:echo_app/shared/widgets/echo_loading_view.dart';
@@ -176,6 +177,23 @@ class _LetterTile extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
+              if (letter.imageUrl.isNotEmpty) ...<Widget>[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: letter.imageUrl,
+                    width: double.infinity,
+                    height: 120,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const SizedBox(
+                      height: 120,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => const SizedBox.shrink(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               Text(
                 letter.content,
                 maxLines: 2,
@@ -224,6 +242,22 @@ class _LetterDialog extends ConsumerWidget {
                 Text(
                   state!.error!.detail ?? '标记已读失败，可稍后重试。',
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
+              if (letter.imageUrl.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: letter.imageUrl,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    placeholder: (context, url) => const SizedBox(
+                      height: 180,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => const SizedBox.shrink(),
+                  ),
                 ),
               ],
               const SizedBox(height: 18),

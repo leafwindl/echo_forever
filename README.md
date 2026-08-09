@@ -2,11 +2,11 @@
 
 Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter 客户端和 FastAPI 服务端组成。它把连续文字聊天、主动联系、定时提醒、语音通话、表情包、长期记忆和每日来信放在同一条可持久化的陪伴链路中。
 
-当前生产版本：**v1.0.7**
+当前生产版本：**v1.0.8**
 
 | 部件 | 当前值 |
 | --- | --- |
-| Android APK | `1.0.7+12` |
+| Android APK | `1.0.8+13` |
 | Android 包名 | `cn.echoaiforever.echo_app` |
 | 公网 API | `https://api.echoaiforever.cn` |
 | APK 下载域名 | `https://download.echoaiforever.cn` |
@@ -87,7 +87,7 @@ cd app
 flutter build apk --release --no-pub `
   --dart-define=ECHO_ENV=production `
   --dart-define=ECHO_BASE_URL=https://api.echoaiforever.cn `
-  --dart-define=APP_VERSION=1.0.7
+  --dart-define=APP_VERSION=1.0.8
 ```
 
 APK 构建后由发布脚本上传 COS，并把版本元数据写入生产 PostgreSQL。不要在服务器构建 APK，也不要把签名文件、个推服务端密钥或 COS 密钥提交到 Git。
@@ -113,7 +113,7 @@ flutter analyze
 flutter test
 ```
 
-当前发布检查结果：Flutter analyze 0 issues，客户端 111 项测试通过，后端 242 项测试和 7 个子测试通过，架构检查通过。
+当前发布检查结果：Flutter analyze 0 issues，客户端 111 项测试通过，后端 254 项测试通过，架构检查通过。
 
 ## 文档入口
 

@@ -1,6 +1,6 @@
 # Echo Backend
 
-Echo Backend 是 Echo AI 陪伴应用的服务端，基于 FastAPI、PostgreSQL 和 pgvector。当前生产版本为 `1.0.7`，负责身份会话、异步聊天、统一 Agent、长期记忆、关系状态、表情包、语音、每日来信、主动聊天、通知和 Android 应用更新。
+Echo Backend 是 Echo AI 陪伴应用的服务端，基于 FastAPI、PostgreSQL 和 pgvector。当前生产版本为 `1.0.8`，负责身份会话、异步聊天、统一 Agent、长期记忆、关系状态、表情包、语音、每日来信、主动聊天、通知和 Android 应用更新。
 
 ## 运行架构
 
@@ -198,4 +198,4 @@ python -B ../scripts/check_architecture.py
 python -m pytest -q
 ```
 
-当前发布结果：242 项后端测试和 7 个子测试通过，架构检查通过。
+当前发布结果：254 项后端测试通过，架构检查通过。

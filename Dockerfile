@@ -13,6 +13,7 @@ RUN python -m pip install --upgrade pip --index-url "${PIP_INDEX_URL}" \
 
 COPY Echo-backend /app/Echo-backend
 COPY scripts /app/scripts
+COPY app/assets/character /app/assets/character
 COPY assets/sticker /app/assets/sticker
 
 WORKDIR /app/Echo-backend

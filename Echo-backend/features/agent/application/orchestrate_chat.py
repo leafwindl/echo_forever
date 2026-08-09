@@ -269,10 +269,16 @@ class OrchestrateChatWithAgent:
                 "当前是语音通话模式。不得搜索、选择或发送表情包，即使用户明确要求也不"
                 "执行图片发送；自然说明通话里先继续说话即可。"
             )
+        elif conversation_mode == "daily_letter":
+            sticker_rule = (
+                "当前是每日来信模式，不得搜索、选择或发送聊天表情包，也不得创建定时任务、"
+                "主动聊天或外部搜索。图片只通过结构化 image_brief 交给来信业务处理。"
+            )
         elif conversation_mode == "proactive":
             sticker_rule = (
-                "This is a proactive text chat. Use at most one fitting sticker only when it naturally improves a "
-                "light, everyday check-in. Never use a sticker to force warmth or compensate for a weak topic."
+                "This is a proactive text chat. Use at most one fitting sticker only when "
+                "it naturally improves a light, everyday check-in. Never use a sticker to "
+                "force warmth or compensate for a weak topic."
             )
         elif allow_proactive_stickers and proactive_sticker_due:
             sticker_rule = (
@@ -304,9 +310,23 @@ class OrchestrateChatWithAgent:
                 "如果 send_sticker 已成功，可将 sticker_placement 设为 before_text 或 "
                 "after_text；不得在 JSON 中填写 sticker_id 或 URL。不要使用 Markdown 代码块。"
             )
-        instruction = {
-            "role": "system",
-            "content": (
+        elif conversation_mode == "daily_letter":
+            delivery_rule = (
+                "每日来信最终只输出一个 JSON 对象，字段必须为：subject、content、mood、"
+                "core_topics、reflection、closing_style、image_brief、source_message_ids、"
+                "source_memory_ids。content 是完整正文，建议 600 到 1000 个中文字符；"
+                "reflection 必须包含 Echo 基于证据形成的个人观察或想法，不能只复述事件。"
+                "image_brief 必须是对象，包含 emotion、scene、visual_symbols、avoid；"
+                "不要在输出中编造图片 URL、storage key 或 Provider 结果；不要使用 Markdown 代码块。"
+            )
+        if conversation_mode == "daily_letter":
+            orchestration_rule = (
+                "你正在 Echo 的统一 Agent 回路中执行每日来信任务。输入中的人物设定、关系上下文、"
+                "昨日消息和长期记忆具有不同证据等级；不得把长期记忆伪装成昨日事实，也不得虚构"
+                "Echo 的离线现实活动。当前无可用工具，必须直接完成结构化来信。"
+            )
+        else:
+            orchestration_rule = (
                 "你正在 Echo 的统一 Agent 对话回路中。当前列出的工具代表真实能力；历史"
                 "assistant 消息中关于能力的说法可能过时，不能覆盖当前工具清单。需要可靠"
                 "事实或执行动作时调用工具，工具结果是唯一可信执行事实。工具调用后继续在"
@@ -314,8 +334,11 @@ class OrchestrateChatWithAgent:
                 "回复，最终文字不得声称不能发送；若失败则不得假装成功。不要向用户解释"
                 "Agent、工具、call id 或内部流程。explicit_request 的 search_stickers 会在"
                 "精确匹配为空时自动返回其他可用候选；拿到候选后直接选择发送，不要反复猜"
-                "测搜索关键词。" + sticker_rule + delivery_rule
-            ),
+                "测搜索关键词。"
+            )
+        instruction = {
+            "role": "system",
+            "content": orchestration_rule + sticker_rule + delivery_rule,
         }
         result = [instruction, *messages]
         clean_intent = sticker_intent.strip()
