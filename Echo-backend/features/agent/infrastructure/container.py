@@ -40,7 +40,7 @@ def get_daily_letter_agent() -> OrchestrateChatWithAgent:
     registry = ToolRegistry()
     return OrchestrateChatWithAgent(
         repository=PostgresAgentRunRepository(),
-        model=ProviderAgentConversationModel(),
+        model=ProviderAgentConversationModel(max_tokens=settings.daily_letter_max_tokens),
         registry=registry,
         executor=ToolExecutor(registry),
         max_steps=settings.daily_letter_agent_max_steps,

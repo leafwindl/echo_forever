@@ -171,6 +171,36 @@ class AgentDomainTests(unittest.TestCase):
 
 
 class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_agent_model_passes_configured_max_tokens_to_provider(self):
+        class RecordingProvider:
+            def __init__(self):
+                self.kwargs = None
+
+            async def chat_completion_message(self, **kwargs):
+                self.kwargs = kwargs
+                return type(
+                    "Response",
+                    (),
+                    {
+                        "content": "done",
+                        "tool_calls": (),
+                        "finish_reason": "stop",
+                        "request_id": "req_test",
+                    },
+                )()
+
+        provider = RecordingProvider()
+        with patch(
+            "features.agent.infrastructure.model.get_llm_provider",
+            return_value=provider,
+        ):
+            await ProviderAgentConversationModel(max_tokens=2500).complete(
+                messages=[{"role": "user", "content": "写信"}],
+                tools=(),
+            )
+
+        self.assertEqual(provider.kwargs["max_tokens"], 2500)
+
     async def test_http_timeout_is_preserved_as_provider_timeout(self):
         class TimeoutClient:
             async def __aenter__(self):
@@ -214,6 +244,31 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_daily_letter_truncation_fails_without_repeating_empty_calls(self):
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    text="",
+                    finish_reason="length",
+                    provider_request_id="req_truncated",
+                )
+            ]
+        )
+        orchestrator, repository, _ = _build_orchestrator(model, max_steps=2)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="Generate daily letter",
+            messages=[{"role": "user", "content": "写信"}],
+            conversation_mode="daily_letter",
+            tools_enabled=False,
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.FAILED)
+        self.assertEqual(result.error_code, "llm_output_truncated")
+        self.assertEqual(len(model.calls), 1)
+        self.assertEqual(repository.finishes[0], ("run_test", 1, "llm_output_truncated"))
+
     async def test_normal_chat_and_tools_share_one_agent_runtime(self):
         model = SequenceAgentModel([AgentModelResponse(text="今天听起来心情不错。")])
         orchestrator, repository, _ = _build_orchestrator(model)

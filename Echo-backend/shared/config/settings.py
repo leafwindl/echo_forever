@@ -610,6 +610,12 @@ class Settings(BaseSettings):
         ge=1,
         le=4,
     )
+    daily_letter_max_tokens: int = Field(
+        default=2500,
+        validation_alias="DAILY_LETTER_MAX_TOKENS",
+        ge=500,
+        le=8192,
+    )
     daily_letter_target_min_chars: int = Field(
         default=600,
         validation_alias="DAILY_LETTER_TARGET_MIN_CHARS",

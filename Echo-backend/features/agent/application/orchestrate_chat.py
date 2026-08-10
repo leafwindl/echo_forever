@@ -91,6 +91,22 @@ class OrchestrateChatWithAgent:
                     timeout_retries_remaining=llm_timeout_retries_remaining,
                 )
 
+                finish_reason = response.finish_reason.strip().lower()
+                if finish_reason == "length" and (
+                    conversation_mode == "daily_letter" or not response.text.strip()
+                ):
+                    final_error = "llm_output_truncated"
+                    logger.warning(
+                        "Unified Agent LLM output truncated run_id=%s mode=%s "
+                        "content_length=%s tool_calls=%s provider_request_id=%s",
+                        run_id,
+                        conversation_mode,
+                        len(response.text),
+                        len(response.tool_calls),
+                        response.provider_request_id,
+                    )
+                    break
+
                 if response.tool_calls:
                     normalized_calls = self._normalize_calls(response.tool_calls)
                     agent_messages.append(
@@ -152,30 +168,31 @@ class OrchestrateChatWithAgent:
 
                 agent_messages.append({"role": "system", "content": FINAL_RETRY_INSTRUCTION})
 
-            final_error = "agent_step_limit"
-            fallback, _ = await self._try_final_response(
-                agent_messages,
-                deadline,
-                run_id,
-                llm_timeout_retries_remaining,
-            )
-            model_steps += 1
-            if fallback:
-                delivery_plan = parse_agent_delivery_plan(fallback, conversation_mode)
-                result = AgentTurnResult(
-                    status=AgentRunStatus.COMPLETED,
-                    reply_text=delivery_plan.reply_text,
-                    sources=tuple(sources),
-                    content_parts=tuple(content_parts),
-                    tool_results=tuple(tool_results),
-                    run_id=run_id,
-                    model_steps=model_steps,
-                    error_code=final_error,
-                    reply_segments=delivery_plan.text_segments,
-                    sticker_placement=delivery_plan.sticker_placement,
+            if final_error is None:
+                final_error = "agent_step_limit"
+                fallback, _ = await self._try_final_response(
+                    agent_messages,
+                    deadline,
+                    run_id,
+                    llm_timeout_retries_remaining,
                 )
-                self.repository.finish(run_id, model_steps + tool_call_count, final_error)
-                return result
+                model_steps += 1
+                if fallback:
+                    delivery_plan = parse_agent_delivery_plan(fallback, conversation_mode)
+                    result = AgentTurnResult(
+                        status=AgentRunStatus.COMPLETED,
+                        reply_text=delivery_plan.reply_text,
+                        sources=tuple(sources),
+                        content_parts=tuple(content_parts),
+                        tool_results=tuple(tool_results),
+                        run_id=run_id,
+                        model_steps=model_steps,
+                        error_code=final_error,
+                        reply_segments=delivery_plan.text_segments,
+                        sticker_placement=delivery_plan.sticker_placement,
+                    )
+                    self.repository.finish(run_id, model_steps + tool_call_count, final_error)
+                    return result
         except Exception as exc:
             if isinstance(exc, AgentModelTimeoutError):
                 final_error = "llm_timeout"

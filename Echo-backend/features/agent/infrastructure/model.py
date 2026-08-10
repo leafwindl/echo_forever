@@ -5,6 +5,9 @@ from features.agent.domain.services import AgentModelTimeoutError
 
 
 class ProviderAgentConversationModel:
+    def __init__(self, *, max_tokens: int | None = None):
+        self.max_tokens = max_tokens
+
     async def complete(
         self,
         messages: list[dict],
@@ -15,6 +18,7 @@ class ProviderAgentConversationModel:
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
+                max_tokens=self.max_tokens,
             )
         except LLMProviderTimeoutError as exc:
             raise AgentModelTimeoutError("Conversation model request timed out") from exc
