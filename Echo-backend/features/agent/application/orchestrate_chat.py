@@ -340,6 +340,7 @@ class OrchestrateChatWithAgent:
                 "source_memory_ids。content 是完整正文，建议 600 到 1000 个中文字符；"
                 "reflection 必须包含 Echo 基于证据形成的个人观察或想法，不能只复述事件。"
                 "image_brief 必须是对象，包含 emotion、scene、visual_symbols、avoid；"
+                "visual_symbols 和 avoid 必须是字符串数组；"
                 "不要在输出中编造图片 URL、storage key 或 Provider 结果；不要使用 Markdown 代码块。"
             )
         if conversation_mode == "daily_letter":

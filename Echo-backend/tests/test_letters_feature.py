@@ -130,6 +130,25 @@ class _FakeImageGenerator:
 
 
 class LetterGenerationTests(unittest.IsolatedAsyncioTestCase):
+    def test_image_brief_normalizes_string_lists_from_model_output(self):
+        raw_output = _letter_json(
+            image_brief={
+                "emotion": "安静关心",
+                "scene": "清晨窗边的 Echo 整理桌上的纸张",
+                "visual_symbols": "晨光、合上的笔记本",
+                "avoid": "文字，真实用户形象",
+            }
+        )
+
+        output = parse_letter_agent_output(
+            raw_output,
+            minimum_chars=10,
+            maximum_chars=1000,
+        )
+
+        self.assertEqual(output.image_brief["visual_symbols"], ["晨光", "合上的笔记本"])
+        self.assertEqual(output.image_brief["avoid"], ["文字", "真实用户形象"])
+
     async def test_invalid_json_gets_one_format_repair_and_grounded_sources(self):
         repository = _FakeLetterRepository([_task()])
         image_generator = _FakeImageGenerator(

@@ -112,6 +112,12 @@ def _clean_image_text(value: Any, field_name: str, maximum: int) -> str:
 
 
 def _clean_image_items(value: Any, field_name: str) -> tuple[str, ...]:
+    if isinstance(value, str):
+        value = [
+            item.strip()
+            for item in re.split(r"[\n,，、;；|]+", value)
+            if item.strip()
+        ]
     if not isinstance(value, list):
         raise LetterOutputValidationError(f"{field_name} must be a list")
     return tuple(
