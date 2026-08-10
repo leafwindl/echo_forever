@@ -103,7 +103,17 @@ class ProcessProactiveChatJobs:
                 conversation_mode="proactive",
             )
             if not prepared.reply_segments and not prepared.content_parts:
-                self.repository.suppress_job(job.job_id, "agent_skip")
+                reason = (
+                    f"agent_failed:{prepared.error_code}"
+                    if prepared.error_code
+                    else "agent_skip"
+                )
+                self.repository.suppress_job(job.job_id, reason)
+                logger.warning(
+                    "Proactive chat job suppressed job_id=%s reason=%s",
+                    job.job_id,
+                    reason,
+                )
                 return True
             delivery_types = ["text" for _ in prepared.reply_segments]
             if any(part.type == "sticker" for part in prepared.content_parts):

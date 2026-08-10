@@ -785,6 +785,43 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(model.calls), 1)
         self.assertEqual(repository.finishes[0][2], "ValueError")
 
+    async def test_proactive_model_failure_is_not_delivered_as_a_user_retry(self):
+        model = SequenceAgentModel([ValueError("model unavailable")])
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="A proactive message is due.",
+            messages=[{"role": "user", "content": "A proactive message is due."}],
+            conversation_mode="proactive",
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.FAILED)
+        self.assertEqual(result.reply_text, "")
+        self.assertEqual(result.reply_segments, ())
+        self.assertEqual(result.content_parts, ())
+        self.assertEqual(result.error_code, "ValueError")
+        self.assertEqual(repository.finishes[0][2], "ValueError")
+
+    async def test_proactive_truncated_empty_output_is_not_delivered(self):
+        model = SequenceAgentModel(
+            [AgentModelResponse(text="", finish_reason="length")]
+        )
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="A proactive message is due.",
+            messages=[{"role": "user", "content": "A proactive message is due."}],
+            conversation_mode="proactive",
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.FAILED)
+        self.assertEqual(result.reply_text, "")
+        self.assertEqual(result.reply_segments, ())
+        self.assertEqual(result.error_code, "llm_output_truncated")
+        self.assertEqual(repository.finishes[0][2], "llm_output_truncated")
+
     async def test_llm_timeout_is_retried_once_and_can_recover(self):
         model = SequenceAgentModel(
             [

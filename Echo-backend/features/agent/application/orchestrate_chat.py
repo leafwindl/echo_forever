@@ -202,18 +202,26 @@ class OrchestrateChatWithAgent:
                 final_error = type(exc).__name__
             logger.warning("Unified Agent runtime failed run_id=%s", run_id, exc_info=True)
 
-        reply_text = self._disaster_fallback(content_parts)
+        failed_content_parts = tuple(content_parts)
+        if conversation_mode == "proactive":
+            # Background check-ins have no user turn to recover. A partial or
+            # failed Agent result must stay silent instead of asking the user
+            # to repeat a message they never sent.
+            reply_text = ""
+            failed_content_parts = ()
+        else:
+            reply_text = self._disaster_fallback(content_parts)
         self.repository.finish(run_id, model_steps + tool_call_count, final_error)
         return AgentTurnResult(
             status=AgentRunStatus.FAILED,
             reply_text=reply_text,
             sources=tuple(sources),
-            content_parts=tuple(content_parts),
+            content_parts=failed_content_parts,
             tool_results=tuple(tool_results),
             run_id=run_id,
             model_steps=model_steps,
             error_code=final_error,
-            reply_segments=(reply_text,),
+            reply_segments=(reply_text,) if reply_text else (),
         )
 
     async def _try_final_response(
