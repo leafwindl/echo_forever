@@ -1,11 +1,11 @@
 import sys
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.proactive_chat.domain.entities import ChatSchedule
+from features.proactive_chat.domain.entities import ChatSchedule, ProactiveChatPreferences
 from features.proactive_chat.infrastructure import postgres_repository as repository_module
 from features.proactive_chat.infrastructure.postgres_repository import (
     PostgresProactiveChatRepository,
@@ -55,6 +55,74 @@ class _FakeTransaction:
 
 
 class ProactiveRepositoryTests(unittest.TestCase):
+    @staticmethod
+    def _preference(**overrides):
+        values = {
+            "user_id": "user_a",
+            "enabled": True,
+            "allow_echo_scheduling": True,
+            "allow_spontaneous_chat": True,
+            "proactivity_level": "active",
+            "timezone": "Asia/Shanghai",
+            "quiet_start": time(22, 30),
+            "quiet_end": time(8),
+            "explicit_reminder_quiet_policy": "defer",
+            "notification_preview": False,
+            "proactive_count": 0,
+            "window_started_at": None,
+            "last_proactive_at": None,
+            "consecutive_unanswered": 0,
+        }
+        values.update(overrides)
+        return ProactiveChatPreferences(**values)
+
+    def test_spontaneous_candidate_query_excludes_unanswered_pause(self):
+        cursor = _FakeCursor(many=[])
+        original_transaction = repository_module.transaction
+        repository_module.transaction = lambda: _FakeTransaction(_FakeConnection(cursor))
+        try:
+            created = PostgresProactiveChatRepository().create_spontaneous_job_if_due()
+        finally:
+            repository_module.transaction = original_transaction
+
+        self.assertFalse(created)
+        self.assertIn("pref.consecutive_unanswered < 2", cursor.calls[0][0])
+
+    def test_spontaneous_policy_pauses_after_two_unanswered_messages(self):
+        now = datetime(2026, 8, 10, 8, tzinfo=UTC)
+        allowed = PostgresProactiveChatRepository()._spontaneous_allowed(
+            self._preference(consecutive_unanswered=2),
+            now - timedelta(hours=3),
+            now,
+        )
+
+        self.assertFalse(allowed)
+
+    def test_active_six_message_limit_uses_rolling_24_hour_window(self):
+        now = datetime(2026, 8, 10, 8, tzinfo=UTC)
+        repository = PostgresProactiveChatRepository()
+        blocked = repository._spontaneous_allowed(
+            self._preference(
+                proactive_count=6,
+                window_started_at=now - timedelta(hours=23),
+                last_proactive_at=now - timedelta(hours=3),
+            ),
+            now - timedelta(hours=3),
+            now,
+        )
+        reset = repository._spontaneous_allowed(
+            self._preference(
+                proactive_count=6,
+                window_started_at=now - timedelta(hours=24),
+                last_proactive_at=now - timedelta(hours=3),
+            ),
+            now - timedelta(hours=3),
+            now,
+        )
+
+        self.assertFalse(blocked)
+        self.assertTrue(reset)
+
     def test_delete_schedule_removes_row_and_suppresses_pending_jobs(self):
         cursor = _FakeCursor(one={"schedule_id": "schedule_a"})
         original_transaction = repository_module.transaction

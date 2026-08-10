@@ -1,11 +1,14 @@
 import sys
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from features.chat.domain.temporal_context import build_temporal_context
 from features.chat.infrastructure.postgres_repositories import (
     _render_message_content,
+    _render_timestamped_history,
     classify_conversation_gap,
 )
 from features.chat.infrastructure.prompt_renderer import (
@@ -15,6 +18,64 @@ from features.chat.infrastructure.prompt_renderer import (
 
 
 class ContextBuilderTests(unittest.TestCase):
+    def test_temporal_context_resolves_local_time_and_relative_expressions(self):
+        context = build_temporal_context(
+            now_utc=datetime(2026, 8, 10, 6, 39, tzinfo=UTC),
+            timezone_name="Asia/Shanghai",
+            user_message="刚刚睡醒，下午准备干活，待会继续，明天上午开会，晚上休息。",
+            conversation_timing={
+                "gap_seconds": 12933,
+                "state": "returned",
+                "should_acknowledge_gap": True,
+                "current_message_at": "2026-08-10T06:37:36+00:00",
+                "previous_user_at": "2026-08-10T03:02:03+00:00",
+            },
+        )
+
+        self.assertEqual(context["local_datetime"], "2026-08-10T14:39:00+08:00")
+        self.assertEqual(context["weekday"], "周一")
+        self.assertEqual(context["day_period"], "下午")
+        expressions = {item["text"]: item for item in context["resolved_expressions"]}
+        self.assertEqual(expressions["刚刚"]["relation_to_now"], "recent_past")
+        self.assertEqual(expressions["下午"]["relation_to_now"], "current")
+        self.assertEqual(expressions["待会"]["relation_to_now"], "near_future")
+        self.assertEqual(expressions["明天上午"]["relation_to_now"], "future")
+        self.assertEqual(expressions["晚上"]["relation_to_now"], "future")
+        self.assertEqual(
+            context["conversation_gap"]["previous_user_at"],
+            "2026-08-10T11:02:03+08:00",
+        )
+
+    def test_history_keeps_local_timestamps_and_inserts_session_boundary(self):
+        rows = [
+            {
+                "message_id": "msg_1",
+                "role": "user",
+                "content": "上午先开会。",
+                "created_at": datetime(2026, 8, 10, 3, 2, 3, tzinfo=UTC),
+            },
+            {
+                "message_id": "msg_2",
+                "role": "assistant",
+                "content": "好，忙完再说。",
+                "created_at": datetime(2026, 8, 10, 3, 2, 15, tzinfo=UTC),
+            },
+            {
+                "message_id": "msg_3",
+                "role": "user",
+                "content": "下午刚睡醒。",
+                "created_at": datetime(2026, 8, 10, 6, 37, 36, tzinfo=UTC),
+            },
+        ]
+
+        messages = _render_timestamped_history(rows, {}, "Asia/Shanghai")
+
+        self.assertEqual(len(messages), 4)
+        self.assertIn("2026-08-10T11:02:03+08:00 周一 上午", messages[0]["content"])
+        self.assertEqual(messages[2]["role"], "system")
+        self.assertIn("间隔 3小时35分钟", messages[2]["content"])
+        self.assertIn("2026-08-10T14:37:36+08:00 周一 下午", messages[3]["content"])
+
     def test_formats_memory_type_content_and_score(self):
         text = format_long_term_memories(
             [

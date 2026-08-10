@@ -1,11 +1,13 @@
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from shared.config import settings
 
 from features.assistant_persona.public import get_assistant_persona
 from features.chat.domain.dialogue_style import should_pause_followup_questions
+from features.chat.domain.temporal_context import build_temporal_context
 from features.chat.infrastructure import postgres_repositories
 from features.chat.infrastructure.prompt_renderer import (
     render_prompt_layers,
@@ -36,6 +38,7 @@ class ChatContext:
     pause_followup_questions: bool = False
     allow_proactive_stickers: bool = True
     proactive_sticker_due: bool = False
+    temporal_context: dict[str, object] = field(default_factory=dict)
 
 
 def _list_active_memories_for_context(user_id: str) -> list[dict[str, object]]:
@@ -102,6 +105,10 @@ async def build_chat_context(
     conversation_mode: str = "chat",
     history_before_message_id: int | None = None,
 ) -> ChatContext:
+    timezone_name = postgres_repositories.get_user_timezone(
+        user_id,
+        settings.default_user_timezone,
+    )
     long_term_memories, memory_retrieval_mode = await _load_long_term_memories(
         user_id,
         user_message,
@@ -119,6 +126,7 @@ async def build_chat_context(
         conversation_id=conversation_id,
         after_message_id=summary_message_id,
         before_message_id=history_before_message_id,
+        timezone_name=timezone_name,
     )
     pause_followup_questions = should_pause_followup_questions(history, user_message)
     allow_proactive_stickers = (
@@ -149,6 +157,12 @@ async def build_chat_context(
         user_id,
         conversation_id,
         current_message_id=history_before_message_id,
+    )
+    temporal_context = build_temporal_context(
+        now_utc=datetime.now(UTC),
+        timezone_name=timezone_name,
+        user_message=user_message,
+        conversation_timing=conversation_timing,
     )
 
     try:
@@ -192,19 +206,20 @@ async def build_chat_context(
             "content": render_turn_focus_guidance(pause_followup_questions),
         }
     )
-    if conversation_timing:
-        messages.append(
-            {
-                "role": "system",
-                "content": (
-                    "以下是服务端计算的对话时间状态，不要机械报时，也不要每次都提时间。"
-                    "active/recent 表示持续对话，不提离开；returned/long_absence 只在轻松闲聊、"
-                    "问候或分享近况时允许自然问候一次，事实问题、任务指令、报错和严肃话题不要插入。\n"
-                    "conversation_timing="
-                    + json.dumps(conversation_timing, ensure_ascii=False)
-                ),
-            }
-        )
+    messages.append(
+        {
+            "role": "system",
+            "content": (
+                "以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。"
+                "resolved_expressions 只确定时间范围，不代表对应事情已经发生或完成；"
+                "relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。"
+                "conversation_gap 的 active/recent 表示持续对话，不提离开；"
+                "returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，"
+                "事实问题、任务指令、报错和严肃话题不要插入。\n"
+                "temporal_context=" + json.dumps(temporal_context, ensure_ascii=False)
+            ),
+        }
+    )
     messages.extend(history)
     messages.append({"role": "user", "content": user_message})
 
@@ -228,4 +243,5 @@ async def build_chat_context(
         pause_followup_questions=pause_followup_questions,
         allow_proactive_stickers=allow_proactive_stickers,
         proactive_sticker_due=proactive_sticker_due,
+        temporal_context=temporal_context,
     )

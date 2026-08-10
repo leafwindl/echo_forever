@@ -1,13 +1,32 @@
 import json
 import uuid
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from db.postgres_connection import get_connection, transaction
 from shared.config import settings
 
 from features.agent.domain.entities import ContentPart, SourceReference
 from features.auth.public import ensure_user_identity
+from features.chat.domain.temporal_context import day_period, format_gap_seconds, weekday_name
 from features.stickers.public import resolve_sticker_asset_url
+
+
+def get_user_timezone(user_id: str, fallback: str) -> str:
+    with get_connection() as conn, conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT timezone FROM proactive_chat_preferences WHERE user_id = %s",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+    candidate = str(row["timezone"] or "").strip() if row else ""
+    for value in (candidate, fallback, "UTC"):
+        try:
+            ZoneInfo(value)
+            return value
+        except ZoneInfoNotFoundError:
+            continue
+    return "UTC"
 
 
 def ensure_conversation(
@@ -371,6 +390,7 @@ def get_history(
     conversation_id: str | None = None,
     after_message_id: int = 0,
     before_message_id: int | None = None,
+    timezone_name: str = "UTC",
 ) -> list[dict[str, str]]:
     with get_connection() as conn:
         with conn.cursor() as cursor:
@@ -382,7 +402,7 @@ def get_history(
                 params.append(limit)
                 cursor.execute(
                     f"""
-                    SELECT message_id, role, content
+                    SELECT message_id, role, content, created_at
                     FROM chat_messages
                     WHERE user_id = %s
                       AND conversation_id = %s
@@ -401,7 +421,7 @@ def get_history(
                 params.append(limit)
                 cursor.execute(
                     f"""
-                    SELECT message_id, role, content
+                    SELECT message_id, role, content, created_at
                     FROM chat_messages
                     WHERE user_id = %s
                       AND id > %s
@@ -419,16 +439,57 @@ def get_history(
         )
 
     rows.reverse()
-    return [
-        {
-            "role": row["role"],
-            "content": _render_message_content(
-                str(row["content"]),
-                attachments.get(str(row["message_id"] or ""), ()),
-            ),
-        }
-        for row in rows
-    ]
+    return _render_timestamped_history(rows, attachments, timezone_name)
+
+
+def _render_timestamped_history(
+    rows,
+    attachments: dict[str, tuple[dict[str, object], ...]],
+    timezone_name: str,
+) -> list[dict[str, str]]:
+    try:
+        zone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        zone = ZoneInfo("UTC")
+
+    messages: list[dict[str, str]] = []
+    previous_at: datetime | None = None
+    for row in rows:
+        created_at = row["created_at"]
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        local_created_at = created_at.astimezone(zone)
+        if previous_at is not None:
+            gap_seconds = max(int((created_at - previous_at).total_seconds()), 0)
+            if gap_seconds >= settings.conversation_returned_min_seconds:
+                previous_local = previous_at.astimezone(zone)
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": (
+                            "[会话时间边界] 上一段消息结束于 "
+                            f"{previous_local.isoformat(timespec='seconds')}，本段开始于 "
+                            f"{local_created_at.isoformat(timespec='seconds')}，间隔 "
+                            f"{format_gap_seconds(gap_seconds)}。不要把边界两侧当作连续即时对话。"
+                        ),
+                    }
+                )
+        rendered = _render_message_content(
+            str(row["content"]),
+            attachments.get(str(row["message_id"] or ""), ()),
+        )
+        messages.append(
+            {
+                "role": str(row["role"]),
+                "content": (
+                    f"[消息时间 {local_created_at.isoformat(timespec='seconds')} "
+                    f"{weekday_name(local_created_at)} {day_period(local_created_at)}]\n"
+                    f"{rendered}"
+                ),
+            }
+        )
+        previous_at = created_at
+    return messages
 
 
 def get_conversation_messages(
@@ -704,6 +765,8 @@ def get_conversation_timing(
         "gap_seconds": gap_seconds,
         "state": state,
         "should_acknowledge_gap": state in {"returned", "long_absence"},
+        "current_message_at": current_at.isoformat(),
+        "previous_user_at": previous_at.isoformat(),
     }
 
 

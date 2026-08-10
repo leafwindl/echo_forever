@@ -16,6 +16,7 @@ from features.proactive_chat.domain.entities import (
     ProactiveChatPreferences,
 )
 
+# The quota window starts at the first delivery and rolls forward; it is not a calendar-day quota.
 _LEVEL_LIMITS = {
     "conservative": (timedelta(hours=24), 4, timedelta(days=7)),
     "balanced": (timedelta(hours=6), 4, timedelta(days=1)),
@@ -444,6 +445,7 @@ class PostgresProactiveChatRepository:
                     FROM proactive_chat_preferences pref
                     WHERE pref.enabled = TRUE
                       AND pref.allow_spontaneous_chat = TRUE
+                      AND pref.consecutive_unanswered < 2
                       AND NOT EXISTS (
                           SELECT 1 FROM proactive_chat_jobs job
                           WHERE job.user_id = pref.user_id
@@ -731,6 +733,8 @@ class PostgresProactiveChatRepository:
         now: datetime,
     ) -> bool:
         min_gap, maximum, window = _LEVEL_LIMITS[preference.proactivity_level]
+        if preference.consecutive_unanswered >= 2:
+            return False
         if now - last_user_at < min_gap:
             return False
         if preference.last_proactive_at and now - preference.last_proactive_at < min_gap:
