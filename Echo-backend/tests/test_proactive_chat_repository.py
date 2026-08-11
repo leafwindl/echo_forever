@@ -5,7 +5,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.proactive_chat.domain.entities import ChatSchedule, ProactiveChatPreferences
+from features.proactive_chat.domain.entities import (
+    ChatSchedule,
+    ProactiveChatJob,
+    ProactiveChatPreferences,
+)
 from features.proactive_chat.infrastructure import postgres_repository as repository_module
 from features.proactive_chat.infrastructure.postgres_repository import (
     PostgresProactiveChatRepository,
@@ -149,6 +153,32 @@ class ProactiveRepositoryTests(unittest.TestCase):
 
         self.assertFalse(deleted)
         self.assertEqual(len(cursor.calls), 1)
+
+    def test_spontaneous_job_context_change_uses_messages_after_job_creation(self):
+        cursor = _FakeCursor(one={"context_changed": True})
+        original_transaction = repository_module.transaction
+        repository_module.transaction = lambda: _FakeTransaction(_FakeConnection(cursor))
+        job = ProactiveChatJob(
+            job_id="job_a",
+            schedule_id=None,
+            user_id="user_a",
+            conversation_id="conversation_a",
+            scheduled_for=datetime(2026, 8, 11, 0, tzinfo=UTC),
+            status="running",
+            attempt_count=2,
+            max_attempts=2,
+        )
+        try:
+            changed = PostgresProactiveChatRepository().spontaneous_job_context_changed(job)
+        finally:
+            repository_module.transaction = original_transaction
+
+        self.assertTrue(changed)
+        query, params = cursor.calls[0]
+        self.assertIn("message.created_at > current_job.created_at", query)
+        self.assertIn("message.role = 'user'", query)
+        self.assertIn("message.status = 'active'", query)
+        self.assertEqual(params, ("job_a", "user_a"))
 
     def test_once_schedule_is_deleted_after_successful_advance(self):
         cursor = _FakeCursor()

@@ -170,6 +170,20 @@ class AgentDomainTests(unittest.TestCase):
         self.assertIn("官方和用户私人表情包都可以参与选择", instruction)
 
 
+    def test_proactive_mode_forbids_assuming_current_user_activity(self):
+        messages = OrchestrateChatWithAgent._build_initial_messages(
+            messages=[{"role": "system", "content": "internal proactive trigger"}],
+            conversation_mode="proactive",
+            sticker_intent="",
+            allow_proactive_stickers=True,
+            proactive_sticker_due=False,
+        )
+
+        instruction = messages[0]["content"]
+        self.assertIn("not by a new user message", instruction)
+        self.assertIn("awake, online, reading", instruction)
+
+
 class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
     async def test_agent_model_passes_configured_max_tokens_to_provider(self):
         class RecordingProvider:

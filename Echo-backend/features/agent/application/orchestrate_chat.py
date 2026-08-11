@@ -307,7 +307,12 @@ class OrchestrateChatWithAgent:
             )
         elif conversation_mode == "proactive":
             sticker_rule = (
-                "This is a proactive text chat. Use at most one fitting sticker only when "
+                "This run was triggered by background policy, not by a new user message. "
+                "Never state or imply that the user is awake, online, reading, responding, "
+                "energetic, available, or currently doing something merely because this "
+                "task is running. Use conditional wording when their current state is "
+                "unknown. This is a proactive text chat. Use at most one fitting sticker "
+                "only when "
                 "it naturally improves a light, everyday check-in. Never use a sticker to "
                 "force warmth or compensate for a weak topic."
             )

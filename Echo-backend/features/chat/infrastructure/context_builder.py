@@ -98,6 +98,12 @@ def should_prioritize_proactive_sticker(
     )
 
 
+def _turn_input_message(user_message: str, conversation_mode: str) -> dict[str, str]:
+    # A proactive trigger is internal orchestration context, not evidence of user activity.
+    role = "system" if conversation_mode == "proactive" else "user"
+    return {"role": role, "content": user_message}
+
+
 async def build_chat_context(
     user_id: str,
     user_message: str,
@@ -221,7 +227,7 @@ async def build_chat_context(
         }
     )
     messages.extend(history)
-    messages.append({"role": "user", "content": user_message})
+    messages.append(_turn_input_message(user_message, conversation_mode))
 
     logger.info(
         "Chat context built prompt_version=%s assistant_persona_version=%s "

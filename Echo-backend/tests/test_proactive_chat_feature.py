@@ -3,7 +3,7 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -147,7 +147,7 @@ class _DeletedScheduleRepository:
 
 
 class _DueSpontaneousJobRepository:
-    def __init__(self):
+    def __init__(self, *, context_changes=()):
         self.job = ProactiveChatJob(
             job_id="job_due",
             schedule_id=None,
@@ -165,6 +165,7 @@ class _DueSpontaneousJobRepository:
             consecutive_unanswered=0,
         )
         self.suppressed = []
+        self.context_changes = list(context_changes)
 
     def claim_due_job(self, _lease_seconds):
         return self.job
@@ -174,6 +175,9 @@ class _DueSpontaneousJobRepository:
 
     def is_quiet(self, _preference, _now):
         return False
+
+    def spontaneous_job_context_changed(self, _job):
+        return self.context_changes.pop(0) if self.context_changes else False
 
     def suppress_job(self, job_id, reason):
         self.suppressed.append((job_id, reason))
@@ -234,6 +238,83 @@ class ProactiveWorkerTests(unittest.IsolatedAsyncioTestCase):
             [("job_due", "agent_failed:llm_output_truncated")],
         )
         broker.publish.assert_not_awaited()
+
+    async def test_changed_spontaneous_context_is_suppressed_before_generation(self):
+        repository = _DueSpontaneousJobRepository(context_changes=(True,))
+        reply_generator = SimpleNamespace(prepare=AsyncMock())
+        guard = SimpleNamespace(try_acquire=lambda _user_id: True, release=lambda _user_id: None)
+        broker = SimpleNamespace(publish=AsyncMock())
+        worker = ProcessProactiveChatJobs(
+            repository=repository,
+            reply_generator=reply_generator,
+            request_guard=guard,
+            event_broker=broker,
+            timing_policy=SimpleNamespace(),
+            lease_seconds=30,
+        )
+
+        processed = await worker.run_once()
+
+        self.assertTrue(processed)
+        self.assertEqual(
+            repository.suppressed,
+            [("job_due", "spontaneous_context_changed")],
+        )
+        reply_generator.prepare.assert_not_awaited()
+        broker.publish.assert_not_awaited()
+
+    async def test_context_change_during_generation_is_suppressed_before_persistence(self):
+        repository = _DueSpontaneousJobRepository(context_changes=(False, True))
+        repository.persist_delivery = Mock()
+        reply_generator = SimpleNamespace(
+            prepare=AsyncMock(
+                return_value=PreparedChatReply(
+                    reply="Good morning",
+                    reply_segments=("Good morning",),
+                )
+            )
+        )
+        guard = SimpleNamespace(try_acquire=lambda _user_id: True, release=lambda _user_id: None)
+        broker = SimpleNamespace(publish=AsyncMock())
+        worker = ProcessProactiveChatJobs(
+            repository=repository,
+            reply_generator=reply_generator,
+            request_guard=guard,
+            event_broker=broker,
+            timing_policy=SimpleNamespace(),
+            lease_seconds=30,
+        )
+
+        processed = await worker.run_once()
+
+        self.assertTrue(processed)
+        self.assertEqual(
+            repository.suppressed,
+            [("job_due", "spontaneous_context_changed")],
+        )
+        repository.persist_delivery.assert_not_called()
+        broker.publish.assert_not_awaited()
+
+    async def test_proactive_prompt_forbids_assuming_current_user_activity(self):
+        repository = _DueSpontaneousJobRepository()
+        reply_generator = SimpleNamespace(
+            prepare=AsyncMock(return_value=PreparedChatReply(reply="", reply_segments=()))
+        )
+        guard = SimpleNamespace(try_acquire=lambda _user_id: True, release=lambda _user_id: None)
+        worker = ProcessProactiveChatJobs(
+            repository=repository,
+            reply_generator=reply_generator,
+            request_guard=guard,
+            event_broker=SimpleNamespace(publish=AsyncMock()),
+            timing_policy=SimpleNamespace(),
+            lease_seconds=30,
+        )
+
+        await worker.run_once()
+
+        prompt = reply_generator.prepare.await_args.kwargs["message"]
+        self.assertIn("not an incoming user message", prompt)
+        self.assertIn("awake, online, reading", prompt)
 
 
 if __name__ == "__main__":

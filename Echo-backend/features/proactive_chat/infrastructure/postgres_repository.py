@@ -483,6 +483,29 @@ class PostgresProactiveChatRepository:
         )
         return preference, schedule, conversation_id
 
+    def spontaneous_job_context_changed(self, job: ProactiveChatJob) -> bool:
+        """Return whether a user message arrived after this spontaneous job was created."""
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM proactive_chat_jobs current_job
+                    JOIN chat_messages message
+                      ON message.user_id = current_job.user_id
+                     AND message.role = 'user'
+                     AND message.status = 'active'
+                     AND message.created_at > current_job.created_at
+                    WHERE current_job.job_id = %s
+                      AND current_job.user_id = %s
+                      AND current_job.schedule_id IS NULL
+                ) AS context_changed
+                """,
+                (job.job_id, job.user_id),
+            )
+            row = cursor.fetchone()
+        return bool(row and row["context_changed"])
+
     def suppress_job(self, job_id: str, reason: str) -> None:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(

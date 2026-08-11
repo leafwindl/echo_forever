@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.chat.domain.temporal_context import build_temporal_context
+from features.chat.infrastructure.context_builder import _turn_input_message
 from features.chat.infrastructure.postgres_repositories import (
     _render_message_content,
     _render_timestamped_history,
@@ -18,6 +19,13 @@ from features.chat.infrastructure.prompt_renderer import (
 
 
 class ContextBuilderTests(unittest.TestCase):
+    def test_proactive_trigger_is_internal_system_context(self):
+        proactive = _turn_input_message("internal proactive trigger", "proactive")
+        chat = _turn_input_message("hello", "chat")
+
+        self.assertEqual(proactive["role"], "system")
+        self.assertEqual(chat["role"], "user")
+
     def test_temporal_context_resolves_local_time_and_relative_expressions(self):
         context = build_temporal_context(
             now_utc=datetime(2026, 8, 10, 6, 39, tzinfo=UTC),

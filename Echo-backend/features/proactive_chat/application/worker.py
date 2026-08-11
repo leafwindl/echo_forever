@@ -72,6 +72,8 @@ class ProcessProactiveChatJobs:
             ) and preference.consecutive_unanswered >= 2:
                 self.repository.suppress_job(job.job_id, "unanswered_pause")
                 return True
+            if self._suppress_changed_spontaneous_job(job, schedule, "before_generation"):
+                return True
 
             now = datetime.now(UTC)
             if self.repository.is_quiet(preference, now) and not (
@@ -90,9 +92,14 @@ class ProcessProactiveChatJobs:
                 else "Start a natural, low-pressure check-in if it is genuinely appropriate."
             )
             prompt = (
-                "A proactive Echo message is due. Use the following intent as internal "
-                f"context only: {intent}. Do not mention schedules, workers, "
-                "notifications, or that you were waiting. "
+                "This is a system-generated proactive trigger, not an incoming user message. "
+                "No current user activity has been observed. Use the following intent as "
+                f"internal context only: {intent}. Do not mention schedules, workers, "
+                "notifications, or that you were waiting. Do not state or imply that the "
+                "user is awake, online, reading, responding, energetic, available, or "
+                "currently doing something unless verified by an actual user message. "
+                "Phrase uncertain current-state references conditionally, such as asking "
+                "them to reply after they wake up or when they are free. "
                 "If no natural message is appropriate, return an empty text_segments array."
             )
             started = time.perf_counter()
@@ -102,6 +109,8 @@ class ProcessProactiveChatJobs:
                 conversation_id=conversation_id,
                 conversation_mode="proactive",
             )
+            if self._suppress_changed_spontaneous_job(job, schedule, "before_persistence"):
+                return True
             if not prepared.reply_segments and not prepared.content_parts:
                 reason = (
                     f"agent_failed:{prepared.error_code}"
@@ -166,3 +175,15 @@ class ProcessProactiveChatJobs:
             return True
         finally:
             self.request_guard.release(job.user_id)
+
+    def _suppress_changed_spontaneous_job(self, job, schedule, phase: str) -> bool:
+        if schedule is not None or not self.repository.spontaneous_job_context_changed(job):
+            return False
+        self.repository.suppress_job(job.job_id, "spontaneous_context_changed")
+        logger.info(
+            "Proactive chat job suppressed job_id=%s reason=spontaneous_context_changed "
+            "phase=%s",
+            job.job_id,
+            phase,
+        )
+        return True
