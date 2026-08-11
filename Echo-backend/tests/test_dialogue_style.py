@@ -22,6 +22,7 @@ class DialogueStyleTests(unittest.TestCase):
 
         self.assertTrue(should_pause_followup_questions(history, "两个方向都有"))
         self.assertFalse(should_pause_followup_questions(history, "你可以继续问我"))
+        self.assertTrue(should_pause_followup_questions([], "先别问了，我想自己缓一会儿"))
         self.assertIn(
             "followup_question_cooldown",
             find_dialogue_style_violations(

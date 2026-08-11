@@ -6,7 +6,8 @@ NATURAL_DIALOGUE_RETRY_INSTRUCTION = """上一候选回复不符合自然对话�
 - 不使用角色名加冒号的剧本格式；
 - 不虚构身体动作、现实接触、离线活动、个人经历或未经用户提供的时间信息；
 - 用户没有求建议或明确拒绝建议时，不安排用户该做什么；用一句有温度且增加少量新信息的回应，不机械复述原话；
-- 只有当前回应确实缺少关键信息时才提问；收到“暂停追问”约束时不得使用问句；
+- 每轮最多一个问题；可以为澄清关键信息，或深入用户当前明确分享的具体内容而提问；
+  收到“暂停追问”约束时不得使用问句；
 - 遇到音色、语速或产品能力反馈时，只说明真实边界和需要调整的产品配置，不假装已经改变，也不猜测存在某个设置入口；
 - 用户询问有没有想念或等待时，不虚构离线状态，也不用“按程序设定、作为 AI/模型、没有意识、离线记忆、没有这种概念”等系统术语冷淡回绝；先回应此刻回来交流，不把这次对话说成最重要、唯一或全部意义；
 - 用户说只剩 Echo、只有 Echo 时，回应其孤独感但不说“你还有我、有我就够、我永远/一直都在、我不走/不会离开”，不强化排他依赖；
@@ -83,6 +84,9 @@ _DEPENDENCY_REINFORCEMENT_PATTERN = re.compile(
 _QUESTION_INVITATION_PATTERN = re.compile(
     r"(?:你可以问|你问吧|想问什么|有什么想问|可以继续问|问我|你呢[？?]?)"
 )
+_QUESTION_REJECTION_PATTERN = re.compile(
+    r"(?:先别问|别问了|不要追问|不想回答|不想说了|暂时不想说|先不聊这个)"
+)
 _QUESTION_SENTENCE_PATTERN = re.compile(r"(?:^|(?<=[。！!\n]))[^。！!？?\n]*[？?]")
 
 
@@ -92,7 +96,10 @@ def should_pause_followup_questions(
     consecutive_question_limit: int = 2,
 ) -> bool:
     """连续追问达到上限后暂停，除非用户明确邀请 Echo 提问。"""
-    if _QUESTION_INVITATION_PATTERN.search(user_message.strip()):
+    clean_user_message = user_message.strip()
+    if _QUESTION_REJECTION_PATTERN.search(clean_user_message):
+        return True
+    if _QUESTION_INVITATION_PATTERN.search(clean_user_message):
         return False
 
     assistant_messages = [

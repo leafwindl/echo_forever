@@ -458,6 +458,32 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(1, len(agent.calls))
 
+    async def test_generate_chat_reply_preserves_one_grounded_exploration_question(self):
+        repository = FakeConversationRepository()
+        candidate = (
+            "我觉得你舍不得的可能不只是项目，还有已经投入进去的期待。"
+            "你现在更舍不得项目本身，还是已经花掉的时间？"
+        )
+        agent = SequenceAgentOrchestrator([candidate])
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
+        )
+
+        result = await use_case.execute(
+            user_id="user_a",
+            message="最近做这个项目越来越没动力，但放弃又觉得可惜",
+        )
+
+        self.assertEqual(candidate, result.reply)
+        self.assertNotIn(
+            "multiple_questions",
+            find_dialogue_style_violations(candidate, result.user_message),
+        )
+
     async def test_every_fifth_user_turn_requests_batch_memory_review(self):
         repository = FakeConversationRepository()
         repository.user_message_count = 5

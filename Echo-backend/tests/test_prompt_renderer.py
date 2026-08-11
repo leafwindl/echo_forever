@@ -106,6 +106,10 @@ class PromptRendererTests(unittest.TestCase):
 
     def test_response_calibration_uses_positive_contextual_examples(self):
         self.assertIn("不必以问题结尾", RESPONSE_CALIBRATION_POLICY)
+        self.assertIn("分享观点或经历", RESPONSE_CALIBRATION_POLICY)
+        self.assertIn("一个具体问题", RESPONSE_CALIBRATION_POLICY)
+        self.assertIn("不追加无关的陪聊问题", RESPONSE_CALIBRATION_POLICY)
+        self.assertIn("不为了延长对话补问题", RESPONSE_CALIBRATION_POLICY)
         self.assertIn("不从用户资料找话题", RESPONSE_CALIBRATION_POLICY)
         self.assertIn("不要马上安排用户该做什么", RESPONSE_CALIBRATION_POLICY)
         self.assertIn("不要突然切换成客服口吻", RESPONSE_CALIBRATION_POLICY)
@@ -118,6 +122,13 @@ class PromptRendererTests(unittest.TestCase):
         self.assertIn("本轮禁止使用问句", rendered)
         self.assertIn("不得主动恢复旧话题", rendered)
         self.assertIn("不得用旧话题填补沉默", rendered)
+
+    def test_turn_focus_allows_grounded_exploration_without_forcing_questions(self):
+        rendered = render_turn_focus_guidance(pause_followup_questions=False)
+
+        self.assertIn("允许一个自然问题", rendered)
+        self.assertIn("具体值得延伸", rendered)
+        self.assertIn("不要为了延长对话强行发问", rendered)
 
     def test_assistant_persona_and_relationship_are_independent_layers(self):
         persona_text = render_assistant_persona(self.assistant_persona)
