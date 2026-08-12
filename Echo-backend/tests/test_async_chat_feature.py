@@ -1,7 +1,7 @@
 import unittest
 from datetime import UTC, datetime
 
-from features.agent.domain.delivery import parse_agent_delivery_plan
+from features.agent.domain.delivery import AgentDeliveryPlanError, parse_agent_delivery_plan
 from features.agent.domain.entities import ContentPart
 from features.chat.application.accept_message import AcceptChatMessage, ChatIntakePolicy
 from features.chat.application.process_turns import ProcessPendingChatTurns
@@ -147,6 +147,15 @@ class AgentDeliveryPlanTests(unittest.TestCase):
     def test_call_mode_keeps_one_plain_reply(self):
         raw = '{"text_segments":["one","two"]}'
         self.assertEqual(parse_agent_delivery_plan(raw, "call").text_segments, (raw,))
+
+    def test_rejects_incomplete_structured_output_instead_of_returning_protocol_fragment(self):
+        with self.assertRaises(AgentDeliveryPlanError) as context:
+            parse_agent_delivery_plan('{"text_segments', "chat")
+        self.assertEqual(context.exception.error_code, "llm_output_malformed")
+
+    def test_rejects_incomplete_fenced_structured_output(self):
+        with self.assertRaises(AgentDeliveryPlanError):
+            parse_agent_delivery_plan('```json\n{"text_segments":["one"]\n```', "chat")
 
     def test_plain_medium_reply_is_split_on_natural_sentence_boundaries(self):
         reply = (

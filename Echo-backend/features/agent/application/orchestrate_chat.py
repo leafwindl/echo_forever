@@ -7,7 +7,7 @@ import uuid
 from contextlib import suppress
 
 from features.agent.application.execute_tool import ToolExecutor
-from features.agent.domain.delivery import parse_agent_delivery_plan
+from features.agent.domain.delivery import AgentDeliveryPlanError, parse_agent_delivery_plan
 from features.agent.domain.entities import (
     AgentModelResponse,
     AgentRunStatus,
@@ -194,7 +194,16 @@ class OrchestrateChatWithAgent:
                     self.repository.finish(run_id, model_steps + tool_call_count, final_error)
                     return result
         except Exception as exc:
-            if isinstance(exc, AgentModelTimeoutError):
+            if isinstance(exc, AgentDeliveryPlanError):
+                final_error = exc.error_code
+                logger.warning(
+                    "Unified Agent structured delivery output rejected "
+                    "run_id=%s mode=%s error_code=%s",
+                    run_id,
+                    conversation_mode,
+                    final_error,
+                )
+            elif isinstance(exc, AgentModelTimeoutError):
                 final_error = "llm_timeout"
             elif isinstance(exc, TimeoutError):
                 final_error = "agent_timeout"

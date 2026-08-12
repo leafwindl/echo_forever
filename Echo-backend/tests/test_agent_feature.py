@@ -836,6 +836,39 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.error_code, "llm_output_truncated")
         self.assertEqual(repository.finishes[0][2], "llm_output_truncated")
 
+    async def test_malformed_structured_output_is_failed_without_protocol_fragment(self):
+        model = SequenceAgentModel([AgentModelResponse(text='{"text_segments')])
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="hello",
+            messages=[{"role": "user", "content": "hello"}],
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.FAILED)
+        self.assertEqual(result.error_code, "llm_output_malformed")
+        self.assertNotIn("text_segments", result.reply_text)
+        self.assertEqual(repository.finishes[0][2], "llm_output_malformed")
+
+    async def test_proactive_malformed_structured_output_is_silent(self):
+        model = SequenceAgentModel([AgentModelResponse(text='{"text_segments')])
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="A proactive message is due.",
+            messages=[{"role": "system", "content": "internal proactive trigger"}],
+            conversation_mode="proactive",
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.FAILED)
+        self.assertEqual(result.reply_text, "")
+        self.assertEqual(result.reply_segments, ())
+        self.assertEqual(result.content_parts, ())
+        self.assertEqual(result.error_code, "llm_output_malformed")
+        self.assertEqual(repository.finishes[0][2], "llm_output_malformed")
+
     async def test_llm_timeout_is_retried_once_and_can_recover(self):
         model = SequenceAgentModel(
             [

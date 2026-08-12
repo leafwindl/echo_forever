@@ -15,6 +15,12 @@ class AgentDeliveryPlan:
         return "\n".join(self.text_segments)
 
 
+class AgentDeliveryPlanError(ValueError):
+    """The model attempted the delivery protocol but returned invalid JSON."""
+
+    error_code = "llm_output_malformed"
+
+
 def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDeliveryPlan:
     clean_text = raw_text.strip()
     if not clean_text:
@@ -23,18 +29,30 @@ def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDel
         return AgentDeliveryPlan((clean_text,))
 
     candidate = clean_text
+    fenced = False
     if candidate.startswith("```") and candidate.endswith("```"):
         lines = candidate.splitlines()
         if len(lines) >= 3:
             candidate = "\n".join(lines[1:-1]).strip()
+            fenced = candidate.startswith(("{", "[")) and "text_segments" in candidate
+    looks_like_protocol = fenced or (
+        candidate.startswith(("{", "["))
+        and "text_segments" in candidate
+    )
     try:
         payload = json.loads(candidate)
     except (json.JSONDecodeError, TypeError):
+        if looks_like_protocol:
+            raise AgentDeliveryPlanError("Invalid structured delivery output")
         return AgentDeliveryPlan(_fallback_segments(clean_text))
     if not isinstance(payload, dict):
+        if looks_like_protocol:
+            raise AgentDeliveryPlanError("Structured delivery output must be an object")
         return AgentDeliveryPlan((clean_text,))
     raw_segments = payload.get("text_segments")
     if not isinstance(raw_segments, list):
+        if looks_like_protocol:
+            raise AgentDeliveryPlanError("Structured delivery output has invalid text_segments")
         return AgentDeliveryPlan((clean_text,))
 
     segments: list[str] = []
