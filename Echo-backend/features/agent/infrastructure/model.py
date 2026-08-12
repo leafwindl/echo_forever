@@ -21,6 +21,7 @@ class ProviderAgentConversationModel:
                 tools=tools,
                 tool_choice="auto",
                 response_format={"type": "json_object"} if structured_output else None,
+                thinking={"type": "disabled"} if structured_output else None,
                 max_tokens=self.max_tokens,
             )
         except LLMProviderTimeoutError as exc:

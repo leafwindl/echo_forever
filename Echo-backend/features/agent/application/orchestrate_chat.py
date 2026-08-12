@@ -104,6 +104,28 @@ class OrchestrateChatWithAgent:
                 if finish_reason == "length" and (
                     conversation_mode == "daily_letter" or not response.text.strip()
                 ):
+                    if (
+                        conversation_mode in {"chat", "proactive"}
+                        and delivery_format_retries_remaining > 0
+                    ):
+                        delivery_format_retries_remaining -= 1
+                        agent_messages.append(
+                            {
+                                "role": "system",
+                                "content": DELIVERY_FORMAT_RETRY_INSTRUCTION,
+                            }
+                        )
+                        tools = ()
+                        logger.warning(
+                            "Unified Agent truncated delivery retry requested "
+                            "run_id=%s mode=%s retries_remaining=%s "
+                            "provider_request_id=%s",
+                            run_id,
+                            conversation_mode,
+                            delivery_format_retries_remaining,
+                            response.provider_request_id,
+                        )
+                        continue
                     final_error = "llm_output_truncated"
                     logger.warning(
                         "Unified Agent LLM output truncated run_id=%s mode=%s "

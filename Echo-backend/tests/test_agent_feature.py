@@ -233,6 +233,7 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(provider.kwargs["max_tokens"], 2500)
         self.assertEqual(provider.kwargs["response_format"], {"type": "json_object"})
+        self.assertEqual(provider.kwargs["thinking"], {"type": "disabled"})
 
     async def test_provider_sends_native_json_response_format(self):
         class RecordingResponse:
@@ -282,9 +283,11 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
             await OpenAICompatibleLLMProvider().chat_completion_message(
                 messages=[{"role": "user", "content": "你好"}],
                 response_format={"type": "json_object"},
+                thinking={"type": "disabled"},
             )
 
         self.assertEqual(client.payload["response_format"], {"type": "json_object"})
+        self.assertEqual(client.payload["thinking"], {"type": "disabled"})
 
     async def test_http_timeout_is_preserved_as_provider_timeout(self):
         class TimeoutClient:
@@ -890,9 +893,12 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.error_code, "ValueError")
         self.assertEqual(repository.finishes[0][2], "ValueError")
 
-    async def test_proactive_truncated_empty_output_is_not_delivered(self):
+    async def test_proactive_truncated_empty_output_retries_then_stays_silent(self):
         model = SequenceAgentModel(
-            [AgentModelResponse(text="", finish_reason="length")]
+            [
+                AgentModelResponse(text="", finish_reason="length"),
+                AgentModelResponse(text="", finish_reason="length"),
+            ]
         )
         orchestrator, repository, _ = _build_orchestrator(model)
 
@@ -907,7 +913,34 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reply_text, "")
         self.assertEqual(result.reply_segments, ())
         self.assertEqual(result.error_code, "llm_output_truncated")
+        self.assertEqual(len(model.calls), 2)
+        self.assertEqual(model.calls[1]["tools"], ())
         self.assertEqual(repository.finishes[0][2], "llm_output_truncated")
+
+    async def test_chat_truncated_empty_output_retries_and_recovers(self):
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    text="",
+                    finish_reason="length",
+                    provider_request_id="req_empty",
+                ),
+                AgentModelResponse(text=_delivery("这次正常回复了。")),
+            ]
+        )
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="你好",
+            messages=[{"role": "user", "content": "你好"}],
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.COMPLETED)
+        self.assertEqual(result.reply_text, "这次正常回复了。")
+        self.assertEqual(len(model.calls), 2)
+        self.assertEqual(model.calls[1]["tools"], ())
+        self.assertEqual(repository.finishes[0][2], None)
 
     async def test_malformed_structured_output_is_failed_without_protocol_fragment(self):
         model = SequenceAgentModel(
