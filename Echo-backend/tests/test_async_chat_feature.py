@@ -157,6 +157,30 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         with self.assertRaises(AgentDeliveryPlanError):
             parse_agent_delivery_plan('```json\n{"text_segments":["one"]\n```', "chat")
 
+    def test_strips_internal_message_timestamp_from_structured_delivery(self):
+        plan = parse_agent_delivery_plan(
+            '{"text_segments":["[消息时间 2026-08-12T11:58:44+08:00 周三 上午]\\n你好呀"]}',
+            "chat",
+        )
+
+        self.assertEqual(plan.text_segments, ("你好呀",))
+
+    def test_rejects_structured_delivery_that_only_contains_internal_message_timestamp(self):
+        with self.assertRaises(AgentDeliveryPlanError) as context:
+            parse_agent_delivery_plan(
+                '{"text_segments":["[消息时间2026-08-12T11:58:44+08:00 周三 上午]"]}',
+                "chat",
+            )
+        self.assertEqual(context.exception.error_code, "llm_output_malformed")
+
+    def test_strips_internal_message_timestamp_from_plain_text_fallback(self):
+        plan = parse_agent_delivery_plan(
+            "[消息时间2026-08-12T11:58:44+08:00 周三 上午]\nordinary reply",
+            "chat",
+        )
+
+        self.assertEqual(plan.text_segments, ("ordinary reply",))
+
     def test_plain_medium_reply_is_split_on_natural_sentence_boundaries(self):
         reply = (
             "今天听起来确实有点累，先不用急着把所有事情都处理完。你可以慢一点，我会认真听你继续说。"

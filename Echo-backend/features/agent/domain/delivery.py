@@ -5,6 +5,12 @@ import re
 from dataclasses import dataclass
 
 
+_INTERNAL_CONTEXT_MARKER = re.compile(
+    r"(?im)^[ \t]*[\[［]\s*(?:消息时间|会话时间边界)[^\r\n]*(?:\r?\n|$)",
+    flags=re.IGNORECASE,
+)
+
+
 @dataclass(frozen=True)
 class AgentDeliveryPlan:
     text_segments: tuple[str, ...]
@@ -29,22 +35,23 @@ def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDel
         return AgentDeliveryPlan((clean_text,))
 
     candidate = clean_text
-    fenced = False
-    if candidate.startswith("```") and candidate.endswith("```"):
+    fenced = candidate.startswith("```")
+    if fenced and candidate.endswith("```"):
         lines = candidate.splitlines()
         if len(lines) >= 3:
             candidate = "\n".join(lines[1:-1]).strip()
-            fenced = candidate.startswith(("{", "[")) and "text_segments" in candidate
-    looks_like_protocol = fenced or (
-        candidate.startswith(("{", "["))
-        and "text_segments" in candidate
-    )
+    looks_like_protocol = (
+        candidate.startswith("{") and "text_segments" in candidate
+    ) or (fenced and "text_segments" in candidate)
     try:
         payload = json.loads(candidate)
     except (json.JSONDecodeError, TypeError):
         if looks_like_protocol:
             raise AgentDeliveryPlanError("Invalid structured delivery output")
-        return AgentDeliveryPlan(_fallback_segments(clean_text))
+        fallback_text = _strip_internal_context_markers(clean_text)
+        if not fallback_text:
+            raise AgentDeliveryPlanError("Delivery output leaked internal context")
+        return AgentDeliveryPlan(_fallback_segments(fallback_text))
     if not isinstance(payload, dict):
         if looks_like_protocol:
             raise AgentDeliveryPlanError("Structured delivery output must be an object")
@@ -56,19 +63,29 @@ def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDel
         return AgentDeliveryPlan((clean_text,))
 
     segments: list[str] = []
+    had_visible_candidate = False
     for value in raw_segments:
         if not isinstance(value, str):
             continue
-        segment = value.strip()
+        raw_segment = value.strip()
+        if raw_segment:
+            had_visible_candidate = True
+        segment = _strip_internal_context_markers(raw_segment)
         if not segment or (segments and segments[-1] == segment):
             continue
         segments.append(segment)
         if len(segments) == 3:
             break
+    if had_visible_candidate and not segments:
+        raise AgentDeliveryPlanError("Structured delivery output leaked internal context")
     placement = str(payload.get("sticker_placement") or "after_text").strip().lower()
     if placement not in {"before_text", "after_text"}:
         placement = "after_text"
     return AgentDeliveryPlan(tuple(segments), placement)
+
+
+def _strip_internal_context_markers(text: str) -> str:
+    return _INTERNAL_CONTEXT_MARKER.sub("", text).strip()
 
 
 def _fallback_segments(text: str) -> tuple[str, ...]:
