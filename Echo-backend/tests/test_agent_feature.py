@@ -41,8 +41,14 @@ class SequenceAgentModel:
         self.responses = list(responses)
         self.calls = []
 
-    async def complete(self, messages, tools):
-        self.calls.append({"messages": list(messages), "tools": tuple(tools)})
+    async def complete(self, messages, tools, *, structured_output=False):
+        self.calls.append(
+            {
+                "messages": list(messages),
+                "tools": tuple(tools),
+                "structured_output": structured_output,
+            }
+        )
         response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -222,9 +228,63 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
             await ProviderAgentConversationModel(max_tokens=2500).complete(
                 messages=[{"role": "user", "content": "写信"}],
                 tools=(),
+                structured_output=True,
             )
 
         self.assertEqual(provider.kwargs["max_tokens"], 2500)
+        self.assertEqual(provider.kwargs["response_format"], {"type": "json_object"})
+
+    async def test_provider_sends_native_json_response_format(self):
+        class RecordingResponse:
+            headers = {}
+
+            @staticmethod
+            def raise_for_status():
+                return None
+
+            @staticmethod
+            def json():
+                return {
+                    "id": "req_json",
+                    "choices": [
+                        {
+                            "finish_reason": "stop",
+                            "message": {
+                                "content": (
+                                    '{"text_segments":["你好"],'
+                                    '"sticker_placement":"after_text"}'
+                                )
+                            },
+                        }
+                    ],
+                }
+
+        class RecordingClient:
+            def __init__(self):
+                self.payload = None
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, traceback):
+                del exc_type, exc, traceback
+
+            async def post(self, url, headers, json):
+                del url, headers
+                self.payload = json
+                return RecordingResponse()
+
+        client = RecordingClient()
+        with patch(
+            "providers.llm_provider.httpx.AsyncClient",
+            return_value=client,
+        ):
+            await OpenAICompatibleLLMProvider().chat_completion_message(
+                messages=[{"role": "user", "content": "你好"}],
+                response_format={"type": "json_object"},
+            )
+
+        self.assertEqual(client.payload["response_format"], {"type": "json_object"})
 
     async def test_http_timeout_is_preserved_as_provider_timeout(self):
         class TimeoutClient:
@@ -894,6 +954,8 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, AgentRunStatus.COMPLETED)
         self.assertEqual(result.reply_text, "hello")
         self.assertEqual(len(model.calls), 2)
+        self.assertTrue(model.calls[0]["structured_output"])
+        self.assertTrue(model.calls[1]["structured_output"])
         self.assertEqual(model.calls[1]["tools"], ())
         self.assertIn("FINAL DELIVERY CONTRACT", model.calls[0]["messages"][0]["content"])
         self.assertEqual(repository.finishes[0][2], None)
@@ -963,8 +1025,8 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_agent_timeout_never_executes_side_effect_tool(self):
         class SlowModel:
-            async def complete(self, messages, tools):
-                del messages, tools
+            async def complete(self, messages, tools, *, structured_output=False):
+                del messages, tools, structured_output
                 await asyncio.sleep(0.05)
                 return AgentModelResponse(text="不会到这里")
 

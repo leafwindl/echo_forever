@@ -12,12 +12,15 @@ class ProviderAgentConversationModel:
         self,
         messages: list[dict],
         tools: tuple[dict, ...],
+        *,
+        structured_output: bool = False,
     ) -> AgentModelResponse:
         try:
             response = await get_llm_provider().chat_completion_message(
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
+                response_format={"type": "json_object"} if structured_output else None,
                 max_tokens=self.max_tokens,
             )
         except LLMProviderTimeoutError as exc:

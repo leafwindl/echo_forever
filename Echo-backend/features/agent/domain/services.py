@@ -25,6 +25,8 @@ class AgentConversationModel(Protocol):
         self,
         messages: list[dict],
         tools: tuple[dict, ...],
+        *,
+        structured_output: bool = False,
     ) -> AgentModelResponse: ...
 
 

@@ -44,6 +44,7 @@ class LLMProvider(Protocol):
         messages: list[dict],
         tools: tuple[dict, ...] | list[dict] = (),
         tool_choice: str = "auto",
+        response_format: dict[str, str] | None = None,
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
@@ -91,6 +92,7 @@ class OpenAICompatibleLLMProvider:
         messages: list[dict],
         tools: tuple[dict, ...] | list[dict] = (),
         tool_choice: str = "auto",
+        response_format: dict[str, str] | None = None,
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
@@ -104,6 +106,8 @@ class OpenAICompatibleLLMProvider:
         if tools:
             payload["tools"] = list(tools)
             payload["tool_choice"] = tool_choice
+        if response_format is not None:
+            payload["response_format"] = response_format
 
         try:
             async with httpx.AsyncClient(timeout=settings.timeout) as client:

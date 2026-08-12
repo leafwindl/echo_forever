@@ -94,6 +94,7 @@ class OrchestrateChatWithAgent:
                 response, llm_timeout_retries_remaining = await self._complete_model(
                     messages=agent_messages,
                     tools=tools,
+                    structured_output=conversation_mode in {"chat", "proactive"},
                     deadline=deadline,
                     run_id=run_id,
                     timeout_retries_remaining=llm_timeout_retries_remaining,
@@ -291,6 +292,7 @@ class OrchestrateChatWithAgent:
                     },
                 ],
                 tools=(),
+                structured_output=conversation_mode in {"chat", "proactive"},
                 deadline=deadline,
                 run_id=run_id,
                 timeout_retries_remaining=timeout_retries_remaining,
@@ -314,6 +316,7 @@ class OrchestrateChatWithAgent:
         self,
         messages: list[dict],
         tools: tuple[dict, ...],
+        structured_output: bool,
         deadline: float,
         run_id: str,
         timeout_retries_remaining: int,
@@ -322,7 +325,11 @@ class OrchestrateChatWithAgent:
         while True:
             try:
                 response = await asyncio.wait_for(
-                    self.model.complete(messages, tools),
+                    self.model.complete(
+                        messages,
+                        tools,
+                        structured_output=structured_output,
+                    ),
                     timeout=self._remaining_timeout(deadline),
                 )
                 return response, timeout_retries_remaining
