@@ -4,6 +4,7 @@ import uuid
 
 from db.postgres_connection import get_connection, transaction
 
+from features.agent.domain.delivery import validate_agent_delivery_segments
 from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
     ChatAcceptedTurn,
@@ -320,6 +321,7 @@ class PostgresAsyncChatRepository:
             )
             if not text_segments and reply.reply.strip():
                 text_segments = (reply.reply.strip(),)
+            validate_agent_delivery_segments(text_segments)
             sticker_parts = tuple(
                 part for part in reply.content_parts if part.type == "sticker" and part.sticker_id
             )[:1]

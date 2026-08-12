@@ -3,10 +3,17 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from typing import Any
 
-
+_STRUCTURED_DELIVERY_MODES = frozenset({"chat", "proactive"})
+_DELIVERY_FIELDS = frozenset({"text_segments", "sticker_placement"})
+_STICKER_PLACEMENTS = frozenset({"before_text", "after_text"})
 _INTERNAL_CONTEXT_MARKER = re.compile(
-    r"(?im)^[ \t]*[\[［]\s*(?:消息时间|会话时间边界)[^\r\n]*(?:\r?\n|$)",
+    r"[\[\uff3b]\s*(?:\u6d88\u606f\u65f6\u95f4|\u4f1a\u8bdd\u65f6\u95f4\u8fb9\u754c)",
+    flags=re.IGNORECASE,
+)
+_DELIVERY_PROTOCOL_FIELD = re.compile(
+    r'"(?:text_segments|sticker_placement)"',
     flags=re.IGNORECASE,
 )
 
@@ -22,113 +29,96 @@ class AgentDeliveryPlan:
 
 
 class AgentDeliveryPlanError(ValueError):
-    """The model attempted the delivery protocol but returned invalid JSON."""
+    """The model did not satisfy the final delivery contract."""
 
     error_code = "llm_output_malformed"
 
 
 def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDeliveryPlan:
+    if not isinstance(raw_text, str):
+        raise AgentDeliveryPlanError("Delivery output must be text")
     clean_text = raw_text.strip()
-    if not clean_text:
-        return AgentDeliveryPlan(())
-    if conversation_mode == "call":
-        return AgentDeliveryPlan((clean_text,))
 
-    candidate = clean_text
-    fenced = candidate.startswith("```")
-    if fenced and candidate.endswith("```"):
-        lines = candidate.splitlines()
-        if len(lines) >= 3:
-            candidate = "\n".join(lines[1:-1]).strip()
-    looks_like_protocol = (
-        candidate.startswith("{") and "text_segments" in candidate
-    ) or (fenced and "text_segments" in candidate)
-    try:
-        payload = json.loads(candidate)
-    except (json.JSONDecodeError, TypeError):
-        if looks_like_protocol:
-            raise AgentDeliveryPlanError("Invalid structured delivery output")
-        fallback_text = _strip_internal_context_markers(clean_text)
-        if not fallback_text:
-            raise AgentDeliveryPlanError("Delivery output leaked internal context")
-        return AgentDeliveryPlan(_fallback_segments(fallback_text))
+    if conversation_mode in {"call", "daily_letter"}:
+        return AgentDeliveryPlan((clean_text,)) if clean_text else AgentDeliveryPlan(())
+    if conversation_mode not in _STRUCTURED_DELIVERY_MODES:
+        raise AgentDeliveryPlanError("Unknown structured delivery mode")
+    if not clean_text:
+        raise AgentDeliveryPlanError("Structured delivery output is empty")
+
+    payload = _load_delivery_payload(clean_text)
     if not isinstance(payload, dict):
-        if looks_like_protocol:
-            raise AgentDeliveryPlanError("Structured delivery output must be an object")
-        return AgentDeliveryPlan((clean_text,))
-    raw_segments = payload.get("text_segments")
+        raise AgentDeliveryPlanError("Structured delivery output must be an object")
+    if frozenset(payload) != _DELIVERY_FIELDS:
+        raise AgentDeliveryPlanError("Structured delivery output has invalid fields")
+
+    raw_segments = payload["text_segments"]
     if not isinstance(raw_segments, list):
-        if looks_like_protocol:
-            raise AgentDeliveryPlanError("Structured delivery output has invalid text_segments")
-        return AgentDeliveryPlan((clean_text,))
+        raise AgentDeliveryPlanError("text_segments must be an array")
+    if len(raw_segments) > 3:
+        raise AgentDeliveryPlanError("text_segments exceeds the maximum item count")
 
     segments: list[str] = []
-    had_visible_candidate = False
     for value in raw_segments:
         if not isinstance(value, str):
-            continue
-        raw_segment = value.strip()
-        if raw_segment:
-            had_visible_candidate = True
-        segment = _strip_internal_context_markers(raw_segment)
-        if not segment or (segments and segments[-1] == segment):
-            continue
+            raise AgentDeliveryPlanError("Every text segment must be a string")
+        segment = value.strip()
+        if not segment:
+            raise AgentDeliveryPlanError("Text segments must not be blank")
+        if segment in segments:
+            raise AgentDeliveryPlanError("Text segments must not be duplicated")
+        _validate_delivery_segment(segment)
         segments.append(segment)
-        if len(segments) == 3:
-            break
-    if had_visible_candidate and not segments:
-        raise AgentDeliveryPlanError("Structured delivery output leaked internal context")
-    placement = str(payload.get("sticker_placement") or "after_text").strip().lower()
-    if placement not in {"before_text", "after_text"}:
-        placement = "after_text"
+
+    placement = payload["sticker_placement"]
+    if not isinstance(placement, str) or placement not in _STICKER_PLACEMENTS:
+        raise AgentDeliveryPlanError("sticker_placement has an invalid value")
     return AgentDeliveryPlan(tuple(segments), placement)
 
 
-def _strip_internal_context_markers(text: str) -> str:
-    return _INTERNAL_CONTEXT_MARKER.sub("", text).strip()
-
-
-def _fallback_segments(text: str) -> tuple[str, ...]:
-    if len(text) < 24 or _should_keep_single_segment(text):
-        return (text,)
-    sentences = [
-        value.strip()
-        for value in re.findall(r".*?(?:[。！？!?；;]+|$)", text, flags=re.S)
-        if value.strip()
-    ]
-    if len(sentences) < 2 and len(text) >= 80:
-        sentences = [
-            value.strip()
-            for value in re.findall(r".*?(?:[，,。！？!?；;]+|$)", text, flags=re.S)
-            if value.strip()
-        ]
-    if len(sentences) < 2:
-        return (text,)
-
-    target_count = 2 if len(text) < 80 else 3
-    segments: list[str] = []
-    current = ""
-    target_length = max(len(text) // target_count, 12)
-    for sentence in sentences:
-        current += sentence
-        remaining_slots = target_count - len(segments) - 1
-        if len(current) >= target_length and remaining_slots > 0:
-            segments.append(current.strip())
-            current = ""
-    if current.strip():
-        segments.append(current.strip())
-    if len(segments) < 2 or any(len(segment) < 6 for segment in segments):
-        return (text,)
+def validate_agent_delivery_segments(segments: tuple[str, ...]) -> None:
+    """Apply the same content gate immediately before chat persistence."""
     if len(segments) > 3:
-        segments = [*segments[:2], "".join(segments[2:])]
-    return tuple(segments)
+        raise AgentDeliveryPlanError("Delivery contains too many text segments")
+    seen: set[str] = set()
+    for value in segments:
+        if not isinstance(value, str) or not value.strip():
+            raise AgentDeliveryPlanError("Delivery contains an invalid text segment")
+        segment = value.strip()
+        if segment in seen:
+            raise AgentDeliveryPlanError("Delivery contains duplicate text segments")
+        _validate_delivery_segment(segment)
+        seen.add(segment)
 
 
-def _should_keep_single_segment(text: str) -> bool:
-    return bool(
-        "```" in text
-        or "http://" in text
-        or "https://" in text
-        or "|" in text
-        or re.search(r"(?m)^\s*(?:[-*]|\d+[.)、])\s+", text)
-    )
+def _load_delivery_payload(candidate: str) -> Any:
+    try:
+        return json.loads(
+            candidate,
+            object_pairs_hook=_object_without_duplicate_keys,
+            parse_constant=_reject_json_constant,
+        )
+    except AgentDeliveryPlanError:
+        raise
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise AgentDeliveryPlanError("Structured delivery output is not valid JSON") from exc
+
+
+def _object_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise AgentDeliveryPlanError("Structured delivery output has duplicate fields")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> None:
+    raise AgentDeliveryPlanError(f"Structured delivery output contains {value}")
+
+
+def _validate_delivery_segment(segment: str) -> None:
+    if _INTERNAL_CONTEXT_MARKER.search(segment):
+        raise AgentDeliveryPlanError("Delivery leaked internal time context")
+    if _DELIVERY_PROTOCOL_FIELD.search(segment):
+        raise AgentDeliveryPlanError("Delivery contains a nested protocol fragment")

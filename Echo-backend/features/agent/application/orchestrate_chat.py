@@ -29,6 +29,13 @@ FINAL_RETRY_INSTRUCTION = (
     "工具事实，用 Echo 的自然语气直接回复用户。不要解释内部流程。"
 )
 LLM_TIMEOUT_RETRY_LIMIT = 1
+DELIVERY_FORMAT_RETRY_LIMIT = 1
+DELIVERY_FORMAT_RETRY_INSTRUCTION = (
+    "Your previous final answer failed the delivery contract. Do not call any tool and do "
+    "not add new content. Return exactly one JSON object with only text_segments and "
+    "sticker_placement. text_segments must contain zero to three unique, non-empty strings; "
+    "sticker_placement must be before_text or after_text. Output no Markdown or surrounding text."
+)
 
 
 class OrchestrateChatWithAgent:
@@ -76,6 +83,7 @@ class OrchestrateChatWithAgent:
         model_steps = 0
         tool_call_count = 0
         llm_timeout_retries_remaining = LLM_TIMEOUT_RETRY_LIMIT
+        delivery_format_retries_remaining = DELIVERY_FORMAT_RETRY_LIMIT
         final_error: str | None = None
         deadline = asyncio.get_running_loop().time() + self.run_timeout_seconds
         tools = self.registry.model_descriptions(conversation_mode) if tools_enabled else ()
@@ -150,7 +158,33 @@ class OrchestrateChatWithAgent:
                         self._collect_delivery(tool_result, content_parts, sources)
                     continue
 
-                delivery_plan = parse_agent_delivery_plan(response.text, conversation_mode)
+                try:
+                    delivery_plan = parse_agent_delivery_plan(response.text, conversation_mode)
+                except AgentDeliveryPlanError:
+                    if (
+                        conversation_mode in {"chat", "proactive"}
+                        and delivery_format_retries_remaining > 0
+                    ):
+                        delivery_format_retries_remaining -= 1
+                        agent_messages.extend(
+                            (
+                                {"role": "assistant", "content": response.text[:8000]},
+                                {
+                                    "role": "system",
+                                    "content": DELIVERY_FORMAT_RETRY_INSTRUCTION,
+                                },
+                            )
+                        )
+                        tools = ()
+                        logger.warning(
+                            "Unified Agent structured delivery retry requested "
+                            "run_id=%s mode=%s retries_remaining=%s",
+                            run_id,
+                            conversation_mode,
+                            delivery_format_retries_remaining,
+                        )
+                        continue
+                    raise
                 if delivery_plan.text_segments or content_parts:
                     result = AgentTurnResult(
                         status=AgentRunStatus.COMPLETED,
@@ -166,7 +200,12 @@ class OrchestrateChatWithAgent:
                     self.repository.finish(run_id, model_steps + tool_call_count)
                     return result
 
-                agent_messages.append({"role": "system", "content": FINAL_RETRY_INSTRUCTION})
+                agent_messages.append(
+                    {
+                        "role": "system",
+                        "content": self._final_retry_instruction(conversation_mode),
+                    }
+                )
 
             if final_error is None:
                 final_error = "agent_step_limit"
@@ -175,6 +214,7 @@ class OrchestrateChatWithAgent:
                     deadline,
                     run_id,
                     llm_timeout_retries_remaining,
+                    conversation_mode,
                 )
                 model_steps += 1
                 if fallback:
@@ -239,12 +279,16 @@ class OrchestrateChatWithAgent:
         deadline: float,
         run_id: str,
         timeout_retries_remaining: int,
+        conversation_mode: str,
     ) -> tuple[str, int]:
         try:
             response, timeout_retries_remaining = await self._complete_model(
                 messages=[
                     *messages,
-                    {"role": "system", "content": FINAL_RETRY_INSTRUCTION},
+                    {
+                        "role": "system",
+                        "content": self._final_retry_instruction(conversation_mode),
+                    },
                 ],
                 tools=(),
                 deadline=deadline,
@@ -259,6 +303,12 @@ class OrchestrateChatWithAgent:
             response.text.strip() if not response.tool_calls else "",
             timeout_retries_remaining,
         )
+
+    @staticmethod
+    def _final_retry_instruction(conversation_mode: str) -> str:
+        if conversation_mode in {"chat", "proactive"}:
+            return FINAL_RETRY_INSTRUCTION + DELIVERY_FORMAT_RETRY_INSTRUCTION
+        return FINAL_RETRY_INSTRUCTION
 
     async def _complete_model(
         self,
@@ -348,6 +398,12 @@ class OrchestrateChatWithAgent:
         delivery_rule = ""
         if conversation_mode in {"chat", "proactive"}:
             delivery_rule = (
+                "FINAL DELIVERY CONTRACT: Output exactly one JSON object and nothing else. "
+                "The object must contain exactly two fields: text_segments and sticker_placement. "
+                "text_segments must be an array of zero to three unique, non-empty strings. "
+                "sticker_placement must be exactly before_text or after_text. Do not add fields, "
+                "Markdown fences, commentary before or after the object, or a nested copy of the "
+                "delivery JSON inside any text segment. "
                 "当你不再调用工具并准备给出最终回复时，只输出一个 JSON 对象："
                 '{"text_segments":["第一条消息","可选第二条消息"],'
                 '"sticker_placement":"after_text"}。text_segments 最多三条，'

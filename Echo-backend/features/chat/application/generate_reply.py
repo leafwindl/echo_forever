@@ -3,6 +3,7 @@ import inspect
 import logging
 import time
 
+from features.agent.domain.delivery import validate_agent_delivery_segments
 from features.agent.domain.entities import ContentPart
 from features.chat.domain.dialogue_style import (
     apply_dialogue_fallback,
@@ -254,6 +255,8 @@ class GenerateChatReply:
             )
             reply = apply_dialogue_fallback(reply, clean_message, style_violations)
             segments = (reply,) if reply else ()
+        if conversation_mode in {"chat", "proactive"}:
+            validate_agent_delivery_segments(segments)
         assistant_content_parts = () if conversation_mode == "call" else agent_result.content_parts
         return PreparedChatReply(
             reply=reply,

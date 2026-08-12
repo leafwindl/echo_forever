@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 import unittest
 from datetime import UTC, datetime
@@ -112,6 +113,16 @@ def _sticker(sticker_id="stk_happy"):
 
 def _tool_names(descriptions):
     return [item["function"]["name"] for item in descriptions]
+
+
+def _delivery(*segments, placement="after_text"):
+    return json.dumps(
+        {
+            "text_segments": list(segments),
+            "sticker_placement": placement,
+        },
+        ensure_ascii=False,
+    )
 
 
 def _build_orchestrator(
@@ -284,7 +295,9 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.finishes[0], ("run_test", 1, "llm_output_truncated"))
 
     async def test_normal_chat_and_tools_share_one_agent_runtime(self):
-        model = SequenceAgentModel([AgentModelResponse(text="今天听起来心情不错。")])
+        model = SequenceAgentModel(
+            [AgentModelResponse(text=_delivery("今天听起来心情不错。"))]
+        )
         orchestrator, repository, _ = _build_orchestrator(model)
 
         result = await orchestrator.execute(
@@ -329,7 +342,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                         ),
                     )
                 ),
-                AgentModelResponse(text="这个笑得很有感染力，给你。"),
+                AgentModelResponse(text=_delivery("这个笑得很有感染力，给你。")),
             ]
         )
         searches = []
@@ -382,7 +395,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                         ),
                     )
                 ),
-                AgentModelResponse(text="这次没找到语义合适的，我先不乱发。"),
+                AgentModelResponse(text=_delivery("这次没找到语义合适的，我先不乱发。")),
             ]
         )
         orchestrator, repository, _ = _build_orchestrator(model)
@@ -471,7 +484,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                         ),
                     )
                 ),
-                AgentModelResponse(text="没找到完全对应的，这张先陪你。"),
+                AgentModelResponse(text=_delivery("没找到完全对应的，这张先陪你。")),
             ]
         )
         orchestrator, repository, _ = _build_orchestrator(
@@ -540,7 +553,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                         ),
                     )
                 ),
-                AgentModelResponse(text="这次先陪你聊，不刷图。"),
+                AgentModelResponse(text=_delivery("这次先陪你聊，不刷图。")),
             ]
         )
         orchestrator, repository, _ = _build_orchestrator(model)
@@ -735,7 +748,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                         ),
                     )
                 ),
-                AgentModelResponse(text="现在是 2026 年 7 月 29 日 16:00。"),
+                AgentModelResponse(text=_delivery("现在是 2026 年 7 月 29 日 16:00。")),
             ]
         )
         orchestrator, _, _ = _build_orchestrator(model)
@@ -770,7 +783,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                         ),
                     )
                 ),
-                AgentModelResponse(text="根据刚查到的来源，情况是这样。"),
+                AgentModelResponse(text=_delivery("根据刚查到的来源，情况是这样。")),
             ]
         )
         orchestrator, _, _ = _build_orchestrator(model, web_search=web)
@@ -837,7 +850,12 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.finishes[0][2], "llm_output_truncated")
 
     async def test_malformed_structured_output_is_failed_without_protocol_fragment(self):
-        model = SequenceAgentModel([AgentModelResponse(text='{"text_segments')])
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(text='{"text_segments'),
+                AgentModelResponse(text='{"text_segments'),
+            ]
+        )
         orchestrator, repository, _ = _build_orchestrator(model)
 
         result = await orchestrator.execute(
@@ -849,10 +867,44 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, AgentRunStatus.FAILED)
         self.assertEqual(result.error_code, "llm_output_malformed")
         self.assertNotIn("text_segments", result.reply_text)
+        self.assertEqual(len(model.calls), 2)
+        self.assertEqual(model.calls[1]["tools"], ())
         self.assertEqual(repository.finishes[0][2], "llm_output_malformed")
 
+    async def test_malformed_structured_output_is_repaired_once_without_tools(self):
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    text=(
+                        'hello {"text_segments":["hello"],'
+                        '"sticker_placement":"after_text"}'
+                    )
+                ),
+                AgentModelResponse(text=_delivery("hello")),
+            ]
+        )
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="hello",
+            messages=[{"role": "user", "content": "hello"}],
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.COMPLETED)
+        self.assertEqual(result.reply_text, "hello")
+        self.assertEqual(len(model.calls), 2)
+        self.assertEqual(model.calls[1]["tools"], ())
+        self.assertIn("FINAL DELIVERY CONTRACT", model.calls[0]["messages"][0]["content"])
+        self.assertEqual(repository.finishes[0][2], None)
+
     async def test_proactive_malformed_structured_output_is_silent(self):
-        model = SequenceAgentModel([AgentModelResponse(text='{"text_segments')])
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(text='{"text_segments'),
+                AgentModelResponse(text='{"text_segments'),
+            ]
+        )
         orchestrator, repository, _ = _build_orchestrator(model)
 
         result = await orchestrator.execute(
@@ -873,7 +925,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         model = SequenceAgentModel(
             [
                 AgentModelTimeoutError("provider timed out"),
-                AgentModelResponse(text="刚才慢了一下，现在好了。"),
+                AgentModelResponse(text=_delivery("刚才慢了一下，现在好了。")),
             ]
         )
         orchestrator, repository, _ = _build_orchestrator(model)

@@ -1,7 +1,11 @@
 import unittest
 from datetime import UTC, datetime
 
-from features.agent.domain.delivery import AgentDeliveryPlanError, parse_agent_delivery_plan
+from features.agent.domain.delivery import (
+    AgentDeliveryPlanError,
+    parse_agent_delivery_plan,
+    validate_agent_delivery_segments,
+)
 from features.agent.domain.entities import ContentPart
 from features.chat.application.accept_message import AcceptChatMessage, ChatIntakePolicy
 from features.chat.application.process_turns import ProcessPendingChatTurns
@@ -122,27 +126,23 @@ class AcceptChatMessageTests(unittest.TestCase):
 
 
 class AgentDeliveryPlanTests(unittest.TestCase):
-    def test_parses_structured_delivery_and_limits_segments(self):
+    def test_parses_exact_structured_delivery_contract(self):
         plan = parse_agent_delivery_plan(
-            '{"text_segments":["one","two","three","four"],"sticker_placement":"before_text"}',
+            '{"text_segments":["one","two","three"],"sticker_placement":"before_text"}',
             "chat",
         )
         self.assertEqual(plan.text_segments, ("one", "two", "three"))
         self.assertEqual(plan.sticker_placement, "before_text")
 
-    def test_accepts_code_fence_and_falls_back_to_plain_text(self):
-        fenced = parse_agent_delivery_plan(
-            '```json\n{"text_segments":["one"]}\n```',
-            "chat",
+    def test_rejects_plain_text_and_markdown_fences(self):
+        invalid_outputs = (
+            "ordinary reply",
+            '```json\n{"text_segments":["one"],"sticker_placement":"after_text"}\n```',
         )
-        plain = parse_agent_delivery_plan("ordinary reply", "chat")
-        invalid_placement = parse_agent_delivery_plan(
-            '{"text_segments":["one"],"sticker_placement":"middle"}',
-            "chat",
-        )
-        self.assertEqual(fenced.text_segments, ("one",))
-        self.assertEqual(plain.text_segments, ("ordinary reply",))
-        self.assertEqual(invalid_placement.sticker_placement, "after_text")
+
+        for raw in invalid_outputs:
+            with self.subTest(raw=raw), self.assertRaises(AgentDeliveryPlanError):
+                parse_agent_delivery_plan(raw, "chat")
 
     def test_call_mode_keeps_one_plain_reply(self):
         raw = '{"text_segments":["one","two"]}'
@@ -157,41 +157,60 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         with self.assertRaises(AgentDeliveryPlanError):
             parse_agent_delivery_plan('```json\n{"text_segments":["one"]\n```', "chat")
 
-    def test_strips_internal_message_timestamp_from_structured_delivery(self):
-        plan = parse_agent_delivery_plan(
-            '{"text_segments":["[消息时间 2026-08-12T11:58:44+08:00 周三 上午]\\n你好呀"]}',
-            "chat",
+    def test_rejects_invalid_schema_shapes(self):
+        invalid_outputs = (
+            '{}',
+            '{"text_segments":["one"]}',
+            '{"text_segments":["one"],"sticker_placement":"after_text","extra":true}',
+            '{"text_segments":"one","sticker_placement":"after_text"}',
+            '{"text_segments":["one",2],"sticker_placement":"after_text"}',
+            '{"text_segments":[""],"sticker_placement":"after_text"}',
+            '{"text_segments":["one","one"],"sticker_placement":"after_text"}',
+            '{"text_segments":["one","two","three","four"],"sticker_placement":"after_text"}',
+            '{"text_segments":["one"],"sticker_placement":"middle"}',
+            '{"text_segments":["one"],"text_segments":["two"],"sticker_placement":"after_text"}',
         )
 
-        self.assertEqual(plan.text_segments, ("你好呀",))
+        for raw in invalid_outputs:
+            with self.subTest(raw=raw), self.assertRaises(AgentDeliveryPlanError):
+                parse_agent_delivery_plan(raw, "chat")
 
-    def test_rejects_structured_delivery_that_only_contains_internal_message_timestamp(self):
-        with self.assertRaises(AgentDeliveryPlanError) as context:
-            parse_agent_delivery_plan(
-                '{"text_segments":["[消息时间2026-08-12T11:58:44+08:00 周三 上午]"]}',
-                "chat",
+    def test_rejects_json_with_surrounding_text_or_nested_protocol(self):
+        invalid_outputs = (
+            'hello {"text_segments":["hello"],"sticker_placement":"after_text"}',
+            '{"text_segments":["hello"],"sticker_placement":"after_text"} trailing',
+            '{"text_segments":["hello {\\"text_segments\\":[\\"hello\\"]}"],'
+            '"sticker_placement":"after_text"}',
+        )
+
+        for raw in invalid_outputs:
+            with self.subTest(raw=raw), self.assertRaises(AgentDeliveryPlanError):
+                parse_agent_delivery_plan(raw, "chat")
+
+    def test_rejects_internal_context_markers_in_segments(self):
+        for marker in ("消息时间", "会话时间边界"):
+            raw = (
+                '{"text_segments":["['
+                + marker
+                + ' 2026-08-12T11:58:44+08:00]\\nhello"],'
+                '"sticker_placement":"after_text"}'
             )
-        self.assertEqual(context.exception.error_code, "llm_output_malformed")
+            with self.subTest(marker=marker), self.assertRaises(AgentDeliveryPlanError):
+                parse_agent_delivery_plan(raw, "chat")
 
-    def test_strips_internal_message_timestamp_from_plain_text_fallback(self):
+    def test_persistence_gate_rejects_protocol_fragments(self):
+        with self.assertRaises(AgentDeliveryPlanError):
+            validate_agent_delivery_segments(
+                ('hello {"text_segments":["hello"]}',),
+            )
+
+    def test_proactive_mode_accepts_explicit_empty_delivery(self):
         plan = parse_agent_delivery_plan(
-            "[消息时间2026-08-12T11:58:44+08:00 周三 上午]\nordinary reply",
-            "chat",
+            '{"text_segments":[],"sticker_placement":"after_text"}',
+            "proactive",
         )
 
-        self.assertEqual(plan.text_segments, ("ordinary reply",))
-
-    def test_plain_medium_reply_is_split_on_natural_sentence_boundaries(self):
-        reply = (
-            "今天听起来确实有点累，先不用急着把所有事情都处理完。你可以慢一点，我会认真听你继续说。"
-        )
-        plan = parse_agent_delivery_plan(reply, "chat")
-        self.assertEqual(len(plan.text_segments), 2)
-        self.assertEqual("".join(plan.text_segments), reply)
-
-    def test_plain_reply_with_url_stays_in_one_segment(self):
-        reply = "先打开 https://example.test/docs 查看说明。确认以后再继续操作。"
-        self.assertEqual(parse_agent_delivery_plan(reply, "chat").text_segments, (reply,))
+        self.assertEqual(plan.text_segments, ())
 
 
 class DeliveryTimingPolicyTests(unittest.TestCase):
