@@ -19,6 +19,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 enum _ChatMenuAction {
+  studyFocus,
   persona,
   memory,
   stickers,
@@ -97,6 +98,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             enabled: !state.isBusy,
             onSelected: _handleMenuAction,
             itemBuilder: (context) => const <PopupMenuEntry<_ChatMenuAction>>[
+              PopupMenuItem<_ChatMenuAction>(
+                value: _ChatMenuAction.studyFocus,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.menu_book_rounded),
+                  title: Text('一起学习'),
+                ),
+              ),
               PopupMenuItem<_ChatMenuAction>(
                 value: _ChatMenuAction.persona,
                 child: Text('个性化设置'),
@@ -232,6 +241,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   Future<void> _handleMenuAction(_ChatMenuAction action) async {
     switch (action) {
+      case _ChatMenuAction.studyFocus:
+        unawaited(context.pushNamed(RouteNames.studyFocus));
       case _ChatMenuAction.persona:
         unawaited(context.pushNamed(RouteNames.persona));
       case _ChatMenuAction.memory:

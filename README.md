@@ -1,12 +1,12 @@
 # Echo
 
-Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter 客户端和 FastAPI 服务端组成。它把连续文字聊天、主动联系、定时提醒、语音通话、表情包、长期记忆和每日来信放在同一条可持久化的陪伴链路中。
+Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter 客户端和 FastAPI 服务端组成。它把连续文字聊天、主动联系、定时提醒、语音通话、学习专注、表情包、长期记忆和每日来信放在同一条可持久化的陪伴链路中。
 
-当前生产版本：**v1.0.9**
+当前生产版本：**v1.1.0**
 
 | 部件 | 当前值 |
 | --- | --- |
-| Android APK | `1.0.9+14` |
+| Android APK | `1.1.0+15` |
 | Android 包名 | `cn.echoaiforever.echo_app` |
 | 公网 API | `https://api.echoaiforever.cn` |
 | APK 下载域名 | `https://download.echoaiforever.cn` |
@@ -87,7 +87,7 @@ cd app
 flutter build apk --release --no-pub `
   --dart-define=ECHO_ENV=production `
   --dart-define=ECHO_BASE_URL=https://api.echoaiforever.cn `
-  --dart-define=APP_VERSION=1.0.9
+  --dart-define=APP_VERSION=1.1.0
 ```
 
 APK 构建后由发布脚本上传 COS，并把版本元数据写入生产 PostgreSQL。不要在服务器构建 APK，也不要把签名文件、个推服务端密钥或 COS 密钥提交到 Git。
@@ -113,14 +113,15 @@ flutter analyze
 flutter test
 ```
 
-当前发布检查结果：Flutter analyze 0 issues，客户端 112 项测试通过，后端 254 项测试通过，架构检查通过。
+当前发布检查结果：Flutter analyze 0 issues，客户端 119 项测试通过，后端 296 项测试通过，架构检查通过。
 
 ## 文档入口
 
 - [`Echo-backend/README.md`](Echo-backend/README.md)：服务端模块、接口、配置和数据流。
 - [`app/README.md`](app/README.md)：客户端页面、消息交互、构建和测试。
-- [`doc/Echo v1.0 业务流程与数据流.md`](doc/Echo%20v1.0%20业务流程与数据流.md)：工程级业务链路、数据库和扩展规则。
-- [`doc/Echo v1.0.7 功能业务与展示站说明.md`](doc/Echo%20v1.0.7%20功能业务与展示站说明.md)：给产品、设计和展示站开发使用的功能说明。
+- [`doc/Echo v1.0.9 当前功能与扩展基线.md`](doc/Echo%20v1.0.9%20当前功能与扩展基线.md)：当前版本的业务逻辑、对话/来信边界和新功能接入规则。
+- [`doc/Echo v1.0 业务流程与数据流.md`](doc/Echo%20v1.0%20业务流程与数据流.md)：v1.0 早期业务链路历史基线，仅用于追溯。
+- [`doc/Echo v1.0.7 功能业务与展示站说明.md`](doc/Echo%20v1.0.7%20功能业务与展示站说明.md)：v1.0.7 展示站历史快照，仅用于追溯。
 - [`doc/README.md`](doc/README.md)：文档索引和历史资料边界。
 
 ## 安全原则

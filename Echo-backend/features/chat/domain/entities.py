@@ -132,6 +132,13 @@ class ChatHistoryPage:
 
 
 @dataclass(frozen=True)
+class ExternalAssistantDelivery:
+    conversation_id: str
+    message: ChatHistoryMessage
+    replayed: bool = False
+
+
+@dataclass(frozen=True)
 class ChatAcceptedTurn:
     turn_id: str
     status: ChatTurnStatus

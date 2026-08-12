@@ -8,6 +8,7 @@ from shared.config import settings
 
 from features.agent.domain.entities import ContentPart, SourceReference
 from features.auth.public import ensure_user_identity
+from features.chat.domain.entities import ChatHistoryMessage, ExternalAssistantDelivery
 from features.chat.domain.temporal_context import day_period, format_gap_seconds, weekday_name
 from features.stickers.public import resolve_sticker_asset_url
 
@@ -166,6 +167,7 @@ def _add_message_record(
     reply_group_id: str | None = None,
     sequence_in_group: int = 0,
     in_reply_to_message_id: int | None = None,
+    source: str | None = None,
 ) -> tuple[int, str]:
     ensure_user_identity(user_id=user_id, conn=conn)
     message_id = f"msg_{uuid.uuid4().hex}"
@@ -175,9 +177,9 @@ def _add_message_record(
             INSERT INTO chat_messages (
                 message_id, client_message_id, user_id, conversation_id, role,
                 content, message_type, agent_turn_id, reply_group_id,
-                sequence_in_group, in_reply_to_message_id
+                sequence_in_group, in_reply_to_message_id, source
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -192,6 +194,7 @@ def _add_message_record(
                 reply_group_id,
                 sequence_in_group,
                 in_reply_to_message_id,
+                source,
             ),
         )
         inserted_row = cursor.fetchone()
@@ -205,6 +208,92 @@ def _add_message_record(
                 (user_id, conversation_id),
             )
     return int(inserted_row["id"]), message_id
+
+
+def add_external_assistant_message(
+    *,
+    user_id: str,
+    content: str,
+    idempotency_key: str,
+    source: str,
+) -> ExternalAssistantDelivery:
+    with transaction() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, message_id, client_message_id, role, content,
+                       message_type, agent_turn_id, reply_group_id,
+                       sequence_in_group, in_reply_to_message_id, created_at,
+                       conversation_id
+                FROM chat_messages
+                WHERE user_id = %s AND client_message_id = %s
+                LIMIT 1
+                """,
+                (user_id, idempotency_key),
+            )
+            existing = cursor.fetchone()
+        if existing is not None:
+            message = ChatHistoryMessage(
+                message_id=int(existing["id"]),
+                stable_message_id=str(existing["message_id"] or ""),
+                client_message_id=str(existing["client_message_id"] or ""),
+                role=str(existing["role"]),
+                content=str(existing["content"]),
+                message_type=str(existing["message_type"]),
+                content_parts=(),
+                sources=(),
+                agent_turn_id=str(existing["agent_turn_id"] or ""),
+                reply_group_id=str(existing["reply_group_id"] or ""),
+                sequence_in_group=int(existing["sequence_in_group"] or 0),
+                in_reply_to_message_id=(
+                    int(existing["in_reply_to_message_id"])
+                    if existing["in_reply_to_message_id"] is not None
+                    else None
+                ),
+                created_at=existing["created_at"],
+            )
+            return ExternalAssistantDelivery(
+                conversation_id=str(existing["conversation_id"] or ""),
+                message=message,
+                replayed=True,
+            )
+
+        conversation_id = get_or_create_active_conversation(user_id, conn=conn)
+        reply_group_id = f"external_{uuid.uuid4().hex}"
+        internal_id, stable_id = _add_message_record(
+            user_id=user_id,
+            role="assistant",
+            content=content,
+            conversation_id=conversation_id,
+            message_type="text",
+            conn=conn,
+            client_message_id=idempotency_key,
+            reply_group_id=reply_group_id,
+            source=source,
+        )
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT created_at FROM chat_messages WHERE id = %s",
+                (internal_id,),
+            )
+            created_at = cursor.fetchone()["created_at"]
+        message = ChatHistoryMessage(
+            message_id=internal_id,
+            stable_message_id=stable_id,
+            client_message_id=idempotency_key,
+            role="assistant",
+            content=content,
+            message_type="text",
+            content_parts=(),
+            sources=(),
+            reply_group_id=reply_group_id,
+            created_at=created_at,
+        )
+        return ExternalAssistantDelivery(
+            conversation_id=conversation_id,
+            message=message,
+            replayed=False,
+        )
 
 
 def _add_message_attachments(

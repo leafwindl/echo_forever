@@ -25,6 +25,7 @@ from features.relationship.interface.router import router as relationship_router
 from features.releases.interface.router import router as releases_router
 from features.stickers.interface.router import router as stickers_router
 from features.stickers.public import backfill_sticker_embeddings, generate_pending_stickers
+from features.study_focus.interface.router import router as study_focus_router
 from features.system.interface.router import router as health_router
 from features.voice.interface.router import router as voice_router
 from features.voice.public import cleanup_expired_voice_audio
@@ -256,6 +257,7 @@ def create_app() -> FastAPI:
     app.include_router(voice_router)
     app.include_router(letters_router)
     app.include_router(stickers_router)
+    app.include_router(study_focus_router)
     app.include_router(releases_router)
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

@@ -1,0 +1,1 @@
+"""Study focus persistence adapters."""

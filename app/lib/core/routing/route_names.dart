@@ -15,4 +15,5 @@ class RouteNames {
   static const notificationSettings = 'notification-settings';
   static const proactiveChatSettings = 'proactive-chat-settings';
   static const scheduledTasks = 'scheduled-tasks';
+  static const studyFocus = 'study-focus';
 }

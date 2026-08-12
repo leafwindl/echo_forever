@@ -35,6 +35,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -47,6 +48,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders["GETUI_APPID"] = getuiAppId
+        manifestPlaceholders["appLabel"] = "Echo"
     }
 
     signingConfigs {
@@ -61,6 +63,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            manifestPlaceholders["appLabel"] = "Echo Dev"
+        }
         release {
             signingConfig = signingConfigs.findByName("release")
         }
@@ -89,6 +96,7 @@ flutter {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("com.getui:gtsdk:3.3.12.0")
     implementation("com.getui:gtc:3.2.18.0")
 }

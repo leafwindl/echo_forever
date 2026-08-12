@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
@@ -12,6 +13,7 @@ from features.letters.domain.repositories import LetterRepository
 from features.memory.public import list_memories, retrieve_relevant_memories
 from features.persona.public import get_persona
 from features.relationship.public import get_relationship_context
+from features.study_focus.public import list_study_focus_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +45,15 @@ class LetterContext:
 
 
 class LetterContextAssembler:
-    def __init__(self, repository: LetterRepository, config: LetterContextConfig):
+    def __init__(
+        self,
+        repository: LetterRepository,
+        config: LetterContextConfig,
+        focus_loader: Callable = list_study_focus_evidence,
+    ):
         self.repository = repository
         self.config = config
+        self.focus_loader = focus_loader
 
     async def build(
         self,
@@ -55,6 +63,15 @@ class LetterContextAssembler:
         timezone_name: str,
     ) -> LetterContext:
         raw_messages = self.repository.source_messages(user_id, local_date, timezone_name)
+        try:
+            focus_sessions = self.focus_loader(user_id, local_date, timezone_name)
+        except Exception:
+            logger.warning(
+                "Letter study focus evidence unavailable user_id=%s",
+                user_id,
+                exc_info=True,
+            )
+            focus_sessions = []
         user_text = "\n".join(
             str(row.get("content") or "").strip()
             for row in raw_messages
@@ -66,6 +83,9 @@ class LetterContextAssembler:
         assistant_persona = get_assistant_persona(self.config.assistant_persona_version)
 
         evidence = self._build_evidence(raw_messages, timezone_name)
+        focus_evidence = self._build_focus_evidence(focus_sessions)
+        if focus_evidence:
+            evidence = f"{evidence}\n\n{focus_evidence}"
         memory_ids = tuple(str(item.get("memory_id")) for item in memories if item.get("memory_id"))
         source_ids = tuple(int(row["id"]) for row in raw_messages)
         user_source_ids = tuple(
@@ -79,6 +99,7 @@ class LetterContextAssembler:
             timezone_name,
             memory_ids=memory_ids,
         )
+        snapshot["study_focus"] = self._focus_snapshot(focus_sessions)
         messages = render_prompt_layers(
             product_identity=self.config.product_identity,
             persona=persona,
@@ -139,7 +160,7 @@ class LetterContextAssembler:
             source_memory_ids=memory_ids,
             raw_message_count=len(raw_messages),
             memory_count=len(memories),
-            has_user_interaction=bool(user_source_ids),
+            has_user_interaction=bool(user_source_ids or focus_sessions),
             snapshot=snapshot,
         )
 
@@ -288,11 +309,54 @@ class LetterContextAssembler:
         }
 
     @staticmethod
+    def _build_focus_evidence(sessions) -> str:
+        if not sessions:
+            return ""
+        lines = ["[STUDY_FOCUS_EVIDENCE]", f"学习时段数: {len(sessions)}"]
+        total_seconds = 0
+        for session in sessions:
+            total_seconds += session.actual_duration_seconds
+            ended = session.ended_at.astimezone(UTC) if session.ended_at else None
+            time_text = ended.strftime("%H:%M UTC") if ended else "未知时间"
+            goal = f"；短目标: {session.short_goal}" if session.short_goal else ""
+            lines.append(
+                f"focus_session_id={session.session_id} time={time_text} "
+                f"status={session.status} activity={session.activity_type} "
+                f"actual_seconds={session.actual_duration_seconds}{goal}"
+            )
+        lines.append(f"实际学习总时长: {total_seconds} 秒")
+        lines.append(
+            "这些是 APP 的确定性计时记录，只能说明用户开启并运行了学习时段；"
+            "不能据此断言具体学习目标已经完成。"
+        )
+        lines.append("[/STUDY_FOCUS_EVIDENCE]")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _focus_snapshot(sessions) -> dict[str, object]:
+        return {
+            "session_count": len(sessions),
+            "total_actual_duration_seconds": sum(
+                session.actual_duration_seconds for session in sessions
+            ),
+            "completed_count": sum(session.status == "completed" for session in sessions),
+            "ended_early_count": sum(session.status == "ended_early" for session in sessions),
+            "session_ids": [session.session_id for session in sessions],
+        }
+
+    @staticmethod
     def _format_snapshot(snapshot: dict[str, object]) -> str:
         lines = [
             f"消息数: {snapshot.get('message_count', 0)}",
             f"会话段数: {snapshot.get('session_count', 0)}",
         ]
+        focus = snapshot.get("study_focus")
+        if isinstance(focus, dict):
+            lines.append(
+                "学习记录: "
+                f"{focus.get('session_count', 0)} 段，"
+                f"共 {focus.get('total_actual_duration_seconds', 0)} 秒"
+            )
         sessions = snapshot.get("sessions")
         if isinstance(sessions, list):
             for index, session in enumerate(sessions, start=1):

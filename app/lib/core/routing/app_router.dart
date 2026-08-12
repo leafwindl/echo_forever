@@ -16,6 +16,7 @@ import 'package:echo_app/features/proactive_chat/presentation/proactive_chat_pag
 import 'package:echo_app/features/proactive_chat/presentation/scheduled_tasks_page.dart';
 import 'package:echo_app/features/push/presentation/notification_settings_page.dart';
 import 'package:echo_app/features/stickers/presentation/stickers_page.dart';
+import 'package:echo_app/features/study_focus/presentation/study_focus_page.dart';
 import 'package:echo_app/shared/widgets/echo_error_view.dart';
 import 'package:echo_app/shared/widgets/echo_loading_view.dart';
 import 'package:flutter/material.dart';
@@ -140,6 +141,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/scheduled-tasks',
         name: RouteNames.scheduledTasks,
         builder: (context, state) => const ScheduledTasksPage(),
+      ),
+      GoRoute(
+        path: '/study-focus',
+        name: RouteNames.studyFocus,
+        builder: (context, state) => const StudyFocusPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

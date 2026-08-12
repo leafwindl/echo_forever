@@ -617,6 +617,26 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             UNIQUE(platform, channel, version_code)
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS study_focus_sessions (
+            session_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            activity_type VARCHAR(40) NOT NULL DEFAULT '学习',
+            short_goal VARCHAR(80) NOT NULL DEFAULT '',
+            planned_duration_seconds INTEGER NOT NULL
+                CHECK (planned_duration_seconds BETWEEN 60 AND 10800),
+            actual_duration_seconds INTEGER NOT NULL DEFAULT 0
+                CHECK (actual_duration_seconds BETWEEN 0 AND 10800),
+            status VARCHAR(24) NOT NULL DEFAULT 'running'
+                CHECK (status IN ('running', 'paused', 'completed', 'ended_early')),
+            started_at TIMESTAMPTZ NOT NULL,
+            ended_at TIMESTAMPTZ,
+            timezone VARCHAR(80) NOT NULL DEFAULT 'UTC',
+            completion_message_id BIGINT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
         "CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL",
         """
@@ -660,6 +680,15 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_messages_user_client_message
         ON chat_messages(user_id, client_message_id)
         WHERE client_message_id IS NOT NULL
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_study_focus_user_started
+        ON study_focus_sessions(user_id, started_at DESC)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_study_focus_user_ended
+        ON study_focus_sessions(user_id, ended_at DESC)
+        WHERE ended_at IS NOT NULL
         """,
         """
         CREATE INDEX IF NOT EXISTS idx_chat_messages_turn_group

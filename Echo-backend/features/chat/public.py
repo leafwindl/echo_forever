@@ -7,6 +7,7 @@ from features.chat.domain.entities import (
     ChatRequestInProgressError,
     ChatTurnResult,
     ChatValidationError,
+    ExternalAssistantDelivery,
 )
 from features.chat.infrastructure.container import (
     get_accept_chat_message_use_case,
@@ -16,6 +17,8 @@ from features.chat.infrastructure.container import (
     get_process_pending_chat_turns_use_case,
     get_send_chat_message_use_case,
 )
+from features.chat.infrastructure.events import ChatEvent, get_chat_event_broker
+from features.chat.infrastructure.postgres_repositories import add_external_assistant_message
 
 
 def clear_chat_context(user_id: str) -> ChatContextClearResult:
@@ -101,6 +104,59 @@ async def send_chat_message(
     )
 
 
+async def deliver_external_assistant_message(
+    *,
+    user_id: str,
+    content: str,
+    idempotency_key: str,
+    source: str,
+) -> ExternalAssistantDelivery:
+    delivery = add_external_assistant_message(
+        user_id=user_id,
+        content=content,
+        idempotency_key=idempotency_key,
+        source=source,
+    )
+    if delivery.replayed:
+        return delivery
+    message = delivery.message
+    await get_chat_event_broker().publish(
+        user_id,
+        ChatEvent(
+            event="chat.delivery.created",
+            data={
+                "turn_id": "",
+                "reply_group_id": message.reply_group_id,
+                "conversation_id": delivery.conversation_id,
+                "origin": source,
+                "presentation": {
+                    "agent_elapsed_ms": 0,
+                    "initial_delay_ms": 0,
+                    "message_delays_ms": [0],
+                },
+                "messages": [
+                    {
+                        "message_id": message.message_id,
+                        "stable_message_id": message.stable_message_id,
+                        "client_message_id": message.client_message_id,
+                        "role": message.role,
+                        "message_type": message.message_type,
+                        "content": message.content,
+                        "content_parts": [],
+                        "sources": [],
+                        "agent_turn_id": message.agent_turn_id,
+                        "reply_group_id": message.reply_group_id,
+                        "sequence_in_group": message.sequence_in_group,
+                        "in_reply_to_message_id": message.in_reply_to_message_id,
+                        "created_at": message.created_at.isoformat(),
+                    }
+                ],
+            },
+        ),
+    )
+    return delivery
+
+
 __all__ = [
     "ChatContextClearResult",
     "ChatHistoryPage",
@@ -109,7 +165,9 @@ __all__ = [
     "ChatRequestInProgressError",
     "ChatTurnResult",
     "ChatValidationError",
+    "ExternalAssistantDelivery",
     "clear_chat_context",
+    "deliver_external_assistant_message",
     "accept_chat_message",
     "generate_chat_reply",
     "list_chat_messages",

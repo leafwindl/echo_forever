@@ -9,9 +9,13 @@ class Endpoints {
   static const pushTokensMe = '/push/tokens/me';
   static const proactivePreferences = '/proactive/preferences';
   static const proactiveSchedules = '/proactive/schedules';
+  static const studyFocusSessions = '/study-focus/sessions';
 
   static String proactiveSchedule(String scheduleId) =>
       '/proactive/schedules/${Uri.encodeComponent(scheduleId)}';
+
+  static String studyFocusSession(String sessionId) =>
+      '$studyFocusSessions/${Uri.encodeComponent(sessionId)}';
   static const latestRelease = '/releases/latest';
 
   static String pushTokenForDevice(String deviceId) =>
