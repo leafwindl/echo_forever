@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from features.agent.domain.delivery import (
     AgentDeliveryPlanError,
     build_natural_delivery_plan,
-    parse_agent_delivery_plan,
     validate_agent_delivery_segments,
 )
 from features.agent.domain.entities import ContentPart
@@ -182,87 +181,22 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         self.assertEqual(plan.text_segments, ())
         self.assertEqual(plan.sticker_placement, "before_text")
 
-    def test_legacy_delivery_cannot_override_tool_sticker_placement(self):
-        plan = build_natural_delivery_plan(
-            '{"text_segments":["给你。"],"sticker_placement":"before_text"}',
-            "chat",
-            sticker_placement="after_text",
-        )
-
-        self.assertEqual(plan.text_segments, ("给你。",))
-        self.assertEqual(plan.sticker_placement, "after_text")
-
-    def test_parses_exact_structured_delivery_contract(self):
-        plan = parse_agent_delivery_plan(
-            '{"text_segments":["one","two","three"],"sticker_placement":"before_text"}',
-            "chat",
-        )
-        self.assertEqual(plan.text_segments, ("one", "two", "three"))
-        self.assertEqual(plan.sticker_placement, "before_text")
-
-    def test_rejects_plain_text_and_markdown_fences(self):
-        invalid_outputs = (
-            "ordinary reply",
-            '```json\n{"text_segments":["one"],"sticker_placement":"after_text"}\n```',
-        )
-
-        for raw in invalid_outputs:
-            with self.subTest(raw=raw), self.assertRaises(AgentDeliveryPlanError):
-                parse_agent_delivery_plan(raw, "chat")
-
     def test_call_mode_keeps_one_plain_reply(self):
         raw = '{"text_segments":["one","two"]}'
-        self.assertEqual(parse_agent_delivery_plan(raw, "call").text_segments, (raw,))
+        self.assertEqual(build_natural_delivery_plan(raw, "call").text_segments, (raw,))
 
-    def test_rejects_incomplete_structured_output_instead_of_returning_protocol_fragment(self):
-        with self.assertRaises(AgentDeliveryPlanError) as context:
-            parse_agent_delivery_plan('{"text_segments', "chat")
-        self.assertEqual(context.exception.error_code, "llm_output_malformed")
-
-    def test_rejects_incomplete_fenced_structured_output(self):
-        with self.assertRaises(AgentDeliveryPlanError):
-            parse_agent_delivery_plan('```json\n{"text_segments":["one"]\n```', "chat")
-
-    def test_rejects_invalid_schema_shapes(self):
+    def test_chat_rejects_json_and_markdown_instead_of_parsing_them(self):
         invalid_outputs = (
             '{}',
-            '{"text_segments":["one"]}',
-            '{"text_segments":["one"],"sticker_placement":"after_text","extra":true}',
-            '{"text_segments":"one","sticker_placement":"after_text"}',
-            '{"text_segments":["one",2],"sticker_placement":"after_text"}',
-            '{"text_segments":[""],"sticker_placement":"after_text"}',
-            '{"text_segments":["one","one"],"sticker_placement":"after_text"}',
-            '{"text_segments":["one","two","three","four"],"sticker_placement":"after_text"}',
-            '{"text_segments":["one"],"sticker_placement":"middle"}',
-            '{"text_segments":["one"],"text_segments":["two"],"sticker_placement":"after_text"}',
+            '[]',
+            '["one", "two"]',
+            '{"text_segments":["one"],"sticker_placement":"after_text"}',
+            '```json\n{"text_segments":["one"]}\n```',
         )
 
         for raw in invalid_outputs:
             with self.subTest(raw=raw), self.assertRaises(AgentDeliveryPlanError):
-                parse_agent_delivery_plan(raw, "chat")
-
-    def test_rejects_json_with_surrounding_text_or_nested_protocol(self):
-        invalid_outputs = (
-            'hello {"text_segments":["hello"],"sticker_placement":"after_text"}',
-            '{"text_segments":["hello"],"sticker_placement":"after_text"} trailing',
-            '{"text_segments":["hello {\\"text_segments\\":[\\"hello\\"]}"],'
-            '"sticker_placement":"after_text"}',
-        )
-
-        for raw in invalid_outputs:
-            with self.subTest(raw=raw), self.assertRaises(AgentDeliveryPlanError):
-                parse_agent_delivery_plan(raw, "chat")
-
-    def test_rejects_internal_context_markers_in_segments(self):
-        for marker in ("消息时间", "会话时间边界"):
-            raw = (
-                '{"text_segments":["['
-                + marker
-                + ' 2026-08-12T11:58:44+08:00]\\nhello"],'
-                '"sticker_placement":"after_text"}'
-            )
-            with self.subTest(marker=marker), self.assertRaises(AgentDeliveryPlanError):
-                parse_agent_delivery_plan(raw, "chat")
+                build_natural_delivery_plan(raw, "chat")
 
     def test_persistence_gate_rejects_protocol_fragments(self):
         with self.assertRaises(AgentDeliveryPlanError):
@@ -281,9 +215,10 @@ class AgentDeliveryPlanTests(unittest.TestCase):
                 validate_agent_delivery_segments((segment,))
 
     def test_proactive_mode_accepts_explicit_empty_delivery(self):
-        plan = parse_agent_delivery_plan(
-            '{"text_segments":[],"sticker_placement":"after_text"}',
+        plan = build_natural_delivery_plan(
+            "",
             "proactive",
+            allow_empty=True,
         )
 
         self.assertEqual(plan.text_segments, ())

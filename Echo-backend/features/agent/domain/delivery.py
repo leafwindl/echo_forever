@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
-from typing import Any
 
-_STRUCTURED_DELIVERY_MODES = frozenset({"chat", "proactive"})
-_DELIVERY_FIELDS = frozenset({"text_segments", "sticker_placement"})
+_NATURAL_DELIVERY_MODES = frozenset({"chat", "proactive"})
 _STICKER_PLACEMENTS = frozenset({"before_text", "after_text"})
-_LEGACY_MAX_TEXT_SEGMENTS = 3
 _NATURAL_MAX_TEXT_SEGMENTS = 6
 _NATURAL_SEGMENT_TARGET_CHARS = 180
 _INTERNAL_CONTEXT_MARKER = re.compile(
@@ -47,48 +43,6 @@ class AgentDeliveryPlanError(ValueError):
     error_code = "llm_output_malformed"
 
 
-def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDeliveryPlan:
-    if not isinstance(raw_text, str):
-        raise AgentDeliveryPlanError("Delivery output must be text")
-    clean_text = raw_text.strip()
-
-    if conversation_mode in {"call", "daily_letter"}:
-        return AgentDeliveryPlan((clean_text,)) if clean_text else AgentDeliveryPlan(())
-    if conversation_mode not in _STRUCTURED_DELIVERY_MODES:
-        raise AgentDeliveryPlanError("Unknown structured delivery mode")
-    if not clean_text:
-        raise AgentDeliveryPlanError("Structured delivery output is empty")
-
-    payload = _load_delivery_payload(clean_text)
-    if not isinstance(payload, dict):
-        raise AgentDeliveryPlanError("Structured delivery output must be an object")
-    if frozenset(payload) != _DELIVERY_FIELDS:
-        raise AgentDeliveryPlanError("Structured delivery output has invalid fields")
-
-    raw_segments = payload["text_segments"]
-    if not isinstance(raw_segments, list):
-        raise AgentDeliveryPlanError("text_segments must be an array")
-    if len(raw_segments) > _LEGACY_MAX_TEXT_SEGMENTS:
-        raise AgentDeliveryPlanError("text_segments exceeds the maximum item count")
-
-    segments: list[str] = []
-    for value in raw_segments:
-        if not isinstance(value, str):
-            raise AgentDeliveryPlanError("Every text segment must be a string")
-        segment = value.strip()
-        if not segment:
-            raise AgentDeliveryPlanError("Text segments must not be blank")
-        if segment in segments:
-            raise AgentDeliveryPlanError("Text segments must not be duplicated")
-        _validate_delivery_segment(segment)
-        segments.append(segment)
-
-    placement = payload["sticker_placement"]
-    if not isinstance(placement, str) or placement not in _STICKER_PLACEMENTS:
-        raise AgentDeliveryPlanError("sticker_placement has an invalid value")
-    return AgentDeliveryPlan(tuple(segments), placement)
-
-
 def validate_agent_delivery_segments(segments: tuple[str, ...]) -> None:
     """Apply the same content gate immediately before chat persistence."""
     if len(segments) > _NATURAL_MAX_TEXT_SEGMENTS:
@@ -102,32 +56,6 @@ def validate_agent_delivery_segments(segments: tuple[str, ...]) -> None:
             raise AgentDeliveryPlanError("Delivery contains duplicate text segments")
         _validate_delivery_segment(segment)
         seen.add(segment)
-
-
-def _load_delivery_payload(candidate: str) -> Any:
-    try:
-        return json.loads(
-            candidate,
-            object_pairs_hook=_object_without_duplicate_keys,
-            parse_constant=_reject_json_constant,
-        )
-    except AgentDeliveryPlanError:
-        raise
-    except (json.JSONDecodeError, TypeError, ValueError) as exc:
-        raise AgentDeliveryPlanError("Structured delivery output is not valid JSON") from exc
-
-
-def _object_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise AgentDeliveryPlanError("Structured delivery output has duplicate fields")
-        result[key] = value
-    return result
-
-
-def _reject_json_constant(value: str) -> None:
-    raise AgentDeliveryPlanError(f"Structured delivery output contains {value}")
 
 
 def _validate_delivery_segment(segment: str) -> None:
@@ -148,18 +76,18 @@ def build_natural_delivery_plan(
 ) -> AgentDeliveryPlan:
     """Build the transport plan from natural model text.
 
-    Chat and proactive replies no longer require the model to serialize a
-    delivery JSON object. The legacy parser remains available as a migration
-    bridge for already queued responses, but new model output is plain text.
+    Chat and proactive replies accept only natural user-visible text. Protocol
+    JSON and Markdown fences are rejected instead of being interpreted.
     """
     if conversation_mode == "daily_letter":
-        return parse_agent_delivery_plan(raw_text, conversation_mode)
+        clean = raw_text.strip()
+        return AgentDeliveryPlan((clean,)) if clean else AgentDeliveryPlan(())
     if conversation_mode == "call":
         clean = raw_text.strip()
         if not clean and not allow_empty:
             raise AgentDeliveryPlanError("Delivery output is empty")
         return AgentDeliveryPlan((clean,) if clean else ())
-    if conversation_mode not in _STRUCTURED_DELIVERY_MODES:
+    if conversation_mode not in _NATURAL_DELIVERY_MODES:
         raise AgentDeliveryPlanError("Unknown natural delivery mode")
     if sticker_placement not in _STICKER_PLACEMENTS:
         raise AgentDeliveryPlanError("sticker_placement has an invalid value")
@@ -170,14 +98,8 @@ def build_natural_delivery_plan(
             return AgentDeliveryPlan((), sticker_placement)
         raise AgentDeliveryPlanError("Natural delivery output is empty")
 
-    # Accept an exact legacy payload during migration, but never accept a
-    # protocol fragment surrounded by user-visible text.
-    if clean.startswith("{") or clean.startswith("```json"):
-        legacy = parse_agent_delivery_plan(clean, conversation_mode)
-        return AgentDeliveryPlan(legacy.text_segments, sticker_placement)
-
-    if _DELIVERY_PROTOCOL_FIELD.search(clean):
-        raise AgentDeliveryPlanError("Delivery contains a nested protocol fragment")
+    if clean.startswith(("{", "[", "```")) or _DELIVERY_PROTOCOL_FIELD.search(clean):
+        raise AgentDeliveryPlanError("Delivery contains protocol or JSON output")
     if _INTERNAL_CONTEXT_MARKER.search(clean) or _INTERNAL_CONTROL_MARKER.search(clean):
         raise AgentDeliveryPlanError("Delivery leaked internal control context")
 

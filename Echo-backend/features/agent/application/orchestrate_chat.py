@@ -350,7 +350,7 @@ class OrchestrateChatWithAgent:
             if isinstance(exc, AgentDeliveryPlanError):
                 final_error = exc.error_code
                 logger.warning(
-                    "Unified Agent structured delivery output rejected "
+                    "Unified Agent natural delivery output rejected "
                     "run_id=%s mode=%s error_code=%s",
                     run_id,
                     conversation_mode,

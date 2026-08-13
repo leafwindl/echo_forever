@@ -962,7 +962,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(model.calls[1]["tools"], ())
         self.assertEqual(repository.finishes[0][2], None)
 
-    async def test_malformed_structured_output_is_failed_without_protocol_fragment(self):
+    async def test_protocol_output_is_failed_without_leaking_protocol_fragment(self):
         model = SequenceAgentModel(
             [
                 AgentModelResponse(text='{"text_segments'),
@@ -984,14 +984,11 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(model.calls[1]["tools"], ())
         self.assertEqual(repository.finishes[0][2], "llm_output_malformed")
 
-    async def test_malformed_structured_output_is_repaired_once_without_tools(self):
+    async def test_exact_legacy_json_is_rejected_and_repaired_as_natural_text(self):
         model = SequenceAgentModel(
             [
                 AgentModelResponse(
-                    text=(
-                        'hello {"text_segments":["hello"],'
-                        '"sticker_placement":"after_text"}'
-                    )
+                    text='{"text_segments":["hello"],"sticker_placement":"after_text"}'
                 ),
                 AgentModelResponse(text=_delivery("hello")),
             ]
@@ -1132,7 +1129,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(model.calls[0]["structured_output"])
         self.assertEqual(repository.finishes[0][2], None)
 
-    async def test_proactive_malformed_structured_output_is_silent(self):
+    async def test_proactive_protocol_output_failure_is_silent(self):
         model = SequenceAgentModel(
             [
                 AgentModelResponse(text='{"text_segments'),
