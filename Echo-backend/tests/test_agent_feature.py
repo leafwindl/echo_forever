@@ -993,11 +993,45 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("FINAL DELIVERY CONTRACT", model.calls[0]["messages"][0]["content"])
         self.assertEqual(repository.finishes[0][2], None)
 
-    async def test_structured_retry_does_not_echo_invalid_output_or_internal_time_markers(self):
+    async def test_metadata_prefixed_reply_is_recovered_without_another_model_call(self):
         leaked_output = "[消息时间 2026-08-13T09:12:35+08:00 周四 上午]\n我也想再睡会儿。"
         model = SequenceAgentModel(
             [
                 AgentModelResponse(text=leaked_output),
+            ]
+        )
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="我还想再睡一会儿",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "[会话时间边界] 上一段消息结束于昨晚，本段开始于今早。"
+                    ),
+                },
+                {
+                    "role": "assistant",
+                    "content": (
+                        "[消息时间 2026-08-13T09:00:00+08:00 周四 上午]\n早上好。"
+                    ),
+                },
+                {"role": "user", "content": "我还想再睡一会儿"},
+            ],
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.COMPLETED)
+        self.assertEqual(result.reply_text, "我也想再睡会儿。")
+        self.assertEqual(len(model.calls), 1)
+        self.assertEqual(repository.finishes[0][2], None)
+
+    async def test_structured_retry_does_not_echo_invalid_output_or_internal_time_markers(self):
+        invalid_output = "not json"
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(text=invalid_output),
                 AgentModelResponse(text=_delivery("那就再眯一会儿。")),
             ]
         )
@@ -1027,7 +1061,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         retry_contents = [str(message.get("content") or "") for message in retry_messages]
         self.assertEqual(result.status, AgentRunStatus.COMPLETED)
         self.assertEqual(result.reply_text, "那就再眯一会儿。")
-        self.assertNotIn(leaked_output, retry_contents)
+        self.assertNotIn(invalid_output, retry_contents)
         self.assertFalse(any("[消息时间" in content for content in retry_contents))
         self.assertFalse(any("[会话时间边界" in content for content in retry_contents))
         self.assertIn("早上好。", retry_contents)

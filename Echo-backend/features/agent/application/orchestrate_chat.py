@@ -8,7 +8,12 @@ import uuid
 from contextlib import suppress
 
 from features.agent.application.execute_tool import ToolExecutor
-from features.agent.domain.delivery import AgentDeliveryPlanError, parse_agent_delivery_plan
+from features.agent.domain.delivery import (
+    AgentDeliveryPlan,
+    AgentDeliveryPlanError,
+    parse_agent_delivery_plan,
+    validate_agent_delivery_segments,
+)
 from features.agent.domain.entities import (
     AgentModelResponse,
     AgentRunStatus,
@@ -43,6 +48,10 @@ _MESSAGE_TIME_PREFIX = re.compile(
 )
 _SESSION_BOUNDARY_PREFIX = re.compile(
     r"^\s*[\[\uff3b]\s*\u4f1a\u8bdd\u65f6\u95f4\u8fb9\u754c[\]\uff3d]"
+)
+_SESSION_BOUNDARY_LINE = re.compile(
+    r"^\s*[\[\uff3b]\s*\u4f1a\u8bdd\u65f6\u95f4\u8fb9\u754c[\]\uff3d]"
+    r"[^\r\n]*(?:\r?\n)?"
 )
 
 
@@ -189,7 +198,21 @@ class OrchestrateChatWithAgent:
                 try:
                     delivery_plan = parse_agent_delivery_plan(response.text, conversation_mode)
                 except AgentDeliveryPlanError as exc:
-                    if (
+                    recovered_plan = self._recover_metadata_prefixed_delivery(
+                        response.text,
+                        conversation_mode,
+                    )
+                    if recovered_plan is not None:
+                        delivery_plan = recovered_plan
+                        logger.warning(
+                            "Unified Agent metadata-prefixed delivery recovered "
+                            "run_id=%s mode=%s content_length=%s prefix_codepoints=%s",
+                            run_id,
+                            conversation_mode,
+                            len(response.text),
+                            self._prefix_codepoints(response.text),
+                        )
+                    elif (
                         conversation_mode in {"chat", "proactive"}
                         and delivery_format_retries_remaining > 0
                     ):
@@ -210,7 +233,18 @@ class OrchestrateChatWithAgent:
                             self._prefix_codepoints(response.text),
                         )
                         continue
-                    raise
+                    else:
+                        logger.warning(
+                            "Unified Agent structured delivery final rejection detail "
+                            "run_id=%s mode=%s error_detail=%s content_length=%s "
+                            "prefix_codepoints=%s",
+                            run_id,
+                            conversation_mode,
+                            str(exc),
+                            len(response.text),
+                            self._prefix_codepoints(response.text),
+                        )
+                        raise
                 if delivery_plan.text_segments or content_parts:
                     result = AgentTurnResult(
                         status=AgentRunStatus.COMPLETED,
@@ -360,6 +394,38 @@ class OrchestrateChatWithAgent:
             }
         )
         return sanitized
+
+    @staticmethod
+    def _recover_metadata_prefixed_delivery(
+        text: str,
+        conversation_mode: str,
+    ) -> AgentDeliveryPlan | None:
+        if conversation_mode not in {"chat", "proactive"}:
+            return None
+        candidate = text.strip()
+        removed_metadata = False
+        while candidate:
+            without_message_time = _MESSAGE_TIME_PREFIX.sub("", candidate, count=1)
+            if without_message_time != candidate:
+                candidate = without_message_time.strip()
+                removed_metadata = True
+                continue
+            without_boundary = _SESSION_BOUNDARY_LINE.sub("", candidate, count=1)
+            if without_boundary != candidate:
+                candidate = without_boundary.strip()
+                removed_metadata = True
+                continue
+            break
+        if not removed_metadata or not candidate:
+            return None
+        try:
+            return parse_agent_delivery_plan(candidate, conversation_mode)
+        except AgentDeliveryPlanError:
+            if candidate.startswith(("{", "[", "```")):
+                return None
+            segments = (candidate,)
+            validate_agent_delivery_segments(segments)
+            return AgentDeliveryPlan(segments)
 
     @staticmethod
     def _prefix_codepoints(text: str, limit: int = 8) -> str:
