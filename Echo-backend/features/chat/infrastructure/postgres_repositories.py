@@ -21,11 +21,17 @@ def get_user_timezone(user_id: str, fallback: str) -> str:
         )
         row = cursor.fetchone()
     candidate = str(row["timezone"] or "").strip() if row else ""
+    return _resolve_timezone(candidate, fallback)
+
+
+def _resolve_timezone(candidate: str, fallback: str) -> str:
     for value in (candidate, fallback, "UTC"):
+        if not value.strip():
+            continue
         try:
             ZoneInfo(value)
             return value
-        except ZoneInfoNotFoundError:
+        except (ZoneInfoNotFoundError, ValueError):
             continue
     return "UTC"
 

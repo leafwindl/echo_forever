@@ -10,6 +10,7 @@ from features.chat.infrastructure.context_builder import _turn_input_message
 from features.chat.infrastructure.postgres_repositories import (
     _render_message_content,
     _render_timestamped_history,
+    _resolve_timezone,
     classify_conversation_gap,
 )
 from features.chat.infrastructure.prompt_renderer import (
@@ -19,6 +20,11 @@ from features.chat.infrastructure.prompt_renderer import (
 
 
 class ContextBuilderTests(unittest.TestCase):
+    def test_empty_or_invalid_user_timezone_falls_back_to_default(self):
+        self.assertEqual(_resolve_timezone("", "Asia/Shanghai"), "Asia/Shanghai")
+        self.assertEqual(_resolve_timezone("/invalid", "Asia/Shanghai"), "Asia/Shanghai")
+        self.assertEqual(_resolve_timezone("Asia/Tokyo", "Asia/Shanghai"), "Asia/Tokyo")
+
     def test_proactive_trigger_is_internal_system_context(self):
         proactive = _turn_input_message("internal proactive trigger", "proactive")
         chat = _turn_input_message("hello", "chat")

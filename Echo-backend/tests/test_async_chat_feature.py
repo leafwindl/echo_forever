@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from features.agent.domain.delivery import (
     AgentDeliveryPlanError,
+    build_natural_delivery_plan,
     parse_agent_delivery_plan,
     validate_agent_delivery_segments,
 )
@@ -126,6 +127,57 @@ class AcceptChatMessageTests(unittest.TestCase):
 
 
 class AgentDeliveryPlanTests(unittest.TestCase):
+    def test_builds_natural_segments_from_blank_lines(self):
+        plan = build_natural_delivery_plan(
+            "先休息一下。\n\n等状态回来再继续。",
+            "chat",
+        )
+
+        self.assertEqual(plan.text_segments, ("先休息一下。", "等状态回来再继续。"))
+        self.assertEqual(plan.sticker_placement, "after_text")
+
+    def test_splits_long_natural_reply_at_sentence_boundaries(self):
+        sentences = tuple(f"这是第{index}句完整的话。" for index in range(1, 41))
+        raw = "".join(sentences)
+        plan = build_natural_delivery_plan(raw, "chat")
+
+        self.assertGreater(len(plan.text_segments), 1)
+        self.assertLessEqual(len(plan.text_segments), 3)
+        self.assertTrue(all(segment.endswith("。") for segment in plan.text_segments))
+        self.assertEqual("".join(plan.text_segments), raw)
+
+    def test_natural_delivery_rejects_internal_markers_and_protocol_fragments(self):
+        invalid_outputs = (
+            "[消息时间 2026-08-13T09:00:00+08:00] 早上好。",
+            "（本条消息为系统生成，无实际文本内容）",
+            '回复是 {"text_segments":["你好"]}',
+        )
+
+        for raw in invalid_outputs:
+            with self.subTest(raw=raw), self.assertRaises(AgentDeliveryPlanError):
+                build_natural_delivery_plan(raw, "chat")
+
+    def test_natural_delivery_allows_sticker_only_after_success(self):
+        plan = build_natural_delivery_plan(
+            "",
+            "chat",
+            sticker_placement="before_text",
+            allow_empty=True,
+        )
+
+        self.assertEqual(plan.text_segments, ())
+        self.assertEqual(plan.sticker_placement, "before_text")
+
+    def test_legacy_delivery_cannot_override_tool_sticker_placement(self):
+        plan = build_natural_delivery_plan(
+            '{"text_segments":["给你。"],"sticker_placement":"before_text"}',
+            "chat",
+            sticker_placement="after_text",
+        )
+
+        self.assertEqual(plan.text_segments, ("给你。",))
+        self.assertEqual(plan.sticker_placement, "after_text")
+
     def test_parses_exact_structured_delivery_contract(self):
         plan = parse_agent_delivery_plan(
             '{"text_segments":["one","two","three"],"sticker_placement":"before_text"}',

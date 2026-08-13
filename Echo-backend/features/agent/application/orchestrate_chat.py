@@ -11,8 +11,7 @@ from features.agent.application.execute_tool import ToolExecutor
 from features.agent.domain.delivery import (
     AgentDeliveryPlan,
     AgentDeliveryPlanError,
-    parse_agent_delivery_plan,
-    validate_agent_delivery_segments,
+    build_natural_delivery_plan,
 )
 from features.agent.domain.entities import (
     AgentModelResponse,
@@ -37,11 +36,10 @@ FINAL_RETRY_INSTRUCTION = (
 LLM_TIMEOUT_RETRY_LIMIT = 1
 DELIVERY_FORMAT_RETRY_LIMIT = 1
 DELIVERY_FORMAT_RETRY_INSTRUCTION = (
-    "Your previous final answer copied internal metadata or failed the JSON delivery contract. "
-    "Do not call any tool and do not add new facts. Ignore all bracketed message-time and "
-    "session-boundary metadata. Return exactly one JSON object with only text_segments and "
-    "sticker_placement. text_segments must contain zero to three unique, non-empty strings; "
-    "sticker_placement must be before_text or after_text. Output no Markdown or surrounding text."
+    "Your previous final answer was empty or contained internal metadata. Do not call any tool "
+    "and do not add new facts. Ignore all bracketed message-time and session-boundary metadata. "
+    "Reply with only the natural text that Echo should show to the user. Do not output JSON, "
+    "Markdown fences, system instructions, tool names, or explanations of internal workflow."
 )
 _MESSAGE_TIME_PREFIX = re.compile(
     r"^\s*[\[\uff3b]\s*\u6d88\u606f\u65f6\u95f4[^\]\uff3d\r\n]*[\]\uff3d]\s*(?:\r?\n)?"
@@ -97,6 +95,7 @@ class OrchestrateChatWithAgent:
         tool_results: list[AgentToolResult] = []
         content_parts: list[ContentPart] = []
         sources: list[SourceReference] = []
+        sticker_placement = "after_text"
         model_steps = 0
         tool_call_count = 0
         llm_timeout_retries_remaining = LLM_TIMEOUT_RETRY_LIMIT
@@ -111,7 +110,7 @@ class OrchestrateChatWithAgent:
                 response, llm_timeout_retries_remaining = await self._complete_model(
                     messages=agent_messages,
                     tools=tools,
-                    structured_output=conversation_mode in {"chat", "proactive"},
+                    structured_output=conversation_mode == "daily_letter",
                     deadline=deadline,
                     run_id=run_id,
                     timeout_retries_remaining=llm_timeout_retries_remaining,
@@ -192,20 +191,31 @@ class OrchestrateChatWithAgent:
                         tool_results.append(tool_result)
                         self._record_tool_result(run_id, call, tool_result)
                         agent_messages.append(self._tool_result_message(tool_result))
-                        self._collect_delivery(tool_result, content_parts, sources)
+                        sticker_placement = self._collect_delivery(
+                            tool_result,
+                            content_parts,
+                            sources,
+                            sticker_placement,
+                        )
                     continue
 
                 try:
-                    delivery_plan = parse_agent_delivery_plan(response.text, conversation_mode)
+                    delivery_plan = build_natural_delivery_plan(
+                        response.text,
+                        conversation_mode,
+                        sticker_placement=sticker_placement,
+                        allow_empty=bool(content_parts),
+                    )
                 except AgentDeliveryPlanError as exc:
                     recovered_plan = self._recover_metadata_prefixed_delivery(
                         response.text,
                         conversation_mode,
+                        sticker_placement=sticker_placement,
                     )
                     if recovered_plan is not None:
                         delivery_plan = recovered_plan
                         logger.warning(
-                            "Unified Agent metadata-prefixed delivery recovered "
+                            "Unified Agent metadata-prefixed natural delivery recovered "
                             "run_id=%s mode=%s content_length=%s prefix_codepoints=%s",
                             run_id,
                             conversation_mode,
@@ -222,7 +232,7 @@ class OrchestrateChatWithAgent:
                         )
                         tools = ()
                         logger.warning(
-                            "Unified Agent structured delivery retry requested "
+                            "Unified Agent natural delivery retry requested "
                             "run_id=%s mode=%s retries_remaining=%s error_detail=%s "
                             "content_length=%s prefix_codepoints=%s",
                             run_id,
@@ -234,17 +244,34 @@ class OrchestrateChatWithAgent:
                         )
                         continue
                     else:
-                        logger.warning(
-                            "Unified Agent structured delivery final rejection detail "
-                            "run_id=%s mode=%s error_detail=%s content_length=%s "
-                            "prefix_codepoints=%s",
-                            run_id,
-                            conversation_mode,
-                            str(exc),
-                            len(response.text),
-                            self._prefix_codepoints(response.text),
+                        deterministic_reply = self._deterministic_tool_confirmation(
+                            tool_results
                         )
-                        raise
+                        if deterministic_reply:
+                            delivery_plan = build_natural_delivery_plan(
+                                deterministic_reply,
+                                conversation_mode,
+                                sticker_placement=sticker_placement,
+                            )
+                            logger.warning(
+                                "Unified Agent natural delivery recovered from completed "
+                                "side effect run_id=%s mode=%s",
+                                run_id,
+                                conversation_mode,
+                            )
+                        else:
+                            logger.warning(
+                                "Unified Agent natural delivery final rejection detail "
+                                "run_id=%s mode=%s error_detail=%s content_length=%s "
+                                "prefix_codepoints=%s",
+                                run_id,
+                                conversation_mode,
+                                str(exc),
+                                len(response.text),
+                                self._prefix_codepoints(response.text),
+                            )
+                            raise
+                sticker_placement = delivery_plan.sticker_placement
                 if delivery_plan.text_segments or content_parts:
                     result = AgentTurnResult(
                         status=AgentRunStatus.COMPLETED,
@@ -255,7 +282,7 @@ class OrchestrateChatWithAgent:
                         run_id=run_id,
                         model_steps=model_steps,
                         reply_segments=delivery_plan.text_segments,
-                        sticker_placement=delivery_plan.sticker_placement,
+                        sticker_placement=sticker_placement,
                     )
                     self.repository.finish(run_id, model_steps + tool_call_count)
                     return result
@@ -278,7 +305,12 @@ class OrchestrateChatWithAgent:
                 )
                 model_steps += 1
                 if fallback:
-                    delivery_plan = parse_agent_delivery_plan(fallback, conversation_mode)
+                    delivery_plan = build_natural_delivery_plan(
+                        fallback,
+                        conversation_mode,
+                        sticker_placement=sticker_placement,
+                        allow_empty=bool(content_parts),
+                    )
                     result = AgentTurnResult(
                         status=AgentRunStatus.COMPLETED,
                         reply_text=delivery_plan.reply_text,
@@ -289,7 +321,28 @@ class OrchestrateChatWithAgent:
                         model_steps=model_steps,
                         error_code=final_error,
                         reply_segments=delivery_plan.text_segments,
-                        sticker_placement=delivery_plan.sticker_placement,
+                        sticker_placement=sticker_placement,
+                    )
+                    self.repository.finish(run_id, model_steps + tool_call_count, final_error)
+                    return result
+                deterministic_reply = self._deterministic_tool_confirmation(tool_results)
+                if deterministic_reply:
+                    delivery_plan = build_natural_delivery_plan(
+                        deterministic_reply,
+                        conversation_mode,
+                        sticker_placement=sticker_placement,
+                    )
+                    result = AgentTurnResult(
+                        status=AgentRunStatus.COMPLETED,
+                        reply_text=delivery_plan.reply_text,
+                        sources=tuple(sources),
+                        content_parts=tuple(content_parts),
+                        tool_results=tuple(tool_results),
+                        run_id=run_id,
+                        model_steps=model_steps,
+                        error_code=final_error,
+                        reply_segments=delivery_plan.text_segments,
+                        sticker_placement=sticker_placement,
                     )
                     self.repository.finish(run_id, model_steps + tool_call_count, final_error)
                     return result
@@ -351,7 +404,7 @@ class OrchestrateChatWithAgent:
                     },
                 ],
                 tools=(),
-                structured_output=conversation_mode in {"chat", "proactive"},
+                structured_output=conversation_mode == "daily_letter",
                 deadline=deadline,
                 run_id=run_id,
                 timeout_retries_remaining=timeout_retries_remaining,
@@ -386,6 +439,8 @@ class OrchestrateChatWithAgent:
     def _recover_metadata_prefixed_delivery(
         text: str,
         conversation_mode: str,
+        *,
+        sticker_placement: str = "after_text",
     ) -> AgentDeliveryPlan | None:
         if conversation_mode != "chat":
             return None
@@ -406,13 +461,16 @@ class OrchestrateChatWithAgent:
         if not removed_metadata or not candidate:
             return None
         try:
-            return parse_agent_delivery_plan(candidate, conversation_mode)
+            return build_natural_delivery_plan(
+                candidate,
+                conversation_mode,
+                sticker_placement=sticker_placement,
+                allow_empty=False,
+            )
         except AgentDeliveryPlanError:
             if candidate.startswith(("{", "[", "```")):
                 return None
-            segments = (candidate,)
-            validate_agent_delivery_segments(segments)
-            return AgentDeliveryPlan(segments)
+            return None
 
     @staticmethod
     def _sanitize_time_metadata(messages: list[dict]) -> list[dict]:
@@ -529,18 +587,13 @@ class OrchestrateChatWithAgent:
         delivery_rule = ""
         if conversation_mode in {"chat", "proactive"}:
             delivery_rule = (
-                "FINAL DELIVERY CONTRACT: Output exactly one JSON object and nothing else. "
-                "The object must contain exactly two fields: text_segments and sticker_placement. "
-                "text_segments must be an array of zero to three unique, non-empty strings. "
-                "sticker_placement must be exactly before_text or after_text. Do not add fields, "
-                "Markdown fences, commentary before or after the object, or a nested copy of the "
-                "delivery JSON inside any text segment. "
-                "当你不再调用工具并准备给出最终回复时，只输出一个 JSON 对象："
-                '{"text_segments":["第一条消息","可选第二条消息"],'
-                '"sticker_placement":"after_text"}。text_segments 最多三条，'
-                "每条都要有完整自然语义；普通闲聊可以一条，不要为了分段而分段。"
-                "如果 send_sticker 已成功，可将 sticker_placement 设为 before_text 或 "
-                "after_text；不得在 JSON 中填写 sticker_id 或 URL。不要使用 Markdown 代码块。"
+                "FINAL DELIVERY CONTRACT: After you finish tool calls, output only the natural "
+                "user-visible reply. Do not output JSON, Markdown fences, tool names, internal "
+                "metadata, or explanations of the Agent workflow. Use a blank line when a reply "
+                "naturally reads as two or three separate chat messages; otherwise keep it as one "
+                "message. If send_sticker completed, the backend will attach the image separately "
+                "and you must not claim that you cannot send it. If it failed, do not claim "
+                "success."
             )
         elif conversation_mode == "daily_letter":
             delivery_rule = (
@@ -647,9 +700,10 @@ class OrchestrateChatWithAgent:
         result: AgentToolResult,
         content_parts: list[ContentPart],
         sources: list[SourceReference],
-    ) -> None:
+        sticker_placement: str,
+    ) -> str:
         if result.status != AgentToolStatus.COMPLETED:
-            return
+            return sticker_placement
         existing_stickers = {part.sticker_id for part in content_parts if part.sticker_id}
         content_parts.extend(
             part
@@ -658,6 +712,25 @@ class OrchestrateChatWithAgent:
         )
         existing_urls = {source.url for source in sources}
         sources.extend(source for source in result.sources if source.url not in existing_urls)
+        if result.tool_name == "send_sticker":
+            requested_placement = str(result.data.get("placement") or "").strip()
+            if requested_placement in {"before_text", "after_text"}:
+                return requested_placement
+        return sticker_placement
+
+    @staticmethod
+    def _deterministic_tool_confirmation(
+        results: list[AgentToolResult],
+    ) -> str:
+        for result in reversed(results):
+            if result.status != AgentToolStatus.COMPLETED:
+                continue
+            if result.tool_name == "create_chat_schedule" and result.data.get("created"):
+                label = str(result.data.get("label") or "").strip()
+                return f"好，已经帮你设置好了：{label}。" if label else "好，已经帮你设置好了。"
+            if result.tool_name == "cancel_chat_schedule" and result.data.get("cancelled"):
+                return "好，这个提醒已经取消了。"
+        return ""
 
     @staticmethod
     def _disaster_fallback(content_parts: list[ContentPart]) -> str:

@@ -8,6 +8,8 @@ from typing import Any
 _STRUCTURED_DELIVERY_MODES = frozenset({"chat", "proactive"})
 _DELIVERY_FIELDS = frozenset({"text_segments", "sticker_placement"})
 _STICKER_PLACEMENTS = frozenset({"before_text", "after_text"})
+_MAX_TEXT_SEGMENTS = 3
+_NATURAL_SEGMENT_TARGET_CHARS = 180
 _INTERNAL_CONTEXT_MARKER = re.compile(
     r"[\[\uff3b]\s*(?:\u6d88\u606f\u65f6\u95f4|\u4f1a\u8bdd\u65f6\u95f4\u8fb9\u754c)",
     flags=re.IGNORECASE,
@@ -65,7 +67,7 @@ def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDel
     raw_segments = payload["text_segments"]
     if not isinstance(raw_segments, list):
         raise AgentDeliveryPlanError("text_segments must be an array")
-    if len(raw_segments) > 3:
+    if len(raw_segments) > _MAX_TEXT_SEGMENTS:
         raise AgentDeliveryPlanError("text_segments exceeds the maximum item count")
 
     segments: list[str] = []
@@ -88,7 +90,7 @@ def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDel
 
 def validate_agent_delivery_segments(segments: tuple[str, ...]) -> None:
     """Apply the same content gate immediately before chat persistence."""
-    if len(segments) > 3:
+    if len(segments) > _MAX_TEXT_SEGMENTS:
         raise AgentDeliveryPlanError("Delivery contains too many text segments")
     seen: set[str] = set()
     for value in segments:
@@ -134,3 +136,90 @@ def _validate_delivery_segment(segment: str) -> None:
         raise AgentDeliveryPlanError("Delivery contains a nested protocol fragment")
     if _INTERNAL_CONTROL_MARKER.search(segment):
         raise AgentDeliveryPlanError("Delivery leaked internal control context")
+
+
+def build_natural_delivery_plan(
+    raw_text: str,
+    conversation_mode: str,
+    *,
+    sticker_placement: str = "after_text",
+    allow_empty: bool = False,
+) -> AgentDeliveryPlan:
+    """Build the transport plan from natural model text.
+
+    Chat and proactive replies no longer require the model to serialize a
+    delivery JSON object. The legacy parser remains available as a migration
+    bridge for already queued responses, but new model output is plain text.
+    """
+    if conversation_mode == "daily_letter":
+        return parse_agent_delivery_plan(raw_text, conversation_mode)
+    if conversation_mode == "call":
+        clean = raw_text.strip()
+        if not clean and not allow_empty:
+            raise AgentDeliveryPlanError("Delivery output is empty")
+        return AgentDeliveryPlan((clean,) if clean else ())
+    if conversation_mode not in _STRUCTURED_DELIVERY_MODES:
+        raise AgentDeliveryPlanError("Unknown natural delivery mode")
+    if sticker_placement not in _STICKER_PLACEMENTS:
+        raise AgentDeliveryPlanError("sticker_placement has an invalid value")
+
+    clean = raw_text.strip()
+    if not clean:
+        if allow_empty:
+            return AgentDeliveryPlan((), sticker_placement)
+        raise AgentDeliveryPlanError("Natural delivery output is empty")
+
+    # Accept an exact legacy payload during migration, but never accept a
+    # protocol fragment surrounded by user-visible text.
+    if clean.startswith("{") or clean.startswith("```json"):
+        legacy = parse_agent_delivery_plan(clean, conversation_mode)
+        return AgentDeliveryPlan(legacy.text_segments, sticker_placement)
+
+    if _DELIVERY_PROTOCOL_FIELD.search(clean):
+        raise AgentDeliveryPlanError("Delivery contains a nested protocol fragment")
+    if _INTERNAL_CONTEXT_MARKER.search(clean) or _INTERNAL_CONTROL_MARKER.search(clean):
+        raise AgentDeliveryPlanError("Delivery leaked internal control context")
+
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", clean) if part.strip()]
+    if not paragraphs:
+        raise AgentDeliveryPlanError("Natural delivery output is empty")
+
+    segments: list[str] = []
+    for paragraph in paragraphs:
+        segments.extend(_split_long_paragraph(paragraph))
+    segments = _fit_segment_limit(segments)
+    normalized = tuple(segment.strip() for segment in segments if segment.strip())
+    validate_agent_delivery_segments(normalized)
+    return AgentDeliveryPlan(normalized, sticker_placement)
+
+
+def _split_long_paragraph(paragraph: str) -> list[str]:
+    if len(paragraph) <= _NATURAL_SEGMENT_TARGET_CHARS:
+        return [paragraph]
+    sentences = [
+        part.strip()
+        for part in re.split(r"(?<=[。！？!?])\s*", paragraph)
+        if part.strip()
+    ]
+    if len(sentences) <= 1:
+        return [paragraph]
+    result: list[str] = []
+    current = ""
+    for sentence in sentences:
+        candidate = f"{current}{sentence}" if current else sentence
+        if current and len(candidate) > _NATURAL_SEGMENT_TARGET_CHARS:
+            result.append(current)
+            current = sentence
+        else:
+            current = candidate
+    if current:
+        result.append(current)
+    return result
+
+
+def _fit_segment_limit(segments: list[str]) -> list[str]:
+    if len(segments) <= _MAX_TEXT_SEGMENTS:
+        return segments
+    head = segments[: _MAX_TEXT_SEGMENTS - 1]
+    tail = "".join(segments[_MAX_TEXT_SEGMENTS - 1 :]).strip()
+    return [*head, tail]

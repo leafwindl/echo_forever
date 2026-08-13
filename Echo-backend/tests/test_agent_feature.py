@@ -1,5 +1,4 @@
 import asyncio
-import json
 import sys
 import unittest
 from datetime import UTC, datetime
@@ -16,6 +15,7 @@ from features.agent.domain.entities import (
     AgentModelResponse,
     AgentRunStatus,
     AgentToolCall,
+    AgentToolResult,
     AgentToolStatus,
 )
 from features.agent.domain.services import AgentModelTimeoutError, resolve_local_time
@@ -122,13 +122,8 @@ def _tool_names(descriptions):
 
 
 def _delivery(*segments, placement="after_text"):
-    return json.dumps(
-        {
-            "text_segments": list(segments),
-            "sticker_placement": placement,
-        },
-        ensure_ascii=False,
-    )
+    del placement
+    return "\n\n".join(segments)
 
 
 def _build_orchestrator(
@@ -332,6 +327,29 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
 
 
 class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
+    def test_completed_schedule_side_effect_has_deterministic_confirmation(self):
+        created = AgentToolResult(
+            call_id="schedule",
+            tool_name="create_chat_schedule",
+            status=AgentToolStatus.COMPLETED,
+            data={"created": True, "label": "十一点半叫我"},
+        )
+        cancelled = AgentToolResult(
+            call_id="cancel",
+            tool_name="cancel_chat_schedule",
+            status=AgentToolStatus.COMPLETED,
+            data={"cancelled": True},
+        )
+
+        self.assertEqual(
+            OrchestrateChatWithAgent._deterministic_tool_confirmation([created]),
+            "好，已经帮你设置好了：十一点半叫我。",
+        )
+        self.assertEqual(
+            OrchestrateChatWithAgent._deterministic_tool_confirmation([cancelled]),
+            "好，这个提醒已经取消了。",
+        )
+
     async def test_daily_letter_truncation_fails_without_repeating_empty_calls(self):
         model = SequenceAgentModel(
             [
@@ -401,6 +419,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                             arguments={
                                 "sticker_id": sticker.sticker_id,
                                 "purpose": "explicit_request",
+                                "placement": "before_text",
                             },
                         ),
                     )
@@ -432,6 +451,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.reply_text, "这个笑得很有感染力，给你。")
         self.assertEqual(result.content_parts[0].sticker_id, sticker.sticker_id)
+        self.assertEqual(result.sticker_placement, "before_text")
         self.assertEqual(searches, [("user_a", "开心", 1)])
         self.assertEqual(sends, [("user_a", sticker.sticker_id)])
         self.assertEqual(
@@ -987,10 +1007,10 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, AgentRunStatus.COMPLETED)
         self.assertEqual(result.reply_text, "hello")
         self.assertEqual(len(model.calls), 2)
-        self.assertTrue(model.calls[0]["structured_output"])
-        self.assertTrue(model.calls[1]["structured_output"])
+        self.assertFalse(model.calls[0]["structured_output"])
+        self.assertFalse(model.calls[1]["structured_output"])
         self.assertEqual(model.calls[1]["tools"], ())
-        self.assertIn("FINAL DELIVERY CONTRACT", model.calls[0]["messages"][0]["content"])
+        self.assertIn("natural", model.calls[0]["messages"][0]["content"])
         self.assertEqual(repository.finishes[0][2], None)
 
     async def test_metadata_prefixed_reply_is_recovered_without_another_model_call(self):
@@ -1081,14 +1101,9 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any("[会话时间边界" in content for content in contents))
         self.assertIn("早上好。", contents)
 
-    async def test_structured_retry_does_not_echo_invalid_output_or_internal_time_markers(self):
-        invalid_output = "not json"
-        model = SequenceAgentModel(
-            [
-                AgentModelResponse(text=invalid_output),
-                AgentModelResponse(text=_delivery("那就再眯一会儿。")),
-            ]
-        )
+    async def test_natural_reply_does_not_require_json_or_retry(self):
+        natural_output = "那就再眯一会儿。"
+        model = SequenceAgentModel([AgentModelResponse(text=natural_output)])
         orchestrator, repository, _ = _build_orchestrator(model)
 
         result = await orchestrator.execute(
@@ -1111,15 +1126,10 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
-        retry_messages = model.calls[1]["messages"]
-        retry_contents = [str(message.get("content") or "") for message in retry_messages]
         self.assertEqual(result.status, AgentRunStatus.COMPLETED)
-        self.assertEqual(result.reply_text, "那就再眯一会儿。")
-        self.assertNotIn(invalid_output, retry_contents)
-        self.assertFalse(any("[消息时间" in content for content in retry_contents))
-        self.assertFalse(any("[会话时间边界" in content for content in retry_contents))
-        self.assertIn("早上好。", retry_contents)
-        self.assertEqual(model.calls[1]["tools"], ())
+        self.assertEqual(result.reply_text, natural_output)
+        self.assertEqual(len(model.calls), 1)
+        self.assertFalse(model.calls[0]["structured_output"])
         self.assertEqual(repository.finishes[0][2], None)
 
     async def test_proactive_malformed_structured_output_is_silent(self):

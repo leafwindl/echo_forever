@@ -28,6 +28,7 @@ class SearchStickersArguments(BaseModel):
 class SendStickerArguments(BaseModel):
     sticker_id: str = Field(min_length=1, max_length=128)
     purpose: Literal["explicit_request", "proactive"] = "explicit_request"
+    placement: Literal["before_text", "after_text"] = "after_text"
 
 
 StickerSearch = Callable[..., list[Sticker] | Awaitable[list[Sticker]]]
@@ -171,6 +172,7 @@ def register_sticker_tools(
                 "sent": True,
                 "delivery": "attached_to_current_reply",
                 "purpose": parsed.purpose,
+                "placement": parsed.placement,
                 "sticker_id": sticker.sticker_id,
                 "description": sticker.description,
                 "semantic_tags": list(sticker.semantic_tags),
@@ -180,6 +182,7 @@ def register_sticker_tools(
                     "sent": True,
                     "delivery": "attached_to_current_reply",
                     "purpose": parsed.purpose,
+                    "placement": parsed.placement,
                     "sticker_id": sticker.sticker_id,
                     "description": sticker.description,
                     "semantic_tags": list(sticker.semantic_tags),
