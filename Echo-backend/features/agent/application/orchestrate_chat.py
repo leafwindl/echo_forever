@@ -590,10 +590,11 @@ class OrchestrateChatWithAgent:
                 "FINAL DELIVERY CONTRACT: After you finish tool calls, output only the natural "
                 "user-visible reply. Do not output JSON, Markdown fences, tool names, internal "
                 "metadata, or explanations of the Agent workflow. Use a blank line when a reply "
-                "naturally reads as two or three separate chat messages; otherwise keep it as one "
-                "message. If send_sticker completed, the backend will attach the image separately "
-                "and you must not claim that you cannot send it. If it failed, do not claim "
-                "success."
+                "naturally reads as separate chat messages; otherwise keep it as one message. "
+                "Most replies should still use one to three messages. Use more only when the reply "
+                "contains genuinely distinct thoughts, and never exceed six. If send_sticker "
+                "completed, the backend will attach the image separately and you must not claim "
+                "that you cannot send it. If it failed, do not claim success."
             )
         elif conversation_mode == "daily_letter":
             delivery_rule = (

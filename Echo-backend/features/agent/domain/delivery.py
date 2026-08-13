@@ -8,7 +8,8 @@ from typing import Any
 _STRUCTURED_DELIVERY_MODES = frozenset({"chat", "proactive"})
 _DELIVERY_FIELDS = frozenset({"text_segments", "sticker_placement"})
 _STICKER_PLACEMENTS = frozenset({"before_text", "after_text"})
-_MAX_TEXT_SEGMENTS = 3
+_LEGACY_MAX_TEXT_SEGMENTS = 3
+_NATURAL_MAX_TEXT_SEGMENTS = 6
 _NATURAL_SEGMENT_TARGET_CHARS = 180
 _INTERNAL_CONTEXT_MARKER = re.compile(
     r"[\[\uff3b]\s*(?:\u6d88\u606f\u65f6\u95f4|\u4f1a\u8bdd\u65f6\u95f4\u8fb9\u754c)",
@@ -67,7 +68,7 @@ def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDel
     raw_segments = payload["text_segments"]
     if not isinstance(raw_segments, list):
         raise AgentDeliveryPlanError("text_segments must be an array")
-    if len(raw_segments) > _MAX_TEXT_SEGMENTS:
+    if len(raw_segments) > _LEGACY_MAX_TEXT_SEGMENTS:
         raise AgentDeliveryPlanError("text_segments exceeds the maximum item count")
 
     segments: list[str] = []
@@ -90,7 +91,7 @@ def parse_agent_delivery_plan(raw_text: str, conversation_mode: str) -> AgentDel
 
 def validate_agent_delivery_segments(segments: tuple[str, ...]) -> None:
     """Apply the same content gate immediately before chat persistence."""
-    if len(segments) > _MAX_TEXT_SEGMENTS:
+    if len(segments) > _NATURAL_MAX_TEXT_SEGMENTS:
         raise AgentDeliveryPlanError("Delivery contains too many text segments")
     seen: set[str] = set()
     for value in segments:
@@ -218,8 +219,8 @@ def _split_long_paragraph(paragraph: str) -> list[str]:
 
 
 def _fit_segment_limit(segments: list[str]) -> list[str]:
-    if len(segments) <= _MAX_TEXT_SEGMENTS:
+    if len(segments) <= _NATURAL_MAX_TEXT_SEGMENTS:
         return segments
-    head = segments[: _MAX_TEXT_SEGMENTS - 1]
-    tail = "".join(segments[_MAX_TEXT_SEGMENTS - 1 :]).strip()
+    head = segments[: _NATURAL_MAX_TEXT_SEGMENTS - 1]
+    tail = "\n\n".join(segments[_NATURAL_MAX_TEXT_SEGMENTS - 1 :]).strip()
     return [*head, tail]

@@ -136,13 +136,27 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         self.assertEqual(plan.text_segments, ("先休息一下。", "等状态回来再继续。"))
         self.assertEqual(plan.sticker_placement, "after_text")
 
+    def test_preserves_more_than_three_natural_paragraphs(self):
+        paragraphs = tuple(f"第{index}个独立想法。" for index in range(1, 5))
+        plan = build_natural_delivery_plan("\n\n".join(paragraphs), "chat")
+
+        self.assertEqual(plan.text_segments, paragraphs)
+
+    def test_merges_only_paragraphs_beyond_the_six_message_safety_limit(self):
+        paragraphs = tuple(f"第{index}个独立想法。" for index in range(1, 9))
+        plan = build_natural_delivery_plan("\n\n".join(paragraphs), "chat")
+
+        self.assertEqual(len(plan.text_segments), 6)
+        self.assertEqual(plan.text_segments[:5], paragraphs[:5])
+        self.assertEqual(plan.text_segments[5], "\n\n".join(paragraphs[5:]))
+
     def test_splits_long_natural_reply_at_sentence_boundaries(self):
         sentences = tuple(f"这是第{index}句完整的话。" for index in range(1, 41))
         raw = "".join(sentences)
         plan = build_natural_delivery_plan(raw, "chat")
 
         self.assertGreater(len(plan.text_segments), 1)
-        self.assertLessEqual(len(plan.text_segments), 3)
+        self.assertLessEqual(len(plan.text_segments), 6)
         self.assertTrue(all(segment.endswith("。") for segment in plan.text_segments))
         self.assertEqual("".join(plan.text_segments), raw)
 

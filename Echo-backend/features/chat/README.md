@@ -10,7 +10,7 @@ POST /chat/messages
   -> 创建或追加 Chat Turn
   -> 返回 202 ACK
   -> Worker 串行运行统一 Agent
-  -> 持久化一至三条文字和最多一张表情包
+  -> 按自然段持久化文字（通常一至三条，安全上限六条）和最多一张表情包
   -> GET /chat/events 通过 SSE 交付 typing 和 Reply Group
 ```
 
