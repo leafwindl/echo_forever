@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from contextlib import suppress
 
@@ -31,10 +32,17 @@ FINAL_RETRY_INSTRUCTION = (
 LLM_TIMEOUT_RETRY_LIMIT = 1
 DELIVERY_FORMAT_RETRY_LIMIT = 1
 DELIVERY_FORMAT_RETRY_INSTRUCTION = (
-    "Your previous final answer failed the delivery contract. Do not call any tool and do "
-    "not add new content. Return exactly one JSON object with only text_segments and "
+    "Your previous final answer copied internal metadata or failed the JSON delivery contract. "
+    "Do not call any tool and do not add new facts. Ignore all bracketed message-time and "
+    "session-boundary metadata. Return exactly one JSON object with only text_segments and "
     "sticker_placement. text_segments must contain zero to three unique, non-empty strings; "
     "sticker_placement must be before_text or after_text. Output no Markdown or surrounding text."
+)
+_MESSAGE_TIME_PREFIX = re.compile(
+    r"^\s*[\[\uff3b]\s*\u6d88\u606f\u65f6\u95f4[^\]\uff3d\r\n]*[\]\uff3d]\s*(?:\r?\n)?"
+)
+_SESSION_BOUNDARY_PREFIX = re.compile(
+    r"^\s*[\[\uff3b]\s*\u4f1a\u8bdd\u65f6\u95f4\u8fb9\u754c[\]\uff3d]"
 )
 
 
@@ -109,11 +117,8 @@ class OrchestrateChatWithAgent:
                         and delivery_format_retries_remaining > 0
                     ):
                         delivery_format_retries_remaining -= 1
-                        agent_messages.append(
-                            {
-                                "role": "system",
-                                "content": DELIVERY_FORMAT_RETRY_INSTRUCTION,
-                            }
+                        agent_messages = self._delivery_retry_messages(
+                            agent_messages,
                         )
                         tools = ()
                         logger.warning(
@@ -183,28 +188,26 @@ class OrchestrateChatWithAgent:
 
                 try:
                     delivery_plan = parse_agent_delivery_plan(response.text, conversation_mode)
-                except AgentDeliveryPlanError:
+                except AgentDeliveryPlanError as exc:
                     if (
                         conversation_mode in {"chat", "proactive"}
                         and delivery_format_retries_remaining > 0
                     ):
                         delivery_format_retries_remaining -= 1
-                        agent_messages.extend(
-                            (
-                                {"role": "assistant", "content": response.text[:8000]},
-                                {
-                                    "role": "system",
-                                    "content": DELIVERY_FORMAT_RETRY_INSTRUCTION,
-                                },
-                            )
+                        agent_messages = self._delivery_retry_messages(
+                            agent_messages,
                         )
                         tools = ()
                         logger.warning(
                             "Unified Agent structured delivery retry requested "
-                            "run_id=%s mode=%s retries_remaining=%s",
+                            "run_id=%s mode=%s retries_remaining=%s error_detail=%s "
+                            "content_length=%s prefix_codepoints=%s",
                             run_id,
                             conversation_mode,
                             delivery_format_retries_remaining,
+                            str(exc),
+                            len(response.text),
+                            self._prefix_codepoints(response.text),
                         )
                         continue
                     raise
@@ -333,6 +336,34 @@ class OrchestrateChatWithAgent:
         if conversation_mode in {"chat", "proactive"}:
             return FINAL_RETRY_INSTRUCTION + DELIVERY_FORMAT_RETRY_INSTRUCTION
         return FINAL_RETRY_INSTRUCTION
+
+    @staticmethod
+    def _delivery_retry_messages(messages: list[dict]) -> list[dict]:
+        sanitized: list[dict] = []
+        for message in messages:
+            content = message.get("content")
+            if not isinstance(content, str):
+                sanitized.append(dict(message))
+                continue
+            if message.get("role") == "system" and _SESSION_BOUNDARY_PREFIX.match(content):
+                continue
+            sanitized.append(
+                {
+                    **message,
+                    "content": _MESSAGE_TIME_PREFIX.sub("", content, count=1),
+                }
+            )
+        sanitized.append(
+            {
+                "role": "system",
+                "content": DELIVERY_FORMAT_RETRY_INSTRUCTION,
+            }
+        )
+        return sanitized
+
+    @staticmethod
+    def _prefix_codepoints(text: str, limit: int = 8) -> str:
+        return ",".join(f"U+{ord(character):04X}" for character in text[:limit])
 
     async def _complete_model(
         self,
