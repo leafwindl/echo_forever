@@ -5,8 +5,14 @@ from features.agent.domain.services import AgentModelTimeoutError
 
 
 class ProviderAgentConversationModel:
-    def __init__(self, *, max_tokens: int | None = None):
+    def __init__(
+        self,
+        *,
+        max_tokens: int | None = None,
+        disable_thinking: bool = False,
+    ):
         self.max_tokens = max_tokens
+        self.disable_thinking = disable_thinking
 
     async def complete(
         self,
@@ -21,7 +27,11 @@ class ProviderAgentConversationModel:
                 tools=tools,
                 tool_choice="auto",
                 response_format={"type": "json_object"} if structured_output else None,
-                thinking={"type": "disabled"} if structured_output else None,
+                thinking=(
+                    {"type": "disabled"}
+                    if structured_output or self.disable_thinking
+                    else None
+                ),
                 max_tokens=self.max_tokens,
             )
         except LLMProviderTimeoutError as exc:

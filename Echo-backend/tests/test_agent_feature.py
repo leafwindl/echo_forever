@@ -20,6 +20,7 @@ from features.agent.domain.entities import (
 )
 from features.agent.domain.services import AgentModelTimeoutError, resolve_local_time
 from features.agent.domain.tools import ToolExecutionContext, ToolRegistry
+from features.agent.infrastructure.container import get_chat_agent
 from features.agent.infrastructure.model import ProviderAgentConversationModel
 from features.agent.infrastructure.tools import (
     register_sticker_tools,
@@ -197,7 +198,7 @@ class AgentDomainTests(unittest.TestCase):
 
 
 class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
-    async def test_agent_model_passes_configured_max_tokens_to_provider(self):
+    async def test_chat_agent_model_disables_thinking_and_uses_its_token_budget(self):
         class RecordingProvider:
             def __init__(self):
                 self.kwargs = None
@@ -220,6 +221,41 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
             "features.agent.infrastructure.model.get_llm_provider",
             return_value=provider,
         ):
+            await ProviderAgentConversationModel(
+                max_tokens=1000,
+                disable_thinking=True,
+            ).complete(
+                messages=[{"role": "user", "content": "你好"}],
+                tools=(),
+            )
+
+        self.assertEqual(provider.kwargs["max_tokens"], 1000)
+        self.assertIsNone(provider.kwargs["response_format"])
+        self.assertEqual(provider.kwargs["thinking"], {"type": "disabled"})
+
+    async def test_structured_agent_output_still_disables_thinking(self):
+        class RecordingProvider:
+            def __init__(self):
+                self.kwargs = None
+
+            async def chat_completion_message(self, **kwargs):
+                self.kwargs = kwargs
+                return type(
+                    "Response",
+                    (),
+                    {
+                        "content": "{}",
+                        "tool_calls": (),
+                        "finish_reason": "stop",
+                        "request_id": "req_test",
+                    },
+                )()
+
+        provider = RecordingProvider()
+        with patch(
+            "features.agent.infrastructure.model.get_llm_provider",
+            return_value=provider,
+        ):
             await ProviderAgentConversationModel(max_tokens=2500).complete(
                 messages=[{"role": "user", "content": "写信"}],
                 tools=(),
@@ -229,6 +265,15 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provider.kwargs["max_tokens"], 2500)
         self.assertEqual(provider.kwargs["response_format"], {"type": "json_object"})
         self.assertEqual(provider.kwargs["thinking"], {"type": "disabled"})
+
+    def test_chat_agent_container_uses_dedicated_budget_and_disables_thinking(self):
+        get_chat_agent.cache_clear()
+        try:
+            agent = get_chat_agent()
+            self.assertEqual(agent.model.max_tokens, 1000)
+            self.assertTrue(agent.model.disable_thinking)
+        finally:
+            get_chat_agent.cache_clear()
 
     async def test_provider_sends_native_json_response_format(self):
         class RecordingResponse:

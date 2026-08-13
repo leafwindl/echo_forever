@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="", validation_alias="LLM_MODEL")
     temperature: float = Field(default=0.8, validation_alias="TEMPERATURE")
     max_tokens: int = Field(default=500, validation_alias="MAX_TOKENS")
+    chat_max_tokens: int = Field(
+        default=1000,
+        validation_alias="CHAT_MAX_TOKENS",
+        ge=200,
+        le=8192,
+    )
     timeout: int = Field(default=30, validation_alias="TIMEOUT")
     prompt_version: str = Field(default="echo-v1.0.0", validation_alias="PROMPT_VERSION")
     assistant_persona_version: str = Field(

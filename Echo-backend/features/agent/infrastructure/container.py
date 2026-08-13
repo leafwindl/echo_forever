@@ -26,7 +26,10 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
     register_web_search_tool(registry, TavilyWebSearchProvider())
     return OrchestrateChatWithAgent(
         repository=PostgresAgentRunRepository(),
-        model=ProviderAgentConversationModel(),
+        model=ProviderAgentConversationModel(
+            max_tokens=settings.chat_max_tokens,
+            disable_thinking=True,
+        ),
         registry=registry,
         executor=ToolExecutor(registry),
         max_steps=settings.agent_max_steps,
