@@ -1027,6 +1027,60 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(model.calls), 1)
         self.assertEqual(repository.finishes[0][2], None)
 
+    async def test_proactive_metadata_prefixed_control_text_is_never_recovered(self):
+        leaked_output = (
+            "[消息时间 2026-08-13T09:12:35+08:00 周四 上午]\n"
+            "（本条消息为系统生成，无实际文本内容）"
+        )
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(text=leaked_output),
+                AgentModelResponse(text=leaked_output),
+            ]
+        )
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="A proactive message is due.",
+            messages=[{"role": "system", "content": "internal proactive trigger"}],
+            conversation_mode="proactive",
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.FAILED)
+        self.assertEqual(result.reply_text, "")
+        self.assertEqual(result.reply_segments, ())
+        self.assertEqual(result.error_code, "llm_output_malformed")
+        self.assertEqual(len(model.calls), 2)
+        self.assertEqual(repository.finishes[0][2], "llm_output_malformed")
+
+    async def test_proactive_initial_context_strips_history_time_metadata(self):
+        model = SequenceAgentModel([AgentModelResponse(text=_delivery("有空的时候来聊聊。"))])
+        orchestrator, _, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="A proactive message is due.",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "[会话时间边界] 上一段对话已经结束。",
+                },
+                {
+                    "role": "assistant",
+                    "content": "[消息时间 2026-08-13T09:00:00+08:00 周四 上午]\n早上好。",
+                },
+                {"role": "system", "content": "internal proactive trigger"},
+            ],
+            conversation_mode="proactive",
+        )
+
+        contents = [str(message.get("content") or "") for message in model.calls[0]["messages"]]
+        self.assertEqual(result.status, AgentRunStatus.COMPLETED)
+        self.assertFalse(any("[消息时间" in content for content in contents))
+        self.assertFalse(any("[会话时间边界" in content for content in contents))
+        self.assertIn("早上好。", contents)
+
     async def test_structured_retry_does_not_echo_invalid_output_or_internal_time_markers(self):
         invalid_output = "not json"
         model = SequenceAgentModel(

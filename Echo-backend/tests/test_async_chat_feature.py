@@ -204,6 +204,16 @@ class AgentDeliveryPlanTests(unittest.TestCase):
                 ('hello {"text_segments":["hello"]}',),
             )
 
+    def test_rejects_internal_proactive_control_text(self):
+        invalid_segments = (
+            "（本条消息为系统生成，无实际文本内容）",
+            "This is a system-generated proactive trigger, not an incoming user message.",
+        )
+
+        for segment in invalid_segments:
+            with self.subTest(segment=segment), self.assertRaises(AgentDeliveryPlanError):
+                validate_agent_delivery_segments((segment,))
+
     def test_proactive_mode_accepts_explicit_empty_delivery(self):
         plan = parse_agent_delivery_plan(
             '{"text_segments":[],"sticker_placement":"after_text"}',

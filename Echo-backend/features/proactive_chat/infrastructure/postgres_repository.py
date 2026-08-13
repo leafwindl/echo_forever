@@ -447,6 +447,23 @@ class PostgresProactiveChatRepository:
                       AND pref.allow_spontaneous_chat = TRUE
                       AND pref.consecutive_unanswered < 2
                       AND NOT EXISTS (
+                          SELECT 1 FROM proactive_chat_jobs recent_failure
+                          WHERE recent_failure.user_id = pref.user_id
+                            AND recent_failure.schedule_id IS NULL
+                            AND recent_failure.updated_at > NOW() - INTERVAL '10 minutes'
+                            AND (
+                                recent_failure.status = 'failed'
+                                OR (
+                                    recent_failure.status = 'suppressed'
+                                    AND (
+                                        recent_failure.error_code = 'agent_skip'
+                                        OR recent_failure.error_code = 'agent_output_rejected'
+                                        OR recent_failure.error_code LIKE 'agent_failed:%'
+                                    )
+                                )
+                            )
+                      )
+                      AND NOT EXISTS (
                           SELECT 1 FROM proactive_chat_jobs job
                           WHERE job.user_id = pref.user_id
                             AND job.schedule_id IS NULL

@@ -92,6 +92,19 @@ class ProactiveRepositoryTests(unittest.TestCase):
         self.assertFalse(created)
         self.assertIn("pref.consecutive_unanswered < 2", cursor.calls[0][0])
 
+    def test_spontaneous_candidate_query_applies_recent_failure_cooldown(self):
+        cursor = _FakeCursor(many=[])
+        original_transaction = repository_module.transaction
+        repository_module.transaction = lambda: _FakeTransaction(_FakeConnection(cursor))
+        try:
+            PostgresProactiveChatRepository().create_spontaneous_job_if_due()
+        finally:
+            repository_module.transaction = original_transaction
+
+        query = cursor.calls[0][0]
+        self.assertIn("recent_failure.updated_at > NOW() - INTERVAL '10 minutes'", query)
+        self.assertIn("recent_failure.error_code LIKE 'agent_failed:%'", query)
+
     def test_spontaneous_policy_pauses_after_two_unanswered_messages(self):
         now = datetime(2026, 8, 10, 8, tzinfo=UTC)
         allowed = PostgresProactiveChatRepository()._spontaneous_allowed(

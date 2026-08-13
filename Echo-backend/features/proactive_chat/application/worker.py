@@ -4,6 +4,7 @@ import logging
 import time
 from datetime import UTC, datetime, timedelta
 
+from features.agent.domain.delivery import AgentDeliveryPlanError, validate_agent_delivery_segments
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.domain.delivery_timing import DeliveryTimingPolicy
 from features.chat.domain.services import ChatRequestGuard
@@ -103,12 +104,22 @@ class ProcessProactiveChatJobs:
                 "If no natural message is appropriate, return an empty text_segments array."
             )
             started = time.perf_counter()
-            prepared = await self.reply_generator.prepare(
-                user_id=job.user_id,
-                message=prompt,
-                conversation_id=conversation_id,
-                conversation_mode="proactive",
-            )
+            try:
+                prepared = await self.reply_generator.prepare(
+                    user_id=job.user_id,
+                    message=prompt,
+                    conversation_id=conversation_id,
+                    conversation_mode="proactive",
+                )
+                validate_agent_delivery_segments(prepared.reply_segments)
+            except AgentDeliveryPlanError:
+                self.repository.suppress_job(job.job_id, "agent_output_rejected")
+                logger.warning(
+                    "Proactive chat job suppressed job_id=%s reason=agent_output_rejected",
+                    job.job_id,
+                    exc_info=True,
+                )
+                return True
             if self._suppress_changed_spontaneous_job(job, schedule, "before_persistence"):
                 return True
             if not prepared.reply_segments and not prepared.content_parts:

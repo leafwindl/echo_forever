@@ -239,6 +239,35 @@ class ProactiveWorkerTests(unittest.IsolatedAsyncioTestCase):
         )
         broker.publish.assert_not_awaited()
 
+    async def test_internal_control_output_is_suppressed_before_persistence(self):
+        repository = _DueSpontaneousJobRepository()
+        repository.persist_delivery = Mock()
+        reply_generator = SimpleNamespace(
+            prepare=AsyncMock(
+                return_value=PreparedChatReply(
+                    reply="（本条消息为系统生成，无实际文本内容）",
+                    reply_segments=("（本条消息为系统生成，无实际文本内容）",),
+                )
+            )
+        )
+        guard = SimpleNamespace(try_acquire=lambda _user_id: True, release=lambda _user_id: None)
+        broker = SimpleNamespace(publish=AsyncMock())
+        worker = ProcessProactiveChatJobs(
+            repository=repository,
+            reply_generator=reply_generator,
+            request_guard=guard,
+            event_broker=broker,
+            timing_policy=SimpleNamespace(),
+            lease_seconds=30,
+        )
+
+        processed = await worker.run_once()
+
+        self.assertTrue(processed)
+        self.assertEqual(repository.suppressed, [("job_due", "agent_output_rejected")])
+        repository.persist_delivery.assert_not_called()
+        broker.publish.assert_not_awaited()
+
     async def test_changed_spontaneous_context_is_suppressed_before_generation(self):
         repository = _DueSpontaneousJobRepository(context_changes=(True,))
         reply_generator = SimpleNamespace(prepare=AsyncMock())

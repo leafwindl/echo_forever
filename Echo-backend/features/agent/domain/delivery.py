@@ -16,6 +16,16 @@ _DELIVERY_PROTOCOL_FIELD = re.compile(
     r'"(?:text_segments|sticker_placement)"',
     flags=re.IGNORECASE,
 )
+_INTERNAL_CONTROL_MARKER = re.compile(
+    r"(?:"
+    r"\u672c\u6761\u6d88\u606f.{0,12}\u7cfb\u7edf\u751f\u6210|"
+    r"\u65e0\u5b9e\u9645\u6587\u672c\u5185\u5bb9|"
+    r"system[- ]generated\s+proactive\s+trigger|"
+    r"not\s+an\s+incoming\s+user\s+message|"
+    r"use\s+the\s+following\s+intent\s+as\s+internal\s+context\s+only"
+    r")",
+    flags=re.IGNORECASE | re.DOTALL,
+)
 
 
 @dataclass(frozen=True)
@@ -122,3 +132,5 @@ def _validate_delivery_segment(segment: str) -> None:
         raise AgentDeliveryPlanError("Delivery leaked internal time context")
     if _DELIVERY_PROTOCOL_FIELD.search(segment):
         raise AgentDeliveryPlanError("Delivery contains a nested protocol fragment")
+    if _INTERNAL_CONTROL_MARKER.search(segment):
+        raise AgentDeliveryPlanError("Delivery leaked internal control context")

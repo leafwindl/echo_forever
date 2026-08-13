@@ -373,20 +373,7 @@ class OrchestrateChatWithAgent:
 
     @staticmethod
     def _delivery_retry_messages(messages: list[dict]) -> list[dict]:
-        sanitized: list[dict] = []
-        for message in messages:
-            content = message.get("content")
-            if not isinstance(content, str):
-                sanitized.append(dict(message))
-                continue
-            if message.get("role") == "system" and _SESSION_BOUNDARY_PREFIX.match(content):
-                continue
-            sanitized.append(
-                {
-                    **message,
-                    "content": _MESSAGE_TIME_PREFIX.sub("", content, count=1),
-                }
-            )
+        sanitized = OrchestrateChatWithAgent._sanitize_time_metadata(messages)
         sanitized.append(
             {
                 "role": "system",
@@ -400,7 +387,7 @@ class OrchestrateChatWithAgent:
         text: str,
         conversation_mode: str,
     ) -> AgentDeliveryPlan | None:
-        if conversation_mode not in {"chat", "proactive"}:
+        if conversation_mode != "chat":
             return None
         candidate = text.strip()
         removed_metadata = False
@@ -426,6 +413,24 @@ class OrchestrateChatWithAgent:
             segments = (candidate,)
             validate_agent_delivery_segments(segments)
             return AgentDeliveryPlan(segments)
+
+    @staticmethod
+    def _sanitize_time_metadata(messages: list[dict]) -> list[dict]:
+        sanitized: list[dict] = []
+        for message in messages:
+            content = message.get("content")
+            if not isinstance(content, str):
+                sanitized.append(dict(message))
+                continue
+            if message.get("role") == "system" and _SESSION_BOUNDARY_PREFIX.match(content):
+                continue
+            sanitized.append(
+                {
+                    **message,
+                    "content": _MESSAGE_TIME_PREFIX.sub("", content, count=1),
+                }
+            )
+        return sanitized
 
     @staticmethod
     def _prefix_codepoints(text: str, limit: int = 8) -> str:
@@ -568,7 +573,12 @@ class OrchestrateChatWithAgent:
             "role": "system",
             "content": orchestration_rule + sticker_rule + delivery_rule,
         }
-        result = [instruction, *messages]
+        context_messages = (
+            OrchestrateChatWithAgent._sanitize_time_metadata(messages)
+            if conversation_mode == "proactive"
+            else [dict(message) for message in messages]
+        )
+        result = [instruction, *context_messages]
         clean_intent = sticker_intent.strip()
         if clean_intent:
             result.insert(
