@@ -167,6 +167,75 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="VOICE_STREAMING_ASR_ENABLED",
     )
+    echo_device_token: str = Field(default="", validation_alias="ECHO_DEVICE_TOKEN")
+    echo_device_user_map_json: str = Field(
+        default="{}",
+        validation_alias="ECHO_DEVICE_USER_MAP_JSON",
+    )
+    echo_device_max_utterance_seconds: int = Field(
+        default=30,
+        validation_alias="ECHO_DEVICE_MAX_UTTERANCE_SECONDS",
+        ge=1,
+        le=120,
+    )
+    echo_device_max_opus_packet_bytes: int = Field(
+        default=4096,
+        validation_alias="ECHO_DEVICE_MAX_OPUS_PACKET_BYTES",
+        ge=128,
+        le=65535,
+    )
+    echo_device_auto_silence_ms: int = Field(
+        default=800,
+        validation_alias="ECHO_DEVICE_AUTO_SILENCE_MS",
+        ge=300,
+        le=3000,
+    )
+    echo_device_auto_minimum_speech_ms: int = Field(
+        default=180,
+        validation_alias="ECHO_DEVICE_AUTO_MINIMUM_SPEECH_MS",
+        ge=60,
+        le=2000,
+    )
+    echo_device_auto_speech_rms_threshold: int = Field(
+        default=500,
+        validation_alias="ECHO_DEVICE_AUTO_SPEECH_RMS_THRESHOLD",
+        ge=1,
+        le=32767,
+    )
+    echo_device_auto_no_speech_timeout_ms: int = Field(
+        default=8000,
+        validation_alias="ECHO_DEVICE_AUTO_NO_SPEECH_TIMEOUT_MS",
+        ge=1000,
+        le=60000,
+    )
+    echo_device_auto_maximum_speech_ms: int = Field(
+        default=15000,
+        validation_alias="ECHO_DEVICE_AUTO_MAXIMUM_SPEECH_MS",
+        ge=1000,
+        le=120000,
+    )
+    echo_device_playback_start_delay_ms: int = Field(
+        default=120,
+        validation_alias="ECHO_DEVICE_PLAYBACK_START_DELAY_MS",
+        ge=0,
+        le=1000,
+    )
+    echo_device_playback_prebuffer_packets: int = Field(
+        default=10,
+        validation_alias="ECHO_DEVICE_PLAYBACK_PREBUFFER_PACKETS",
+        ge=0,
+        le=20,
+    )
+    echo_device_playback_stop_grace_ms: int = Field(
+        default=240,
+        validation_alias="ECHO_DEVICE_PLAYBACK_STOP_GRACE_MS",
+        ge=0,
+        le=2000,
+    )
+    echo_firmware_version: str = Field(
+        default="0.1.0",
+        validation_alias="ECHO_FIRMWARE_VERSION",
+    )
     tencent_asr_engine_model_type: str = Field(
         default="16k_zh",
         validation_alias="TENCENT_ASR_ENGINE_MODEL_TYPE",

@@ -5,6 +5,8 @@
 - [`Echo v1.0.9 当前功能与扩展基线.md`](Echo%20v1.0.9%20当前功能与扩展基线.md)：当前生产版本的业务边界、对话和每日来信数据流，以及后续功能接入规则。
 - [`Echo 学习陪伴番茄专注模块开发文档.md`](Echo%20学习陪伴番茄专注模块开发文档.md)：v1.1.0 “一起学习”页面、计时、环境声、记录和 Echo 反馈规则。
 - [`Echo 桌面机器人三阶段实施方案.md`](Echo%20桌面机器人三阶段实施方案.md)：桌面机器人从云端语音原型、本地 ASR 到 Echo Hub 与本地 TTS 的实施边界和验收标准。
+- [`Echo 桌面机器人硬件与嵌入式入门手册.md`](Echo%20桌面机器人硬件与嵌入式入门手册.md)：面向硬件初学者解释 Bread Compact、ESP32-S3、固件、烧录、音频协议、APP 关系和 Echo 接入步骤。
+- [`Echo 桌面机器人第一阶段开发与烧录手册.md`](Echo%20桌面机器人第一阶段开发与烧录手册.md)：两个仓库的边界、设备认证、固件版本、构建产物、首次烧录步骤和验收标准。
 - [`../deploy/README.md`](../deploy/README.md)：当前服务器、Nginx、Docker Compose 和 APK 发布步骤。
 - [`../Echo-backend/README.md`](../Echo-backend/README.md)：后端启动、模块边界和接口总览。
 - [`../app/README.md`](../app/README.md)：Flutter 客户端运行和检查方式。
