@@ -18,7 +18,25 @@ _ACTION_WORDS = (
     "抱|拍|摸|牵|靠近|走近|走到|笑|哭|看着|注视|点头|摇头|叹|沉默|眨眼|"
     "递|坐下|站起|歪头|耸肩|抬手|伸手|握住|握着|擦去|听着|轻轻|温柔地|摸头|拥抱"
 )
+_STICKER_NARRATION_ACTION = (
+    r"(?:给你|这就|那就|顺便|再)?\s*"
+    r"(?:附上|送上|配上|加上|贴上|发给你|发你一(?:张|个)|"
+    r"送你一(?:张|个)|发送一(?:张|个)|发一(?:张|个)|来一(?:张|个))"
+)
+_STICKER_NARRATION_OBJECT = r"(?:表情包|贴图|图片)"
+_STICKER_NARRATION_BODY = (
+    rf"{_STICKER_NARRATION_ACTION}[^\n]{{0,80}}?"
+    rf"{_STICKER_NARRATION_OBJECT}[^\n]{{0,60}}?"
+)
 _STAGE_PATTERNS = (
+    (
+        "sticker_action_narration",
+        re.compile(
+            rf"(?:[（(]\s*{_STICKER_NARRATION_BODY}[）)]|"
+            rf"\*\s*{_STICKER_NARRATION_BODY}\*|"
+            rf"[［\[]\s*{_STICKER_NARRATION_BODY}[］\]])"
+        ),
+    ),
     (
         "parenthesized_action",
         re.compile(rf"[（(][^（）()\n]{{0,60}}(?:{_ACTION_WORDS})[^（）()\n]{{0,60}}[）)]"),
@@ -169,7 +187,7 @@ def find_dialogue_style_violations(
     return tuple(violations)
 
 
-def sanitize_dialogue_reply(reply: str) -> str:
+def sanitize_dialogue_reply(reply: str, *, allow_empty: bool = False) -> str:
     """在一次重试仍失败时移除可确定的格式违规，不改写正常对话。"""
     sanitized = reply
     for _, pattern in _STAGE_PATTERNS:
@@ -178,7 +196,7 @@ def sanitize_dialogue_reply(reply: str) -> str:
     sanitized = _ROLE_PREFIX_PATTERN.sub("", sanitized)
     sanitized = re.sub(r"[ \t]+\n", "\n", sanitized)
     sanitized = re.sub(r"\n{3,}", "\n\n", sanitized).strip()
-    if sanitized:
+    if sanitized or allow_empty:
         return sanitized
     return "我在听。你可以直接告诉我，现在最希望我怎样回应你。"
 
@@ -187,6 +205,8 @@ def apply_dialogue_fallback(
     reply: str,
     user_message: str,
     violations: tuple[str, ...],
+    *,
+    allow_empty: bool = False,
 ) -> str:
     """Return a narrow deterministic fallback after a rewrite still violates key boundaries."""
     violation_set = set(violations)
@@ -214,4 +234,4 @@ def apply_dialogue_fallback(
     if "followup_question_cooldown" in violation_set:
         return remove_followup_questions(reply)
 
-    return sanitize_dialogue_reply(reply)
+    return sanitize_dialogue_reply(reply, allow_empty=allow_empty)

@@ -422,6 +422,45 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("我会认真听。", result.reply)
         self.assertEqual(1, len(agent.calls))
 
+    async def test_proactive_reply_removes_fake_sticker_delivery_narration(self):
+        candidate = "（附上一张安静的表情包，当作睡前的小回应。）\n\n叶子，好好睡，明天见。"
+        use_case = GenerateChatReply(
+            conversation_repository=FakeConversationRepository(),
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=SequenceAgentOrchestrator([candidate]),
+        )
+
+        prepared = await use_case.prepare(
+            user_id="user_a",
+            message="internal proactive trigger",
+            conversation_id="conv_active",
+            conversation_mode="proactive",
+        )
+
+        self.assertEqual("叶子，好好睡，明天见。", prepared.reply)
+        self.assertEqual(("叶子，好好睡，明天见。",), prepared.reply_segments)
+
+    async def test_proactive_reply_suppresses_sticker_narration_only_output(self):
+        use_case = GenerateChatReply(
+            conversation_repository=FakeConversationRepository(),
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=SequenceAgentOrchestrator(["（附上一张安静的表情包。）"]),
+        )
+
+        prepared = await use_case.prepare(
+            user_id="user_a",
+            message="internal proactive trigger",
+            conversation_id="conv_active",
+            conversation_mode="proactive",
+        )
+
+        self.assertEqual("", prepared.reply)
+        self.assertEqual((), prepared.reply_segments)
+
     async def test_generate_chat_reply_pauses_questions_after_two_question_turns(self):
         repository = FakeConversationRepository()
         context_provider = FakeContextProvider()

@@ -253,7 +253,12 @@ class GenerateChatReply:
                 "Dialogue style fallback applied violation_types=%s",
                 ",".join(style_violations),
             )
-            reply = apply_dialogue_fallback(reply, clean_message, style_violations)
+            reply = apply_dialogue_fallback(
+                reply,
+                clean_message,
+                style_violations,
+                allow_empty=conversation_mode == "proactive",
+            )
             segments = (reply,) if reply else ()
         if conversation_mode in {"chat", "proactive"}:
             validate_agent_delivery_segments(segments)

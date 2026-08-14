@@ -111,6 +111,16 @@ class DialogueStyleTests(unittest.TestCase):
                 violations,
             ),
         )
+    def test_detects_and_removes_sticker_action_narration(self):
+        reply = "（附上一张安静的表情包，当作睡前的小回应。）\n\n叶子，好好睡，明天见。"
+
+        self.assertIn("sticker_action_narration", find_dialogue_style_violations(reply))
+        self.assertEqual("叶子，好好睡，明天见。", sanitize_dialogue_reply(reply))
+
+    def test_sticker_action_narration_can_be_sanitized_to_empty(self):
+        reply = "（附上一张安静的表情包。）"
+
+        self.assertEqual("", sanitize_dialogue_reply(reply, allow_empty=True))
 
 
 if __name__ == "__main__":

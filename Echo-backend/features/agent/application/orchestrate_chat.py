@@ -594,7 +594,10 @@ class OrchestrateChatWithAgent:
                 "Most replies should still use one to three messages. Use more only when the reply "
                 "contains genuinely distinct thoughts, and never exceed six. If send_sticker "
                 "completed, the backend will attach the image separately and you must not claim "
-                "that you cannot send it. If it failed, do not claim success."
+                "that you cannot send it. A sticker is sent only when send_sticker completes. "
+                "Never narrate or simulate sticker/image delivery in visible text, including "
+                "parenthesized, bracketed, or starred action descriptions. If it failed or was "
+                "not called, do not claim or imply that an image was attached."
             )
         elif conversation_mode == "daily_letter":
             delivery_rule = (
