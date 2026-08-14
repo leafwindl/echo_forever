@@ -321,7 +321,7 @@ class OrchestrateChatWithAgent:
                         response.text,
                         conversation_mode,
                         sticker_placement=sticker_placement,
-                        allow_empty=bool(content_parts),
+                        allow_empty=bool(content_parts) or conversation_mode == "proactive",
                     )
                 except AgentDeliveryPlanError as exc:
                     recovered_plan = self._recover_metadata_prefixed_delivery(
@@ -389,6 +389,24 @@ class OrchestrateChatWithAgent:
                             )
                             raise
                 sticker_placement = delivery_plan.sticker_placement
+                if (
+                    conversation_mode == "proactive"
+                    and not delivery_plan.text_segments
+                    and not content_parts
+                ):
+                    result = AgentTurnResult(
+                        status=AgentRunStatus.COMPLETED,
+                        reply_text="",
+                        sources=tuple(sources),
+                        content_parts=(),
+                        tool_results=tuple(tool_results),
+                        run_id=run_id,
+                        model_steps=model_steps,
+                        reply_segments=(),
+                        sticker_placement=sticker_placement,
+                    )
+                    self.repository.finish(run_id, model_steps + tool_call_count)
+                    return result
                 if (
                     conversation_mode in {"chat", "proactive"}
                     and delivery_plan.reply_text

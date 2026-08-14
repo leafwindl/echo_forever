@@ -1166,6 +1166,25 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.error_code, "ValueError")
         self.assertEqual(repository.finishes[0][2], "ValueError")
 
+    async def test_proactive_empty_natural_output_completes_as_a_silent_skip(self):
+        model = SequenceAgentModel([AgentModelResponse(text="", finish_reason="stop")])
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="A proactive message is due.",
+            messages=[{"role": "system", "content": "internal proactive trigger"}],
+            conversation_mode="proactive",
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.COMPLETED)
+        self.assertEqual(result.reply_text, "")
+        self.assertEqual(result.reply_segments, ())
+        self.assertEqual(result.content_parts, ())
+        self.assertIsNone(result.error_code)
+        self.assertEqual(len(model.calls), 1)
+        self.assertEqual(repository.finishes[0][2], None)
+
     async def test_proactive_truncated_empty_output_retries_then_stays_silent(self):
         model = SequenceAgentModel(
             [

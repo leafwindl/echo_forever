@@ -101,7 +101,7 @@ class ProcessProactiveChatJobs:
                 "currently doing something unless verified by an actual user message. "
                 "Phrase uncertain current-state references conditionally, such as asking "
                 "them to reply after they wake up or when they are free. "
-                "If no natural message is appropriate, return an empty text_segments array."
+                "If no natural message is appropriate, return no user-visible text."
             )
             started = time.perf_counter()
             try:

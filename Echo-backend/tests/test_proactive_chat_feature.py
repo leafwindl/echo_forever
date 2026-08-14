@@ -344,6 +344,8 @@ class ProactiveWorkerTests(unittest.IsolatedAsyncioTestCase):
         prompt = reply_generator.prepare.await_args.kwargs["message"]
         self.assertIn("not an incoming user message", prompt)
         self.assertIn("awake, online, reading", prompt)
+        self.assertIn("return no user-visible text", prompt)
+        self.assertNotIn("text_segments", prompt)
 
 
 if __name__ == "__main__":
