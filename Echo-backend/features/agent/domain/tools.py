@@ -19,27 +19,6 @@ class ToolExecutionContext:
     allow_proactive_stickers: bool = True
     prior_results: tuple[AgentToolResult, ...] = field(default_factory=tuple)
 
-    @property
-    def candidate_sticker_ids(self) -> frozenset[str]:
-        return frozenset(
-            str(candidate.get("sticker_id", ""))
-            for result in self.prior_results
-            if result.tool_name == "search_stickers"
-            for candidate in result.data.get("candidates", [])
-            if candidate.get("sticker_id")
-        )
-
-    def sticker_candidate_purpose(self, sticker_id: str) -> str:
-        for result in reversed(self.prior_results):
-            if result.tool_name != "search_stickers":
-                continue
-            if any(
-                str(candidate.get("sticker_id", "")) == sticker_id
-                for candidate in result.data.get("candidates", [])
-            ):
-                return str(result.data.get("purpose", ""))
-        return ""
-
 
 
 class ToolArgumentsModel(Protocol):

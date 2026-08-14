@@ -35,11 +35,7 @@ class ToolExecutor:
             for result in context.prior_results
             if result.tool_name == call.tool_name and result.arguments == call.arguments
         )
-        if matching_results and not self._can_retry_after_context_change(
-            context,
-            call,
-            matching_results,
-        ):
+        if matching_results:
             return AgentToolResult(
                 call_id=call.call_id,
                 tool_name=call.tool_name,
@@ -126,17 +122,3 @@ class ToolExecutor:
             sources=result.sources,
             error_code=result.error_code,
         )
-
-    @staticmethod
-    def _can_retry_after_context_change(
-        context: ToolExecutionContext,
-        call: AgentToolCall,
-        matching_results: tuple[AgentToolResult, ...],
-    ) -> bool:
-        if call.tool_name != "send_sticker":
-            return False
-        latest_result = matching_results[-1]
-        if latest_result.error_code != "sticker_not_in_search_results":
-            return False
-        sticker_id = str(call.arguments.get("sticker_id", "")).strip()
-        return bool(sticker_id and sticker_id in context.candidate_sticker_ids)

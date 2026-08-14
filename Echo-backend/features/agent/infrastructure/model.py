@@ -1,3 +1,5 @@
+from typing import Any
+
 from providers.llm_provider import LLMProviderTimeoutError, get_llm_provider
 
 from features.agent.domain.entities import AgentModelResponse, AgentToolCall
@@ -20,12 +22,13 @@ class ProviderAgentConversationModel:
         tools: tuple[dict, ...],
         *,
         structured_output: bool = False,
+        tool_choice: str | dict[str, Any] = "auto",
     ) -> AgentModelResponse:
         try:
             response = await get_llm_provider().chat_completion_message(
                 messages=messages,
                 tools=tools,
-                tool_choice="auto",
+                tool_choice=tool_choice,
                 response_format={"type": "json_object"} if structured_output else None,
                 thinking=(
                     {"type": "disabled"}

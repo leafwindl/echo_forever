@@ -19,14 +19,8 @@ from features.stickers.domain.entities import Sticker
 from features.stickers.public import search_stickers, send_sticker
 
 
-class SearchStickersArguments(BaseModel):
-    query: str = Field(default="", max_length=300)
-    limit: int = Field(default=3, ge=1, le=3)
-    purpose: Literal["explicit_request", "proactive"] = "explicit_request"
-
-
 class SendStickerArguments(BaseModel):
-    sticker_id: str = Field(min_length=1, max_length=128)
+    intent: str = Field(min_length=1, max_length=300)
     purpose: Literal["explicit_request", "proactive"] = "explicit_request"
     placement: Literal["before_text", "after_text"] = "after_text"
 
@@ -38,14 +32,14 @@ StickerSend = Callable[[str, str], Sticker | None]
 async def _search_with_context(
     search: StickerSearch,
     context: ToolExecutionContext,
-    query: str,
+    intent: str,
     limit: int,
     purpose: str,
 ) -> list[Sticker]:
     try:
         result = search(
             context.user_id,
-            query,
+            intent,
             limit,
             conversation_id=context.conversation_id,
             purpose=purpose,
@@ -53,7 +47,7 @@ async def _search_with_context(
     except TypeError as exc:
         if "unexpected keyword argument" not in str(exc):
             raise
-        result = search(context.user_id, query, limit)
+        result = search(context.user_id, intent, limit)
     if inspect.isawaitable(result):
         return await result
     return result
@@ -64,131 +58,93 @@ def register_sticker_tools(
     search: StickerSearch = search_stickers,
     send: StickerSend = send_sticker,
 ) -> None:
-    async def search_handler(
-        context: ToolExecutionContext,
-        arguments: BaseModel,
-    ) -> AgentToolResult:
-        parsed = SearchStickersArguments.model_validate(arguments)
-        if parsed.purpose == "proactive" and not context.allow_proactive_stickers:
-            return AgentToolResult(
-                call_id="",
-                tool_name="search_stickers",
-                status=AgentToolStatus.FAILED,
-                data={"purpose": parsed.purpose, "candidates": []},
-                safe_for_model='{"status":"blocked","reason":"proactive_sticker_cooldown"}',
-                error_code="proactive_sticker_cooldown",
-            )
-        requested_query = parsed.query.strip()
-        stickers = await _search_with_context(
-            search,
-            context,
-            requested_query,
-            parsed.limit,
-            parsed.purpose,
-        )
-        fallback_used = False
-        if not stickers and parsed.purpose == "explicit_request" and requested_query:
-            fallback_used = True
-            stickers = await _search_with_context(
-                search,
-                context,
-                "",
-                parsed.limit,
-                parsed.purpose,
-            )
-        candidates = [
-            {
-                "sticker_id": sticker.sticker_id,
-                "description": sticker.description,
-                "semantic_tags": list(sticker.semantic_tags),
-                "priority": sticker.priority,
-                "similarity_score": sticker.similarity_score,
-            }
-            for sticker in stickers
-        ]
-        status = AgentToolStatus.COMPLETED if candidates else AgentToolStatus.NO_RESULT
-        payload = {
-            "query": requested_query,
-            "purpose": parsed.purpose,
-            "fallback_used": fallback_used,
-            "candidates": candidates,
-        }
-        return AgentToolResult(
-            call_id="",
-            tool_name="search_stickers",
-            status=status,
-            data=payload,
-            safe_for_model=json.dumps(payload, ensure_ascii=False),
-        )
-
     async def send_handler(
         context: ToolExecutionContext,
         arguments: BaseModel,
     ) -> AgentToolResult:
         parsed = SendStickerArguments.model_validate(arguments)
-        sticker_id = parsed.sticker_id.strip()
-        if sticker_id not in context.candidate_sticker_ids:
-            return AgentToolResult(
-                call_id="",
-                tool_name="send_sticker",
-                status=AgentToolStatus.FAILED,
-                data={"sent": False},
-                safe_for_model='{"sent": false}',
-                error_code="sticker_not_in_search_results",
-            )
-        if context.sticker_candidate_purpose(sticker_id) != parsed.purpose:
-            return AgentToolResult(
-                call_id="",
-                tool_name="send_sticker",
-                status=AgentToolStatus.FAILED,
-                data={"sent": False},
-                safe_for_model='{"sent":false,"reason":"purpose_mismatch"}',
-                error_code="sticker_purpose_mismatch",
-            )
         if parsed.purpose == "proactive" and not context.allow_proactive_stickers:
             return AgentToolResult(
                 call_id="",
                 tool_name="send_sticker",
                 status=AgentToolStatus.FAILED,
-                data={"sent": False},
+                data={"sent": False, "purpose": parsed.purpose},
                 safe_for_model='{"sent":false,"reason":"proactive_sticker_cooldown"}',
                 error_code="proactive_sticker_cooldown",
             )
-        sticker = send(context.user_id, sticker_id)
+
+        requested_intent = parsed.intent.strip()
+        stickers = await _search_with_context(
+            search,
+            context,
+            requested_intent,
+            3,
+            parsed.purpose,
+        )
+        fallback_used = False
+        if not stickers and parsed.purpose == "explicit_request" and requested_intent:
+            fallback_used = True
+            stickers = await _search_with_context(
+                search,
+                context,
+                "",
+                3,
+                parsed.purpose,
+            )
+        if not stickers:
+            payload = {
+                "sent": False,
+                "status": "no_result",
+                "intent": requested_intent,
+                "purpose": parsed.purpose,
+                "fallback_used": fallback_used,
+            }
+            return AgentToolResult(
+                call_id="",
+                tool_name="send_sticker",
+                status=AgentToolStatus.NO_RESULT,
+                data=payload,
+                safe_for_model=json.dumps(payload, ensure_ascii=False),
+            )
+
+        selected = stickers[0]
+        sticker = send(context.user_id, selected.sticker_id)
         if sticker is None:
+            payload = {
+                "sent": False,
+                "status": "unavailable",
+                "intent": requested_intent,
+                "purpose": parsed.purpose,
+                "fallback_used": fallback_used,
+                "sticker_id": selected.sticker_id,
+            }
             return AgentToolResult(
                 call_id="",
                 tool_name="send_sticker",
                 status=AgentToolStatus.FAILED,
-                data={"sent": False},
-                safe_for_model='{"sent": false}',
+                data=payload,
+                safe_for_model=json.dumps(payload, ensure_ascii=False),
                 error_code="sticker_unavailable",
             )
+
+        payload = {
+            "sent": True,
+            "status": "sent",
+            "delivery": "attached_to_current_reply",
+            "intent": requested_intent,
+            "purpose": parsed.purpose,
+            "placement": parsed.placement,
+            "fallback_used": fallback_used,
+            "sticker_id": sticker.sticker_id,
+            "description": sticker.description,
+            "semantic_tags": list(sticker.semantic_tags),
+        }
         return AgentToolResult(
             call_id="",
             tool_name="send_sticker",
             status=AgentToolStatus.COMPLETED,
-            data={
-                "sent": True,
-                "delivery": "attached_to_current_reply",
-                "purpose": parsed.purpose,
-                "placement": parsed.placement,
-                "sticker_id": sticker.sticker_id,
-                "description": sticker.description,
-                "semantic_tags": list(sticker.semantic_tags),
-            },
-            safe_for_model=json.dumps(
-                {
-                    "sent": True,
-                    "delivery": "attached_to_current_reply",
-                    "purpose": parsed.purpose,
-                    "placement": parsed.placement,
-                    "sticker_id": sticker.sticker_id,
-                    "description": sticker.description,
-                    "semantic_tags": list(sticker.semantic_tags),
-                },
-                ensure_ascii=False,
-            ),
+            data=payload,
+            safe_for_model=json.dumps(payload, ensure_ascii=False),
             content_parts=(
                 ContentPart(
                     type="sticker",
@@ -201,35 +157,19 @@ def register_sticker_tools(
     registry.register(
         ToolDefinition(
             specification=ToolSpecification(
-                name="search_stickers",
-                description=(
-                    "根据当前语境中想表达的情绪、态度和使用场景，语义查询当前用户可见的 "
-                    "Echo 或私人表情包候选。query 应使用自然语言描述表达意图，不要只堆砌关键词。"
-                    "explicit_request 没有语义候选时会回退到其他可用候选。"
-                ),
-                risk_level=ToolRisk.READ,
-                timeout_seconds=5,
-                is_idempotent=True,
-                allowed_modes=("chat", "proactive"),
-                max_calls_per_turn=2,
-                count_no_result_toward_call_limit=False,
-                allow_proactive=True,
-            ),
-            arguments_model=SearchStickersArguments,
-            handler=search_handler,
-        )
-    )
-    registry.register(
-        ToolDefinition(
-            specification=ToolSpecification(
                 name="send_sticker",
-                description="发送本轮 search_stickers 已返回且当前用户可见的一张表情包",
+                description=(
+                    "根据自然语言 intent 在当前用户可见的 Echo 官方和私人表情包中进行语义"
+                    "搜索、排序、冷却过滤并发送最高优先级的一张。explicit_request 搜索无精确"
+                    "结果时会回退到当前可用表情包；没有任何候选时返回 no_result 且不发送。"
+                ),
                 risk_level=ToolRisk.SEND,
                 timeout_seconds=5,
                 is_idempotent=True,
                 allowed_modes=("chat", "proactive"),
                 max_calls_per_turn=3,
                 max_successful_calls_per_turn=1,
+                count_no_result_toward_call_limit=False,
                 allow_proactive=True,
             ),
             arguments_model=SendStickerArguments,
