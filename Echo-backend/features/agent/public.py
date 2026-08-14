@@ -1,7 +1,11 @@
 from shared.config import settings
 
-from features.agent.domain.entities import AgentTurnResult
-from features.agent.infrastructure.container import get_chat_agent, get_daily_letter_agent
+from features.agent.domain.entities import AgentTurnResult, ProactiveDecision
+from features.agent.infrastructure.container import (
+    get_chat_agent,
+    get_daily_letter_agent,
+    get_proactive_planner,
+)
 
 
 async def run_chat_agent(
@@ -42,4 +46,23 @@ async def run_daily_letter_agent(
     )
 
 
-__all__ = ["AgentTurnResult", "run_chat_agent", "run_daily_letter_agent"]
+async def plan_proactive_message(
+    messages: list[dict],
+    available_fact_ids: tuple[str, ...],
+    *,
+    force_send: bool = False,
+) -> ProactiveDecision:
+    return await get_proactive_planner().decide(
+        messages,
+        available_fact_ids,
+        force_send=force_send,
+    )
+
+
+__all__ = [
+    "AgentTurnResult",
+    "ProactiveDecision",
+    "plan_proactive_message",
+    "run_chat_agent",
+    "run_daily_letter_agent",
+]

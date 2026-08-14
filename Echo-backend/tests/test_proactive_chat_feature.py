@@ -166,6 +166,7 @@ class _DueSpontaneousJobRepository:
         )
         self.suppressed = []
         self.context_changes = list(context_changes)
+        self.duplicate_delivery = False
 
     def claim_due_job(self, _lease_seconds):
         return self.job
@@ -179,8 +180,35 @@ class _DueSpontaneousJobRepository:
     def spontaneous_job_context_changed(self, _job):
         return self.context_changes.pop(0) if self.context_changes else False
 
+    def has_recent_assistant_content(self, _user_id, _conversation_id, _segments):
+        return self.duplicate_delivery
+
     def suppress_job(self, job_id, reason):
         self.suppressed.append((job_id, reason))
+
+
+class _DueExplicitScheduleRepository(_DueSpontaneousJobRepository):
+    def __init__(self):
+        super().__init__()
+        self.job = ProactiveChatJob(
+            job_id="job_explicit",
+            schedule_id="schedule_explicit",
+            user_id="user_a",
+            conversation_id="conversation_a",
+            scheduled_for=datetime(2026, 8, 10, 12, tzinfo=UTC),
+            status="running",
+            attempt_count=1,
+            max_attempts=2,
+        )
+        self.schedule = SimpleNamespace(
+            schedule_id="schedule_explicit",
+            created_by="user_request",
+            intent="提醒用户喝水",
+            status="active",
+        )
+
+    def load_job_context(self, _job):
+        return self.preference, self.schedule, "conversation_a"
 
 
 class ProactiveWorkerTests(unittest.IsolatedAsyncioTestCase):
@@ -346,6 +374,60 @@ class ProactiveWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("awake, online, reading", prompt)
         self.assertIn("return no user-visible text", prompt)
         self.assertNotIn("text_segments", prompt)
+        prepare_kwargs = reply_generator.prepare.await_args.kwargs
+        self.assertEqual("", prepare_kwargs["proactive_intent"])
+        self.assertFalse(prepare_kwargs["proactive_force_send"])
+
+    async def test_explicit_schedule_forces_send_plan_with_approved_intent(self):
+        repository = _DueExplicitScheduleRepository()
+        reply_generator = SimpleNamespace(
+            prepare=AsyncMock(return_value=PreparedChatReply(reply="", reply_segments=()))
+        )
+        guard = SimpleNamespace(try_acquire=lambda _user_id: True, release=lambda _user_id: None)
+        worker = ProcessProactiveChatJobs(
+            repository=repository,
+            reply_generator=reply_generator,
+            request_guard=guard,
+            event_broker=SimpleNamespace(publish=AsyncMock()),
+            timing_policy=SimpleNamespace(),
+            lease_seconds=30,
+        )
+
+        await worker.run_once()
+
+        prepare_kwargs = reply_generator.prepare.await_args.kwargs
+        self.assertEqual("提醒用户喝水", prepare_kwargs["proactive_intent"])
+        self.assertTrue(prepare_kwargs["proactive_force_send"])
+
+    async def test_duplicate_spontaneous_delivery_is_suppressed_before_persistence(self):
+        repository = _DueSpontaneousJobRepository()
+        repository.duplicate_delivery = True
+        repository.persist_delivery = Mock()
+        reply_generator = SimpleNamespace(
+            prepare=AsyncMock(
+                return_value=PreparedChatReply(
+                    reply="晚上好，有空聊聊吗？",
+                    reply_segments=("晚上好，有空聊聊吗？",),
+                )
+            )
+        )
+        worker = ProcessProactiveChatJobs(
+            repository=repository,
+            reply_generator=reply_generator,
+            request_guard=SimpleNamespace(
+                try_acquire=lambda _user_id: True,
+                release=lambda _user_id: None,
+            ),
+            event_broker=SimpleNamespace(publish=AsyncMock()),
+            timing_policy=SimpleNamespace(),
+            lease_seconds=30,
+        )
+
+        processed = await worker.run_once()
+
+        self.assertTrue(processed)
+        self.assertEqual(repository.suppressed, [("job_due", "duplicate_delivery")])
+        repository.persist_delivery.assert_not_called()
 
 
 if __name__ == "__main__":

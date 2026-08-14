@@ -33,6 +33,10 @@ def _timezone(value: str) -> str:
     return clean
 
 
+def _normalize_delivery_text(value: str) -> str:
+    return " ".join(value.split()).strip()
+
+
 def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         raise ValueError("local_datetime must include a timezone offset")
@@ -451,15 +455,16 @@ class PostgresProactiveChatRepository:
                           WHERE recent_failure.user_id = pref.user_id
                             AND recent_failure.schedule_id IS NULL
                             AND recent_failure.updated_at > NOW() - INTERVAL '10 minutes'
+                    AND (
+                        recent_failure.status = 'failed'
+                        OR (
+                            recent_failure.status = 'suppressed'
                             AND (
-                                recent_failure.status = 'failed'
-                                OR (
-                                    recent_failure.status = 'suppressed'
-                                    AND (
-                                        recent_failure.error_code = 'agent_skip'
-                                        OR recent_failure.error_code = 'agent_output_rejected'
-                                        OR recent_failure.error_code LIKE 'agent_failed:%'
-                                    )
+                                recent_failure.error_code = 'agent_skip'
+                                OR recent_failure.error_code = 'agent_output_rejected'
+                                OR recent_failure.error_code = 'duplicate_delivery'
+                                OR recent_failure.error_code LIKE 'agent_failed:%'
+                            )
                                 )
                             )
                       )
@@ -487,6 +492,40 @@ class PostgresProactiveChatRepository:
                 self._insert_job(cursor, None, str(row["user_id"]), conversation_id, now)
                 return True
         return False
+
+    def has_recent_assistant_content(
+        self,
+        user_id: str,
+        conversation_id: str,
+        segments: tuple[str, ...],
+    ) -> bool:
+        candidates = {
+            _normalize_delivery_text(segment)
+            for segment in segments
+            if _normalize_delivery_text(segment)
+        }
+        if not candidates:
+            return False
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT content
+                FROM chat_messages
+                WHERE user_id = %s
+                  AND conversation_id = %s
+                  AND role = 'assistant'
+                  AND status = 'active'
+                  AND created_at > NOW() - INTERVAL '24 hours'
+                ORDER BY id DESC
+                LIMIT 48
+                """,
+                (user_id, conversation_id),
+            )
+            recent_contents = cursor.fetchall()
+        return any(
+            _normalize_delivery_text(str(row["content"] or "")) in candidates
+            for row in recent_contents
+        )
 
     def load_job_context(
         self,

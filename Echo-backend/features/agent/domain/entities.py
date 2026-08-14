@@ -24,6 +24,20 @@ class AgentRunStatus(StrEnum):
     FAILED = "failed"
 
 
+class ProactiveAction(StrEnum):
+    SEND = "send"
+    SKIP = "skip"
+
+
+@dataclass(frozen=True)
+class ProactiveDecision:
+    action: ProactiveAction
+    topic: str = "casual_check_in"
+    tone: str = "gentle"
+    safe_fact_ids: tuple[str, ...] = field(default_factory=tuple)
+    reason: str = ""
+
+
 @dataclass(frozen=True)
 class SourceReference:
     title: str

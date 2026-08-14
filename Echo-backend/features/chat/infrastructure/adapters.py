@@ -3,7 +3,8 @@ import threading
 from shared.config import settings
 
 from features.agent.domain.entities import ContentPart, SourceReference
-from features.agent.public import run_chat_agent
+from features.agent.domain.services import ProactiveDecisionPlanner
+from features.agent.public import plan_proactive_message, run_chat_agent
 from features.chat.domain.entities import (
     ChatContext,
     ChatHistoryMessage,
@@ -56,6 +57,21 @@ class ChatAgentOrchestratorAdapter(ChatAgentOrchestrator):
             sticker_intent=sticker_intent,
             allow_proactive_stickers=allow_proactive_stickers,
             proactive_sticker_due=proactive_sticker_due,
+        )
+
+
+class ProactiveDecisionPlannerAdapter(ProactiveDecisionPlanner):
+    async def decide(
+        self,
+        messages: list[dict],
+        available_fact_ids: tuple[str, ...],
+        *,
+        force_send: bool = False,
+    ):
+        return await plan_proactive_message(
+            messages,
+            available_fact_ids,
+            force_send=force_send,
         )
 
 
@@ -244,6 +260,8 @@ class ChatContextProviderAdapter(ChatContextProvider):
             pause_followup_questions=context.pause_followup_questions,
             allow_proactive_stickers=context.allow_proactive_stickers,
             proactive_sticker_due=context.proactive_sticker_due,
+            proactive_writer_messages=context.proactive_writer_messages,
+            proactive_safe_facts=context.proactive_safe_facts,
         )
 
 

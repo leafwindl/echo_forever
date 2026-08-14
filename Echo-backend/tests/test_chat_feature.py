@@ -5,7 +5,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.agent.domain.entities import AgentTurnResult, ContentPart
+from features.agent.domain.entities import (
+    AgentTurnResult,
+    ContentPart,
+    ProactiveAction,
+    ProactiveDecision,
+)
 from features.chat.application.clear_context import ClearChatContext
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.application.send_message import SendChatMessage
@@ -116,6 +121,22 @@ class SequenceAgentOrchestrator:
         )
         reply = self.replies.pop(0) if self.replies else "hello from echo"
         return reply if isinstance(reply, AgentTurnResult) else AgentTurnResult(reply_text=reply)
+
+
+class FakeProactivePlanner:
+    def __init__(self, decision):
+        self.decision = decision
+        self.calls = []
+
+    async def decide(self, messages, available_fact_ids, *, force_send=False):
+        self.calls.append(
+            {
+                "messages": list(messages),
+                "available_fact_ids": tuple(available_fact_ids),
+                "force_send": force_send,
+            }
+        )
+        return self.decision
 
 
 class FakeSummaryUpdater:
@@ -460,6 +481,93 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("", prepared.reply)
         self.assertEqual((), prepared.reply_segments)
+
+    async def test_proactive_planner_skip_never_calls_writer(self):
+        agent = SequenceAgentOrchestrator(["不应生成"])
+        planner = FakeProactivePlanner(
+            ProactiveDecision(action=ProactiveAction.SKIP, reason="no_natural_topic")
+        )
+        use_case = GenerateChatReply(
+            conversation_repository=FakeConversationRepository(),
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
+            proactive_planner=planner,
+        )
+
+        prepared = await use_case.prepare(
+            user_id="user_a",
+            message="internal proactive trigger",
+            conversation_id="conv_active",
+            conversation_mode="proactive",
+        )
+
+        self.assertEqual("", prepared.reply)
+        self.assertEqual((), prepared.reply_segments)
+        self.assertEqual(1, len(planner.calls))
+        self.assertEqual([], agent.calls)
+
+    async def test_proactive_writer_receives_only_selected_safe_facts(self):
+        class ProactiveContextProvider:
+            async def build_context(
+                self, user_id, user_message, conversation_id, conversation_mode
+            ):
+                del user_id, user_message, conversation_id, conversation_mode
+                return ChatContext(
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": "[消息时间 2026-08-14T17:33:20+08:00] 准备吃饭。",
+                        }
+                    ],
+                    history_messages=[],
+                    proactive_writer_messages=[
+                        {"role": "system", "content": "Echo persona"}
+                    ],
+                    proactive_safe_facts={
+                        "conversation_gap": "距上一条真实用户消息约 2小时50分钟。",
+                        "last_user_message": "上一条用户消息：准备吃饭。",
+                    },
+                )
+
+        planner = FakeProactivePlanner(
+            ProactiveDecision(
+                action=ProactiveAction.SEND,
+                topic="casual_check_in",
+                tone="gentle",
+                safe_fact_ids=("conversation_gap",),
+            )
+        )
+        agent = SequenceAgentOrchestrator(["晚上好，有空的时候来聊聊吧。"])
+        use_case = GenerateChatReply(
+            conversation_repository=FakeConversationRepository(),
+            context_provider=ProactiveContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
+            proactive_planner=planner,
+        )
+
+        prepared = await use_case.prepare(
+            user_id="user_a",
+            message="internal proactive trigger",
+            conversation_id="conv_active",
+            conversation_mode="proactive",
+        )
+
+        writer_content = "\n".join(
+            str(item.get("content") or "") for item in agent.calls[0]["messages"]
+        )
+        planner_content = "\n".join(
+            str(item.get("content") or "")
+            for item in planner.calls[0]["messages"]
+        )
+        self.assertIn("[消息时间", planner_content)
+        self.assertNotIn("[消息时间", writer_content)
+        self.assertIn("2小时50分钟", writer_content)
+        self.assertNotIn("准备吃饭", writer_content)
+        self.assertEqual("晚上好，有空的时候来聊聊吧。", prepared.reply)
 
     async def test_generate_chat_reply_pauses_questions_after_two_question_turns(self):
         repository = FakeConversationRepository()

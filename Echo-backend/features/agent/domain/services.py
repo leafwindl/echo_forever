@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from features.agent.domain.entities import AgentModelResponse
+from features.agent.domain.entities import AgentModelResponse, ProactiveDecision
 
 
 class AgentModelTimeoutError(TimeoutError):
@@ -57,6 +57,16 @@ class StickerSemanticAnalyzer(Protocol):
     ) -> StickerRequestDecision: ...
 
     async def claims_sticker_delivery(self, reply_text: str) -> bool: ...
+
+
+class ProactiveDecisionPlanner(Protocol):
+    async def decide(
+        self,
+        messages: list[dict],
+        available_fact_ids: tuple[str, ...],
+        *,
+        force_send: bool = False,
+    ) -> ProactiveDecision: ...
 
 
 def resolve_local_time(clock: Clock, timezone_name: str, day_offset: int = 0) -> dict[str, str]:

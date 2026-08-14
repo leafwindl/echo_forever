@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 _NATURAL_DELIVERY_MODES = frozenset({"chat", "proactive"})
@@ -12,13 +13,21 @@ _INTERNAL_CONTEXT_MARKER = re.compile(
     flags=re.IGNORECASE,
 )
 _DELIVERY_PROTOCOL_FIELD = re.compile(
-    r'"(?:text_segments|sticker_placement)"',
+    r'"(?:text_segments|sticker_placement|tool_name|tool_calls|call_id|safe_for_model|'
+    r'agent_turn_id|job_id|error_code|sticker_id|content_parts)"',
+    flags=re.IGNORECASE,
+)
+_INTERNAL_IDENTIFIER = re.compile(
+    r"\b(?:run|job|msg|conv|stk|schedule)_[A-Za-z0-9]+\b",
     flags=re.IGNORECASE,
 )
 _INTERNAL_CONTROL_MARKER = re.compile(
     r"(?:"
     r"\u672c\u6761\u6d88\u606f.{0,12}\u7cfb\u7edf\u751f\u6210|"
+    r"\u672c\u6761\u6d88\u606f.{0,12}\u53ef\u4fe1\u7ed3\u6784\u5316\u9644\u4ef6|"
     r"\u65e0\u5b9e\u9645\u6587\u672c\u5185\u5bb9|"
+    r"\u540e\u7aef\u6279\u51c6\u7684\u4e3b\u52a8\u804a\u5929\u5199\u4f5c\u7b80\u62a5|"
+    r"\u552f\u4e00\u5141\u8bb8\u4f7f\u7528\u7684\u4e8b\u5b9e|"
     r"system[- ]generated\s+proactive\s+trigger|"
     r"not\s+an\s+incoming\s+user\s+message|"
     r"use\s+the\s+following\s+intent\s+as\s+internal\s+context\s+only"
@@ -59,11 +68,14 @@ def validate_agent_delivery_segments(segments: tuple[str, ...]) -> None:
 
 
 def _validate_delivery_segment(segment: str) -> None:
-    if _INTERNAL_CONTEXT_MARKER.search(segment):
+    normalized = unicodedata.normalize("NFKC", segment)
+    if _INTERNAL_CONTEXT_MARKER.search(normalized):
         raise AgentDeliveryPlanError("Delivery leaked internal time context")
-    if _DELIVERY_PROTOCOL_FIELD.search(segment):
+    if _DELIVERY_PROTOCOL_FIELD.search(normalized):
         raise AgentDeliveryPlanError("Delivery contains a nested protocol fragment")
-    if _INTERNAL_CONTROL_MARKER.search(segment):
+    if _INTERNAL_IDENTIFIER.search(normalized):
+        raise AgentDeliveryPlanError("Delivery contains an internal identifier")
+    if _INTERNAL_CONTROL_MARKER.search(normalized):
         raise AgentDeliveryPlanError("Delivery leaked internal control context")
 
 
@@ -98,9 +110,16 @@ def build_natural_delivery_plan(
             return AgentDeliveryPlan((), sticker_placement)
         raise AgentDeliveryPlanError("Natural delivery output is empty")
 
-    if clean.startswith(("{", "[", "```")) or _DELIVERY_PROTOCOL_FIELD.search(clean):
+    normalized_clean = unicodedata.normalize("NFKC", clean)
+    if normalized_clean.startswith(("{", "[", "```")) or _DELIVERY_PROTOCOL_FIELD.search(
+        normalized_clean
+    ):
         raise AgentDeliveryPlanError("Delivery contains protocol or JSON output")
-    if _INTERNAL_CONTEXT_MARKER.search(clean) or _INTERNAL_CONTROL_MARKER.search(clean):
+    if _INTERNAL_IDENTIFIER.search(normalized_clean):
+        raise AgentDeliveryPlanError("Delivery contains an internal identifier")
+    if _INTERNAL_CONTEXT_MARKER.search(normalized_clean) or _INTERNAL_CONTROL_MARKER.search(
+        normalized_clean
+    ):
         raise AgentDeliveryPlanError("Delivery leaked internal control context")
 
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", clean) if part.strip()]

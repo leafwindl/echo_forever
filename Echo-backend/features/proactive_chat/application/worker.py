@@ -110,6 +110,8 @@ class ProcessProactiveChatJobs:
                     message=prompt,
                     conversation_id=conversation_id,
                     conversation_mode="proactive",
+                    proactive_intent=(schedule.intent if schedule is not None else ""),
+                    proactive_force_send=explicit,
                 )
                 validate_agent_delivery_segments(prepared.reply_segments)
             except AgentDeliveryPlanError:
@@ -121,6 +123,22 @@ class ProcessProactiveChatJobs:
                 )
                 return True
             if self._suppress_changed_spontaneous_job(job, schedule, "before_persistence"):
+                return True
+            duplicate_checker = getattr(self.repository, "has_recent_assistant_content", None)
+            if (
+                schedule is None
+                and callable(duplicate_checker)
+                and duplicate_checker(
+                    job.user_id,
+                    conversation_id,
+                    prepared.reply_segments,
+                )
+            ):
+                self.repository.suppress_job(job.job_id, "duplicate_delivery")
+                logger.info(
+                    "Proactive chat job suppressed job_id=%s reason=duplicate_delivery",
+                    job.job_id,
+                )
                 return True
             if not prepared.reply_segments and not prepared.content_parts:
                 reason = (

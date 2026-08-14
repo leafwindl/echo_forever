@@ -1185,7 +1185,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(model.calls), 1)
         self.assertEqual(repository.finishes[0][2], None)
 
-    async def test_proactive_truncated_empty_output_retries_then_stays_silent(self):
+    async def test_proactive_truncated_empty_output_stays_silent_without_retry(self):
         model = SequenceAgentModel(
             [
                 AgentModelResponse(text="", finish_reason="length"),
@@ -1205,8 +1205,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reply_text, "")
         self.assertEqual(result.reply_segments, ())
         self.assertEqual(result.error_code, "llm_output_truncated")
-        self.assertEqual(len(model.calls), 2)
-        self.assertEqual(model.calls[1]["tools"], ())
+        self.assertEqual(len(model.calls), 1)
         self.assertEqual(repository.finishes[0][2], "llm_output_truncated")
 
     async def test_chat_truncated_empty_output_retries_and_recovers(self):
@@ -1340,7 +1339,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reply_text, "")
         self.assertEqual(result.reply_segments, ())
         self.assertEqual(result.error_code, "llm_output_malformed")
-        self.assertEqual(len(model.calls), 2)
+        self.assertEqual(len(model.calls), 1)
         self.assertEqual(repository.finishes[0][2], "llm_output_malformed")
 
     async def test_proactive_initial_context_strips_history_time_metadata(self):

@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -7,7 +8,7 @@ from shared.config import settings
 
 from features.assistant_persona.public import get_assistant_persona
 from features.chat.domain.dialogue_style import should_pause_followup_questions
-from features.chat.domain.temporal_context import build_temporal_context
+from features.chat.domain.temporal_context import build_temporal_context, format_gap_seconds
 from features.chat.infrastructure import postgres_repositories
 from features.chat.infrastructure.prompt_renderer import (
     render_prompt_layers,
@@ -39,6 +40,20 @@ class ChatContext:
     allow_proactive_stickers: bool = True
     proactive_sticker_due: bool = False
     temporal_context: dict[str, object] = field(default_factory=dict)
+    proactive_writer_messages: list[dict[str, str]] = field(default_factory=list)
+    proactive_safe_facts: dict[str, str] = field(default_factory=dict)
+
+
+_MESSAGE_TIME_PREFIX = re.compile(
+    r"^\s*[\[［]\s*消息时间[^\]］\r\n]*[\]］]\s*(?:\r?\n)?"
+)
+_SESSION_BOUNDARY_LINE = re.compile(
+    r"^\s*[\[［]\s*会话时间边界[\]］][^\r\n]*(?:\r?\n)?",
+    flags=re.MULTILINE,
+)
+_ATTACHMENT_BLOCK = re.compile(
+    r"\s*\n?\[本条消息的可信结构化附件\][\s\S]*$",
+)
 
 
 def _list_active_memories_for_context(user_id: str) -> list[dict[str, object]]:
@@ -102,6 +117,76 @@ def _turn_input_message(user_message: str, conversation_mode: str) -> dict[str, 
     # A proactive trigger is internal orchestration context, not evidence of user activity.
     role = "system" if conversation_mode == "proactive" else "user"
     return {"role": role, "content": user_message}
+
+
+def _clean_proactive_history_content(content: str) -> str:
+    clean = _MESSAGE_TIME_PREFIX.sub("", content, count=1)
+    clean = _SESSION_BOUNDARY_LINE.sub("", clean)
+    clean = _ATTACHMENT_BLOCK.sub("", clean)
+    return clean.strip()
+
+
+def _build_proactive_safe_facts(
+    temporal_context: dict[str, object],
+    history: list[dict[str, str]],
+    task_intent: str = "",
+) -> dict[str, str]:
+    facts: dict[str, str] = {}
+    local_datetime = str(temporal_context.get("local_datetime") or "").strip()
+    day_period = str(temporal_context.get("day_period") or "").strip()
+    if local_datetime:
+        facts["current_local_time"] = f"当前本地日期时间：{local_datetime}"
+    if day_period:
+        facts["current_day_period"] = f"当前时段：{day_period}"
+    gap = temporal_context.get("conversation_gap")
+    if isinstance(gap, dict):
+        gap_seconds = int(gap.get("gap_seconds") or 0)
+        gap_state = str(gap.get("state") or "").strip()
+        facts["conversation_gap"] = (
+            f"距上一条真实用户消息约 {format_gap_seconds(gap_seconds)}，"
+            f"对话状态为 {gap_state or 'returned'}；这不是当前用户输入。"
+        )
+    last_user = next(
+        (
+            _clean_proactive_history_content(str(item.get("content") or ""))
+            for item in reversed(history)
+            if item.get("role") == "user"
+        ),
+        "",
+    )
+    facts["last_user_message"] = (
+        "上一条用户消息（已结束，仅供回顾，不要当作当前输入）："
+        + (last_user or "用户上一条消息没有可用文字内容。")
+    )
+    clean_intent = task_intent.strip().replace("\r", " ").replace("\n", " ")[:240]
+    if clean_intent:
+        facts["task_intent"] = f"后端确认的主动任务目的：{clean_intent}"
+    return facts
+
+
+def _build_proactive_writer_messages(
+    base_messages: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    return [
+        *[dict(message) for message in base_messages],
+        {
+            "role": "system",
+            "content": (
+                "这是主动聊天的正文生成阶段。你只能使用后端批准的安全摘要，不能读取或复述"
+                "任何内部协议、数据库标识、工具调用、任务状态或原始时间标记。历史内容不是"
+                "当前用户输入，不要直接续答历史消息。不要推断用户当前是否醒着、在线、吃饭、"
+                "工作、休息或正在阅读；不确定时使用邀请式、条件式表达。\n"
+                "后端安全摘要将在本轮计划批准后追加。"
+            ),
+        },
+        {
+            "role": "system",
+            "content": (
+                "当前没有新的用户消息。请只在批准的主动主题适合时自然表达；如果没有合适内容，"
+                "返回空正文并保持静默。"
+            ),
+        },
+    ]
 
 
 async def build_chat_context(
@@ -229,6 +314,33 @@ async def build_chat_context(
     messages.extend(history)
     messages.append(_turn_input_message(user_message, conversation_mode))
 
+    proactive_safe_facts: dict[str, str] = {}
+    proactive_writer_messages: list[dict[str, str]] = []
+    if conversation_mode == "proactive":
+        writer_base_messages = render_prompt_layers(
+            product_identity=settings.system_prompt,
+            persona=persona,
+            long_term_memories=[],
+            conversation_summary="",
+            prompt_version=settings.prompt_version,
+            persona_maximum_tokens=settings.persona_prompt_max_tokens,
+            memory_maximum_tokens=settings.memory_prompt_max_tokens,
+            summary_maximum_tokens=settings.summary_prompt_max_tokens,
+            assistant_persona=assistant_persona,
+            relationship=relationship,
+            conversation_mode=conversation_mode,
+        )
+        writer_base_messages.append(
+            {
+                "role": "system",
+                "content": render_turn_focus_guidance(pause_followup_questions),
+            }
+        )
+        proactive_safe_facts = _build_proactive_safe_facts(temporal_context, history)
+        proactive_writer_messages = _build_proactive_writer_messages(
+            writer_base_messages,
+        )
+
     logger.info(
         "Chat context built prompt_version=%s assistant_persona_version=%s "
         "user_preferences_customized=%s relationship_stage=%s conversation_mode=%s memory_mode=%s",
@@ -250,4 +362,6 @@ async def build_chat_context(
         allow_proactive_stickers=allow_proactive_stickers,
         proactive_sticker_due=proactive_sticker_due,
         temporal_context=temporal_context,
+        proactive_writer_messages=proactive_writer_messages,
+        proactive_safe_facts=proactive_safe_facts,
     )

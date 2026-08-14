@@ -17,6 +17,7 @@ from features.chat.infrastructure.adapters import (
     InMemoryChatRequestGuard,
     MemoryExtractionSchedulerAdapter,
     PostgresChatRequestResultRepositoryAdapter,
+    ProactiveDecisionPlannerAdapter,
     RelationshipTurnRecorderAdapter,
     VoiceReplySynthesizerAdapter,
 )
@@ -55,6 +56,7 @@ def get_generate_chat_reply_use_case() -> GenerateChatReply:
             memory_scheduler=MemoryExtractionSchedulerAdapter(),
             relationship_recorder=RelationshipTurnRecorderAdapter(),
             agent_orchestrator=ChatAgentOrchestratorAdapter(),
+            proactive_planner=ProactiveDecisionPlannerAdapter(),
             summary_update_in_background=True,
         )
     return _generate_chat_reply_use_case

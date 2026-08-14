@@ -9,6 +9,7 @@ from features.agent.domain.services import SystemClock
 from features.agent.domain.tools import ToolRegistry
 from features.agent.infrastructure.model import ProviderAgentConversationModel
 from features.agent.infrastructure.postgres_repository import PostgresAgentRunRepository
+from features.agent.infrastructure.proactive_planner import ProviderProactiveDecisionPlanner
 from features.agent.infrastructure.sticker_semantics import ProviderStickerSemanticAnalyzer
 from features.agent.infrastructure.tools import (
     register_schedule_tools,
@@ -42,6 +43,13 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
         max_steps=settings.agent_max_steps,
         max_tool_calls=settings.agent_max_tool_calls,
         run_timeout_seconds=settings.agent_run_timeout_seconds,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_proactive_planner() -> ProviderProactiveDecisionPlanner:
+    return ProviderProactiveDecisionPlanner(
+        ProviderAgentConversationModel(max_tokens=320, disable_thinking=True)
     )
 
 

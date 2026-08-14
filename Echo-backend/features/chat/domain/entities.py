@@ -45,6 +45,8 @@ class ChatContext:
     pause_followup_questions: bool = False
     allow_proactive_stickers: bool = True
     proactive_sticker_due: bool = False
+    proactive_writer_messages: list[dict[str, str]] = field(default_factory=list)
+    proactive_safe_facts: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

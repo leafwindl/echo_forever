@@ -189,7 +189,7 @@ class OrchestrateChatWithAgent:
                     conversation_mode == "daily_letter" or not response.text.strip()
                 ):
                     if (
-                        conversation_mode in {"chat", "proactive"}
+                        conversation_mode == "chat"
                         and delivery_format_retries_remaining > 0
                     ):
                         delivery_format_retries_remaining -= 1
@@ -340,7 +340,7 @@ class OrchestrateChatWithAgent:
                             self._prefix_codepoints(response.text),
                         )
                     elif (
-                        conversation_mode in {"chat", "proactive"}
+                        conversation_mode == "chat"
                         and delivery_format_retries_remaining > 0
                     ):
                         delivery_format_retries_remaining -= 1
@@ -480,6 +480,13 @@ class OrchestrateChatWithAgent:
                     }
                 )
 
+            if conversation_mode == "proactive" and final_error is None:
+                final_error = "agent_step_limit"
+                logger.warning(
+                    "Unified Agent proactive step limit reached; suppressing final retry "
+                    "run_id=%s",
+                    run_id,
+                )
             if final_error is None:
                 final_error = "agent_step_limit"
                 fallback, _ = await self._try_final_response(

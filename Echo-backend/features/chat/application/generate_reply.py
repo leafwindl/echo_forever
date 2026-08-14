@@ -4,7 +4,8 @@ import logging
 import time
 
 from features.agent.domain.delivery import validate_agent_delivery_segments
-from features.agent.domain.entities import ContentPart
+from features.agent.domain.entities import ContentPart, ProactiveAction, ProactiveDecision
+from features.agent.domain.services import ProactiveDecisionPlanner
 from features.chat.domain.dialogue_style import (
     apply_dialogue_fallback,
     find_dialogue_style_violations,
@@ -38,6 +39,7 @@ class GenerateChatReply:
         memory_scheduler: MemoryExtractionScheduler,
         relationship_recorder: RelationshipTurnRecorder | None = None,
         agent_orchestrator: ChatAgentOrchestrator | None = None,
+        proactive_planner: ProactiveDecisionPlanner | None = None,
         summary_update_in_background: bool = False,
     ):
         self.conversation_repository = conversation_repository
@@ -46,6 +48,7 @@ class GenerateChatReply:
         self.memory_scheduler = memory_scheduler
         self.relationship_recorder = relationship_recorder
         self.agent_orchestrator = agent_orchestrator
+        self.proactive_planner = proactive_planner
         self.summary_update_in_background = summary_update_in_background
         self._summary_tasks: set[asyncio.Task[bool]] = set()
 
@@ -191,6 +194,8 @@ class GenerateChatReply:
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         history_before_message_id: int | None = None,
+        proactive_intent: str = "",
+        proactive_force_send: bool = False,
     ) -> PreparedChatReply:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -217,6 +222,37 @@ class GenerateChatReply:
             )
         if self.agent_orchestrator is None:
             raise RuntimeError("Unified Agent runtime is not configured")
+        agent_messages = context.messages
+        agent_message = clean_message
+        if conversation_mode == "proactive" and self.proactive_planner is not None:
+            safe_facts = dict(context.proactive_safe_facts)
+            clean_intent = proactive_intent.strip().replace("\r", " ").replace("\n", " ")[:240]
+            if clean_intent:
+                safe_facts["task_intent"] = f"后端确认的主动任务目的：{clean_intent}"
+            decision = await self.proactive_planner.decide(
+                context.messages,
+                tuple(safe_facts),
+                force_send=proactive_force_send,
+            )
+            logger.info(
+                "Proactive planner completed action=%s topic=%s tone=%s facts=%s reason=%s",
+                decision.action,
+                decision.topic,
+                decision.tone,
+                ",".join(decision.safe_fact_ids),
+                decision.reason,
+            )
+            if decision.action == ProactiveAction.SKIP:
+                return PreparedChatReply(reply="", reply_segments=())
+            if not context.proactive_writer_messages:
+                logger.error("Proactive writer context missing; suppressing delivery")
+                return PreparedChatReply(reply="", reply_segments=())
+            agent_messages = self._build_proactive_writer_turn(
+                context.proactive_writer_messages,
+                safe_facts,
+                decision,
+            )
+            agent_message = "根据后端批准的主动聊天安全摘要生成自然正文。"
         agent_kwargs = {
             "conversation_mode": conversation_mode,
             "sticker_intent": sticker_intent,
@@ -227,8 +263,8 @@ class GenerateChatReply:
             agent_kwargs["conversation_id"] = conversation_id
         agent_result = await self.agent_orchestrator.run(
             clean_user_id,
-            clean_message,
-            context.messages,
+            agent_message,
+            agent_messages,
             **agent_kwargs,
         )
         logger.info(
@@ -272,6 +308,50 @@ class GenerateChatReply:
             run_id=agent_result.run_id,
             error_code=agent_result.error_code,
         )
+
+    @staticmethod
+    def _build_proactive_writer_turn(
+        base_messages: list[dict[str, str]],
+        safe_facts: dict[str, str],
+        decision: ProactiveDecision,
+    ) -> list[dict[str, str]]:
+        topic_labels = {
+            "casual_check_in": "轻松问候",
+            "share_presence": "自然分享与陪伴",
+            "follow_up_past_topic": "以过去话题为背景重新开启交流",
+            "scheduled_reminder": "执行用户已确认的定时提醒",
+        }
+        tone_labels = {
+            "gentle": "温和",
+            "playful": "轻松俏皮",
+            "calm": "平静",
+            "encouraging": "鼓励",
+            "warm": "亲近温暖",
+        }
+        selected_facts = [
+            safe_facts[fact_id]
+            for fact_id in decision.safe_fact_ids
+            if fact_id in safe_facts
+        ]
+        if not selected_facts:
+            selected_facts = ["没有获准引用的用户当前状态，只能发送不带状态推断的一般问候。"]
+        fact_lines = "\n".join(f"- {fact}" for fact in selected_facts)
+        return [
+            *[dict(message) for message in base_messages],
+            {
+                "role": "system",
+                "content": (
+                    "后端批准的主动聊天写作简报（不可原样输出）：\n"
+                    f"主题：{topic_labels.get(decision.topic, '轻松问候')}\n"
+                    f"语气：{tone_labels.get(decision.tone, '温和')}\n"
+                    "唯一允许使用的事实：\n"
+                    f"{fact_lines}\n"
+                    "不得补充未列出的用户当前状态。上一条用户消息即使被引用，也只是过去事实，"
+                    "不能作为刚收到的消息直接回答。请输出自然的用户可见正文，不要输出计划、"
+                    "标签、事实清单、JSON 或内部说明；没有自然内容时输出空正文。"
+                ),
+            },
+        ]
 
     async def execute(
         self,

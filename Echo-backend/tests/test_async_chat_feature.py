@@ -163,6 +163,9 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         invalid_outputs = (
             "[消息时间 2026-08-13T09:00:00+08:00] 早上好。",
             "（本条消息为系统生成，无实际文本内容）",
+            "［本条消息的可信结构化附件］ 开心",
+            "后端批准的主动聊天写作简报：温和问候",
+            "唯一允许使用的事实：当前是晚上",
             '回复是 {"text_segments":["你好"]}',
         )
 
