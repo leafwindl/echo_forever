@@ -464,6 +464,7 @@ class PostgresProactiveChatRepository:
                                 OR recent_failure.error_code = 'agent_output_rejected'
                                 OR recent_failure.error_code = 'duplicate_delivery'
                                 OR recent_failure.error_code LIKE 'agent_failed:%'
+                                OR recent_failure.error_code LIKE 'planner_%'
                             )
                                 )
                             )

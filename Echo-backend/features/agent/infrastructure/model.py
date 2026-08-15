@@ -11,9 +11,11 @@ class ProviderAgentConversationModel:
         self,
         *,
         max_tokens: int | None = None,
+        temperature: float | None = None,
         disable_thinking: bool = False,
     ):
         self.max_tokens = max_tokens
+        self.temperature = temperature
         self.disable_thinking = disable_thinking
 
     async def complete(
@@ -35,6 +37,7 @@ class ProviderAgentConversationModel:
                     if structured_output or self.disable_thinking
                     else None
                 ),
+                temperature=self.temperature,
                 max_tokens=self.max_tokens,
             )
         except LLMProviderTimeoutError as exc:

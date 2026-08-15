@@ -13,6 +13,14 @@ class AgentModelTimeoutError(TimeoutError):
     """The configured conversation model request timed out."""
 
 
+class ProactivePlannerError(RuntimeError):
+    """The proactive planner failed before making a business decision."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
 class StickerSemanticAnalysisError(ValueError):
     """The model did not return a valid sticker semantic decision."""
 

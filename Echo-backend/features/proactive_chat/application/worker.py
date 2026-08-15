@@ -142,7 +142,11 @@ class ProcessProactiveChatJobs:
                 return True
             if not prepared.reply_segments and not prepared.content_parts:
                 reason = (
-                    f"agent_failed:{prepared.error_code}"
+                    (
+                        prepared.error_code
+                        if prepared.error_code.startswith("planner_")
+                        else f"agent_failed:{prepared.error_code}"
+                    )
                     if prepared.error_code
                     else "agent_skip"
                 )

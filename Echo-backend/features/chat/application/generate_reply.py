@@ -8,7 +8,7 @@ from features.agent.domain.delivery import (
     validate_agent_delivery_segments,
 )
 from features.agent.domain.entities import ContentPart, ProactiveAction, ProactiveDecision
-from features.agent.domain.services import ProactiveDecisionPlanner
+from features.agent.domain.services import ProactiveDecisionPlanner, ProactivePlannerError
 from features.chat.domain.dialogue_style import (
     apply_dialogue_fallback,
     find_dialogue_style_violations,
@@ -232,11 +232,19 @@ class GenerateChatReply:
             clean_intent = proactive_intent.strip().replace("\r", " ").replace("\n", " ")[:240]
             if clean_intent:
                 safe_facts["task_intent"] = f"后端确认的主动任务目的：{clean_intent}"
-            decision = await self.proactive_planner.decide(
-                context.messages,
-                tuple(safe_facts),
-                force_send=proactive_force_send,
-            )
+            try:
+                decision = await self.proactive_planner.decide(
+                    context.messages,
+                    tuple(safe_facts),
+                    force_send=proactive_force_send,
+                )
+            except ProactivePlannerError as exc:
+                logger.warning("Proactive planner technical failure code=%s", exc.code)
+                return PreparedChatReply(
+                    reply="",
+                    reply_segments=(),
+                    error_code=exc.code,
+                )
             logger.info(
                 "Proactive planner completed action=%s topic=%s tone=%s facts=%s reason=%s",
                 decision.action,

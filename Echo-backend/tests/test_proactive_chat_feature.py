@@ -267,6 +267,36 @@ class ProactiveWorkerTests(unittest.IsolatedAsyncioTestCase):
         )
         broker.publish.assert_not_awaited()
 
+    async def test_failed_planner_result_keeps_specific_error_code_without_delivery(self):
+        repository = _DueSpontaneousJobRepository()
+        repository.persist_delivery = Mock()
+        reply_generator = SimpleNamespace(
+            prepare=AsyncMock(
+                return_value=PreparedChatReply(
+                    reply="",
+                    reply_segments=(),
+                    error_code="planner_output_invalid",
+                )
+            )
+        )
+        worker = ProcessProactiveChatJobs(
+            repository=repository,
+            reply_generator=reply_generator,
+            request_guard=SimpleNamespace(
+                try_acquire=lambda _user_id: True,
+                release=lambda _user_id: None,
+            ),
+            event_broker=SimpleNamespace(publish=AsyncMock()),
+            timing_policy=SimpleNamespace(),
+            lease_seconds=30,
+        )
+
+        processed = await worker.run_once()
+
+        self.assertTrue(processed)
+        self.assertEqual(repository.suppressed, [("job_due", "planner_output_invalid")])
+        repository.persist_delivery.assert_not_called()
+
     async def test_internal_control_output_is_suppressed_before_persistence(self):
         repository = _DueSpontaneousJobRepository()
         repository.persist_delivery = Mock()

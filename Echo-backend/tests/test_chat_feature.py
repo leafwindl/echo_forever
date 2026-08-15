@@ -11,6 +11,7 @@ from features.agent.domain.entities import (
     ProactiveAction,
     ProactiveDecision,
 )
+from features.agent.domain.services import ProactivePlannerError
 from features.chat.application.clear_context import ClearChatContext
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.application.send_message import SendChatMessage
@@ -137,6 +138,22 @@ class FakeProactivePlanner:
             }
         )
         return self.decision
+
+
+class FailedProactivePlanner:
+    def __init__(self, code):
+        self.code = code
+        self.calls = []
+
+    async def decide(self, messages, available_fact_ids, *, force_send=False):
+        self.calls.append(
+            {
+                "messages": list(messages),
+                "available_fact_ids": tuple(available_fact_ids),
+                "force_send": force_send,
+            }
+        )
+        raise ProactivePlannerError(self.code)
 
 
 class FakeSummaryUpdater:
@@ -553,6 +570,30 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("", prepared.reply)
         self.assertEqual((), prepared.reply_segments)
         self.assertEqual(1, len(planner.calls))
+        self.assertEqual([], agent.calls)
+
+    async def test_proactive_planner_failure_is_preserved_as_technical_error(self):
+        agent = SequenceAgentOrchestrator(["不应生成"])
+        planner = FailedProactivePlanner("planner_output_invalid")
+        use_case = GenerateChatReply(
+            conversation_repository=FakeConversationRepository(),
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
+            proactive_planner=planner,
+        )
+
+        prepared = await use_case.prepare(
+            user_id="user_a",
+            message="internal proactive trigger",
+            conversation_id="conv_active",
+            conversation_mode="proactive",
+        )
+
+        self.assertEqual("", prepared.reply)
+        self.assertEqual((), prepared.reply_segments)
+        self.assertEqual("planner_output_invalid", prepared.error_code)
         self.assertEqual([], agent.calls)
 
     async def test_proactive_writer_receives_only_selected_safe_facts(self):

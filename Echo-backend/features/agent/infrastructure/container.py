@@ -49,7 +49,12 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
 @lru_cache(maxsize=1)
 def get_proactive_planner() -> ProviderProactiveDecisionPlanner:
     return ProviderProactiveDecisionPlanner(
-        ProviderAgentConversationModel(max_tokens=320, disable_thinking=True)
+        ProviderAgentConversationModel(
+            max_tokens=settings.proactive_planner_max_tokens,
+            temperature=settings.proactive_planner_temperature,
+            disable_thinking=True,
+        ),
+        format_retries=settings.proactive_planner_format_retries,
     )
 
 

@@ -23,6 +23,24 @@ class Settings(BaseSettings):
         ge=200,
         le=8192,
     )
+    proactive_planner_temperature: float = Field(
+        default=0.1,
+        validation_alias="PROACTIVE_PLANNER_TEMPERATURE",
+        ge=0.0,
+        le=2.0,
+    )
+    proactive_planner_max_tokens: int = Field(
+        default=320,
+        validation_alias="PROACTIVE_PLANNER_MAX_TOKENS",
+        ge=64,
+        le=2048,
+    )
+    proactive_planner_format_retries: int = Field(
+        default=1,
+        validation_alias="PROACTIVE_PLANNER_FORMAT_RETRIES",
+        ge=0,
+        le=2,
+    )
     timeout: int = Field(default=30, validation_alias="TIMEOUT")
     prompt_version: str = Field(default="echo-v1.0.0", validation_alias="PROMPT_VERSION")
     assistant_persona_version: str = Field(

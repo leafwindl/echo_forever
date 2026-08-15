@@ -262,6 +262,7 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
         ):
             await ProviderAgentConversationModel(
                 max_tokens=1000,
+                temperature=0.1,
                 disable_thinking=True,
             ).complete(
                 messages=[{"role": "user", "content": "你好"}],
@@ -269,6 +270,7 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(provider.kwargs["max_tokens"], 1000)
+        self.assertEqual(provider.kwargs["temperature"], 0.1)
         self.assertIsNone(provider.kwargs["response_format"])
         self.assertEqual(provider.kwargs["thinking"], {"type": "disabled"})
 
