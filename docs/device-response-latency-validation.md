@@ -59,8 +59,13 @@ All new behavior is reversible without a firmware reflash:
 ```dotenv
 ECHO_DEVICE_STREAMING_ENABLED=false
 ECHO_DEVICE_REALTIME_ASR_ENABLED=false
+ECHO_DEVICE_TOOLS_ENABLED=false
 VOICE_STREAMING_ASR_ENABLED=false
 ```
+
+Device tools are disabled by default only for the low-latency streaming device
+path. APP chat keeps the existing Agent tool configuration. When device tools
+are enabled, the final reply fallback still guarantees that TTS is not silent.
 
 Enable Stage 2 only after the existing batch path passes a hardware smoke test.
 Enable Stage 3 only when Tencent streaming credentials and the real device

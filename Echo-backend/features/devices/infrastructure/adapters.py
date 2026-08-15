@@ -37,6 +37,7 @@ class EchoConversationService:
             request_id=request_id,
             on_text_delta=on_reply_delta,
             synthesize_voice=synthesize_voice,
+            tools_enabled=settings.echo_device_tools_enabled,
         )
         return DeviceTurnResult(
             user_text=user_text,

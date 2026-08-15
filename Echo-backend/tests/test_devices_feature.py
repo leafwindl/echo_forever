@@ -385,6 +385,46 @@ class FakeStreamingDeviceTurn:
 
 
 class DeviceStreamingTurnTests(unittest.IsolatedAsyncioTestCase):
+    async def test_uses_final_reply_when_no_stream_delta_is_available(self):
+        class Recognizer:
+            async def recognize_pcm16(self, audio):
+                del audio
+                return "用户问题"
+
+        class NonStreamingConversation:
+            async def reply(self, **kwargs):
+                return DeviceTurnResult(
+                    user_text=kwargs["user_text"],
+                    reply="最终回复。",
+                    audio_urls=(),
+                )
+
+        speech = FakeStreamingSpeech()
+        turn = StreamDeviceVoiceTurn(
+            recognizer=Recognizer(),
+            conversation=NonStreamingConversation(),
+            speech=speech,
+            notifier=FakeStreamingNotifier(),
+            chunk_max_chars=24,
+            queue_max_packets=40,
+        )
+
+        async def ignore(*_args):
+            return None
+
+        await turn.execute(
+            user_id="user-1",
+            pcm16_audio=b"\x00\x00" * 16000,
+            request_id="device-1",
+            on_recognized=ignore,
+            on_tts_start=ignore,
+            on_sentence_start=ignore,
+            on_audio_packet=ignore,
+            on_tts_stop=ignore,
+        )
+
+        self.assertEqual(speech.phrases, ["最终回复。"])
+
     async def test_streams_sentences_and_notifies_after_generation(self):
         class Recognizer:
             async def recognize_pcm16(self, audio):

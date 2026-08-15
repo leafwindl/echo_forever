@@ -201,6 +201,7 @@ class GenerateChatReply:
         proactive_intent: str = "",
         proactive_force_send: bool = False,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+        tools_enabled: bool | None = None,
     ) -> PreparedChatReply:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -276,6 +277,8 @@ class GenerateChatReply:
             agent_kwargs["conversation_id"] = conversation_id
         if "on_text_delta" in inspect.signature(self.agent_orchestrator.run).parameters:
             agent_kwargs["on_text_delta"] = on_text_delta
+        if "tools_enabled" in inspect.signature(self.agent_orchestrator.run).parameters:
+            agent_kwargs["tools_enabled"] = tools_enabled
         agent_result = await self.agent_orchestrator.run(
             clean_user_id,
             agent_message,
@@ -388,6 +391,7 @@ class GenerateChatReply:
         sticker_intent: str = "",
         user_content_parts: tuple[ContentPart, ...] = (),
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+        tools_enabled: bool | None = None,
     ) -> ChatTurnResult:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -411,6 +415,7 @@ class GenerateChatReply:
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
             on_text_delta=on_text_delta,
+            tools_enabled=tools_enabled,
         )
         logger.info(
             "LLM reply generated for user_id=%s text_length=%s duration_ms=%.1f",

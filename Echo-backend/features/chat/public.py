@@ -72,6 +72,7 @@ async def generate_chat_reply(
     sticker_intent: str = "",
     user_content_parts: tuple[ContentPart, ...] = (),
     on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+    tools_enabled: bool | None = None,
 ) -> ChatTurnResult:
     use_case = get_generate_chat_reply_use_case()
     return await use_case.execute(
@@ -84,6 +85,7 @@ async def generate_chat_reply(
         sticker_intent=sticker_intent,
         user_content_parts=user_content_parts,
         on_text_delta=on_text_delta,
+        tools_enabled=tools_enabled,
     )
 
 
@@ -97,6 +99,7 @@ async def send_chat_message(
     request_id: str = "",
     on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     synthesize_voice: bool = True,
+    tools_enabled: bool | None = None,
 ) -> ChatReplyDeliveryResult:
     use_case = get_send_chat_message_use_case()
     return await use_case.execute(
@@ -109,6 +112,7 @@ async def send_chat_message(
         request_id=request_id,
         on_text_delta=on_text_delta,
         synthesize_voice=synthesize_voice,
+        tools_enabled=tools_enabled,
     )
 
 

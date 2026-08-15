@@ -20,6 +20,7 @@ async def run_chat_agent(
     allow_proactive_stickers: bool = True,
     proactive_sticker_due: bool = False,
     on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+    tools_enabled: bool | None = None,
 ) -> AgentTurnResult:
     return await get_chat_agent().execute(
         user_id,
@@ -30,7 +31,7 @@ async def run_chat_agent(
         sticker_intent=sticker_intent,
         allow_proactive_stickers=allow_proactive_stickers,
         proactive_sticker_due=proactive_sticker_due,
-        tools_enabled=settings.agent_enabled,
+        tools_enabled=settings.agent_enabled if tools_enabled is None else tools_enabled,
         on_text_delta=on_text_delta,
     )
 

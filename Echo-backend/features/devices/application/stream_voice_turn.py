@@ -72,8 +72,12 @@ class StreamDeviceVoiceTurn:
         )
         chunker = SentenceChunker(max_chars=self.chunk_max_chars)
         tts_started = False
+        delta_received = False
 
         async def on_text_delta(delta: str) -> None:
+            nonlocal delta_received
+            if delta:
+                delta_received = True
             for phrase in chunker.push(delta):
                 if phrase:
                     await phrase_queue.put(phrase)
@@ -109,6 +113,9 @@ class StreamDeviceVoiceTurn:
                 on_reply_delta=on_text_delta,
                 synthesize_voice=False,
             )
+            if not delta_received and result.reply.strip():
+                for phrase in chunker.push(result.reply):
+                    await phrase_queue.put(phrase)
             for phrase in chunker.finish():
                 await phrase_queue.put(phrase)
             await phrase_queue.put(None)

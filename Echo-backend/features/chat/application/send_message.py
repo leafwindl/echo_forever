@@ -44,6 +44,7 @@ class SendChatMessage:
         request_id: str = "",
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         synthesize_voice: bool = True,
+        tools_enabled: bool | None = None,
     ) -> ChatReplyDeliveryResult:
         clean_user_id = user_id.strip()
         clean_mode = conversation_mode.strip().lower()
@@ -63,6 +64,7 @@ class SendChatMessage:
             resolved_user_message_type,
             sticker_intent,
             user_content_parts,
+            tools_enabled,
         )
         claimed_request = False
         if clean_request_id and self.request_result_repository is not None:
@@ -98,6 +100,7 @@ class SendChatMessage:
                 sticker_intent=sticker_intent,
                 user_content_parts=user_content_parts,
                 on_text_delta=on_text_delta,
+                tools_enabled=tools_enabled,
             )
 
             audio_urls: tuple[str, ...] = ()
@@ -152,6 +155,7 @@ class SendChatMessage:
         user_message_type: str,
         sticker_intent: str,
         user_content_parts: tuple[ContentPart, ...],
+        tools_enabled: bool | None,
     ) -> str:
         payload = {
             "user_id": user_id,
@@ -159,6 +163,7 @@ class SendChatMessage:
             "conversation_mode": conversation_mode,
             "user_message_type": user_message_type,
             "sticker_intent": sticker_intent,
+            "tools_enabled": tools_enabled,
             "content_parts": [
                 {"type": part.type, "sticker_id": part.sticker_id} for part in user_content_parts
             ],

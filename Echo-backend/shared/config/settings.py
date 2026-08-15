@@ -258,6 +258,10 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="ECHO_DEVICE_REALTIME_ASR_ENABLED",
     )
+    echo_device_tools_enabled: bool = Field(
+        default=False,
+        validation_alias="ECHO_DEVICE_TOOLS_ENABLED",
+    )
     echo_device_tts_chunk_max_chars: int = Field(
         default=24,
         validation_alias="ECHO_DEVICE_TTS_CHUNK_MAX_CHARS",
