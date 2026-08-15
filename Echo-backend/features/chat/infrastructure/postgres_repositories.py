@@ -204,6 +204,15 @@ def _add_message_record(
             ),
         )
         inserted_row = cursor.fetchone()
+        if role == "user":
+            cursor.execute(
+                """
+                UPDATE proactive_chat_preferences
+                SET consecutive_unanswered = 0, updated_at = NOW()
+                WHERE user_id = %s
+                """,
+                (user_id,),
+            )
         if conversation_id:
             cursor.execute(
                 """

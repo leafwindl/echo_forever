@@ -9,10 +9,61 @@ from features.chat.domain.dialogue_style import (
     find_dialogue_style_violations,
     sanitize_dialogue_reply,
     should_pause_followup_questions,
+    should_suppress_repeated_greeting,
 )
 
 
 class DialogueStyleTests(unittest.TestCase):
+    def test_repeated_greeting_cooldown_only_applies_inside_live_session(self):
+        history = [
+            {
+                "role": "assistant",
+                "content": "[消息时间 2026-08-15T12:45:03+08:00 周六 中午]\n中午好，叶子。",
+            }
+        ]
+
+        self.assertTrue(
+            should_suppress_repeated_greeting(history, "下午要听PPT汇报", "active")
+        )
+        self.assertFalse(
+            should_suppress_repeated_greeting(history, "中午好Echo", "active")
+        )
+        self.assertFalse(
+            should_suppress_repeated_greeting(history, "下午要听PPT汇报", "returned")
+        )
+
+    def test_repeated_greeting_is_removed_by_deterministic_fallback(self):
+        reply = "中午好，叶子。下午的汇报先听完整体思路。"
+        violations = find_dialogue_style_violations(
+            reply,
+            "下午要听PPT汇报",
+            suppress_repeated_greeting=True,
+        )
+
+        self.assertIn("repeated_session_greeting", violations)
+        self.assertEqual(
+            "叶子。下午的汇报先听完整体思路。",
+            apply_dialogue_fallback(reply, "下午要听PPT汇报", violations),
+        )
+
+    def test_server_weekday_is_grounded_but_wrong_weekday_is_rejected(self):
+        self.assertNotIn(
+            "ungrounded_time_detail",
+            find_dialogue_style_violations(
+                "今天周六还要听汇报，确实挺忙。",
+                "下午要听PPT汇报",
+                grounded_weekday="周六",
+            ),
+        )
+        self.assertIn(
+            "ungrounded_time_detail",
+            find_dialogue_style_violations(
+                "今天周日还要听汇报，确实挺忙。",
+                "下午要听PPT汇报",
+                grounded_weekday="周六",
+            ),
+        )
+
     def test_question_cooldown_after_two_consecutive_assistant_questions(self):
         history = [
             {"role": "assistant", "content": "你最近在看什么？"},

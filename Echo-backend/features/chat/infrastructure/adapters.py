@@ -258,8 +258,10 @@ class ChatContextProviderAdapter(ChatContextProvider):
             long_term_memories=context.long_term_memories,
             memory_retrieval_mode=context.memory_retrieval_mode,
             pause_followup_questions=context.pause_followup_questions,
+            suppress_repeated_greeting=context.suppress_repeated_greeting,
             allow_proactive_stickers=context.allow_proactive_stickers,
             proactive_sticker_due=context.proactive_sticker_due,
+            temporal_context=context.temporal_context,
             proactive_writer_messages=context.proactive_writer_messages,
             proactive_safe_facts=context.proactive_safe_facts,
         )

@@ -135,6 +135,17 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         self.assertEqual(plan.text_segments, ("先休息一下。", "等状态回来再继续。"))
         self.assertEqual(plan.sticker_placement, "after_text")
 
+    def test_builds_natural_segments_from_single_line_breaks(self):
+        plan = build_natural_delivery_plan(
+            "先听完汇报再整理意见。\n下午慢慢处理。",
+            "chat",
+        )
+
+        self.assertEqual(
+            plan.text_segments,
+            ("先听完汇报再整理意见。", "下午慢慢处理。"),
+        )
+
     def test_preserves_more_than_three_natural_paragraphs(self):
         paragraphs = tuple(f"第{index}个独立想法。" for index in range(1, 5))
         plan = build_natural_delivery_plan("\n\n".join(paragraphs), "chat")

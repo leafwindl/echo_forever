@@ -3,7 +3,10 @@ import inspect
 import logging
 import time
 
-from features.agent.domain.delivery import validate_agent_delivery_segments
+from features.agent.domain.delivery import (
+    build_natural_delivery_plan,
+    validate_agent_delivery_segments,
+)
 from features.agent.domain.entities import ContentPart, ProactiveAction, ProactiveDecision
 from features.agent.domain.services import ProactiveDecisionPlanner
 from features.chat.domain.dialogue_style import (
@@ -283,6 +286,8 @@ class GenerateChatReply:
             reply,
             clean_message,
             pause_followup_questions=context.pause_followup_questions,
+            suppress_repeated_greeting=context.suppress_repeated_greeting,
+            grounded_weekday=str(context.temporal_context.get("weekday") or ""),
         )
         if style_violations:
             logger.warning(
@@ -295,7 +300,14 @@ class GenerateChatReply:
                 style_violations,
                 allow_empty=conversation_mode == "proactive",
             )
-            segments = (reply,) if reply else ()
+            delivery_plan = build_natural_delivery_plan(
+                reply,
+                conversation_mode,
+                sticker_placement=agent_result.sticker_placement,
+                allow_empty=conversation_mode == "proactive",
+            )
+            segments = delivery_plan.text_segments
+            reply = delivery_plan.reply_text
         if conversation_mode in {"chat", "proactive"}:
             validate_agent_delivery_segments(segments)
         assistant_content_parts = () if conversation_mode == "call" else agent_result.content_parts

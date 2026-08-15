@@ -463,6 +463,53 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("叶子，好好睡，明天见。", prepared.reply)
         self.assertEqual(("叶子，好好睡，明天见。",), prepared.reply_segments)
 
+    async def test_style_fallback_rebuilds_segments_and_accepts_server_weekday(self):
+        class LiveSessionContextProvider:
+            async def build_context(
+                self,
+                user_id,
+                user_message,
+                conversation_id,
+                conversation_mode,
+            ):
+                del user_id, conversation_id, conversation_mode
+                return ChatContext(
+                    messages=[{"role": "user", "content": user_message}],
+                    history_messages=[],
+                    suppress_repeated_greeting=True,
+                    temporal_context={"weekday": "周六"},
+                )
+
+        candidate = AgentTurnResult(
+            reply_text="中午好，叶子。今天周六。\n下午的汇报先听完整体思路。",
+            reply_segments=(
+                "中午好，叶子。今天周六。",
+                "下午的汇报先听完整体思路。",
+            ),
+        )
+        use_case = GenerateChatReply(
+            conversation_repository=FakeConversationRepository(),
+            context_provider=LiveSessionContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=SequenceAgentOrchestrator([candidate]),
+        )
+
+        prepared = await use_case.prepare(
+            user_id="user_a",
+            message="下午要听PPT汇报",
+            conversation_id="conv_active",
+        )
+
+        self.assertEqual(
+            ("叶子。今天周六。", "下午的汇报先听完整体思路。"),
+            prepared.reply_segments,
+        )
+        self.assertEqual(
+            "叶子。今天周六。\n下午的汇报先听完整体思路。",
+            prepared.reply,
+        )
+
     async def test_proactive_reply_suppresses_sticker_narration_only_output(self):
         use_case = GenerateChatReply(
             conversation_repository=FakeConversationRepository(),

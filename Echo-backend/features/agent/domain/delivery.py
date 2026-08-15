@@ -122,7 +122,7 @@ def build_natural_delivery_plan(
     ):
         raise AgentDeliveryPlanError("Delivery leaked internal control context")
 
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n+", clean) if part.strip()]
+    paragraphs = [part.strip() for part in re.split(r"\n+", clean) if part.strip()]
     if not paragraphs:
         raise AgentDeliveryPlanError("Natural delivery output is empty")
 

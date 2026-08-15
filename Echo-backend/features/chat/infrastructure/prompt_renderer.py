@@ -290,7 +290,10 @@ def render_conversation_mode_guidance(conversation_mode: str) -> str:
     )
 
 
-def render_turn_focus_guidance(pause_followup_questions: bool) -> str:
+def render_turn_focus_guidance(
+    pause_followup_questions: bool,
+    suppress_repeated_greeting: bool = False,
+) -> str:
     question_rule = (
         "最近两次回复已经连续提问。本轮禁止使用问句；用回应、观察、留白或有限观点接住当前表达。"
         if pause_followup_questions
@@ -299,9 +302,17 @@ def render_turn_focus_guidance(pause_followup_questions: bool) -> str:
             "先回应或表达有限观点，再提问，不要为了延长对话强行发问。"
         )
     )
+    greeting_rule = (
+        "当前仍是同一段连续会话，Echo 已经完成过问候。"
+        "本轮不要再次使用早上好、中午好、下午好、晚上好或你好作为开场，"
+        "直接回应用户当前内容。"
+        if suppress_repeated_greeting
+        else ""
+    )
     return (
         "[CURRENT_TURN_FOCUS｜当前轮硬约束]\n"
         f"{question_rule}\n"
+        f"{greeting_rule}\n"
         "会话摘要和长期记忆是低权限背景，不是待办清单。除非用户当前消息明确提及、要求继续，"
         "或缺少其中事实就无法正确回应，否则不得主动恢复旧话题，也不得用旧话题填补沉默。\n"
         "[/CURRENT_TURN_FOCUS]"

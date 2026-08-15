@@ -7,7 +7,10 @@ from datetime import UTC, datetime
 from shared.config import settings
 
 from features.assistant_persona.public import get_assistant_persona
-from features.chat.domain.dialogue_style import should_pause_followup_questions
+from features.chat.domain.dialogue_style import (
+    should_pause_followup_questions,
+    should_suppress_repeated_greeting,
+)
 from features.chat.domain.temporal_context import build_temporal_context, format_gap_seconds
 from features.chat.infrastructure import postgres_repositories
 from features.chat.infrastructure.prompt_renderer import (
@@ -37,6 +40,7 @@ class ChatContext:
     long_term_memories: list[dict[str, object]] = field(default_factory=list)
     memory_retrieval_mode: str = "none"
     pause_followup_questions: bool = False
+    suppress_repeated_greeting: bool = False
     allow_proactive_stickers: bool = True
     proactive_sticker_due: bool = False
     temporal_context: dict[str, object] = field(default_factory=dict)
@@ -255,6 +259,17 @@ async def build_chat_context(
         user_message=user_message,
         conversation_timing=conversation_timing,
     )
+    conversation_gap = temporal_context.get("conversation_gap")
+    conversation_gap_state = (
+        str(conversation_gap.get("state") or "")
+        if isinstance(conversation_gap, dict)
+        else ""
+    )
+    suppress_repeated_greeting = should_suppress_repeated_greeting(
+        history,
+        user_message,
+        conversation_gap_state,
+    )
 
     try:
         persona = get_persona(user_id)
@@ -294,7 +309,10 @@ async def build_chat_context(
     messages.append(
         {
             "role": "system",
-            "content": render_turn_focus_guidance(pause_followup_questions),
+            "content": render_turn_focus_guidance(
+                pause_followup_questions,
+                suppress_repeated_greeting,
+            ),
         }
     )
     messages.append(
@@ -333,7 +351,10 @@ async def build_chat_context(
         writer_base_messages.append(
             {
                 "role": "system",
-                "content": render_turn_focus_guidance(pause_followup_questions),
+                "content": render_turn_focus_guidance(
+                    pause_followup_questions,
+                    suppress_repeated_greeting,
+                ),
             }
         )
         proactive_safe_facts = _build_proactive_safe_facts(temporal_context, history)
@@ -359,6 +380,7 @@ async def build_chat_context(
         long_term_memories=long_term_memories,
         memory_retrieval_mode=memory_retrieval_mode,
         pause_followup_questions=pause_followup_questions,
+        suppress_repeated_greeting=suppress_repeated_greeting,
         allow_proactive_stickers=allow_proactive_stickers,
         proactive_sticker_due=proactive_sticker_due,
         temporal_context=temporal_context,

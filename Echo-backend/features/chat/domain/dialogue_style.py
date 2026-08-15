@@ -60,7 +60,17 @@ _FABRICATED_OFFLINE_STATE_PATTERN = re.compile(
 _FABRICATED_HUMAN_EXPERIENCE_PATTERN = re.compile(
     r"我也(?:经常|常常|有时|会).{0,20}(?:累|躺|睡|吃|出门|打球|工作|上班|上学)"
 )
-_WEEKDAY_PATTERN = re.compile(r"(?:周[一二三四五六日天]|星期[一二三四五六日天])")
+_WEEKDAY_PATTERN = re.compile(r"(?:周|星期)([一二三四五六日天])")
+_LEADING_SESSION_GREETING_PATTERN = re.compile(
+    r"^\s*(?:(?:早上|上午|中午|下午|晚上)好|早安|午安|晚安|"
+    r"你好|嗨|哈喽|hello)(?:呀|啊|哦)?(?:\s*(?:echo|艾可))?"
+    r"(?=$|[\s，,。！!、:：])\s*[，,。！!、:：]?\s*",
+    flags=re.IGNORECASE,
+)
+_MESSAGE_TIME_PREFIX_PATTERN = re.compile(
+    r"^\s*[\[［]\s*消息时间[^\]］\n]*[\]］]\s*",
+)
+_SESSION_BOUNDARY_MARKER = "[会话时间边界]"
 _ADVICE_REJECTION_PATTERN = re.compile(r"(?:不想|不要|别).{0,8}(?:建议|分析|办法|方案)")
 _MILD_EMOTION_PATTERN = re.compile(r"有点(?:累|烦|难过|不开心|低落|疲惫)")
 _UNREQUESTED_ADVICE_PATTERN = re.compile(
@@ -131,6 +141,42 @@ def should_pause_followup_questions(
     return all("？" in message or "?" in message for message in recent)
 
 
+def starts_with_session_greeting(value: str) -> bool:
+    visible = _MESSAGE_TIME_PREFIX_PATTERN.sub("", value.strip(), count=1)
+    return bool(_LEADING_SESSION_GREETING_PATTERN.search(visible))
+
+
+def should_suppress_repeated_greeting(
+    history_messages: list[dict[str, str]],
+    user_message: str,
+    conversation_gap_state: str,
+) -> bool:
+    """Suppress another greeting only while the same live conversation continues."""
+    if conversation_gap_state not in {"active", "recent"}:
+        return False
+    if starts_with_session_greeting(user_message):
+        return False
+
+    for message in reversed(history_messages):
+        content = str(message.get("content", ""))
+        if message.get("role") == "system" and _SESSION_BOUNDARY_MARKER in content:
+            break
+        if message.get("role") == "assistant" and starts_with_session_greeting(content):
+            return True
+    return False
+
+
+def remove_repeated_session_greeting(reply: str) -> str:
+    return _LEADING_SESSION_GREETING_PATTERN.sub("", reply.strip(), count=1).strip()
+
+
+def _weekday_keys(value: str) -> set[str]:
+    return {
+        "日" if match.group(1) == "天" else match.group(1)
+        for match in _WEEKDAY_PATTERN.finditer(value)
+    }
+
+
 def remove_followup_questions(reply: str) -> str:
     """重写仍违规时只删除问句，尽量保留已有的自然回应。"""
     without_questions = _QUESTION_SENTENCE_PATTERN.sub("", reply)
@@ -142,6 +188,8 @@ def find_dialogue_style_violations(
     reply: str,
     user_message: str = "",
     pause_followup_questions: bool = False,
+    suppress_repeated_greeting: bool = False,
+    grounded_weekday: str = "",
 ) -> tuple[str, ...]:
     """识别默认对话中明确的舞台动作和角色脚本格式。"""
     violations = [name for name, pattern in _STAGE_PATTERNS if pattern.search(reply)]
@@ -157,9 +205,13 @@ def find_dialogue_style_violations(
         violations.append("multiple_questions")
     if pause_followup_questions and ("？" in reply or "?" in reply):
         violations.append("followup_question_cooldown")
+    if suppress_repeated_greeting and starts_with_session_greeting(reply):
+        violations.append("repeated_session_greeting")
 
     clean_user_message = user_message.strip()
-    if _WEEKDAY_PATTERN.search(reply) and not _WEEKDAY_PATTERN.search(clean_user_message):
+    reply_weekdays = _weekday_keys(reply)
+    grounded_weekdays = _weekday_keys(clean_user_message) | _weekday_keys(grounded_weekday)
+    if reply_weekdays - grounded_weekdays:
         violations.append("ungrounded_time_detail")
     if (
         _ADVICE_REJECTION_PATTERN.search(clean_user_message)
@@ -211,6 +263,11 @@ def apply_dialogue_fallback(
     """Return a narrow deterministic fallback after a rewrite still violates key boundaries."""
     violation_set = set(violations)
     clean_user_message = user_message.strip()
+
+    if "ungrounded_time_detail" in violation_set:
+        reply = _WEEKDAY_PATTERN.sub("", reply)
+    if "repeated_session_greeting" in violation_set:
+        reply = remove_repeated_session_greeting(reply)
 
     if "dependency_reinforcement" in violation_set:
         return "听起来你现在很孤单，我愿意先陪你聊，也希望你别一个人扛着。身边有没有一个你愿意联系的人？"

@@ -130,6 +130,15 @@ class PromptRendererTests(unittest.TestCase):
         self.assertIn("具体值得延伸", rendered)
         self.assertIn("不要为了延长对话强行发问", rendered)
 
+    def test_turn_focus_suppresses_repeated_live_session_greeting(self):
+        rendered = render_turn_focus_guidance(
+            pause_followup_questions=False,
+            suppress_repeated_greeting=True,
+        )
+
+        self.assertIn("已经完成过问候", rendered)
+        self.assertIn("直接回应用户当前内容", rendered)
+
     def test_assistant_persona_and_relationship_are_independent_layers(self):
         persona_text = render_assistant_persona(self.assistant_persona)
         relationship_text = render_relationship_guidance(self.relationship)
