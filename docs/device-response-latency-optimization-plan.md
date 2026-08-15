@@ -4,7 +4,7 @@
 > 编写日期：2026-08-15  
 > 适用范围：Echo Bread Compact + Echo Backend 第一阶段语音机器人  
 > 当前固件基线：`0.1.3`  
-> 当前状态：方案文档，尚未实施后端优化
+> 当前状态：阶段一、阶段二后端实现完成，阶段三实时 ASR 已进入服务器验证
 
 ## 1. 目标
 
@@ -97,10 +97,11 @@ DEVICE_REALTIME_ASR_ENABLED=false 回退到一次性 ASR
 设备继续复用现有 `OPENAI_BASE_URL`、`OPENAI_API_KEY` 和 `LLM_MODEL`。只增加设备交付相关配置：
 
 ```dotenv
-ECHO_DEVICE_AUTO_SILENCE_MS=500
+ECHO_DEVICE_AUTO_SILENCE_MS=650
 ECHO_DEVICE_AUTO_MINIMUM_SPEECH_MS=180
+ECHO_DEVICE_AUTO_MAXIMUM_SPEECH_MS=30000
 ECHO_DEVICE_STREAMING_ENABLED=false
-ECHO_DEVICE_TTS_CHUNK_MAX_CHARS=24
+ECHO_DEVICE_TTS_CHUNK_MAX_CHARS=18
 ```
 
 实际 API Key 仍使用服务器已有的密钥管理方式，不写入代码和 Git。
@@ -126,19 +127,20 @@ Echo-backend/features/chat/application/generate_reply.py
 Echo-backend/features/chat/application/send_message.py
 ```
 
-### 4.3 将静音端点从 800 ms 调到 450～500 ms
+### 4.3 将静音端点从 800 ms 调到 600～650 ms
 
 当前 `ECHO_DEVICE_AUTO_SILENCE_MS=800` 会在每轮结束时额外等待约 0.8 秒。
 
 建议按以下顺序实机测试：
 
 ```text
-500 ms -> 默认候选值
-450 ms -> 语速较快时测试
-650 ms -> 如果出现截断或漏字时回退
+650 ms -> 当前默认候选值
+600 ms -> 只有在真机长句不截断时再测试
+800 ms -> 如果用户自然停顿仍被截断时回退
 ```
 
-不要一开始降到 300 ms，因为中文短句中停顿可能被误认为结束。
+合成中文长句已经证明 500 ms 会在逗号停顿处提前结束，因此不能只追求更短
+端点等待。不要降到 300 ms，因为中文短句中停顿可能被误认为结束。
 
 代码位置：
 
@@ -429,7 +431,7 @@ speech_end_to_persisted_ms
 1. APP 文字聊天行为不变
 2. 机器人仍使用同一人格和记忆
 3. ASR 正确率不能明显下降
-4. 设备语音回复首包 P50 <= 2.5 秒
+4. 设备语音回复首包 P50 <= 2.5 秒（当前云 TTS 实测约 2.5 秒，需真机确认）
 5. 连续 20 轮对话无明显截断
 6. TTS 失败时文字消息仍保存到 APP
 7. 所有参数可通过 .env 回滚
@@ -438,7 +440,8 @@ speech_end_to_persisted_ms
 ### 第二阶段验收
 
 ```text
-1. 首个自然短句开始播放 P50 <= 1.6 秒
+1. 首个自然短句开始播放目标为 P50 <= 1.6 秒；在当前云 TTS 和同一 DeepSeek
+   约束下，服务器实测约 2.4～2.6 秒，1.6 秒需要更快或本地 TTS 才能达成
 2. 连续音频无明显卡顿
 3. 取消、断线、重连不会卡死设备
 4. 完整回复只保存一次
