@@ -405,6 +405,57 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.payload["response_format"], {"type": "json_object"})
         self.assertEqual(client.payload["thinking"], {"type": "disabled"})
 
+    async def test_provider_streams_text_deltas_and_reassembles_tool_calls(self):
+        class StreamingResponse:
+            headers = {"x-request-id": "req_stream"}
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            async def aiter_lines(self):
+                yield 'data: {"id":"req_stream","choices":[{"delta":{"content":"你好"},"finish_reason":null}]}'
+                yield 'data: {"choices":[{"delta":{"content":"，Echo"},"finish_reason":null}]}'
+                yield 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"get_time","arguments":"{\\"zone\\":\\"Asia/Shanghai\\"}"}}]},"finish_reason":"tool_calls"}]}'
+                yield "data: [DONE]"
+
+        class StreamContext:
+            async def __aenter__(self):
+                return StreamingResponse()
+
+            async def __aexit__(self, exc_type, exc, traceback):
+                del exc_type, exc, traceback
+
+        class StreamingClient:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, traceback):
+                del exc_type, exc, traceback
+
+            def stream(self, *_args, **_kwargs):
+                return StreamContext()
+
+        deltas = []
+
+        async def record_delta(text):
+            deltas.append(text)
+
+        with patch("providers.llm_provider.httpx.AsyncClient", StreamingClient):
+            result = await OpenAICompatibleLLMProvider().stream_chat_completion_message(
+                messages=[{"role": "user", "content": "你好"}],
+                on_text_delta=record_delta,
+            )
+
+        self.assertEqual(deltas, ["你好", "，Echo"])
+        self.assertEqual(result.content, "你好，Echo")
+        self.assertEqual(result.request_id, "req_stream")
+        self.assertEqual(result.tool_calls[0].name, "get_time")
+        self.assertEqual(result.tool_calls[0].arguments["zone"], "Asia/Shanghai")
+
     async def test_http_timeout_is_preserved_as_provider_timeout(self):
         class TimeoutClient:
             async def __aenter__(self):

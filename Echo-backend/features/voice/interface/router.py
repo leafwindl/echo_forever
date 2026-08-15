@@ -185,10 +185,14 @@ async def voice_asr_stream(websocket: WebSocket):
                 continue
 
             if event == "stop":
+                stop_received_at = time.perf_counter()
+                audio_duration_ms = total_audio_bytes * 1000 / (16000 * 2)
                 logger.info(
-                    "Streaming voice ASR stop received frames=%s audio_bytes=%s capture_ms=%.1f",
+                    "Streaming voice ASR stop received frames=%s audio_bytes=%s "
+                    "audio_duration_ms=%.1f capture_ms=%.1f",
                     audio_frame_count,
                     total_audio_bytes,
+                    audio_duration_ms,
                     (time.perf_counter() - ready_at) * 1000,
                 )
                 await session.finish()
@@ -199,9 +203,12 @@ async def voice_asr_stream(websocket: WebSocket):
                     )
                 await websocket.close(code=1000)
                 logger.info(
-                    "Streaming voice ASR completed frames=%s audio_bytes=%s duration_ms=%.1f",
+                    "Streaming voice ASR completed frames=%s audio_bytes=%s "
+                    "audio_duration_ms=%.1f finalization_ms=%.1f duration_ms=%.1f",
                     audio_frame_count,
                     total_audio_bytes,
+                    audio_duration_ms,
+                    (time.perf_counter() - stop_received_at) * 1000,
                     (time.perf_counter() - started_at) * 1000,
                 )
                 return

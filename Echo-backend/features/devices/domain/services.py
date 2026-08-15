@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Protocol
 
 from features.devices.domain.entities import DeviceTurnResult
@@ -14,7 +15,16 @@ class DeviceConversationService(Protocol):
         user_id: str,
         user_text: str,
         request_id: str,
+        on_reply_delta: Callable[[str], Awaitable[None]] | None = None,
+        synthesize_voice: bool = True,
     ) -> DeviceTurnResult: ...
+
+
+class DeviceSpeechSynthesizer(Protocol):
+    def stream_pcm16(
+        self,
+        text: str,
+    ) -> AsyncIterator[bytes]: ...
 
 
 class DeviceAudioSource(Protocol):

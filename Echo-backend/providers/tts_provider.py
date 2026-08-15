@@ -1,11 +1,14 @@
 import asyncio
+import io
 import logging
 import threading
 import time
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Protocol, cast
 
+import av
 import dashscope
 import edge_tts
 from dashscope.audio.tts_v2 import AudioFormat, ResultCallback, SpeechSynthesizer
@@ -32,6 +35,13 @@ class TTSProvider(Protocol):
     ) -> TTSOutput: ...
 
     def stream_text_to_speech(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> AsyncIterator[bytes]: ...
+
+    def stream_pcm16(
         self,
         text: str,
         voice_id: str,
@@ -80,6 +90,26 @@ class EdgeTTSProvider:
             content_type="audio/mpeg",
         )
 
+    async def stream_pcm16(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> AsyncIterator[bytes]:
+        audio = bytearray()
+        async for chunk in self.stream_text_to_speech(text, voice_id, instruction=instruction):
+            audio.extend(chunk)
+        with av.open(io.BytesIO(bytes(audio)), mode="r") as container:
+            stream = next((item for item in container.streams if item.type == "audio"), None)
+            if stream is None:
+                raise ValueError("Edge TTS returned no audio stream")
+            resampler = av.AudioResampler(format="s16", layout="mono", rate=24000)
+            for decoded in container.decode(stream):
+                for frame in resampler.resample(decoded):
+                    yield bytes(frame.planes[0])[: frame.samples * 2]
+            for frame in resampler.resample(None):
+                yield bytes(frame.planes[0])[: frame.samples * 2]
+
 
 class _CosyVoiceResultCallback(ResultCallback):
     def __init__(self, loop: asyncio.AbstractEventLoop, queue: asyncio.Queue) -> None:
@@ -89,11 +119,8 @@ class _CosyVoiceResultCallback(ResultCallback):
         self._finished = False
 
     def _publish(self, item: bytes | Exception | None) -> None:
-        try:
+        with suppress(RuntimeError):
             self._loop.call_soon_threadsafe(self._queue.put_nowait, item)
-        except RuntimeError:
-            # The request was already cancelled and its event loop has closed.
-            pass
 
     def finish(self) -> None:
         with self._finish_lock:
@@ -153,11 +180,12 @@ class CosyVoiceTTSProvider:
             raise ValueError(f"CosyVoice missing configuration: {', '.join(missing)}")
         return api_key, model, clean_voice_id
 
-    async def stream_text_to_speech(
+    async def _stream_audio(
         self,
         text: str,
         voice_id: str,
         instruction: str | None = None,
+        audio_format: str = AudioFormat.MP3_22050HZ_MONO_256KBPS,
     ) -> AsyncIterator[bytes]:
         clean_text = text.strip()
         if not clean_text:
@@ -168,7 +196,7 @@ class CosyVoiceTTSProvider:
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[bytes | Exception | None] = asyncio.Queue()
         callback = _CosyVoiceResultCallback(loop, queue)
-        synthesizer_state: dict[str, SpeechSynthesizer] = {}
+        synthesizer_state: dict[str, SpeechSynthesizer | bool] = {}
         started_at = time.perf_counter()
 
         def synthesize() -> None:
@@ -177,7 +205,7 @@ class CosyVoiceTTSProvider:
                 synthesizer = SpeechSynthesizer(
                     model=model,
                     voice=clean_voice_id,
-                    format=AudioFormat.MP3_22050HZ_MONO_256KBPS,
+                    format=audio_format,
                     volume=settings.cosyvoice_volume,
                     speech_rate=settings.tts_speed,
                     pitch_rate=settings.cosyvoice_pitch_rate,
@@ -187,6 +215,7 @@ class CosyVoiceTTSProvider:
                     callback=callback,
                 )
                 synthesizer_state["instance"] = synthesizer
+                synthesizer_state["started"] = True
                 synthesizer.streaming_call(clean_text)
                 synthesizer.streaming_complete()
             except Exception as exc:
@@ -230,14 +259,25 @@ class CosyVoiceTTSProvider:
                 "CosyVoice synthesis completed model=%s request_id=%s sdk_first_packet_ms=%s "
                 "duration_ms=%.1f",
                 model,
-                synthesizer.get_last_request_id() if synthesizer else "unknown",
-                synthesizer.get_first_package_delay() if synthesizer else "unknown",
+                (
+                    synthesizer.get_last_request_id()
+                    if isinstance(synthesizer, SpeechSynthesizer)
+                    else "unknown"
+                ),
+                (
+                    synthesizer.get_first_package_delay()
+                    if isinstance(synthesizer, SpeechSynthesizer)
+                    else "unknown"
+                ),
                 (time.perf_counter() - started_at) * 1000,
             )
         finally:
             if not worker.done():
                 synthesizer = synthesizer_state.get("instance")
-                if synthesizer is not None:
+                if (
+                    isinstance(synthesizer, SpeechSynthesizer)
+                    and synthesizer_state.get("started") is True
+                ):
                     try:
                         await asyncio.to_thread(synthesizer.streaming_cancel, 1000)
                     except Exception:
@@ -248,6 +288,34 @@ class CosyVoiceTTSProvider:
                     worker.cancel()
                 except Exception:
                     logger.debug("CosyVoice worker stopped with an error", exc_info=True)
+
+    async def stream_text_to_speech(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> AsyncIterator[bytes]:
+        async for chunk in self._stream_audio(
+            text,
+            voice_id,
+            instruction=instruction,
+            audio_format=AudioFormat.MP3_22050HZ_MONO_256KBPS,
+        ):
+            yield chunk
+
+    async def stream_pcm16(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+    ) -> AsyncIterator[bytes]:
+        async for chunk in self._stream_audio(
+            text,
+            voice_id,
+            instruction=instruction,
+            audio_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
+        ):
+            yield chunk
 
     async def text_to_speech(
         self,

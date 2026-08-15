@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from features.agent.domain.entities import AgentTurnResult
@@ -26,6 +27,7 @@ class ChatAgentOrchestrator(Protocol):
         sticker_intent: str = "",
         allow_proactive_stickers: bool = True,
         proactive_sticker_due: bool = False,
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> AgentTurnResult: ...
 
 

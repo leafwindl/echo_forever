@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
     ChatContextClearResult,
@@ -69,6 +71,7 @@ async def generate_chat_reply(
     conversation_mode: str = "chat",
     sticker_intent: str = "",
     user_content_parts: tuple[ContentPart, ...] = (),
+    on_text_delta: Callable[[str], Awaitable[None]] | None = None,
 ) -> ChatTurnResult:
     use_case = get_generate_chat_reply_use_case()
     return await use_case.execute(
@@ -80,6 +83,7 @@ async def generate_chat_reply(
         conversation_mode=conversation_mode,
         sticker_intent=sticker_intent,
         user_content_parts=user_content_parts,
+        on_text_delta=on_text_delta,
     )
 
 
@@ -91,6 +95,8 @@ async def send_chat_message(
     sticker_intent: str = "",
     user_content_parts: tuple[ContentPart, ...] = (),
     request_id: str = "",
+    on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+    synthesize_voice: bool = True,
 ) -> ChatReplyDeliveryResult:
     use_case = get_send_chat_message_use_case()
     return await use_case.execute(
@@ -101,6 +107,8 @@ async def send_chat_message(
         sticker_intent=sticker_intent,
         user_content_parts=user_content_parts,
         request_id=request_id,
+        on_text_delta=on_text_delta,
+        synthesize_voice=synthesize_voice,
     )
 
 

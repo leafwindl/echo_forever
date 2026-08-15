@@ -1,4 +1,5 @@
 import threading
+from collections.abc import Awaitable, Callable
 
 from shared.config import settings
 
@@ -47,6 +48,7 @@ class ChatAgentOrchestratorAdapter(ChatAgentOrchestrator):
         sticker_intent: str = "",
         allow_proactive_stickers: bool = True,
         proactive_sticker_due: bool = False,
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     ):
         return await run_chat_agent(
             user_id,
@@ -57,6 +59,7 @@ class ChatAgentOrchestratorAdapter(ChatAgentOrchestrator):
             sticker_intent=sticker_intent,
             allow_proactive_stickers=allow_proactive_stickers,
             proactive_sticker_due=proactive_sticker_due,
+            on_text_delta=on_text_delta,
         )
 
 

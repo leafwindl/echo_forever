@@ -203,7 +203,7 @@ class Settings(BaseSettings):
         le=65535,
     )
     echo_device_auto_silence_ms: int = Field(
-        default=800,
+        default=500,
         validation_alias="ECHO_DEVICE_AUTO_SILENCE_MS",
         ge=300,
         le=3000,
@@ -249,6 +249,26 @@ class Settings(BaseSettings):
         validation_alias="ECHO_DEVICE_PLAYBACK_STOP_GRACE_MS",
         ge=0,
         le=2000,
+    )
+    echo_device_streaming_enabled: bool = Field(
+        default=False,
+        validation_alias="ECHO_DEVICE_STREAMING_ENABLED",
+    )
+    echo_device_realtime_asr_enabled: bool = Field(
+        default=False,
+        validation_alias="ECHO_DEVICE_REALTIME_ASR_ENABLED",
+    )
+    echo_device_tts_chunk_max_chars: int = Field(
+        default=24,
+        validation_alias="ECHO_DEVICE_TTS_CHUNK_MAX_CHARS",
+        ge=8,
+        le=120,
+    )
+    echo_device_audio_queue_max_packets: int = Field(
+        default=40,
+        validation_alias="ECHO_DEVICE_AUDIO_QUEUE_MAX_PACKETS",
+        ge=4,
+        le=200,
     )
     echo_firmware_version: str = Field(
         default="0.1.0",

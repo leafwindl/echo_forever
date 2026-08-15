@@ -50,6 +50,59 @@ class OpusPacketDecoder:
         self._pcm.extend(bytes(frame.planes[0])[: frame.samples * bytes_per_sample])
 
 
+class StreamingPcmOpusEncoder:
+    """Encode arbitrary PCM16 chunks into fixed 60 ms device Opus packets."""
+
+    def __init__(self, *, sample_rate: int = 24000, frame_duration_ms: int = 60):
+        if frame_duration_ms not in {20, 40, 60}:
+            raise ValueError("Unsupported Opus frame duration")
+        self.sample_rate = sample_rate
+        self.frame_duration_ms = frame_duration_ms
+        self.frame_samples = sample_rate * frame_duration_ms // 1000
+        self.frame_bytes = self.frame_samples * 2
+        self._pcm = bytearray()
+        self._encoder = av.CodecContext.create("libopus", "w")
+        self._encoder.sample_rate = sample_rate
+        self._encoder.layout = "mono"
+        self._encoder.format = "s16"
+        self._encoder.bit_rate = 24000
+        self._encoder.time_base = Fraction(1, sample_rate)
+        self._encoder.options = {"frame_duration": str(frame_duration_ms)}
+        self._encoder.open()
+        self._next_pts = 0
+
+    def push(self, pcm16_audio: bytes) -> tuple[bytes, ...]:
+        if pcm16_audio:
+            self._pcm.extend(pcm16_audio[: len(pcm16_audio) - (len(pcm16_audio) % 2)])
+        packets: list[bytes] = []
+        while len(self._pcm) >= self.frame_bytes:
+            packets.extend(self._encode_frame(bytes(self._pcm[: self.frame_bytes])))
+            del self._pcm[: self.frame_bytes]
+        return tuple(packets)
+
+    def finish(self) -> tuple[bytes, ...]:
+        packets: list[bytes] = []
+        if self._pcm:
+            padded = bytes(self._pcm) + b"\x00" * (self.frame_bytes - len(self._pcm))
+            packets.extend(self._encode_frame(padded))
+            self._pcm.clear()
+        packets.extend(bytes(packet) for packet in self._encoder.encode(None))
+        return tuple(packets)
+
+    def _encode_frame(self, pcm16_audio: bytes) -> tuple[bytes, ...]:
+        frame = av.AudioFrame(
+            format="s16",
+            layout="mono",
+            samples=self.frame_samples,
+        )
+        frame.sample_rate = self.sample_rate
+        frame.pts = self._next_pts
+        frame.time_base = Fraction(1, self.sample_rate)
+        frame.planes[0].update(pcm16_audio)
+        self._next_pts += self.frame_samples
+        return tuple(bytes(packet) for packet in self._encoder.encode(frame))
+
+
 def encode_audio_bytes_to_opus_packets(
     audio_bytes: bytes,
     *,

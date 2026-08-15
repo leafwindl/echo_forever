@@ -1,5 +1,6 @@
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol, cast
 
@@ -49,6 +50,19 @@ class LLMProvider(Protocol):
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+    ) -> ProviderAssistantMessage: ...
+
+    async def stream_chat_completion_message(
+        self,
+        messages: list[dict],
+        tools: tuple[dict, ...] | list[dict] = (),
+        tool_choice: str | dict[str, Any] = "auto",
+        response_format: dict[str, str] | None = None,
+        thinking: dict[str, str] | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> ProviderAssistantMessage: ...
 
 
@@ -158,6 +172,119 @@ class OpenAICompatibleLLMProvider:
         except Exception as exc:
             logger.error("Error requesting LLM: %s", exc)
             raise ValueError("Failed to request LLM service") from exc
+
+    async def stream_chat_completion_message(
+        self,
+        messages: list[dict],
+        tools: tuple[dict, ...] | list[dict] = (),
+        tool_choice: str | dict[str, Any] = "auto",
+        response_format: dict[str, str] | None = None,
+        thinking: dict[str, str] | None = None,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+    ) -> ProviderAssistantMessage:
+        url, headers, payload = self._request_options(
+            messages,
+            model,
+            temperature,
+            max_tokens,
+        )
+        payload["stream"] = True
+        if tools:
+            payload["tools"] = list(tools)
+            payload["tool_choice"] = tool_choice
+        if response_format is not None:
+            payload["response_format"] = response_format
+        if thinking is not None:
+            payload["thinking"] = thinking
+
+        content_parts: list[str] = []
+        tool_calls: dict[int, dict[str, str]] = {}
+        finish_reason = ""
+        request_id = ""
+        try:
+            async with httpx.AsyncClient(timeout=settings.timeout) as client, client.stream(
+                "POST", url, headers=headers, json=payload
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        raw_data = line[5:].strip()
+                        if not raw_data or raw_data == "[DONE]":
+                            continue
+                        try:
+                            data = json.loads(raw_data)
+                        except json.JSONDecodeError:
+                            logger.warning("Ignoring malformed streamed LLM chunk")
+                            continue
+
+                        request_id = str(
+                            data.get("id") or response.headers.get("x-request-id") or request_id
+                        )
+                        choices = data.get("choices") or []
+                        if not choices:
+                            continue
+                        choice = choices[0] or {}
+                        finish_reason = str(choice.get("finish_reason") or finish_reason)
+                        delta = choice.get("delta") or {}
+                        content = str(delta.get("content") or "")
+                        if content:
+                            content_parts.append(content)
+                            if on_text_delta is not None:
+                                await on_text_delta(content)
+
+                        for raw_call in delta.get("tool_calls") or []:
+                            index = int(raw_call.get("index") or 0)
+                            call = tool_calls.setdefault(
+                                index,
+                                {"id": "", "name": "", "arguments": ""},
+                            )
+                            call["id"] += str(raw_call.get("id") or "")
+                            function = raw_call.get("function") or {}
+                            call["name"] += str(function.get("name") or "")
+                            call["arguments"] += str(function.get("arguments") or "")
+        except httpx.TimeoutException as exc:
+            logger.warning("LLM streaming request timed out timeout_seconds=%s", settings.timeout)
+            raise LLMProviderTimeoutError("LLM provider streaming request timed out") from exc
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "HTTPStatusError from streamed LLM status=%s response_length=%s",
+                exc.response.status_code,
+                len(exc.response.text or ""),
+            )
+            raise ValueError(
+                f"LLM service responded with status {exc.response.status_code}"
+            ) from exc
+        except Exception as exc:
+            logger.error("Error requesting streamed LLM service: %s", exc)
+            raise ValueError("Failed to request streamed LLM service") from exc
+
+        parsed_calls: list[ProviderToolCall] = []
+        for index in sorted(tool_calls):
+            raw_call = tool_calls[index]
+            raw_arguments = raw_call["arguments"] or "{}"
+            try:
+                arguments = json.loads(raw_arguments)
+            except (TypeError, json.JSONDecodeError):
+                arguments = {}
+            if not isinstance(arguments, dict):
+                arguments = {}
+            parsed_calls.append(
+                ProviderToolCall(
+                    call_id=raw_call["id"] or f"streamed-tool-{index}",
+                    name=raw_call["name"],
+                    arguments=arguments,
+                )
+            )
+        return ProviderAssistantMessage(
+            content="".join(content_parts),
+            tool_calls=tuple(parsed_calls),
+            finish_reason=finish_reason,
+            request_id=request_id,
+        )
 
 
 def get_llm_provider() -> LLMProvider:

@@ -1,0 +1,130 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from collections.abc import Awaitable, Callable
+from contextlib import suppress
+
+from features.devices.application.sentence_chunker import SentenceChunker
+from features.devices.domain.entities import DeviceTurnResult
+from features.devices.domain.services import (
+    DeviceChatNotifier,
+    DeviceConversationService,
+    DeviceSpeechSynthesizer,
+    DeviceVoiceRecognizer,
+)
+
+logger = logging.getLogger(__name__)
+
+TextCallback = Callable[[str], Awaitable[None]]
+PacketCallback = Callable[[bytes], Awaitable[None]]
+EventCallback = Callable[[], Awaitable[None]]
+
+
+class StreamDeviceVoiceTurn:
+    """Run one device turn while handing completed text phrases to TTS."""
+
+    def __init__(
+        self,
+        *,
+        recognizer: DeviceVoiceRecognizer,
+        conversation: DeviceConversationService,
+        speech: DeviceSpeechSynthesizer,
+        notifier: DeviceChatNotifier,
+        chunk_max_chars: int,
+        queue_max_packets: int,
+    ):
+        self.recognizer = recognizer
+        self.conversation = conversation
+        self.speech = speech
+        self.notifier = notifier
+        self.chunk_max_chars = chunk_max_chars
+        self.queue_max_packets = queue_max_packets
+
+    async def execute(
+        self,
+        *,
+        user_id: str,
+        pcm16_audio: bytes,
+        request_id: str,
+        on_recognized: TextCallback,
+        on_tts_start: EventCallback,
+        on_sentence_start: Callable[[str], Awaitable[None]],
+        on_audio_packet: PacketCallback,
+        on_tts_stop: EventCallback,
+        recognized_text: str | None = None,
+    ) -> DeviceTurnResult:
+        if not user_id.strip():
+            raise ValueError("Device is not mapped to an Echo user")
+        if not pcm16_audio:
+            raise ValueError("Device audio is empty")
+
+        user_text = (recognized_text or "").strip()
+        if not user_text:
+            user_text = (await self.recognizer.recognize_pcm16(pcm16_audio)).strip()
+        if not user_text:
+            raise ValueError("Device speech was not recognized")
+        await on_recognized(user_text)
+
+        phrase_queue: asyncio.Queue[str | None] = asyncio.Queue(
+            maxsize=max(1, self.queue_max_packets // 4)
+        )
+        chunker = SentenceChunker(max_chars=self.chunk_max_chars)
+        tts_started = False
+
+        async def on_text_delta(delta: str) -> None:
+            for phrase in chunker.push(delta):
+                if phrase:
+                    await phrase_queue.put(phrase)
+
+        async def consume_phrases() -> None:
+            nonlocal tts_started
+            from features.devices.infrastructure.audio_codec import StreamingPcmOpusEncoder
+
+            encoder = StreamingPcmOpusEncoder(sample_rate=24000, frame_duration_ms=60)
+            while True:
+                phrase = await phrase_queue.get()
+                if phrase is None:
+                    break
+                if not tts_started:
+                    tts_started = True
+                    await on_tts_start()
+                await on_sentence_start(phrase)
+                async for pcm16_chunk in self.speech.stream_pcm16(phrase):
+                    for packet in encoder.push(pcm16_chunk):
+                        await on_audio_packet(packet)
+            for packet in encoder.finish():
+                await on_audio_packet(packet)
+            if tts_started:
+                await on_tts_stop()
+
+        consumer_task = asyncio.create_task(consume_phrases())
+        started_at = time.perf_counter()
+        try:
+            result = await self.conversation.reply(
+                user_id=user_id,
+                user_text=user_text,
+                request_id=request_id,
+                on_reply_delta=on_text_delta,
+                synthesize_voice=False,
+            )
+            for phrase in chunker.finish():
+                await phrase_queue.put(phrase)
+            await phrase_queue.put(None)
+            await consumer_task
+            await self.notifier.notify_latest_turn(user_id)
+            logger.info(
+                "Echo streaming device turn completed input_bytes=%s "
+                "audio_duration_ms=%.1f duration_ms=%.1f",
+                len(pcm16_audio),
+                len(pcm16_audio) * 1000 / (16000 * 2),
+                (time.perf_counter() - started_at) * 1000,
+            )
+            return result
+        except BaseException:
+            if not consumer_task.done():
+                consumer_task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await consumer_task
+            raise

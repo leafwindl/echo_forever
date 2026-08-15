@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
+from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -54,6 +55,16 @@ class AgentConversationModel(Protocol):
         *,
         structured_output: bool = False,
         tool_choice: str | dict[str, Any] = "auto",
+    ) -> AgentModelResponse: ...
+
+    async def stream_complete(
+        self,
+        messages: list[dict],
+        tools: tuple[dict, ...],
+        *,
+        structured_output: bool = False,
+        tool_choice: str | dict[str, Any] = "auto",
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> AgentModelResponse: ...
 
 

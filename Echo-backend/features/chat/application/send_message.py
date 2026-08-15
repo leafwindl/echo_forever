@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+from collections.abc import Awaitable, Callable
 
 from features.agent.domain.entities import ContentPart
 from features.chat.application.generate_reply import GenerateChatReply
@@ -41,6 +42,8 @@ class SendChatMessage:
         sticker_intent: str = "",
         user_content_parts: tuple[ContentPart, ...] = (),
         request_id: str = "",
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+        synthesize_voice: bool = True,
     ) -> ChatReplyDeliveryResult:
         clean_user_id = user_id.strip()
         clean_mode = conversation_mode.strip().lower()
@@ -94,10 +97,11 @@ class SendChatMessage:
                 conversation_mode=clean_mode,
                 sticker_intent=sticker_intent,
                 user_content_parts=user_content_parts,
+                on_text_delta=on_text_delta,
             )
 
             audio_urls: tuple[str, ...] = ()
-            if is_call:
+            if is_call and synthesize_voice:
                 try:
                     synthesis_result = await self.voice_reply_synthesizer.synthesize_reply(
                         chat_result.reply

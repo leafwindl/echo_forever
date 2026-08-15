@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import uuid
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from typing import Any
 
@@ -130,6 +131,7 @@ class OrchestrateChatWithAgent:
         allow_proactive_stickers: bool = True,
         proactive_sticker_due: bool = False,
         tools_enabled: bool = True,
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> AgentTurnResult:
         run_id = self.repository.start(user_id, message, conversation_mode, self.max_steps)
         agent_messages = self._build_initial_messages(
@@ -182,6 +184,7 @@ class OrchestrateChatWithAgent:
                     deadline=deadline,
                     run_id=run_id,
                     timeout_retries_remaining=llm_timeout_retries_remaining,
+                    on_text_delta=on_text_delta,
                 )
 
                 finish_reason = response.finish_reason.strip().lower()
@@ -724,6 +727,7 @@ class OrchestrateChatWithAgent:
         run_id: str,
         timeout_retries_remaining: int,
         tool_choice: str | dict[str, Any] = "auto",
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> tuple[AgentModelResponse, int]:
         retried = False
         while True:
@@ -733,14 +737,29 @@ class OrchestrateChatWithAgent:
                 }
                 if tool_choice != "auto":
                     completion_options["tool_choice"] = tool_choice
-                response = await asyncio.wait_for(
-                    self.model.complete(
-                        messages,
-                        tools,
-                        **completion_options,
-                    ),
-                    timeout=self._remaining_timeout(deadline),
-                )
+                # Do not speak speculative text from a tool-enabled model turn.
+                # A provider may emit content before it finishes assembling a
+                # tool call; only the final post-tool turn is safe for TTS.
+                stream_callback = on_text_delta if on_text_delta is not None and not tools else None
+                if stream_callback is not None and hasattr(self.model, "stream_complete"):
+                    response = await asyncio.wait_for(
+                        self.model.stream_complete(
+                            messages,
+                            tools,
+                            on_text_delta=stream_callback,
+                            **completion_options,
+                        ),
+                        timeout=self._remaining_timeout(deadline),
+                    )
+                else:
+                    response = await asyncio.wait_for(
+                        self.model.complete(
+                            messages,
+                            tools,
+                            **completion_options,
+                        ),
+                        timeout=self._remaining_timeout(deadline),
+                    )
                 return response, timeout_retries_remaining
             except AgentModelTimeoutError:
                 remaining_seconds = deadline - asyncio.get_running_loop().time()

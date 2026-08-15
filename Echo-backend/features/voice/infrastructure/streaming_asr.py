@@ -6,6 +6,7 @@ import json
 import logging
 import secrets
 import time
+from contextlib import suppress
 from typing import Any
 from urllib.parse import quote, urlencode
 from uuid import uuid4
@@ -69,6 +70,7 @@ class TencentASRStreamingRecognitionSession(VoiceStreamingRecognitionSession):
         self.transcript = TencentASRTranscriptAccumulator()
         self.finished = False
         self.closed = False
+        self.failed = False
         self.receive_task = asyncio.create_task(self._receive_updates())
 
     async def send_audio(self, audio_bytes: bytes) -> None:
@@ -103,6 +105,8 @@ class TencentASRStreamingRecognitionSession(VoiceStreamingRecognitionSession):
         self.closed = True
         if not self.receive_task.done():
             self.receive_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self.receive_task
         await self.upstream.close()
 
     async def _receive_updates(self) -> None:
@@ -124,6 +128,7 @@ class TencentASRStreamingRecognitionSession(VoiceStreamingRecognitionSession):
         except asyncio.CancelledError:
             raise
         except Exception:
+            self.failed = True
             logger.exception("Tencent ASR result stream failed")
             if not self.final_event.is_set():
                 await self.update_queue.put(

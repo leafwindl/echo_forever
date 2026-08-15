@@ -122,6 +122,29 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
             "wss://workspace-a.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference",
         )
 
+    async def test_cosyvoice_provider_can_stream_24k_pcm_for_devices(self):
+        provider = CosyVoiceTTSProvider()
+        fake_dashscope = SimpleNamespace(api_key=None)
+
+        with (
+            patch.object(tts_provider_module, "SpeechSynthesizer", FakeCosyVoiceSynthesizer),
+            patch.object(tts_provider_module, "dashscope", fake_dashscope),
+            patch.object(settings, "dashscope_api_key", "test-key"),
+            patch.object(settings, "dashscope_workspace_id", "workspace-a"),
+            patch.object(settings, "cosyvoice_model", "cosyvoice-v3.5-flash"),
+            patch.object(settings, "cosyvoice_websocket_url", ""),
+        ):
+            chunks = [
+                chunk
+                async for chunk in provider.stream_pcm16("你好", "custom-voice")
+            ]
+
+        self.assertEqual(chunks, [b"audio-1", b"audio-2"])
+        self.assertEqual(
+            FakeCosyVoiceSynthesizer.instances[-1].kwargs["format"],
+            tts_provider_module.AudioFormat.PCM_24000HZ_MONO_16BIT,
+        )
+
     async def test_cosyvoice_provider_reports_missing_credentials(self):
         provider = CosyVoiceTTSProvider()
 

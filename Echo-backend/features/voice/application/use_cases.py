@@ -33,20 +33,25 @@ class RecognizeVoice:
         if len(audio_bytes) % 2 != 0:
             raise ValueError("PCM16 audio must contain complete 16-bit samples")
 
+        audio_duration_ms = len(audio_bytes) * 1000 / (16000 * 2)
         audio_path = self.audio_storage.save_upload(audio_bytes, suffix=".pcm")
+        recognition_started_at = time.perf_counter()
         try:
-            recognition_started_at = time.perf_counter()
             user_text = await self.recognizer.recognize(audio_path)
         finally:
             try:
                 self.audio_storage.delete_upload(audio_path)
             except Exception:
                 logger.warning("Failed to cleanup voice upload: %s", audio_path, exc_info=True)
+        recognition_duration_ms = (time.perf_counter() - recognition_started_at) * 1000
         logger.info(
-            "Voice ASR completed text_length=%s audio_bytes=%s duration_ms=%.1f",
+            "Voice ASR completed text_length=%s audio_bytes=%s audio_duration_ms=%.1f "
+            "duration_ms=%.1f realtime_factor=%.4f",
             len(user_text),
             len(audio_bytes),
-            (time.perf_counter() - recognition_started_at) * 1000,
+            audio_duration_ms,
+            recognition_duration_ms,
+            recognition_duration_ms / audio_duration_ms if audio_duration_ms else 0.0,
         )
         return VoiceRecognitionResult(user_text=user_text)
 

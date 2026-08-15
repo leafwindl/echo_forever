@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -26,17 +27,32 @@ class EchoConversationService:
         user_id: str,
         user_text: str,
         request_id: str,
+        on_reply_delta: Callable[[str], Awaitable[None]] | None = None,
+        synthesize_voice: bool = True,
     ) -> DeviceTurnResult:
         result = await send_chat_message(
             user_id=user_id,
             message=user_text,
             conversation_mode="call",
             request_id=request_id,
+            on_text_delta=on_reply_delta,
+            synthesize_voice=synthesize_voice,
         )
         return DeviceTurnResult(
             user_text=user_text,
             reply=result.reply,
             audio_urls=result.audio_urls,
+        )
+
+
+class EchoSpeechSynthesizer:
+    def stream_pcm16(self, text: str) -> AsyncIterator[bytes]:
+        from providers.tts_provider import get_tts_provider
+
+        return get_tts_provider().stream_pcm16(
+            text,
+            settings.tts_voice_id,
+            instruction=settings.cosyvoice_instruction,
         )
 
 

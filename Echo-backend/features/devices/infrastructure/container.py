@@ -1,11 +1,14 @@
 from features.devices.application.process_voice_turn import ProcessDeviceVoiceTurn
+from features.devices.application.stream_voice_turn import StreamDeviceVoiceTurn
 from features.devices.infrastructure.adapters import (
     EchoChatNotifier,
     EchoConversationService,
+    EchoSpeechSynthesizer,
     EchoVoiceRecognizer,
 )
 
 _process_device_voice_turn: ProcessDeviceVoiceTurn | None = None
+_stream_device_voice_turn: StreamDeviceVoiceTurn | None = None
 
 
 def get_process_device_voice_turn() -> ProcessDeviceVoiceTurn:
@@ -19,6 +22,23 @@ def get_process_device_voice_turn() -> ProcessDeviceVoiceTurn:
     return _process_device_voice_turn
 
 
+def get_stream_device_voice_turn() -> StreamDeviceVoiceTurn:
+    global _stream_device_voice_turn
+    if _stream_device_voice_turn is None:
+        from shared.config import settings
+
+        _stream_device_voice_turn = StreamDeviceVoiceTurn(
+            recognizer=EchoVoiceRecognizer(),
+            conversation=EchoConversationService(),
+            speech=EchoSpeechSynthesizer(),
+            notifier=EchoChatNotifier(),
+            chunk_max_chars=settings.echo_device_tts_chunk_max_chars,
+            queue_max_packets=settings.echo_device_audio_queue_max_packets,
+        )
+    return _stream_device_voice_turn
+
+
 def reset_device_services_for_tests() -> None:
-    global _process_device_voice_turn
+    global _process_device_voice_turn, _stream_device_voice_turn
     _process_device_voice_turn = None
+    _stream_device_voice_turn = None

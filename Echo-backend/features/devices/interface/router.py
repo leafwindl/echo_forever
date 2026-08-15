@@ -17,13 +17,17 @@ from features.devices.infrastructure.audio_codec import (
     OpusPacketDecoder,
     encode_audio_bytes_to_opus_packets,
 )
-from features.devices.infrastructure.container import get_process_device_voice_turn
+from features.devices.infrastructure.container import (
+    get_process_device_voice_turn,
+    get_stream_device_voice_turn,
+)
 from features.devices.infrastructure.endpoint_detector import AudioEndpointDetector
 from features.devices.interface.schemas import (
     DeviceBootstrapResponse,
     DeviceFirmwareResponse,
     DeviceWebSocketConfig,
 )
+from features.voice.public import open_streaming_voice_recognition
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -117,6 +121,8 @@ async def device_websocket(websocket: WebSocket):
     endpoint_detector: AudioEndpointDetector | None = None
     input_format: DeviceAudioFormat | None = None
     processing_task: asyncio.Task[None] | None = None
+    realtime_asr_session = None
+    capture_started_at: float | None = None
     maximum_utterance_bytes = settings.echo_device_max_utterance_seconds * 16000 * 2
 
     def new_auto_endpoint_detector() -> AudioEndpointDetector:
@@ -128,37 +134,136 @@ async def device_websocket(websocket: WebSocket):
         )
 
     def reset_auto_capture() -> None:
-        nonlocal decoder, endpoint_detector
+        nonlocal decoder, endpoint_detector, capture_started_at
         decoder = OpusPacketDecoder(output_sample_rate=16000)
         endpoint_detector = new_auto_endpoint_detector()
+        capture_started_at = time.perf_counter()
 
-    async def process_turn(pcm16_audio: bytes) -> None:
+    async def drain_realtime_asr(session) -> str:
+        """Read the final update while tolerating a provider that only sends partials."""
+        latest_text = ""
+        for _ in range(512):
+            try:
+                update = await asyncio.wait_for(session.receive_update(), timeout=0.05)
+            except TimeoutError:
+                break
+            latest_text = update.text.strip()
+            if update.is_final:
+                break
+        return latest_text
+
+    async def process_turn(pcm16_audio: bytes, asr_session=None) -> None:
         started_at = time.perf_counter()
         try:
             request_id = f"device-{session_id}-{uuid.uuid4().hex[:12]}"
+            recognized_text = ""
+            if asr_session is not None:
+                try:
+                    await asr_session.finish()
+                    recognized_text = await drain_realtime_asr(asr_session)
+                    if getattr(asr_session, "failed", False):
+                        recognized_text = ""
+                    logger.info(
+                        "Echo device realtime ASR finalized device_id=%s text_length=%s",
+                        device_id,
+                        len(recognized_text),
+                    )
+                except Exception:
+                    logger.warning(
+                        "Echo device realtime ASR failed; falling back to batch ASR "
+                        "device_id=%s",
+                        device_id,
+                        exc_info=True,
+                    )
+                finally:
+                    with suppress(Exception):
+                        await asr_session.close()
 
             async def send_recognized(user_text: str) -> None:
                 await websocket.send_json(
                     {"session_id": session_id, "type": "stt", "text": user_text}
                 )
 
-            result = await get_process_device_voice_turn().execute(
-                user_id=user_id,
-                pcm16_audio=pcm16_audio,
-                request_id=request_id,
-                on_recognized=send_recognized,
-            )
+            if settings.echo_device_streaming_enabled:
+                playback_started_at: float | None = None
+                packet_index = 0
+
+                async def send_tts_start() -> None:
+                    await websocket.send_json(
+                        {"session_id": session_id, "type": "tts", "state": "start"}
+                    )
+
+                async def send_sentence_start(text: str) -> None:
+                    await websocket.send_json(
+                        {
+                            "session_id": session_id,
+                            "type": "tts",
+                            "state": "sentence_start",
+                            "text": text,
+                        }
+                    )
+
+                async def send_audio_packet(packet: bytes) -> None:
+                    nonlocal playback_started_at, packet_index
+                    loop = asyncio.get_running_loop()
+                    if playback_started_at is None:
+                        playback_started_at = loop.time()
+                    else:
+                        send_at = playback_started_at + packet_index * 0.06
+                        delay = send_at - loop.time()
+                        if delay > 0:
+                            await asyncio.sleep(delay)
+                    await websocket.send_bytes(packet)
+                    packet_index += 1
+
+                async def send_tts_stop() -> None:
+                    await websocket.send_json(
+                        {"session_id": session_id, "type": "tts", "state": "stop"}
+                    )
+
+                result = await get_stream_device_voice_turn().execute(
+                    user_id=user_id,
+                    pcm16_audio=pcm16_audio,
+                    request_id=request_id,
+                    on_recognized=send_recognized,
+                    on_tts_start=send_tts_start,
+                    on_sentence_start=send_sentence_start,
+                    on_audio_packet=send_audio_packet,
+                    on_tts_stop=send_tts_stop,
+                    recognized_text=recognized_text or None,
+                )
+                logger.info(
+                    "Echo streaming device turn delivered device_id=%s duration_ms=%.1f "
+                    "packets=%s",
+                    device_id,
+                    (time.perf_counter() - started_at) * 1000,
+                    packet_index,
+                )
+                return
+
+            process_kwargs = {
+                "user_id": user_id,
+                "pcm16_audio": pcm16_audio,
+                "request_id": request_id,
+                "on_recognized": send_recognized,
+            }
+            if recognized_text:
+                process_kwargs["recognized_text"] = recognized_text
+            result = await get_process_device_voice_turn().execute(**process_kwargs)
+            reply_ready_at = time.perf_counter()
             if not result.audio_urls:
                 raise ValueError("Echo TTS did not return audio")
 
             source = EchoAudioSource()
             audio_bytes = await source.read(result.audio_urls[0])
+            audio_loaded_at = time.perf_counter()
             packets = await asyncio.to_thread(
                 encode_audio_bytes_to_opus_packets,
                 audio_bytes,
                 output_sample_rate=24000,
                 frame_duration_ms=60,
             )
+            audio_encoded_at = time.perf_counter()
             await websocket.send_json(
                 {"session_id": session_id, "type": "tts", "state": "start"}
             )
@@ -202,11 +307,17 @@ async def device_websocket(websocket: WebSocket):
             )
             logger.info(
                 "Echo device turn completed device_id=%s input_bytes=%s output_packets=%s "
-                "prebuffer_packets=%s max_send_lateness_ms=%.1f duration_ms=%.1f",
+                "prebuffer_packets=%s reply_ready_ms=%.1f audio_load_ms=%.1f "
+                "audio_encode_ms=%.1f playback_ms=%.1f max_send_lateness_ms=%.1f "
+                "duration_ms=%.1f",
                 device_id,
                 len(pcm16_audio),
                 len(packets),
                 prebuffer_count,
+                (reply_ready_at - started_at) * 1000,
+                (audio_loaded_at - reply_ready_at) * 1000,
+                (audio_encoded_at - audio_loaded_at) * 1000,
+                (time.perf_counter() - audio_encoded_at) * 1000,
                 maximum_send_lateness * 1000,
                 (time.perf_counter() - started_at) * 1000,
             )
@@ -230,14 +341,16 @@ async def device_websocket(websocket: WebSocket):
             except Exception:
                 pass
 
-    def start_processing() -> None:
-        nonlocal decoder, endpoint_detector, processing_task
+    async def start_processing() -> None:
+        nonlocal decoder, endpoint_detector, processing_task, realtime_asr_session
         if decoder is None or processing_task is not None:
             return
         detector = endpoint_detector
         pcm16_audio = decoder.finish()
         decoder = None
         endpoint_detector = None
+        asr_session = realtime_asr_session
+        realtime_asr_session = None
         if detector is not None:
             pcm16_audio = detector.trim(pcm16_audio)
         if len(pcm16_audio) > maximum_utterance_bytes:
@@ -248,7 +361,7 @@ async def device_websocket(websocket: WebSocket):
                 maximum_utterance_bytes,
             )
             pcm16_audio = pcm16_audio[:maximum_utterance_bytes]
-        processing_task = asyncio.create_task(process_turn(pcm16_audio))
+        processing_task = asyncio.create_task(process_turn(pcm16_audio, asr_session))
 
     try:
         while True:
@@ -267,15 +380,40 @@ async def device_websocket(websocket: WebSocket):
                     if len(binary) > settings.echo_device_max_opus_packet_bytes:
                         raise ValueError("Device Opus packet is too large")
                     decoded_pcm = decoder.push(binary)
+                    if realtime_asr_session is not None and decoded_pcm:
+                        try:
+                            await realtime_asr_session.send_audio(decoded_pcm)
+                        except Exception:
+                            logger.warning(
+                                "Echo device realtime ASR upload failed; "
+                                "falling back to batch ASR device_id=%s",
+                                device_id,
+                                exc_info=True,
+                            )
+                            with suppress(Exception):
+                                await realtime_asr_session.close()
+                            realtime_asr_session = None
                     if endpoint_detector is not None:
                         endpoint_reached = endpoint_detector.push(decoded_pcm)
                         if endpoint_reached:
+                            capture_duration_ms = (
+                                (time.perf_counter() - capture_started_at) * 1000
+                                if capture_started_at is not None
+                                else endpoint_detector.elapsed_ms
+                            )
                             logger.info(
-                                "Echo device endpoint detected device_id=%s buffered_bytes=%s",
+                                "Echo device endpoint detected device_id=%s buffered_bytes=%s "
+                                "audio_duration_ms=%.1f capture_ms=%.1f speech_elapsed_ms=%.1f "
+                                "trailing_silence_ms=%.1f configured_silence_ms=%s",
                                 device_id,
                                 decoder.buffered_bytes,
+                                decoder.buffered_bytes * 1000 / (16000 * 2),
+                                capture_duration_ms,
+                                endpoint_detector.speech_elapsed_ms,
+                                endpoint_detector.trailing_silence_ms,
+                                settings.echo_device_auto_silence_ms,
                             )
-                            start_processing()
+                            await start_processing()
                         elif (
                             not endpoint_detector.speech_started
                             and not endpoint_detector.has_speech_candidate
@@ -300,7 +438,7 @@ async def device_websocket(websocket: WebSocket):
                                 device_id,
                                 decoder.buffered_bytes,
                             )
-                            start_processing()
+                            await start_processing()
                     elif decoder.buffered_bytes > maximum_utterance_bytes:
                         logger.warning(
                             "Echo device manual utterance reached maximum duration "
@@ -308,7 +446,7 @@ async def device_websocket(websocket: WebSocket):
                             device_id,
                             decoder.buffered_bytes,
                         )
-                        start_processing()
+                        await start_processing()
                 continue
 
             text = message.get("text")
@@ -346,15 +484,42 @@ async def device_websocket(websocket: WebSocket):
                 if state == "start":
                     if processing_task is not None:
                         continue
+                    if realtime_asr_session is not None:
+                        with suppress(Exception):
+                            await realtime_asr_session.close()
+                        realtime_asr_session = None
                     decoder = OpusPacketDecoder(output_sample_rate=16000)
+                    capture_started_at = time.perf_counter()
                     mode = str(payload.get("mode", ""))
                     endpoint_detector = (
                         new_auto_endpoint_detector()
                         if mode == "auto"
                         else None
                     )
+                    if (
+                        settings.echo_device_realtime_asr_enabled
+                        and settings.voice_streaming_asr_enabled
+                    ):
+                        try:
+                            realtime_asr_session = await asyncio.wait_for(
+                                open_streaming_voice_recognition(),
+                                timeout=10,
+                            )
+                            logger.info(
+                                "Echo device realtime ASR ready device_id=%s mode=%s",
+                                device_id,
+                                mode,
+                            )
+                        except Exception:
+                            logger.warning(
+                                "Echo device realtime ASR unavailable; using batch ASR "
+                                "device_id=%s",
+                                device_id,
+                                exc_info=True,
+                            )
+                            realtime_asr_session = None
                 elif state == "stop" and decoder is not None and processing_task is None:
-                    start_processing()
+                    await start_processing()
             elif message_type == "abort":
                 if processing_task is not None:
                     processing_task.cancel()
@@ -363,6 +528,10 @@ async def device_websocket(websocket: WebSocket):
                     processing_task = None
                 decoder = None
                 endpoint_detector = None
+                if realtime_asr_session is not None:
+                    with suppress(Exception):
+                        await realtime_asr_session.close()
+                    realtime_asr_session = None
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -375,3 +544,6 @@ async def device_websocket(websocket: WebSocket):
                 processing_task.cancel()
             with suppress(asyncio.CancelledError, Exception):
                 await processing_task
+        if realtime_asr_session is not None:
+            with suppress(Exception):
+                await realtime_asr_session.close()

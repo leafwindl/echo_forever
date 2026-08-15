@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import logging
 import time
+from collections.abc import Awaitable, Callable
 
 from features.agent.domain.delivery import (
     build_natural_delivery_plan,
@@ -199,6 +200,7 @@ class GenerateChatReply:
         history_before_message_id: int | None = None,
         proactive_intent: str = "",
         proactive_force_send: bool = False,
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> PreparedChatReply:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -272,6 +274,8 @@ class GenerateChatReply:
         }
         if "conversation_id" in inspect.signature(self.agent_orchestrator.run).parameters:
             agent_kwargs["conversation_id"] = conversation_id
+        if "on_text_delta" in inspect.signature(self.agent_orchestrator.run).parameters:
+            agent_kwargs["on_text_delta"] = on_text_delta
         agent_result = await self.agent_orchestrator.run(
             clean_user_id,
             agent_message,
@@ -383,6 +387,7 @@ class GenerateChatReply:
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         user_content_parts: tuple[ContentPart, ...] = (),
+        on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> ChatTurnResult:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -405,6 +410,7 @@ class GenerateChatReply:
             conversation_id=resolved_conversation_id,
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
+            on_text_delta=on_text_delta,
         )
         logger.info(
             "LLM reply generated for user_id=%s text_length=%s duration_ms=%.1f",
