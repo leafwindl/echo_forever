@@ -369,8 +369,9 @@ class FakeStreamingDeviceTurn:
         on_audio_packet,
         on_tts_stop,
         recognized_text=None,
+        latency=None,
     ):
-        del user_id, pcm16_audio, request_id
+        del user_id, pcm16_audio, request_id, latency
         self.recognized_text = recognized_text
         await on_recognized(recognized_text or "batch-result")
         await on_tts_start()

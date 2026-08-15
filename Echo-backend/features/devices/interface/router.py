@@ -11,6 +11,7 @@ from contextlib import suppress
 from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect, status
 from shared.config import settings
 
+from features.devices.application.latency import DeviceLatencyTracker
 from features.devices.domain.entities import DeviceAudioFormat
 from features.devices.infrastructure.adapters import EchoAudioSource, parse_personal_device_map
 from features.devices.infrastructure.audio_codec import (
@@ -152,10 +153,17 @@ async def device_websocket(websocket: WebSocket):
                 break
         return latest_text
 
-    async def process_turn(pcm16_audio: bytes, asr_session=None) -> None:
+    async def process_turn(
+        pcm16_audio: bytes,
+        asr_session=None,
+        *,
+        speech_ended_at: float | None = None,
+    ) -> None:
         started_at = time.perf_counter()
         try:
             request_id = f"device-{session_id}-{uuid.uuid4().hex[:12]}"
+            latency = DeviceLatencyTracker(request_id, started_at=speech_ended_at)
+            latency.mark("endpoint_detected")
             recognized_text = ""
             if asr_session is not None:
                 try:
@@ -192,6 +200,7 @@ async def device_websocket(websocket: WebSocket):
                     await websocket.send_json(
                         {"session_id": session_id, "type": "tts", "state": "start"}
                     )
+                    latency.mark("device_tts_start")
 
                 async def send_sentence_start(text: str) -> None:
                     await websocket.send_json(
@@ -214,6 +223,7 @@ async def device_websocket(websocket: WebSocket):
                         if delay > 0:
                             await asyncio.sleep(delay)
                     await websocket.send_bytes(packet)
+                    latency.mark("device_first_packet")
                     packet_index += 1
 
                 async def send_tts_stop() -> None:
@@ -231,7 +241,9 @@ async def device_websocket(websocket: WebSocket):
                     on_audio_packet=send_audio_packet,
                     on_tts_stop=send_tts_stop,
                     recognized_text=recognized_text or None,
+                    latency=latency,
                 )
+                latency.log_summary(device_id=device_id, packet_count=packet_index)
                 logger.info(
                     "Echo streaming device turn delivered device_id=%s duration_ms=%.1f "
                     "packets=%s",
@@ -361,7 +373,16 @@ async def device_websocket(websocket: WebSocket):
                 maximum_utterance_bytes,
             )
             pcm16_audio = pcm16_audio[:maximum_utterance_bytes]
-        processing_task = asyncio.create_task(process_turn(pcm16_audio, asr_session))
+        speech_ended_at = time.perf_counter()
+        if detector is not None and detector.speech_started:
+            speech_ended_at -= detector.trailing_silence_ms / 1000
+        processing_task = asyncio.create_task(
+            process_turn(
+                pcm16_audio,
+                asr_session,
+                speech_ended_at=speech_ended_at,
+            )
+        )
 
     try:
         while True:

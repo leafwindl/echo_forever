@@ -6,6 +6,7 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 
+from features.devices.application.latency import DeviceLatencyTracker
 from features.devices.application.sentence_chunker import SentenceChunker
 from features.devices.domain.entities import DeviceTurnResult
 from features.devices.domain.services import (
@@ -54,6 +55,7 @@ class StreamDeviceVoiceTurn:
         on_audio_packet: PacketCallback,
         on_tts_stop: EventCallback,
         recognized_text: str | None = None,
+        latency: DeviceLatencyTracker | None = None,
     ) -> DeviceTurnResult:
         if not user_id.strip():
             raise ValueError("Device is not mapped to an Echo user")
@@ -65,6 +67,8 @@ class StreamDeviceVoiceTurn:
             user_text = (await self.recognizer.recognize_pcm16(pcm16_audio)).strip()
         if not user_text:
             raise ValueError("Device speech was not recognized")
+        if latency is not None:
+            latency.mark("asr_final")
         await on_recognized(user_text)
 
         phrase_queue: asyncio.Queue[str | None] = asyncio.Queue(
@@ -73,13 +77,19 @@ class StreamDeviceVoiceTurn:
         chunker = SentenceChunker(max_chars=self.chunk_max_chars)
         tts_started = False
         delta_received = False
+        first_sentence_ready = False
 
         async def on_text_delta(delta: str) -> None:
-            nonlocal delta_received
+            nonlocal delta_received, first_sentence_ready
             if delta:
+                if not delta_received and latency is not None:
+                    latency.mark("llm_first_delta")
                 delta_received = True
             for phrase in chunker.push(delta):
                 if phrase:
+                    if not first_sentence_ready and latency is not None:
+                        first_sentence_ready = True
+                        latency.mark("llm_first_sentence")
                     await phrase_queue.put(phrase)
 
         async def consume_phrases() -> None:
@@ -87,6 +97,7 @@ class StreamDeviceVoiceTurn:
             from features.devices.infrastructure.audio_codec import StreamingPcmOpusEncoder
 
             encoder = StreamingPcmOpusEncoder(sample_rate=24000, frame_duration_ms=60)
+            first_pcm_received = False
             while True:
                 phrase = await phrase_queue.get()
                 if phrase is None:
@@ -96,6 +107,10 @@ class StreamDeviceVoiceTurn:
                     await on_tts_start()
                 await on_sentence_start(phrase)
                 async for pcm16_chunk in self.speech.stream_pcm16(phrase):
+                    if not first_pcm_received:
+                        first_pcm_received = True
+                        if latency is not None:
+                            latency.mark("tts_first_pcm")
                     for packet in encoder.push(pcm16_chunk):
                         await on_audio_packet(packet)
             for packet in encoder.finish():
@@ -113,14 +128,25 @@ class StreamDeviceVoiceTurn:
                 on_reply_delta=on_text_delta,
                 synthesize_voice=False,
             )
+            if latency is not None:
+                latency.mark("reply_persisted")
             if not delta_received and result.reply.strip():
                 for phrase in chunker.push(result.reply):
+                    if phrase and not first_sentence_ready and latency is not None:
+                        first_sentence_ready = True
+                        latency.mark("llm_first_sentence")
                     await phrase_queue.put(phrase)
             for phrase in chunker.finish():
+                if phrase and not first_sentence_ready and latency is not None:
+                    first_sentence_ready = True
+                    latency.mark("llm_first_sentence")
                 await phrase_queue.put(phrase)
             await phrase_queue.put(None)
             await consumer_task
             await self.notifier.notify_latest_turn(user_id)
+            if latency is not None:
+                latency.mark("app_notified")
+                latency.mark("turn_complete")
             logger.info(
                 "Echo streaming device turn completed input_bytes=%s "
                 "audio_duration_ms=%.1f duration_ms=%.1f",
