@@ -67,6 +67,17 @@ class LLMProvider(Protocol):
 
 
 class OpenAICompatibleLLMProvider:
+    def __init__(self):
+        self._client: httpx.AsyncClient | None = None
+
+    def _http_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=settings.timeout,
+                limits=httpx.Limits(keepalive_expiry=300),
+            )
+        return self._client
+
     @staticmethod
     def _request_options(
         messages: list[dict],
@@ -128,35 +139,34 @@ class OpenAICompatibleLLMProvider:
             payload["thinking"] = thinking
 
         try:
-            async with httpx.AsyncClient(timeout=settings.timeout) as client:
-                response = await client.post(url, headers=headers, json=payload)
-                response.raise_for_status()
-                data = response.json()
-                choice = data["choices"][0]
-                message = choice.get("message") or {}
-                parsed_calls = []
-                for raw_call in message.get("tool_calls") or []:
-                    function = raw_call.get("function") or {}
-                    raw_arguments = function.get("arguments") or "{}"
-                    try:
-                        arguments = json.loads(raw_arguments)
-                    except (TypeError, json.JSONDecodeError):
-                        arguments = {}
-                    if not isinstance(arguments, dict):
-                        arguments = {}
-                    parsed_calls.append(
-                        ProviderToolCall(
-                            call_id=str(raw_call.get("id") or ""),
-                            name=str(function.get("name") or ""),
-                            arguments=arguments,
-                        )
+            response = await self._http_client().post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            choice = data["choices"][0]
+            message = choice.get("message") or {}
+            parsed_calls = []
+            for raw_call in message.get("tool_calls") or []:
+                function = raw_call.get("function") or {}
+                raw_arguments = function.get("arguments") or "{}"
+                try:
+                    arguments = json.loads(raw_arguments)
+                except (TypeError, json.JSONDecodeError):
+                    arguments = {}
+                if not isinstance(arguments, dict):
+                    arguments = {}
+                parsed_calls.append(
+                    ProviderToolCall(
+                        call_id=str(raw_call.get("id") or ""),
+                        name=str(function.get("name") or ""),
+                        arguments=arguments,
                     )
-                return ProviderAssistantMessage(
-                    content=str(message.get("content") or ""),
-                    tool_calls=tuple(parsed_calls),
-                    finish_reason=str(choice.get("finish_reason") or ""),
-                    request_id=str(data.get("id") or response.headers.get("x-request-id") or ""),
                 )
+            return ProviderAssistantMessage(
+                content=str(message.get("content") or ""),
+                tool_calls=tuple(parsed_calls),
+                finish_reason=str(choice.get("finish_reason") or ""),
+                request_id=str(data.get("id") or response.headers.get("x-request-id") or ""),
+            )
         except httpx.TimeoutException as exc:
             logger.warning("LLM request timed out timeout_seconds=%s", settings.timeout)
             raise LLMProviderTimeoutError("LLM provider request timed out") from exc
@@ -205,7 +215,7 @@ class OpenAICompatibleLLMProvider:
         finish_reason = ""
         request_id = ""
         try:
-            async with httpx.AsyncClient(timeout=settings.timeout) as client, client.stream(
+            async with self._http_client().stream(
                 "POST", url, headers=headers, json=payload
             ) as response:
                 response.raise_for_status()

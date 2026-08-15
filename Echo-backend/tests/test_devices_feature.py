@@ -117,6 +117,21 @@ class SentenceChunkerTests(unittest.TestCase):
         self.assertEqual(chunker.push("一二三四五六七八九"), ("一二三四五六七八",))
         self.assertEqual(chunker.finish(), ("九",))
 
+    def test_emits_a_natural_clause_at_a_later_comma(self):
+        chunker = SentenceChunker(max_chars=18)
+
+        self.assertEqual(
+            chunker.push("叶子，今天白天刚忙完汇报，"),
+            ("叶子，今天白天刚忙完汇报，",),
+        )
+        self.assertEqual(chunker.finish(), ())
+
+    def test_does_not_emit_an_overly_short_comma_fragment(self):
+        chunker = SentenceChunker(max_chars=18)
+
+        self.assertEqual(chunker.push("叶子，"), ())
+        self.assertEqual(chunker.push("我在听。"), ("叶子，我在听。",))
+
 
 class DeviceStreamingCodecTests(unittest.TestCase):
     def test_streaming_encoder_emits_packets_after_incremental_pcm(self):

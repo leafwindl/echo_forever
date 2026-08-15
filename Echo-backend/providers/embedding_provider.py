@@ -1,21 +1,34 @@
+from __future__ import annotations
+
 import logging
-from typing import Optional, Protocol, cast
+from typing import Protocol, cast
 
 import httpx
+from shared.config import settings
 
 from providers.registry import get_provider
-from shared.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class EmbeddingProvider(Protocol):
-    async def create_embedding(self, text: str, model: Optional[str] = None) -> list[float]:
+    async def create_embedding(self, text: str, model: str | None = None) -> list[float]:
         ...
 
 
 class OpenAICompatibleEmbeddingProvider:
-    async def create_embedding(self, text: str, model: Optional[str] = None) -> list[float]:
+    def __init__(self):
+        self._client: httpx.AsyncClient | None = None
+
+    def _http_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=settings.timeout,
+                limits=httpx.Limits(keepalive_expiry=300),
+            )
+        return self._client
+
+    async def create_embedding(self, text: str, model: str | None = None) -> list[float]:
         clean_text = text.strip()
         if not clean_text:
             raise ValueError("Embedding input cannot be empty")
@@ -33,18 +46,19 @@ class OpenAICompatibleEmbeddingProvider:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=settings.timeout) as client:
-                response = await client.post(url, headers=headers, json=payload)
-                response.raise_for_status()
-                data = response.json()
-                embedding = data["data"][0]["embedding"]
+            response = await self._http_client().post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            embedding = data["data"][0]["embedding"]
         except httpx.HTTPStatusError as exc:
             logger.error(
                 "HTTPStatusError from embedding API status=%s response_length=%s",
                 exc.response.status_code,
                 len(exc.response.text or ""),
             )
-            raise ValueError(f"Embedding service responded with status {exc.response.status_code}") from exc
+            raise ValueError(
+                f"Embedding service responded with status {exc.response.status_code}"
+            ) from exc
         except Exception as exc:
             logger.error("Error requesting embedding: %s", exc)
             raise ValueError("Failed to request embedding service") from exc
