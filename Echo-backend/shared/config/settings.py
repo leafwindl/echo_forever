@@ -194,7 +194,7 @@ class Settings(BaseSettings):
         validation_alias="COSYVOICE_WEBSOCKET_URL",
     )
     cosyvoice_instruction: str = Field(
-        default="用温柔、自然、亲近的语气说话，语速稍慢，像在陪伴用户聊天。",
+        default="用温柔、自然、亲近的语气连贯说话，语速稍快，句间只做极短停顿，不要长时间停顿，像在陪伴用户聊天。",
         validation_alias="COSYVOICE_INSTRUCTION",
     )
     cosyvoice_volume: int = Field(
@@ -299,19 +299,19 @@ class Settings(BaseSettings):
         validation_alias="ECHO_DEVICE_REALTIME_ASR_ENABLED",
     )
     echo_device_tts_chunk_max_chars: int = Field(
-        default=32,
+        default=18,
         validation_alias="ECHO_DEVICE_TTS_CHUNK_MAX_CHARS",
         ge=8,
         le=120,
     )
     echo_device_tts_chunk_min_chars: int = Field(
-        default=12,
+        default=8,
         validation_alias="ECHO_DEVICE_TTS_CHUNK_MIN_CHARS",
         ge=1,
         le=120,
     )
     echo_device_tts_prefetch_phrases: int = Field(
-        default=1,
+        default=2,
         validation_alias="ECHO_DEVICE_TTS_PREFETCH_PHRASES",
         ge=0,
         le=4,
