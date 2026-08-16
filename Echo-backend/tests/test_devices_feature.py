@@ -13,9 +13,14 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from features.agent.domain.delivery import AgentDeliveryPlanError
 from features.devices.application.process_voice_turn import ProcessDeviceVoiceTurn
 from features.devices.application.sentence_chunker import SentenceChunker
 from features.devices.application.stream_voice_turn import StreamDeviceVoiceTurn
+from features.devices.application.transcript_guard import (
+    is_plausible_device_transcript,
+    maximum_transcript_chars,
+)
 from features.devices.domain.entities import DeviceTurnResult
 from features.devices.infrastructure.adapters import parse_personal_device_map
 from features.devices.infrastructure.audio_codec import (
@@ -130,7 +135,31 @@ class SentenceChunkerTests(unittest.TestCase):
         chunker = SentenceChunker(max_chars=18)
 
         self.assertEqual(chunker.push("叶子，"), ())
-        self.assertEqual(chunker.push("我在听。"), ("叶子，我在听。",))
+        self.assertEqual(chunker.push("我在听。"), ())
+        self.assertEqual(chunker.push("你慢慢说。"), ("叶子，我在听。你慢慢说。",))
+
+    def test_coalesces_short_sentences_to_reduce_tts_requests(self):
+        chunker = SentenceChunker(max_chars=32, min_chars=12)
+
+        self.assertEqual(chunker.push("好呀。"), ())
+        self.assertEqual(chunker.push("我陪你聊。"), ())
+        self.assertEqual(
+            chunker.push("你刚才最在意的是哪一段？"),
+            ("好呀。我陪你聊。你刚才最在意的是哪一段？",),
+        )
+
+
+class DeviceTranscriptGuardTests(unittest.TestCase):
+    def test_rejects_transcript_impossible_for_audio_duration(self):
+        audio_bytes = 4 * 16000 * 2
+
+        self.assertEqual(maximum_transcript_chars(audio_bytes), 96)
+        self.assertFalse(is_plausible_device_transcript("很长" * 200, audio_bytes))
+
+    def test_accepts_normal_transcript(self):
+        self.assertTrue(
+            is_plausible_device_transcript("我刚刚在看视频。", 2 * 16000 * 2)
+        )
 
 
 class DeviceStreamingCodecTests(unittest.TestCase):
@@ -322,8 +351,10 @@ class FakeStreamingConversation:
         user_text,
         request_id,
         on_reply_delta=None,
+        on_progress_text=None,
         synthesize_voice=True,
     ):
+        del on_progress_text
         self.arguments = (user_id, user_text, request_id, synthesize_voice)
         await on_reply_delta("第一句。第二句")
         return DeviceTurnResult(user_text=user_text, reply="第一句。第二句", audio_urls=())
@@ -372,6 +403,18 @@ class FakeEmptyDeviceRealtimeAsrSession(FakeDeviceRealtimeAsrSession):
     async def finish(self):
         self.finished = True
         await self._updates.put(type("Update", (), {"text": "", "is_final": True})())
+
+
+class FakeImplausibleDeviceRealtimeAsrSession(FakeDeviceRealtimeAsrSession):
+    async def finish(self):
+        self.finished = True
+        await self._updates.put(
+            type(
+                "Update",
+                (),
+                {"text": "异常长文本" * 80, "is_final": True},
+            )()
+        )
 
 
 class FakeStreamingDeviceTurn:
@@ -520,12 +563,56 @@ class DeviceStreamingTurnTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.reply, "第一句。第二句")
         self.assertEqual(recognized, ["用户问题"])
-        self.assertEqual(speech.phrases, ["第一句。", "第二句"])
+        self.assertEqual(speech.phrases, ["第一句。第二句"])
         self.assertEqual(lifecycle[0], "start")
         self.assertEqual(lifecycle[-1], "stop")
         self.assertTrue(packets)
         self.assertEqual(notifier.user_id, "user-1")
         self.assertEqual(conversation.arguments[-1], False)
+
+    async def test_rejects_internal_time_metadata_before_tts(self):
+        class Recognizer:
+            async def recognize_pcm16(self, audio):
+                del audio
+                return "用户问题"
+
+        class LeakingConversation:
+            async def reply(self, **kwargs):
+                await kwargs["on_reply_delta"](
+                    "[消息时间 2026-08-16T10:00:00+08:00]\n不该说出来。"
+                )
+                return DeviceTurnResult(
+                    user_text=kwargs["user_text"],
+                    reply="不该说出来。",
+                    audio_urls=(),
+                )
+
+        speech = FakeStreamingSpeech()
+        turn = StreamDeviceVoiceTurn(
+            recognizer=Recognizer(),
+            conversation=LeakingConversation(),
+            speech=speech,
+            notifier=FakeStreamingNotifier(),
+            chunk_max_chars=24,
+            queue_max_packets=40,
+        )
+
+        async def ignore(*_args):
+            return None
+
+        with self.assertRaises(AgentDeliveryPlanError):
+            await turn.execute(
+                user_id="user-1",
+                pcm16_audio=b"\x00\x00" * 16000,
+                request_id="device-leak",
+                on_recognized=ignore,
+                on_tts_start=ignore,
+                on_sentence_start=ignore,
+                on_audio_packet=ignore,
+                on_tts_stop=ignore,
+            )
+
+        self.assertEqual(speech.phrases, [])
 
     async def test_prefetches_next_phrase_while_first_phrase_is_streaming(self):
         class Recognizer:
@@ -540,7 +627,7 @@ class DeviceStreamingTurnTests(unittest.IsolatedAsyncioTestCase):
                 self.second_started_before_first_finished = False
 
             async def _stream(self, text):
-                if text == "第一句。":
+                if text == "第一段内容已经足够长了。":
                     await asyncio.wait_for(self.second_started.wait(), timeout=1)
                     yield b"\x00\x00" * 1440
                     self.first_finished = True
@@ -552,13 +639,23 @@ class DeviceStreamingTurnTests(unittest.IsolatedAsyncioTestCase):
             def stream_pcm16(self, text):
                 return self._stream(text)
 
+        class MultiPhraseConversation:
+            async def reply(self, **kwargs):
+                reply = "第一段内容已经足够长了。第二段内容也已经足够长。"
+                await kwargs["on_reply_delta"](reply)
+                return DeviceTurnResult(
+                    user_text=kwargs["user_text"],
+                    reply=reply,
+                    audio_urls=(),
+                )
+
         async def ignore(*_args):
             return None
 
         speech = CoordinatedSpeech()
         turn = StreamDeviceVoiceTurn(
             recognizer=Recognizer(),
-            conversation=FakeStreamingConversation(),
+            conversation=MultiPhraseConversation(),
             speech=speech,
             notifier=FakeStreamingNotifier(),
             chunk_max_chars=24,
@@ -578,6 +675,140 @@ class DeviceStreamingTurnTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(speech.second_started_before_first_finished)
+
+    async def test_progress_phrase_is_spoken_before_final_reply(self):
+        class Recognizer:
+            async def recognize_pcm16(self, audio):
+                del audio
+                return "今天有什么新闻"
+
+        class ProgressConversation:
+            async def reply(self, **kwargs):
+                await kwargs["on_progress_text"]("好，我查一下。")
+                await kwargs["on_reply_delta"]("今天比较受关注的是这件事。")
+                return DeviceTurnResult(
+                    user_text=kwargs["user_text"],
+                    reply="今天比较受关注的是这件事。",
+                    audio_urls=(),
+                )
+
+        speech = FakeStreamingSpeech()
+        turn = StreamDeviceVoiceTurn(
+            recognizer=Recognizer(),
+            conversation=ProgressConversation(),
+            speech=speech,
+            notifier=FakeStreamingNotifier(),
+            chunk_max_chars=32,
+            queue_max_packets=40,
+        )
+
+        async def ignore(*_args):
+            return None
+
+        await turn.execute(
+            user_id="user-1",
+            pcm16_audio=b"\x00\x00" * 16000,
+            request_id="device-progress",
+            on_recognized=ignore,
+            on_tts_start=ignore,
+            on_sentence_start=ignore,
+            on_audio_packet=ignore,
+            on_tts_stop=ignore,
+        )
+
+        self.assertEqual(
+            speech.phrases,
+            ["好，我查一下。", "今天比较受关注的是这件事。"],
+        )
+
+    async def test_retries_initial_tts_failure_once_and_releases_the_turn(self):
+        class RetryOnceSpeech:
+            def __init__(self):
+                self.calls = 0
+
+            async def _stream(self, text):
+                del text
+                self.calls += 1
+                if self.calls == 1:
+                    raise ValueError("rate limited")
+                yield b"\x00\x00" * 1440
+
+            def stream_pcm16(self, text):
+                return self._stream(text)
+
+        speech = RetryOnceSpeech()
+        lifecycle = []
+        turn = StreamDeviceVoiceTurn(
+            recognizer=AsyncMock(return_value="用户问题"),
+            conversation=FakeStreamingConversation(),
+            speech=speech,
+            notifier=FakeStreamingNotifier(),
+            chunk_max_chars=24,
+            queue_max_packets=40,
+        )
+
+        async def record(value=None):
+            lifecycle.append(value)
+
+        with patch(
+            "features.devices.application.stream_voice_turn."
+            "_TTS_EMPTY_AUDIO_RETRY_DELAY_SECONDS",
+            0,
+        ):
+            await turn.execute(
+                user_id="user-1",
+                pcm16_audio=b"\x00\x00" * 16000,
+                request_id="device-tts-retry",
+                on_recognized=lambda _text: record("recognized"),
+                on_tts_start=lambda: record("start"),
+                on_sentence_start=lambda _text: record("sentence"),
+                on_audio_packet=lambda _packet: record("packet"),
+                on_tts_stop=lambda: record("stop"),
+                recognized_text="用户问题",
+            )
+
+        self.assertEqual(speech.calls, 2)
+        self.assertEqual(lifecycle.count("start"), 1)
+        self.assertEqual(lifecycle.count("stop"), 1)
+
+    async def test_tts_failure_after_audio_still_stops_exactly_once(self):
+        class FailingAfterAudioSpeech:
+            async def _stream(self, text):
+                del text
+                yield b"\x00\x00" * 1440
+                raise ValueError("stream interrupted")
+
+            def stream_pcm16(self, text):
+                return self._stream(text)
+
+        lifecycle = []
+        turn = StreamDeviceVoiceTurn(
+            recognizer=AsyncMock(return_value="用户问题"),
+            conversation=FakeStreamingConversation(),
+            speech=FailingAfterAudioSpeech(),
+            notifier=FakeStreamingNotifier(),
+            chunk_max_chars=24,
+            queue_max_packets=40,
+        )
+
+        async def record(value=None):
+            lifecycle.append(value)
+
+        with self.assertRaisesRegex(ValueError, "stream interrupted"):
+            await turn.execute(
+                user_id="user-1",
+                pcm16_audio=b"\x00\x00" * 16000,
+                request_id="device-tts-failure",
+                on_recognized=lambda _text: record("recognized"),
+                on_tts_start=lambda: record("start"),
+                on_sentence_start=lambda _text: record("sentence"),
+                on_audio_packet=lambda _packet: record("packet"),
+                on_tts_stop=lambda: record("stop"),
+                recognized_text="用户问题",
+            )
+
+        self.assertEqual(lifecycle.count("start"), 1)
+        self.assertEqual(lifecycle.count("stop"), 1)
 
 
 class DeviceWebSocketTests(unittest.TestCase):
@@ -636,6 +867,71 @@ class DeviceWebSocketTests(unittest.TestCase):
                 websocket.send_bytes(packet)
             websocket.send_json({"type": "listen", "state": "stop"})
 
+            self.assertEqual(websocket.receive_json()["state"], "stop")
+
+        self.assertTrue(asr_session.finished)
+        self.assertTrue(asr_session.closed)
+        self.assertIsNone(stream_turn.recognized_text)
+
+    def test_implausible_realtime_asr_falls_back_to_batch_recognition(self):
+        app = FastAPI()
+        app.include_router(device_router.router)
+        asr_session = FakeImplausibleDeviceRealtimeAsrSession()
+        stream_turn = FakeStreamingDeviceTurn()
+        packets = _encode_pcm_packets(_sine_pcm(16000, 0.18), 16000)
+
+        with (
+            patch.object(device_router.settings, "echo_device_token", "device-secret"),
+            patch.object(
+                device_router.settings,
+                "echo_device_user_map_json",
+                '{"aa:bb|client-1":"user-1"}',
+            ),
+            patch.object(device_router.settings, "echo_device_streaming_enabled", True),
+            patch.object(device_router.settings, "echo_device_realtime_asr_enabled", True),
+            patch.object(device_router.settings, "voice_streaming_asr_enabled", True),
+            patch.object(
+                device_router,
+                "open_streaming_voice_recognition",
+                new=AsyncMock(return_value=asr_session),
+            ),
+            patch.object(
+                device_router,
+                "get_stream_device_voice_turn",
+                return_value=stream_turn,
+            ),
+            TestClient(app) as client,
+            client.websocket_connect(
+                "/devices/ws",
+                headers={
+                    "Device-Id": "aa:bb",
+                    "Client-Id": "client-1",
+                    "Authorization": "Bearer device-secret",
+                },
+            ) as websocket,
+        ):
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "version": 1,
+                    "audio_params": {
+                        "format": "opus",
+                        "sample_rate": 16000,
+                        "channels": 1,
+                        "frame_duration": 60,
+                    },
+                }
+            )
+            websocket.receive_json()
+            websocket.send_json({"type": "listen", "state": "start"})
+            for packet in packets:
+                websocket.send_bytes(packet)
+            websocket.send_json({"type": "listen", "state": "stop"})
+
+            self.assertEqual(websocket.receive_json()["text"], "batch-result")
+            self.assertEqual(websocket.receive_json()["state"], "start")
+            self.assertEqual(websocket.receive_json()["state"], "sentence_start")
+            self.assertEqual(websocket.receive_bytes(), b"stream-opus")
             self.assertEqual(websocket.receive_json()["state"], "stop")
 
         self.assertTrue(asr_session.finished)

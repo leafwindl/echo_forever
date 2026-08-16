@@ -81,6 +81,7 @@ def register_web_search_tool(
                 risk_level=ToolRisk.READ,
                 timeout_seconds=15,
                 is_idempotent=True,
+                allowed_modes=("chat", "call"),
                 max_calls_per_turn=2,
             ),
             arguments_model=SearchWebArguments,

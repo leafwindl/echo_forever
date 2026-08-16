@@ -66,9 +66,19 @@ class ToolRegistry:
     def get(self, name: str) -> ToolDefinition | None:
         return self._definitions.get(name.strip())
 
-    def model_descriptions(self, conversation_mode: str) -> tuple[dict[str, Any], ...]:
+    def model_descriptions(
+        self,
+        conversation_mode: str,
+        allowed_tool_names: tuple[str, ...] | None = None,
+    ) -> tuple[dict[str, Any], ...]:
+        allowed_names = (
+            {name.strip() for name in allowed_tool_names if name.strip()}
+            if allowed_tool_names is not None
+            else None
+        )
         return tuple(
             definition.model_description()
             for definition in self._definitions.values()
             if conversation_mode in definition.specification.allowed_modes
+            and (allowed_names is None or definition.specification.name in allowed_names)
         )

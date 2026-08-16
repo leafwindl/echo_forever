@@ -58,6 +58,11 @@ _SESSION_BOUNDARY_LINE = re.compile(
 _ATTACHMENT_BLOCK = re.compile(
     r"\s*\n?\[本条消息的可信结构化附件\][\s\S]*$",
 )
+_CALL_EXTENDED_CONTEXT_PATTERN = re.compile(
+    r"(?:还记得|记得吗|记不记得|我说过|我们聊过|你知道我|"
+    r"(?:之前|以前|上次).{0,8}(?:我|我们|说|聊|提|事情|话题)|"
+    r"继续.{0,8}(?:之前|上次|话题))"
+)
 
 
 def _list_active_memories_for_context(user_id: str) -> list[dict[str, object]]:
@@ -103,6 +108,54 @@ async def _load_long_term_memories(
         _list_active_memories_for_context(user_id),
         "fallback_importance",
     )
+
+
+def _call_requires_extended_context(user_message: str) -> bool:
+    return bool(_CALL_EXTENDED_CONTEXT_PATTERN.search(user_message.strip()))
+
+
+def _clean_call_history_content(content: str) -> str:
+    clean = _MESSAGE_TIME_PREFIX.sub("", content, count=1)
+    clean = _SESSION_BOUNDARY_LINE.sub("", clean)
+    clean = _ATTACHMENT_BLOCK.sub("", clean)
+    return clean.strip()
+
+
+def _build_call_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
+    for message in history:
+        role = str(message.get("role") or "")
+        if role not in {"user", "assistant"}:
+            continue
+        content = _clean_call_history_content(str(message.get("content") or ""))
+        if content:
+            result.append({"role": role, "content": content})
+    return result
+
+
+def _build_call_temporal_context(
+    temporal_context: dict[str, object],
+) -> dict[str, object]:
+    result = {
+        key: temporal_context[key]
+        for key in (
+            "local_date",
+            "local_time",
+            "weekday",
+            "day_period",
+            "timezone",
+            "resolved_expressions",
+        )
+        if key in temporal_context
+    }
+    gap = temporal_context.get("conversation_gap")
+    if isinstance(gap, dict):
+        result["conversation_gap"] = {
+            key: gap[key]
+            for key in ("gap_seconds", "state", "should_acknowledge_gap")
+            if key in gap
+        }
+    return result
 
 
 def should_prioritize_proactive_sticker(
@@ -200,29 +253,36 @@ async def build_chat_context(
     conversation_mode: str = "chat",
     history_before_message_id: int | None = None,
 ) -> ChatContext:
+    is_call = conversation_mode == "call"
+    use_extended_call_context = is_call and _call_requires_extended_context(user_message)
     timezone_name = postgres_repositories.get_user_timezone(
         user_id,
         settings.default_user_timezone,
     )
-    long_term_memories, memory_retrieval_mode = await _load_long_term_memories(
-        user_id,
-        user_message,
-    )
+    if is_call and not use_extended_call_context:
+        long_term_memories, memory_retrieval_mode = [], "call_skipped"
+    else:
+        long_term_memories, memory_retrieval_mode = await _load_long_term_memories(
+            user_id,
+            user_message,
+        )
     summary_text = ""
     summary_message_id = 0
-    if conversation_id:
+    if conversation_id and (not is_call or use_extended_call_context):
         summary_state = postgres_repositories.get_conversation_summary(user_id, conversation_id)
         summary_text = str(summary_state["summary"])
         summary_message_id = int(summary_state["summary_message_id"])
 
     history = postgres_repositories.get_history(
         user_id,
-        limit=MAX_HISTORY_MESSAGES,
+        limit=settings.call_history_messages if is_call else MAX_HISTORY_MESSAGES,
         conversation_id=conversation_id,
         after_message_id=summary_message_id,
         before_message_id=history_before_message_id,
         timezone_name=timezone_name,
     )
+    if is_call:
+        history = _build_call_history(history)
     pause_followup_questions = should_pause_followup_questions(history, user_message)
     allow_proactive_stickers = (
         conversation_mode in {"chat", "proactive"}
@@ -258,6 +318,9 @@ async def build_chat_context(
         timezone_name=timezone_name,
         user_message=user_message,
         conversation_timing=conversation_timing,
+    )
+    prompt_temporal_context = (
+        _build_call_temporal_context(temporal_context) if is_call else temporal_context
     )
     conversation_gap = temporal_context.get("conversation_gap")
     conversation_gap_state = (
@@ -315,18 +378,25 @@ async def build_chat_context(
             ),
         }
     )
+    temporal_guidance = (
+        "以下是通话内部时间事实。仅在用户提到时间或理解上下文确有必要时使用，"
+        "不要朗读字段、日期协议或机械报时。conversation_gap 只表示对话是否连续；"
+        "resolved_expressions 只表示时间范围，不代表事情已经完成。\ncall_time_context="
+        if is_call
+        else (
+            "以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。"
+            "resolved_expressions 只确定时间范围，不代表对应事情已经发生或完成；"
+            "relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。"
+            "conversation_gap 的 active/recent 表示持续对话，不提离开；"
+            "returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，"
+            "事实问题、任务指令、报错和严肃话题不要插入。\ntemporal_context="
+        )
+    )
     messages.append(
         {
             "role": "system",
-            "content": (
-                "以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。"
-                "resolved_expressions 只确定时间范围，不代表对应事情已经发生或完成；"
-                "relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。"
-                "conversation_gap 的 active/recent 表示持续对话，不提离开；"
-                "returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，"
-                "事实问题、任务指令、报错和严肃话题不要插入。\n"
-                "temporal_context=" + json.dumps(temporal_context, ensure_ascii=False)
-            ),
+            "content": temporal_guidance
+            + json.dumps(prompt_temporal_context, ensure_ascii=False),
         }
     )
     messages.extend(history)

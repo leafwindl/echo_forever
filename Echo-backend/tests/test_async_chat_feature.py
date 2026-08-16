@@ -195,9 +195,15 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         self.assertEqual(plan.text_segments, ())
         self.assertEqual(plan.sticker_placement, "before_text")
 
-    def test_call_mode_keeps_one_plain_reply(self):
-        raw = '{"text_segments":["one","two"]}'
-        self.assertEqual(build_natural_delivery_plan(raw, "call").text_segments, (raw,))
+    def test_call_mode_rejects_protocol_output(self):
+        invalid_outputs = (
+            '{"text_segments":["one","two"]}',
+            "[消息时间 2026-08-16T10:00:00+08:00]\n你好。",
+        )
+
+        for raw in invalid_outputs:
+            with self.subTest(raw=raw), self.assertRaises(AgentDeliveryPlanError):
+                build_natural_delivery_plan(raw, "call")
 
     def test_chat_rejects_json_and_markdown_instead_of_parsing_them(self):
         invalid_outputs = (

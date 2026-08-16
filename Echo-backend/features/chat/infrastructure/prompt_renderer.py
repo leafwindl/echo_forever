@@ -55,6 +55,14 @@ RESPONSE_CALIBRATION_POLICY = """[对话策略选择]
 - 事实只能来自当前消息、助手 Persona 和明确提供的上下文；不要为自己补充现实活动或相似的人类经历。
 """
 
+CALL_DIALOGUE_POLICY = """[实时通话规则]
+1. 只说用户现在能直接听懂的话，不输出动作、旁白、协议字段、内部标记或书面排版。
+2. 先回应当前内容，不复述整段原话；普通问候、确认和闲聊通常一至两句。
+3. 用户没有求建议时不说教；值得继续的话题可以表达一个简短观察，最多问一个具体问题。
+4. 不虚构身体、地点、离线活动、等待或想念，也不使用系统术语破坏 Echo 的人物身份。
+5. 历史、记忆和时间只在当前话题直接相关时使用，不主动朗读日期或技术上下文。
+"""
+
 _REPLY_STYLE_TEXT = {
     "natural": "自然、平实，贴近用户当前语气",
     "concise": "直接、克制，减少铺垫和重复",
@@ -123,9 +131,11 @@ _CONVERSATION_MODE_GUIDANCE = {
         "信息复杂时允许清晰分行，但普通闲聊不要写成清单、讲稿或客服说明。"
     ),
     "call": (
-        "当前是实时电话。只写适合直接说出口并交给 TTS 播放的话：通常一至两句短句，"
-        "普通问答尽量控制在八十个汉字以内；只有用户明确要求详细说明时才适度展开。"
-        "先回应再自然停顿；使用口语词序和易听懂的表达，可少量使用语气词，但不要堆叠。"
+        "当前是实时电话。只写适合直接说出口的话，像自然通话一样回应，通常只说一至两句，"
+        "每句尽量简短，"
+        "普通闲聊和问答尽量控制在五十个汉字以内。复杂问题先说最重要的部分，"
+        "必要时再问用户要不要继续展开。使用口语词序和易听懂的表达，可少量使用语气词，"
+        "但不要堆叠，也不要复述用户刚说过的整句话。"
         "不要输出 Markdown、编号、项目符号、括号补充、网址、表情符号或书面长句；"
         "避免连续解释多个观点，也不要说“以上、如下、首先、其次、综上”。"
     ),
@@ -344,10 +354,17 @@ def render_prompt_layers(
     ]
     if assistant_persona is not None:
         messages.append({"role": "system", "content": render_assistant_persona(assistant_persona)})
+    if conversation_mode == "call":
+        messages.append({"role": "system", "content": CALL_DIALOGUE_POLICY})
+    else:
+        messages.extend(
+            [
+                {"role": "system", "content": NATURAL_DIALOGUE_POLICY},
+                {"role": "system", "content": RESPONSE_CALIBRATION_POLICY},
+            ]
+        )
     messages.extend(
         [
-            {"role": "system", "content": NATURAL_DIALOGUE_POLICY},
-            {"role": "system", "content": RESPONSE_CALIBRATION_POLICY},
             {
                 "role": "system",
                 "content": render_conversation_mode_guidance(conversation_mode),

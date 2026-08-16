@@ -58,6 +58,7 @@ def get_generate_chat_reply_use_case() -> GenerateChatReply:
             agent_orchestrator=ChatAgentOrchestratorAdapter(),
             proactive_planner=ProactiveDecisionPlannerAdapter(),
             summary_update_in_background=True,
+            call_reply_max_chars=settings.call_reply_max_chars,
         )
     return _generate_chat_reply_use_case
 

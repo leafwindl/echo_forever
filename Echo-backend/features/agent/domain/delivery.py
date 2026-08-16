@@ -69,6 +69,8 @@ def validate_agent_delivery_segments(segments: tuple[str, ...]) -> None:
 
 def _validate_delivery_segment(segment: str) -> None:
     normalized = unicodedata.normalize("NFKC", segment)
+    if normalized.lstrip().startswith(("{", "[", "```")):
+        raise AgentDeliveryPlanError("Delivery contains protocol-like output")
     if _INTERNAL_CONTEXT_MARKER.search(normalized):
         raise AgentDeliveryPlanError("Delivery leaked internal time context")
     if _DELIVERY_PROTOCOL_FIELD.search(normalized):
@@ -98,7 +100,9 @@ def build_natural_delivery_plan(
         clean = raw_text.strip()
         if not clean and not allow_empty:
             raise AgentDeliveryPlanError("Delivery output is empty")
-        return AgentDeliveryPlan((clean,) if clean else ())
+        segments = (clean,) if clean else ()
+        validate_agent_delivery_segments(segments)
+        return AgentDeliveryPlan(segments)
     if conversation_mode not in _NATURAL_DELIVERY_MODES:
         raise AgentDeliveryPlanError("Unknown natural delivery mode")
     if sticker_placement not in _STICKER_PLACEMENTS:

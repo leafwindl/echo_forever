@@ -3,6 +3,7 @@ import sys
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import httpx
@@ -11,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.agent.application.execute_tool import ToolExecutor
 from features.agent.application.orchestrate_chat import OrchestrateChatWithAgent
+from features.agent.domain.call_routing import CallToolMode, route_call_tools
 from features.agent.domain.entities import (
     AgentModelResponse,
     AgentRunStatus,
@@ -29,6 +31,7 @@ from features.agent.infrastructure.container import get_chat_agent
 from features.agent.infrastructure.model import ProviderAgentConversationModel
 from features.agent.infrastructure.sticker_semantics import ProviderStickerSemanticAnalyzer
 from features.agent.infrastructure.tools import (
+    register_schedule_tools,
     register_sticker_tools,
     register_time_tool,
     register_web_search_tool,
@@ -207,6 +210,58 @@ class AgentDomainTests(unittest.TestCase):
         self.assertIn("send_sticker", _tool_names(registry.model_descriptions("chat")))
         self.assertNotIn("send_sticker", _tool_names(registry.model_descriptions("call")))
         self.assertNotIn("search_stickers", _tool_names(registry.model_descriptions("call")))
+
+    def test_call_router_keeps_normal_dialogue_on_fast_path(self):
+        route = route_call_tools(
+            "今天有点累，陪我聊会儿",
+            web_search_available=True,
+            schedule_tools_available=True,
+        )
+
+        self.assertEqual(route.mode, CallToolMode.FAST_CHAT)
+        self.assertEqual(route.allowed_tool_names, ())
+
+    def test_call_router_exposes_only_requested_search_capability(self):
+        route = route_call_tools(
+            "帮我查一下今天有什么新闻",
+            web_search_available=True,
+            schedule_tools_available=True,
+        )
+
+        self.assertEqual(route.mode, CallToolMode.WEB_SEARCH)
+        self.assertEqual(route.allowed_tool_names, ("search_web",))
+        self.assertEqual(route.maximum_tool_calls, 1)
+
+    def test_call_router_never_pretends_disabled_search_is_available(self):
+        route = route_call_tools(
+            "搜索一下最新消息",
+            web_search_available=False,
+            schedule_tools_available=True,
+        )
+
+        self.assertEqual(route.mode, CallToolMode.WEB_SEARCH)
+        self.assertEqual(route.allowed_tool_names, ())
+        self.assertIn("不要用模型内部知识冒充搜索结果", route.instruction)
+
+    def test_call_router_only_exposes_schedule_list_on_the_first_manage_step(self):
+        route = route_call_tools(
+            "取消我明天的提醒",
+            web_search_available=True,
+            schedule_tools_available=True,
+        )
+
+        self.assertEqual(route.mode, CallToolMode.SCHEDULE_MANAGE)
+        self.assertEqual(route.allowed_tool_names, ("list_chat_schedules",))
+        self.assertEqual(route.maximum_tool_calls, 2)
+
+    def test_tool_registry_filters_call_tools_by_route(self):
+        _, _, registry = _build_orchestrator(
+            SequenceAgentModel([AgentModelResponse(text="你好")])
+        )
+
+        descriptions = registry.model_descriptions("call", ("search_web",))
+
+        self.assertEqual(_tool_names(descriptions), ["search_web"])
 
     def test_due_turn_prioritizes_proactive_sticker_without_excluding_private_library(self):
         messages = OrchestrateChatWithAgent._build_initial_messages(
@@ -414,9 +469,17 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
                 return None
 
             async def aiter_lines(self):
-                yield 'data: {"id":"req_stream","choices":[{"delta":{"content":"你好"},"finish_reason":null}]}'
+                yield (
+                    'data: {"id":"req_stream","choices":'
+                    '[{"delta":{"content":"你好"},"finish_reason":null}]}'
+                )
                 yield 'data: {"choices":[{"delta":{"content":"，Echo"},"finish_reason":null}]}'
-                yield 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"get_time","arguments":"{\\"zone\\":\\"Asia/Shanghai\\"}"}}]},"finish_reason":"tool_calls"}]}'
+                yield (
+                    'data: {"choices":[{"delta":{"tool_calls":'
+                    '[{"index":0,"id":"call_1","function":{"name":"get_time",'
+                    '"arguments":"{\\"zone\\":\\"Asia/Shanghai\\"}"}}]},'
+                    '"finish_reason":"tool_calls"}]}'
+                )
                 yield "data: [DONE]"
 
         class StreamContext:
@@ -1185,6 +1248,228 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.sources[0].url, "https://example.test/source")
         self.assertEqual(web.requests[0].query, "最新消息")
+
+    async def test_call_search_reports_progress_once_then_streams_without_tools(self):
+        web = FakeWebSearch(
+            [
+                WebSearchItem(
+                    title="来源一",
+                    canonical_url="https://example.test/source",
+                    snippet="可靠摘要",
+                )
+            ]
+        )
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    tool_calls=(
+                        AgentToolCall(
+                            call_id="call_web",
+                            tool_name="search_web",
+                            arguments={"query": "今天的新闻", "limit": 1},
+                        ),
+                    )
+                ),
+                AgentModelResponse(text="今天比较受关注的是这件事。"),
+            ]
+        )
+        orchestrator, _, _ = _build_orchestrator(model, web_search=web)
+        progress = []
+
+        async def record_progress(text):
+            progress.append(text)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="帮我查一下今天的新闻",
+            messages=[{"role": "user", "content": "帮我查一下今天的新闻"}],
+            conversation_mode="call",
+            allowed_tool_names=("search_web",),
+            tool_call_limit=1,
+            on_progress_text=record_progress,
+        )
+
+        self.assertEqual(progress, ["好，我查一下。"])
+        self.assertEqual(_tool_names(model.calls[0]["tools"]), ["search_web"])
+        self.assertEqual(model.calls[1]["tools"], ())
+        self.assertEqual(result.reply_text, "今天比较受关注的是这件事。")
+
+    async def test_call_search_no_result_cannot_claim_that_results_were_found(self):
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    tool_calls=(
+                        AgentToolCall(
+                            call_id="call_web_empty",
+                            tool_name="search_web",
+                            arguments={"query": "不存在的消息", "limit": 1},
+                        ),
+                    )
+                ),
+                AgentModelResponse(text="我查到了，确实有这条消息。"),
+            ]
+        )
+        orchestrator, _, _ = _build_orchestrator(model, web_search=FakeWebSearch())
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="帮我查一下这条消息",
+            messages=[{"role": "user", "content": "帮我查一下这条消息"}],
+            conversation_mode="call",
+            allowed_tool_names=("search_web",),
+            tool_call_limit=1,
+        )
+
+        self.assertEqual(
+            result.reply_text,
+            "这次没有查到可靠的结果，我们可以换个说法再试试。",
+        )
+
+    async def test_call_search_failure_cannot_claim_that_search_succeeded(self):
+        class FailingWebSearch:
+            async def search(self, request):
+                del request
+                raise RuntimeError("provider unavailable")
+
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    tool_calls=(
+                        AgentToolCall(
+                            call_id="call_web_failed",
+                            tool_name="search_web",
+                            arguments={"query": "今天的新闻", "limit": 1},
+                        ),
+                    )
+                ),
+                AgentModelResponse(text="搜索成功，今天有很多新闻。"),
+            ]
+        )
+        orchestrator, _, _ = _build_orchestrator(
+            model,
+            web_search=FailingWebSearch(),
+        )
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="帮我查一下今天的新闻",
+            messages=[{"role": "user", "content": "帮我查一下今天的新闻"}],
+            conversation_mode="call",
+            allowed_tool_names=("search_web",),
+            tool_call_limit=1,
+        )
+
+        self.assertEqual(result.reply_text, "这次联网查询没有完成，稍后再试试吧。")
+
+    async def test_call_cancel_is_only_exposed_after_listing_owned_schedules(self):
+        class ScheduleRepository:
+            def __init__(self):
+                self.deleted = []
+
+            def list_schedules(self, user_id):
+                self.listed_user_id = user_id
+                return (
+                    SimpleNamespace(
+                        schedule_id="schedule_owned",
+                        user_visible_label="明天的提醒",
+                        intent="提醒我带伞",
+                        status="active",
+                        next_run_at=datetime(2026, 8, 17, 0, 0, tzinfo=UTC),
+                        timezone="Asia/Shanghai",
+                    ),
+                )
+
+            def delete_schedule(self, user_id, schedule_id):
+                self.deleted.append((user_id, schedule_id))
+                return user_id == "user_a" and schedule_id == "schedule_owned"
+
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    tool_calls=(
+                        AgentToolCall(
+                            call_id="call_list",
+                            tool_name="list_chat_schedules",
+                            arguments={"include_inactive": False},
+                        ),
+                    )
+                ),
+                AgentModelResponse(
+                    tool_calls=(
+                        AgentToolCall(
+                            call_id="call_cancel",
+                            tool_name="cancel_chat_schedule",
+                            arguments={"schedule_id": "schedule_owned"},
+                        ),
+                    )
+                ),
+                AgentModelResponse(text="好，这个提醒已经取消了。"),
+            ]
+        )
+        schedule_repository = ScheduleRepository()
+        registry = ToolRegistry()
+        register_schedule_tools(registry, schedule_repository)
+        orchestrator = OrchestrateChatWithAgent(
+            repository=FakeAgentRunRepository(),
+            model=model,
+            registry=registry,
+            executor=ToolExecutor(registry),
+            max_steps=4,
+            max_tool_calls=2,
+            run_timeout_seconds=45,
+        )
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="取消我明天的提醒",
+            messages=[{"role": "user", "content": "取消我明天的提醒"}],
+            conversation_mode="call",
+            allowed_tool_names=("list_chat_schedules",),
+            tool_call_limit=2,
+            conversation_id="conv_a",
+        )
+
+        self.assertEqual(_tool_names(model.calls[0]["tools"]), ["list_chat_schedules"])
+        self.assertEqual(_tool_names(model.calls[1]["tools"]), ["cancel_chat_schedule"])
+        self.assertEqual(model.calls[2]["tools"], ())
+        self.assertEqual(schedule_repository.listed_user_id, "user_a")
+        self.assertEqual(schedule_repository.deleted, [("user_a", "schedule_owned")])
+        self.assertEqual(result.reply_text, "好，这个提醒已经取消了。")
+
+    async def test_call_route_rejects_registered_but_unadvertised_tool(self):
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    tool_calls=(
+                        AgentToolCall(
+                            call_id="unexpected_time",
+                            tool_name="get_current_time",
+                            arguments={"timezone": "Asia/Shanghai"},
+                        ),
+                    )
+                ),
+                AgentModelResponse(text="这次没有执行额外操作。"),
+            ]
+        )
+        orchestrator, _, _ = _build_orchestrator(model)
+        progress = []
+
+        async def record_progress(text):
+            progress.append(text)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="查一下今天的新闻",
+            messages=[{"role": "user", "content": "查一下今天的新闻"}],
+            conversation_mode="call",
+            allowed_tool_names=("search_web",),
+            tool_call_limit=1,
+            on_progress_text=record_progress,
+        )
+
+        self.assertEqual(progress, [])
+        self.assertEqual(result.tool_results[0].error_code, "tool_not_allowed_for_route")
+        self.assertEqual(result.reply_text, "这次没有执行额外操作。")
 
     async def test_model_failure_never_uses_a_separate_reply_model(self):
         model = SequenceAgentModel([ValueError("model unavailable")])

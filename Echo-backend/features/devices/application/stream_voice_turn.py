@@ -7,8 +7,10 @@ from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
 
+from features.agent.domain.delivery import validate_agent_delivery_segments
 from features.devices.application.latency import DeviceLatencyTracker
 from features.devices.application.sentence_chunker import SentenceChunker
+from features.devices.application.transcript_guard import is_plausible_device_transcript
 from features.devices.domain.entities import DeviceTurnResult
 from features.devices.domain.services import (
     DeviceChatNotifier,
@@ -25,6 +27,7 @@ EventCallback = Callable[[], Awaitable[None]]
 
 _NON_ACTIONABLE_FILLERS = frozenset("嗯啊呃额唔")
 _FILLER_PUNCTUATION = frozenset("。！？!?，,、；;：:… .")
+_TTS_EMPTY_AUDIO_RETRY_DELAY_SECONDS = 0.35
 
 
 def is_actionable_device_text(text: str) -> bool:
@@ -56,13 +59,15 @@ class StreamDeviceVoiceTurn:
         notifier: DeviceChatNotifier,
         chunk_max_chars: int,
         queue_max_packets: int,
-        prefetch_phrases: int = 2,
+        chunk_min_chars: int = 12,
+        prefetch_phrases: int = 1,
     ):
         self.recognizer = recognizer
         self.conversation = conversation
         self.speech = speech
         self.notifier = notifier
         self.chunk_max_chars = chunk_max_chars
+        self.chunk_min_chars = chunk_min_chars
         self.queue_max_packets = queue_max_packets
         self.prefetch_phrases = max(0, prefetch_phrases)
 
@@ -90,6 +95,15 @@ class StreamDeviceVoiceTurn:
             user_text = (await self.recognizer.recognize_pcm16(pcm16_audio)).strip()
         if not user_text:
             raise ValueError("Device speech was not recognized")
+        if not is_plausible_device_transcript(user_text, len(pcm16_audio)):
+            logger.warning(
+                "Echo device rejected implausible transcript request_id=%s "
+                "text_length=%s audio_duration_ms=%.1f",
+                request_id,
+                len(user_text),
+                len(pcm16_audio) * 1000 / (16000 * 2),
+            )
+            raise ValueError("Device speech transcript is implausibly long")
         if latency is not None:
             latency.mark("asr_final")
         if not is_actionable_device_text(user_text):
@@ -106,7 +120,10 @@ class StreamDeviceVoiceTurn:
         phrase_queue: asyncio.Queue[_QueuedPhrase | None] = asyncio.Queue(
             maxsize=max(1, self.queue_max_packets // 4)
         )
-        chunker = SentenceChunker(max_chars=self.chunk_max_chars)
+        chunker = SentenceChunker(
+            max_chars=self.chunk_max_chars,
+            min_chars=self.chunk_min_chars,
+        )
         tts_started = False
         delta_received = False
         first_sentence_ready = False
@@ -117,9 +134,23 @@ class StreamDeviceVoiceTurn:
         async def collect_prefetched_audio(text: str, index: int) -> tuple[bytes, ...]:
             started_at = time.perf_counter()
             chunks: list[bytes] = []
-            async with prefetch_slots:
-                async for chunk in self.speech.stream_pcm16(text):
-                    chunks.append(chunk)
+            for attempt in range(2):
+                chunks = []
+                try:
+                    async with prefetch_slots:
+                        async for chunk in self.speech.stream_pcm16(text):
+                            chunks.append(chunk)
+                    break
+                except Exception:
+                    if attempt > 0:
+                        raise
+                    logger.warning(
+                        "Echo device TTS prefetch retry request_id=%s phrase_index=%s",
+                        request_id,
+                        index,
+                        exc_info=True,
+                    )
+                    await asyncio.sleep(_TTS_EMPTY_AUDIO_RETRY_DELAY_SECONDS)
             logger.info(
                 "Echo device TTS phrase prefetched request_id=%s phrase_index=%s "
                 "text_length=%s chunks=%s bytes=%s duration_ms=%.1f",
@@ -136,6 +167,7 @@ class StreamDeviceVoiceTurn:
             nonlocal first_sentence_ready, phrase_index
             if not phrase:
                 return
+            validate_agent_delivery_segments((phrase,))
             if not first_sentence_ready and latency is not None:
                 first_sentence_ready = True
                 latency.mark("llm_first_sentence")
@@ -159,6 +191,13 @@ class StreamDeviceVoiceTurn:
             for phrase in chunker.push(delta):
                 await enqueue_phrase(phrase)
 
+        async def on_progress_text(text: str) -> None:
+            clean_text = text.strip()
+            if not clean_text:
+                return
+            validate_agent_delivery_segments((clean_text,))
+            await enqueue_phrase(clean_text)
+
         async def consume_phrases() -> None:
             nonlocal tts_started
             from features.devices.infrastructure.audio_codec import StreamingPcmOpusEncoder
@@ -175,26 +214,43 @@ class StreamDeviceVoiceTurn:
                 for packet in encoder.push(pcm16_chunk):
                     await on_audio_packet(packet)
 
-            while True:
-                queued_phrase = await phrase_queue.get()
-                if queued_phrase is None:
-                    break
-                if not tts_started:
-                    tts_started = True
-                    await on_tts_start()
-                await on_sentence_start(queued_phrase.text)
-                if queued_phrase.audio_task is None:
-                    async for pcm16_chunk in self.speech.stream_pcm16(
-                        queued_phrase.text
-                    ):
-                        await emit_pcm_chunk(pcm16_chunk)
-                else:
-                    for pcm16_chunk in await queued_phrase.audio_task:
-                        await emit_pcm_chunk(pcm16_chunk)
-            for packet in encoder.finish():
-                await on_audio_packet(packet)
-            if tts_started:
-                await on_tts_stop()
+            try:
+                while True:
+                    queued_phrase = await phrase_queue.get()
+                    if queued_phrase is None:
+                        break
+                    if not tts_started:
+                        tts_started = True
+                        await on_tts_start()
+                    await on_sentence_start(queued_phrase.text)
+                    if queued_phrase.audio_task is None:
+                        audio_received = False
+                        for attempt in range(2):
+                            try:
+                                async for pcm16_chunk in self.speech.stream_pcm16(
+                                    queued_phrase.text
+                                ):
+                                    audio_received = True
+                                    await emit_pcm_chunk(pcm16_chunk)
+                                break
+                            except Exception:
+                                if audio_received or attempt > 0:
+                                    raise
+                                logger.warning(
+                                    "Echo device initial TTS retry request_id=%s",
+                                    request_id,
+                                    exc_info=True,
+                                )
+                                await asyncio.sleep(_TTS_EMPTY_AUDIO_RETRY_DELAY_SECONDS)
+                    else:
+                        for pcm16_chunk in await queued_phrase.audio_task:
+                            await emit_pcm_chunk(pcm16_chunk)
+                for packet in encoder.finish():
+                    await on_audio_packet(packet)
+            finally:
+                if tts_started:
+                    with suppress(Exception):
+                        await on_tts_stop()
 
         consumer_task = asyncio.create_task(consume_phrases())
         started_at = time.perf_counter()
@@ -204,6 +260,7 @@ class StreamDeviceVoiceTurn:
                 user_text=user_text,
                 request_id=request_id,
                 on_reply_delta=on_text_delta,
+                on_progress_text=on_progress_text,
                 synthesize_voice=False,
             )
             if latency is not None:

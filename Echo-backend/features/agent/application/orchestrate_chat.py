@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from typing import Any
 
+from features.agent.application.call_progress import build_call_progress_text
 from features.agent.application.execute_tool import ToolExecutor
 from features.agent.domain.delivery import (
     AgentDeliveryPlan,
@@ -132,6 +133,10 @@ class OrchestrateChatWithAgent:
         proactive_sticker_due: bool = False,
         tools_enabled: bool = True,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+        on_progress_text: Callable[[str], Awaitable[None]] | None = None,
+        allowed_tool_names: tuple[str, ...] | None = None,
+        tool_call_limit: int | None = None,
+        call_route_instruction: str = "",
     ) -> AgentTurnResult:
         run_id = self.repository.start(user_id, message, conversation_mode, self.max_steps)
         agent_messages = self._build_initial_messages(
@@ -140,6 +145,7 @@ class OrchestrateChatWithAgent:
             sticker_intent=sticker_intent,
             allow_proactive_stickers=allow_proactive_stickers,
             proactive_sticker_due=proactive_sticker_due,
+            call_route_instruction=call_route_instruction,
         )
         tool_results: list[AgentToolResult] = []
         content_parts: list[ContentPart] = []
@@ -147,13 +153,23 @@ class OrchestrateChatWithAgent:
         sticker_placement = "after_text"
         model_steps = 0
         tool_call_count = 0
+        progress_reported = False
         llm_timeout_retries_remaining = LLM_TIMEOUT_RETRY_LIMIT
         delivery_format_retries_remaining = DELIVERY_FORMAT_RETRY_LIMIT
         required_call_retries_remaining = STICKER_REQUIRED_CALL_RETRY_LIMIT
         sticker_claim_retries_remaining = STICKER_CLAIM_RETRY_LIMIT
         final_error: str | None = None
         deadline = asyncio.get_running_loop().time() + self.run_timeout_seconds
-        tools = self.registry.model_descriptions(conversation_mode) if tools_enabled else ()
+        tools = (
+            self.registry.model_descriptions(conversation_mode, allowed_tool_names)
+            if tools_enabled
+            else ()
+        )
+        maximum_tool_calls = (
+            self.max_tool_calls
+            if tool_call_limit is None
+            else min(self.max_tool_calls, max(tool_call_limit, 0))
+        )
         sticker_decision = StickerRequestDecision(StickerToolPolicy.OPTIONAL)
         required_sticker_call_pending = False
 
@@ -171,6 +187,9 @@ class OrchestrateChatWithAgent:
             )
             while model_steps < self.max_steps:
                 model_steps += 1
+                step_tool_names = {
+                    str(item.get("function", {}).get("name") or "") for item in tools
+                }
                 tool_choice = (
                     self._forced_tool_choice("send_sticker")
                     if required_sticker_call_pending and tools
@@ -277,7 +296,40 @@ class OrchestrateChatWithAgent:
                         self._assistant_tool_call_message(response.text, normalized_calls)
                     )
                     for call in normalized_calls:
-                        if tool_call_count >= self.max_tool_calls:
+                        definition = self.registry.get(call.tool_name)
+                        if (
+                            not progress_reported
+                            and conversation_mode == "call"
+                            and on_progress_text is not None
+                            and definition is not None
+                            and call.tool_name in step_tool_names
+                        ):
+                            try:
+                                definition.arguments_model.model_validate(call.arguments)
+                            except Exception:
+                                pass
+                            else:
+                                progress_text = build_call_progress_text(call.tool_name)
+                                if progress_text:
+                                    await on_progress_text(progress_text)
+                                    progress_reported = True
+                        if call.tool_name not in step_tool_names:
+                            route_error = (
+                                "tool_not_allowed_in_mode"
+                                if definition is not None
+                                and conversation_mode
+                                not in definition.specification.allowed_modes
+                                else "tool_not_allowed_for_route"
+                            )
+                            tool_result = AgentToolResult(
+                                call_id=call.call_id,
+                                tool_name=call.tool_name,
+                                status=AgentToolStatus.FAILED,
+                                arguments=call.arguments,
+                                error_code=route_error,
+                            )
+                            tool_call_count += 1
+                        elif tool_call_count >= maximum_tool_calls:
                             tool_result = AgentToolResult(
                                 call_id=call.call_id,
                                 tool_name=call.tool_name,
@@ -300,7 +352,6 @@ class OrchestrateChatWithAgent:
                                 ),
                                 timeout=self._remaining_timeout(deadline),
                             )
-                            definition = self.registry.get(call.tool_name)
                             if not (
                                 definition is not None
                                 and not definition.specification.count_no_result_toward_call_limit
@@ -317,6 +368,26 @@ class OrchestrateChatWithAgent:
                             sources,
                             sticker_placement,
                         )
+                        if conversation_mode == "call":
+                            if call.tool_name in {
+                                "search_web",
+                                "create_chat_schedule",
+                                "cancel_chat_schedule",
+                            }:
+                                tools = ()
+                            elif call.tool_name == "list_chat_schedules":
+                                schedules = tool_result.data.get("schedules")
+                                if (
+                                    tool_result.status == AgentToolStatus.COMPLETED
+                                    and isinstance(schedules, list)
+                                    and schedules
+                                ):
+                                    tools = self.registry.model_descriptions(
+                                        conversation_mode,
+                                        ("cancel_chat_schedule",),
+                                    )
+                                else:
+                                    tools = ()
                     continue
 
                 try:
@@ -364,9 +435,11 @@ class OrchestrateChatWithAgent:
                         )
                         continue
                     else:
-                        deterministic_reply = self._deterministic_tool_confirmation(
-                            tool_results
-                        )
+                        deterministic_reply = (
+                            self._deterministic_call_tool_failure(tool_results)
+                            if conversation_mode == "call"
+                            else ""
+                        ) or self._deterministic_tool_confirmation(tool_results)
                         if deterministic_reply:
                             delivery_plan = build_natural_delivery_plan(
                                 deterministic_reply,
@@ -391,6 +464,16 @@ class OrchestrateChatWithAgent:
                                 self._prefix_codepoints(response.text),
                             )
                             raise
+                if conversation_mode == "call":
+                    deterministic_failure = self._deterministic_call_tool_failure(
+                        tool_results
+                    )
+                    if deterministic_failure:
+                        delivery_plan = build_natural_delivery_plan(
+                            deterministic_failure,
+                            conversation_mode,
+                            sticker_placement=sticker_placement,
+                        )
                 sticker_placement = delivery_plan.sticker_placement
                 if (
                     conversation_mode == "proactive"
@@ -507,6 +590,16 @@ class OrchestrateChatWithAgent:
                         sticker_placement=sticker_placement,
                         allow_empty=bool(content_parts),
                     )
+                    if conversation_mode == "call":
+                        deterministic_failure = self._deterministic_call_tool_failure(
+                            tool_results
+                        )
+                        if deterministic_failure:
+                            delivery_plan = build_natural_delivery_plan(
+                                deterministic_failure,
+                                conversation_mode,
+                                sticker_placement=sticker_placement,
+                            )
                     if (
                         conversation_mode in {"chat", "proactive"}
                         and delivery_plan.reply_text
@@ -549,7 +642,11 @@ class OrchestrateChatWithAgent:
                     )
                     self.repository.finish(run_id, model_steps + tool_call_count, final_error)
                     return result
-                deterministic_reply = self._deterministic_tool_confirmation(tool_results)
+                deterministic_reply = (
+                    self._deterministic_call_tool_failure(tool_results)
+                    if conversation_mode == "call"
+                    else ""
+                ) or self._deterministic_tool_confirmation(tool_results)
                 if deterministic_reply:
                     delivery_plan = build_natural_delivery_plan(
                         deterministic_reply,
@@ -596,7 +693,11 @@ class OrchestrateChatWithAgent:
             reply_text = ""
             failed_content_parts = ()
         else:
-            reply_text = self._disaster_fallback(content_parts)
+            reply_text = (
+                self._deterministic_call_tool_failure(tool_results)
+                if conversation_mode == "call"
+                else ""
+            ) or self._disaster_fallback(content_parts)
         self.repository.finish(run_id, model_steps + tool_call_count, final_error)
         return AgentTurnResult(
             status=AgentRunStatus.FAILED,
@@ -931,10 +1032,11 @@ class OrchestrateChatWithAgent:
         sticker_intent: str,
         allow_proactive_stickers: bool,
         proactive_sticker_due: bool,
+        call_route_instruction: str = "",
     ) -> list[dict]:
         if conversation_mode == "call":
             sticker_rule = (
-                "当前是语音通话模式。不得搜索、选择或发送表情包，即使用户明确要求也不"
+                "当前是语音通话模式。不得检索、选择或发送表情包，即使用户明确要求也不"
                 "执行图片发送；自然说明通话里先继续说话即可。"
             )
         elif conversation_mode == "daily_letter":
@@ -1025,6 +1127,15 @@ class OrchestrateChatWithAgent:
             else [dict(message) for message in messages]
         )
         result = [instruction, *context_messages]
+        clean_call_instruction = call_route_instruction.strip()
+        if conversation_mode == "call" and clean_call_instruction:
+            result.insert(
+                1,
+                {
+                    "role": "system",
+                    "content": clean_call_instruction,
+                },
+            )
         clean_intent = sticker_intent.strip()
         if clean_intent:
             result.insert(
@@ -1124,6 +1235,33 @@ class OrchestrateChatWithAgent:
                 return f"好，已经帮你设置好了：{label}。" if label else "好，已经帮你设置好了。"
             if result.tool_name == "cancel_chat_schedule" and result.data.get("cancelled"):
                 return "好，这个提醒已经取消了。"
+        return ""
+
+    @staticmethod
+    def _deterministic_call_tool_failure(
+        results: list[AgentToolResult],
+    ) -> str:
+        for result in reversed(results):
+            if result.tool_name == "search_web":
+                if result.status == AgentToolStatus.NO_RESULT:
+                    return "这次没有查到可靠的结果，我们可以换个说法再试试。"
+                if result.status == AgentToolStatus.FAILED:
+                    return "这次联网查询没有完成，稍后再试试吧。"
+            if (
+                result.tool_name == "create_chat_schedule"
+                and result.status != AgentToolStatus.COMPLETED
+            ):
+                return "这个提醒这次没有设置成功，我们再确认一下时间吧。"
+            if (
+                result.tool_name == "list_chat_schedules"
+                and result.status == AgentToolStatus.FAILED
+            ):
+                return "我这次没能读取你的提醒，稍后再试试吧。"
+            if (
+                result.tool_name == "cancel_chat_schedule"
+                and result.status != AgentToolStatus.COMPLETED
+            ):
+                return "我没有找到要取消的提醒，我们可以再确认一下。"
         return ""
 
     @staticmethod

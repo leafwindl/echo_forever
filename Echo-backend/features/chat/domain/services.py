@@ -28,6 +28,7 @@ class ChatAgentOrchestrator(Protocol):
         allow_proactive_stickers: bool = True,
         proactive_sticker_due: bool = False,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+        on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         tools_enabled: bool | None = None,
     ) -> AgentTurnResult: ...
 

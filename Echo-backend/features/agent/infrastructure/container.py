@@ -47,6 +47,25 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
 
 
 @lru_cache(maxsize=1)
+def get_call_agent() -> OrchestrateChatWithAgent:
+    registry = ToolRegistry()
+    register_schedule_tools(registry)
+    register_web_search_tool(registry, TavilyWebSearchProvider())
+    return OrchestrateChatWithAgent(
+        repository=PostgresAgentRunRepository(),
+        model=ProviderAgentConversationModel(
+            max_tokens=settings.call_max_tokens,
+            disable_thinking=True,
+        ),
+        registry=registry,
+        executor=ToolExecutor(registry),
+        max_steps=settings.agent_max_steps,
+        max_tool_calls=2,
+        run_timeout_seconds=settings.agent_run_timeout_seconds,
+    )
+
+
+@lru_cache(maxsize=1)
 def get_proactive_planner() -> ProviderProactiveDecisionPlanner:
     return ProviderProactiveDecisionPlanner(
         ProviderAgentConversationModel(

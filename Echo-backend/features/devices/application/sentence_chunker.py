@@ -7,11 +7,14 @@ _SOFT_ENDINGS = frozenset("，,、：:")
 class SentenceChunker:
     """Turn streamed LLM text into TTS-sized natural Chinese phrases."""
 
-    def __init__(self, *, max_chars: int = 24):
+    def __init__(self, *, max_chars: int = 32, min_chars: int | None = None):
         if max_chars < 8:
             raise ValueError("Sentence chunk size is too small")
+        resolved_min_chars = min(12, max_chars) if min_chars is None else min_chars
+        if resolved_min_chars < 1 or resolved_min_chars > max_chars:
+            raise ValueError("Sentence chunk minimum must be within the maximum")
         self.max_chars = max_chars
-        self.min_soft_chars = min(8, max_chars)
+        self.min_chars = resolved_min_chars
         self._buffer = ""
 
     def push(self, text: str) -> tuple[str, ...]:
@@ -30,21 +33,17 @@ class SentenceChunker:
         return (remaining,) if remaining else ()
 
     def _find_boundary(self) -> int | None:
-        for index, character in enumerate(self._buffer, start=1):
-            if character in _HARD_ENDINGS:
+        search_limit = min(len(self._buffer), self.max_chars)
+        soft_boundaries: list[int] = []
+        for index, character in enumerate(self._buffer[:search_limit], start=1):
+            if character in _HARD_ENDINGS and index >= self.min_chars:
                 return index
-            if character in _SOFT_ENDINGS and index >= self.min_soft_chars:
-                return index
+            if character in _SOFT_ENDINGS and index >= self.min_chars:
+                soft_boundaries.append(index)
+        if soft_boundaries:
+            return soft_boundaries[-1]
         if len(self._buffer) >= self.max_chars:
-            soft_boundaries = [
-                index
-                for index, character in enumerate(
-                    self._buffer[: self.max_chars],
-                    start=1,
-                )
-                if character in _SOFT_ENDINGS and index >= self.min_soft_chars
-            ]
-            return soft_boundaries[-1] if soft_boundaries else self.max_chars
+            return self.max_chars
         return None
 
     def _take(self, length: int) -> str:

@@ -145,6 +145,9 @@ class _CosyVoiceResultCallback(ResultCallback):
 
 
 class CosyVoiceTTSProvider:
+    def __init__(self) -> None:
+        self._stream_slots = asyncio.Semaphore(settings.cosyvoice_max_concurrent_streams)
+
     @staticmethod
     def _endpoint() -> str:
         custom_endpoint = settings.cosyvoice_websocket_url.strip()
@@ -181,6 +184,22 @@ class CosyVoiceTTSProvider:
         return api_key, model, clean_voice_id
 
     async def _stream_audio(
+        self,
+        text: str,
+        voice_id: str,
+        instruction: str | None = None,
+        audio_format: str = AudioFormat.MP3_22050HZ_MONO_256KBPS,
+    ) -> AsyncIterator[bytes]:
+        async with self._stream_slots:
+            async for chunk in self._stream_audio_with_slot(
+                text,
+                voice_id,
+                instruction=instruction,
+                audio_format=audio_format,
+            ):
+                yield chunk
+
+    async def _stream_audio_with_slot(
         self,
         text: str,
         voice_id: str,

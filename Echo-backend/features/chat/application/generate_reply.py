@@ -10,6 +10,7 @@ from features.agent.domain.delivery import (
 )
 from features.agent.domain.entities import ContentPart, ProactiveAction, ProactiveDecision
 from features.agent.domain.services import ProactiveDecisionPlanner, ProactivePlannerError
+from features.chat.application.call_reply_limiter import CallReplyStreamLimiter
 from features.chat.domain.dialogue_style import (
     apply_dialogue_fallback,
     find_dialogue_style_violations,
@@ -45,6 +46,7 @@ class GenerateChatReply:
         agent_orchestrator: ChatAgentOrchestrator | None = None,
         proactive_planner: ProactiveDecisionPlanner | None = None,
         summary_update_in_background: bool = False,
+        call_reply_max_chars: int = 80,
     ):
         self.conversation_repository = conversation_repository
         self.context_provider = context_provider
@@ -54,6 +56,7 @@ class GenerateChatReply:
         self.agent_orchestrator = agent_orchestrator
         self.proactive_planner = proactive_planner
         self.summary_update_in_background = summary_update_in_background
+        self.call_reply_max_chars = call_reply_max_chars
         self._summary_tasks: set[asyncio.Task[bool]] = set()
 
     async def _update_summary(self, user_id: str, conversation_id: str) -> bool:
@@ -201,6 +204,7 @@ class GenerateChatReply:
         proactive_intent: str = "",
         proactive_force_send: bool = False,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+        on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         tools_enabled: bool | None = None,
     ) -> PreparedChatReply:
         clean_user_id = user_id.strip()
@@ -230,6 +234,19 @@ class GenerateChatReply:
             raise RuntimeError("Unified Agent runtime is not configured")
         agent_messages = context.messages
         agent_message = clean_message
+        call_reply_limiter: CallReplyStreamLimiter | None = None
+        effective_on_text_delta = on_text_delta
+        if conversation_mode == "call":
+            async def deliver_call_delta(delta: str) -> None:
+                validate_agent_delivery_segments((delta,))
+                if on_text_delta is not None:
+                    await on_text_delta(delta)
+
+            call_reply_limiter = CallReplyStreamLimiter(
+                max_chars=self.call_reply_max_chars,
+                on_text_delta=deliver_call_delta,
+            )
+            effective_on_text_delta = call_reply_limiter.push
         if conversation_mode == "proactive" and self.proactive_planner is not None:
             safe_facts = dict(context.proactive_safe_facts)
             clean_intent = proactive_intent.strip().replace("\r", " ").replace("\n", " ")[:240]
@@ -276,7 +293,9 @@ class GenerateChatReply:
         if "conversation_id" in inspect.signature(self.agent_orchestrator.run).parameters:
             agent_kwargs["conversation_id"] = conversation_id
         if "on_text_delta" in inspect.signature(self.agent_orchestrator.run).parameters:
-            agent_kwargs["on_text_delta"] = on_text_delta
+            agent_kwargs["on_text_delta"] = effective_on_text_delta
+        if "on_progress_text" in inspect.signature(self.agent_orchestrator.run).parameters:
+            agent_kwargs["on_progress_text"] = on_progress_text
         if "tools_enabled" in inspect.signature(self.agent_orchestrator.run).parameters:
             agent_kwargs["tools_enabled"] = tools_enabled
         agent_result = await self.agent_orchestrator.run(
@@ -289,41 +308,58 @@ class GenerateChatReply:
             "Chat reply prepared duration_ms=%.1f",
             (time.perf_counter() - context_started_at) * 1000,
         )
-        segments = tuple(
-            segment.strip()
-            for segment in agent_result.reply_segments
-            if segment.strip()
-        )
-        if not segments and agent_result.reply_text.strip():
-            segments = (agent_result.reply_text.strip(),)
-        reply = "\n".join(segments)
-        style_violations = find_dialogue_style_violations(
-            reply,
-            clean_message,
-            pause_followup_questions=context.pause_followup_questions,
-            suppress_repeated_greeting=context.suppress_repeated_greeting,
-            grounded_weekday=str(context.temporal_context.get("weekday") or ""),
-        )
-        if style_violations:
-            logger.warning(
-                "Dialogue style fallback applied violation_types=%s",
-                ",".join(style_violations),
-            )
-            reply = apply_dialogue_fallback(
-                reply,
-                clean_message,
-                style_violations,
-                allow_empty=conversation_mode == "proactive",
-            )
+        if conversation_mode == "call" and call_reply_limiter is not None:
+            limited_reply = await call_reply_limiter.finish(agent_result.reply_text)
+            if call_reply_limiter.truncated:
+                logger.info(
+                    "Call reply truncated at natural delivery boundary "
+                    "observed_chars=%s delivered_chars=%s max_chars=%s",
+                    call_reply_limiter.observed_chars,
+                    len(limited_reply),
+                    self.call_reply_max_chars,
+                )
             delivery_plan = build_natural_delivery_plan(
-                reply,
+                limited_reply,
                 conversation_mode,
-                sticker_placement=agent_result.sticker_placement,
-                allow_empty=conversation_mode == "proactive",
             )
             segments = delivery_plan.text_segments
-            reply = delivery_plan.reply_text
-        if conversation_mode in {"chat", "proactive"}:
+        else:
+            segments = tuple(
+                segment.strip()
+                for segment in agent_result.reply_segments
+                if segment.strip()
+            )
+            if not segments and agent_result.reply_text.strip():
+                segments = (agent_result.reply_text.strip(),)
+        reply = "\n".join(segments)
+        if conversation_mode != "call":
+            style_violations = find_dialogue_style_violations(
+                reply,
+                clean_message,
+                pause_followup_questions=context.pause_followup_questions,
+                suppress_repeated_greeting=context.suppress_repeated_greeting,
+                grounded_weekday=str(context.temporal_context.get("weekday") or ""),
+            )
+            if style_violations:
+                logger.warning(
+                    "Dialogue style fallback applied violation_types=%s",
+                    ",".join(style_violations),
+                )
+                reply = apply_dialogue_fallback(
+                    reply,
+                    clean_message,
+                    style_violations,
+                    allow_empty=conversation_mode == "proactive",
+                )
+                delivery_plan = build_natural_delivery_plan(
+                    reply,
+                    conversation_mode,
+                    sticker_placement=agent_result.sticker_placement,
+                    allow_empty=conversation_mode == "proactive",
+                )
+                segments = delivery_plan.text_segments
+                reply = delivery_plan.reply_text
+        if conversation_mode in {"chat", "call", "proactive"}:
             validate_agent_delivery_segments(segments)
         assistant_content_parts = () if conversation_mode == "call" else agent_result.content_parts
         return PreparedChatReply(
@@ -391,6 +427,7 @@ class GenerateChatReply:
         sticker_intent: str = "",
         user_content_parts: tuple[ContentPart, ...] = (),
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
+        on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         tools_enabled: bool | None = None,
     ) -> ChatTurnResult:
         clean_user_id = user_id.strip()
@@ -415,6 +452,7 @@ class GenerateChatReply:
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
             on_text_delta=on_text_delta,
+            on_progress_text=on_progress_text,
             tools_enabled=tools_enabled,
         )
         logger.info(

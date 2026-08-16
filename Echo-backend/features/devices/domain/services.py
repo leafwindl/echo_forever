@@ -16,6 +16,7 @@ class DeviceConversationService(Protocol):
         user_text: str,
         request_id: str,
         on_reply_delta: Callable[[str], Awaitable[None]] | None = None,
+        on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         synthesize_voice: bool = True,
     ) -> DeviceTurnResult: ...
 

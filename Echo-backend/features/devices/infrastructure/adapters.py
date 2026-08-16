@@ -28,6 +28,7 @@ class EchoConversationService:
         user_text: str,
         request_id: str,
         on_reply_delta: Callable[[str], Awaitable[None]] | None = None,
+        on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         synthesize_voice: bool = True,
     ) -> DeviceTurnResult:
         result = await send_chat_message(
@@ -36,8 +37,8 @@ class EchoConversationService:
             conversation_mode="call",
             request_id=request_id,
             on_text_delta=on_reply_delta,
+            on_progress_text=on_progress_text,
             synthesize_voice=synthesize_voice,
-            tools_enabled=settings.echo_device_tools_enabled,
         )
         return DeviceTurnResult(
             user_text=user_text,

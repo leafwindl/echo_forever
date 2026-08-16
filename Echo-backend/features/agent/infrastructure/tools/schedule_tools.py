@@ -163,14 +163,15 @@ def register_schedule_tools(
                 name="create_chat_schedule",
                 description=(
                     "Create a persistent user-visible chat reminder or one-time later "
-                    "check-in. Before resolving relative time, call get_current_time. "
+                    "check-in. Resolve relative time from trusted current-time context; "
+                    "when get_current_time is available, use it before creating. "
                     "Use only when a time is clear; ask a concise question when a time "
                     "is ambiguous."
                 ),
                 risk_level=ToolRisk.CREATE_INTERNAL,
                 timeout_seconds=5,
                 is_idempotent=False,
-                allowed_modes=("chat",),
+                allowed_modes=("chat", "call"),
                 max_calls_per_turn=1,
                 max_successful_calls_per_turn=1,
             ),
@@ -187,7 +188,7 @@ def register_schedule_tools(
                 ),
                 risk_level=ToolRisk.READ,
                 timeout_seconds=5,
-                allowed_modes=("chat",),
+                allowed_modes=("chat", "call"),
                 max_calls_per_turn=1,
             ),
             arguments_model=ListChatSchedulesArguments,
@@ -205,7 +206,7 @@ def register_schedule_tools(
                 risk_level=ToolRisk.DESTRUCTIVE,
                 timeout_seconds=5,
                 is_idempotent=True,
-                allowed_modes=("chat",),
+                allowed_modes=("chat", "call"),
                 max_calls_per_turn=1,
             ),
             arguments_model=CancelChatScheduleArguments,

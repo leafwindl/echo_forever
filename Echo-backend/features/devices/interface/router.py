@@ -12,6 +12,7 @@ from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDiscon
 from shared.config import settings
 
 from features.devices.application.latency import DeviceLatencyTracker
+from features.devices.application.transcript_guard import is_plausible_device_transcript
 from features.devices.domain.entities import DeviceAudioFormat
 from features.devices.infrastructure.adapters import EchoAudioSource, parse_personal_device_map
 from features.devices.infrastructure.audio_codec import (
@@ -160,6 +161,7 @@ async def device_websocket(websocket: WebSocket):
         speech_ended_at: float | None = None,
     ) -> None:
         started_at = time.perf_counter()
+        tts_stop_sent = False
         try:
             request_id = f"device-{session_id}-{uuid.uuid4().hex[:12]}"
             latency = DeviceLatencyTracker(request_id, started_at=speech_ended_at)
@@ -190,6 +192,20 @@ async def device_websocket(websocket: WebSocket):
                     with suppress(Exception):
                         await asr_session.close()
 
+            if recognized_text and not is_plausible_device_transcript(
+                recognized_text,
+                len(pcm16_audio),
+            ):
+                logger.warning(
+                    "Echo device realtime ASR transcript rejected; falling back to batch ASR "
+                    "device_id=%s text_length=%s audio_duration_ms=%.1f",
+                    device_id,
+                    len(recognized_text),
+                    len(pcm16_audio) * 1000 / (16000 * 2),
+                )
+                recognized_text = ""
+                realtime_asr_succeeded = False
+
             if asr_session is not None and realtime_asr_succeeded and not recognized_text:
                 latency.mark("asr_final")
                 latency.mark("turn_complete")
@@ -197,6 +213,7 @@ async def device_websocket(websocket: WebSocket):
                     "Echo device ignored empty realtime ASR result device_id=%s",
                     device_id,
                 )
+                tts_stop_sent = True
                 await websocket.send_json(
                     {"session_id": session_id, "type": "tts", "state": "stop"}
                 )
@@ -213,11 +230,16 @@ async def device_websocket(websocket: WebSocket):
                 maximum_packet_gap = 0.0
                 schedule_rebases = 0
                 packet_index = 0
+                tts_started = False
                 streaming_prebuffer_packets = (
                     settings.echo_device_streaming_prebuffer_packets
                 )
 
                 async def send_tts_start() -> None:
+                    nonlocal tts_started
+                    if tts_started:
+                        return
+                    tts_started = True
                     await websocket.send_json(
                         {"session_id": session_id, "type": "tts", "state": "start"}
                     )
@@ -260,6 +282,10 @@ async def device_websocket(websocket: WebSocket):
                     packet_index += 1
 
                 async def send_tts_stop() -> None:
+                    nonlocal tts_stop_sent
+                    if tts_stop_sent:
+                        return
+                    tts_stop_sent = True
                     buffered_tail_packets = min(
                         packet_index,
                         streaming_prebuffer_packets,
@@ -359,6 +385,7 @@ async def device_websocket(websocket: WebSocket):
                 await asyncio.sleep(remaining_playback)
             if settings.echo_device_playback_stop_grace_ms:
                 await asyncio.sleep(settings.echo_device_playback_stop_grace_ms / 1000)
+            tts_stop_sent = True
             await websocket.send_json(
                 {"session_id": session_id, "type": "tts", "state": "stop"}
             )
@@ -392,9 +419,11 @@ async def device_websocket(websocket: WebSocket):
                         "emotion": "sad",
                     }
                 )
-                await websocket.send_json(
-                    {"session_id": session_id, "type": "tts", "state": "stop"}
-                )
+                if not tts_stop_sent:
+                    tts_stop_sent = True
+                    await websocket.send_json(
+                        {"session_id": session_id, "type": "tts", "state": "stop"}
+                    )
             except Exception:
                 pass
 

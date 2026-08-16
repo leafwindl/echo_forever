@@ -23,6 +23,40 @@ class Settings(BaseSettings):
         ge=200,
         le=8192,
     )
+    call_max_tokens: int = Field(
+        default=256,
+        validation_alias="CALL_MAX_TOKENS",
+        ge=64,
+        le=1024,
+    )
+    call_history_messages: int = Field(
+        default=8,
+        validation_alias="CALL_HISTORY_MESSAGES",
+        ge=2,
+        le=20,
+    )
+    call_reply_max_chars: int = Field(
+        default=80,
+        validation_alias="CALL_REPLY_MAX_CHARS",
+        ge=24,
+        le=240,
+    )
+    call_tool_routing_enabled: bool = Field(
+        default=False,
+        validation_alias="CALL_TOOL_ROUTING_ENABLED",
+    )
+    call_web_search_enabled: bool = Field(
+        default=False,
+        validation_alias="CALL_WEB_SEARCH_ENABLED",
+    )
+    call_schedule_tools_enabled: bool = Field(
+        default=False,
+        validation_alias="CALL_SCHEDULE_TOOLS_ENABLED",
+    )
+    call_progress_speech_enabled: bool = Field(
+        default=True,
+        validation_alias="CALL_PROGRESS_SPEECH_ENABLED",
+    )
     proactive_planner_temperature: float = Field(
         default=0.1,
         validation_alias="PROACTIVE_PLANNER_TEMPERATURE",
@@ -181,6 +215,12 @@ class Settings(BaseSettings):
         ge=5,
         le=120,
     )
+    cosyvoice_max_concurrent_streams: int = Field(
+        default=2,
+        validation_alias="COSYVOICE_MAX_CONCURRENT_STREAMS",
+        ge=1,
+        le=8,
+    )
     voice_streaming_asr_enabled: bool = Field(
         default=False,
         validation_alias="VOICE_STREAMING_ASR_ENABLED",
@@ -258,18 +298,20 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="ECHO_DEVICE_REALTIME_ASR_ENABLED",
     )
-    echo_device_tools_enabled: bool = Field(
-        default=False,
-        validation_alias="ECHO_DEVICE_TOOLS_ENABLED",
-    )
     echo_device_tts_chunk_max_chars: int = Field(
-        default=24,
+        default=32,
         validation_alias="ECHO_DEVICE_TTS_CHUNK_MAX_CHARS",
         ge=8,
         le=120,
     )
+    echo_device_tts_chunk_min_chars: int = Field(
+        default=12,
+        validation_alias="ECHO_DEVICE_TTS_CHUNK_MIN_CHARS",
+        ge=1,
+        le=120,
+    )
     echo_device_tts_prefetch_phrases: int = Field(
-        default=2,
+        default=1,
         validation_alias="ECHO_DEVICE_TTS_PREFETCH_PHRASES",
         ge=0,
         le=4,

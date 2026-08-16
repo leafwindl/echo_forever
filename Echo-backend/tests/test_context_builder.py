@@ -7,8 +7,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.chat.domain.temporal_context import build_temporal_context
 from features.chat.infrastructure.context_builder import (
+    _build_call_history,
+    _build_call_temporal_context,
     _build_proactive_safe_facts,
     _build_proactive_writer_messages,
+    _call_requires_extended_context,
     _clean_proactive_history_content,
     _turn_input_message,
 )
@@ -20,7 +23,11 @@ from features.chat.infrastructure.postgres_repositories import (
 )
 from features.chat.infrastructure.prompt_renderer import (
     BASELINE_SAFETY_POLICY,
+    CALL_DIALOGUE_POLICY,
+    NATURAL_DIALOGUE_POLICY,
+    RESPONSE_CALIBRATION_POLICY,
     format_long_term_memories,
+    render_prompt_layers,
 )
 
 
@@ -94,6 +101,81 @@ class ContextBuilderTests(unittest.TestCase):
         self.assertEqual(messages[2]["role"], "system")
         self.assertIn("间隔 3小时35分钟", messages[2]["content"])
         self.assertIn("2026-08-10T14:37:36+08:00 周一 下午", messages[3]["content"])
+
+    def test_call_history_keeps_only_plain_recent_dialogue(self):
+        history = [
+            {
+                "role": "user",
+                "content": (
+                    "[消息时间 2026-08-15T22:30:00+08:00 周六 晚上]\n"
+                    "我准备睡了。\n\n"
+                    "[本条消息的可信结构化附件]\n- 表情包语义标签=晚安"
+                ),
+            },
+            {
+                "role": "system",
+                "content": "[会话时间边界] 上一段消息结束于昨晚。",
+            },
+            {
+                "role": "assistant",
+                "content": "[消息时间 2026-08-16T09:00:00+08:00 周日 上午]\n早。",
+            },
+        ]
+
+        self.assertEqual(
+            _build_call_history(history),
+            [
+                {"role": "user", "content": "我准备睡了。"},
+                {"role": "assistant", "content": "早。"},
+            ],
+        )
+
+    def test_call_temporal_context_omits_historical_absolute_timestamps(self):
+        context = _build_call_temporal_context(
+            {
+                "local_date": "2026-08-16",
+                "local_time": "10:30:00",
+                "weekday": "周日",
+                "day_period": "上午",
+                "timezone": "Asia/Shanghai",
+                "resolved_expressions": [],
+                "conversation_gap": {
+                    "gap_seconds": 3600,
+                    "state": "returned",
+                    "should_acknowledge_gap": True,
+                    "previous_user_at": "2026-08-16T09:30:00+08:00",
+                    "current_message_at": "2026-08-16T10:30:00+08:00",
+                },
+            }
+        )
+
+        self.assertEqual(context["local_date"], "2026-08-16")
+        self.assertEqual(context["conversation_gap"]["gap_seconds"], 3600)
+        self.assertNotIn("previous_user_at", context["conversation_gap"])
+        self.assertNotIn("current_message_at", context["conversation_gap"])
+
+    def test_call_extended_context_requires_an_explicit_recall_reference(self):
+        self.assertFalse(_call_requires_extended_context("今天想吃什么？"))
+        self.assertFalse(_call_requires_extended_context("我刚才去吃饭了。"))
+        self.assertTrue(_call_requires_extended_context("你还记得我上次说的事吗？"))
+
+    def test_call_prompt_uses_compact_dialogue_policy(self):
+        messages = render_prompt_layers(
+            product_identity="Echo",
+            persona=None,
+            long_term_memories=[],
+            conversation_summary="",
+            prompt_version="test",
+            persona_maximum_tokens=400,
+            memory_maximum_tokens=800,
+            summary_maximum_tokens=800,
+            conversation_mode="call",
+        )
+        content = "\n".join(message["content"] for message in messages)
+
+        self.assertIn(CALL_DIALOGUE_POLICY, content)
+        self.assertNotIn(NATURAL_DIALOGUE_POLICY, content)
+        self.assertNotIn(RESPONSE_CALIBRATION_POLICY, content)
 
     def test_formats_memory_type_content_and_score(self):
         text = format_long_term_memories(

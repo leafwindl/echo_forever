@@ -124,6 +124,63 @@ class SequenceAgentOrchestrator:
         return reply if isinstance(reply, AgentTurnResult) else AgentTurnResult(reply_text=reply)
 
 
+class StreamingCallAgentOrchestrator:
+    async def run(
+        self,
+        user_id,
+        message,
+        messages,
+        conversation_mode="chat",
+        sticker_intent="",
+        allow_proactive_stickers=True,
+        proactive_sticker_due=False,
+        on_text_delta=None,
+        tools_enabled=None,
+    ):
+        del (
+            user_id,
+            message,
+            messages,
+            sticker_intent,
+            allow_proactive_stickers,
+            proactive_sticker_due,
+            tools_enabled,
+        )
+        self.conversation_mode = conversation_mode
+        await on_text_delta("这是实际")
+        await on_text_delta("说出的回复。")
+        return AgentTurnResult(reply_text="不同的最终回复。")
+
+
+class LongStreamingCallAgentOrchestrator:
+    async def run(
+        self,
+        user_id,
+        message,
+        messages,
+        conversation_mode="chat",
+        sticker_intent="",
+        allow_proactive_stickers=True,
+        proactive_sticker_due=False,
+        on_text_delta=None,
+        tools_enabled=None,
+    ):
+        del (
+            user_id,
+            message,
+            messages,
+            conversation_mode,
+            sticker_intent,
+            allow_proactive_stickers,
+            proactive_sticker_due,
+            tools_enabled,
+        )
+        reply = "第一句已经完整说完。第二句也完整说完。第三句不应该被播放。"
+        await on_text_delta("第一句已经完整说完。第二句也完整说完。")
+        await on_text_delta("第三句不应该被播放。")
+        return AgentTurnResult(reply_text=reply)
+
+
 class FakeProactivePlanner:
     def __init__(self, decision):
         self.decision = decision
@@ -851,6 +908,143 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(voice_synthesizer.received_replies, ["hello from echo"])
         self.assertEqual(repository.persisted_turns[0]["user_message_type"], "voice_asr")
         self.assertEqual(repository.persisted_turns[0]["assistant_message_type"], "voice_reply")
+
+    async def test_call_mode_persists_the_same_text_sent_to_streaming_tts(self):
+        repository = FakeConversationRepository()
+        streamed = []
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=StreamingCallAgentOrchestrator(),
+        )
+
+        async def record_delta(delta):
+            streamed.append(delta)
+
+        result = await use_case.execute(
+            user_id="user_a",
+            message="你在吗？",
+            conversation_mode="call",
+            on_text_delta=record_delta,
+        )
+
+        self.assertEqual("".join(streamed), "这是实际说出的回复。")
+        self.assertEqual(result.reply, "这是实际说出的回复。")
+        self.assertEqual(
+            repository.persisted_turns[0]["assistant_reply"],
+            "这是实际说出的回复。",
+        )
+
+    async def test_call_mode_stops_long_stream_at_a_sentence_boundary(self):
+        repository = FakeConversationRepository()
+        streamed = []
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=LongStreamingCallAgentOrchestrator(),
+            call_reply_max_chars=24,
+        )
+
+        async def record_delta(delta):
+            streamed.append(delta)
+
+        result = await use_case.execute(
+            user_id="user_a",
+            message="请简单说说。",
+            conversation_mode="call",
+            on_text_delta=record_delta,
+        )
+
+        expected = "第一句已经完整说完。第二句也完整说完。"
+        self.assertEqual("".join(streamed), expected)
+        self.assertEqual(result.reply, expected)
+        self.assertEqual(repository.persisted_turns[0]["assistant_reply"], expected)
+
+    async def test_call_mode_limits_non_streaming_agent_reply(self):
+        repository = FakeConversationRepository()
+        full_reply = "第一句已经完整说完。第二句也完整说完。第三句不应该被保存。"
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=SequenceAgentOrchestrator([full_reply]),
+            call_reply_max_chars=24,
+        )
+
+        result = await use_case.execute(
+            user_id="user_a",
+            message="请简单说说。",
+            conversation_mode="call",
+        )
+
+        expected = "第一句已经完整说完。第二句也完整说完。"
+        self.assertEqual(result.reply, expected)
+        self.assertEqual(repository.persisted_turns[0]["assistant_reply"], expected)
+
+    async def test_call_progress_text_is_not_persisted_as_reply_content(self):
+        class ProgressAgentOrchestrator:
+            async def run(
+                self,
+                user_id,
+                message,
+                messages,
+                conversation_mode="chat",
+                sticker_intent="",
+                allow_proactive_stickers=True,
+                proactive_sticker_due=False,
+                on_text_delta=None,
+                on_progress_text=None,
+            ):
+                del (
+                    user_id,
+                    message,
+                    messages,
+                    conversation_mode,
+                    sticker_intent,
+                    allow_proactive_stickers,
+                    proactive_sticker_due,
+                )
+                await on_progress_text("好，我查一下。")
+                await on_text_delta("查到的结果是这样。")
+                return AgentTurnResult(reply_text="查到的结果是这样。")
+
+        repository = FakeConversationRepository()
+        progress = []
+        final_text = []
+        use_case = GenerateChatReply(
+            conversation_repository=repository,
+            context_provider=FakeContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=ProgressAgentOrchestrator(),
+        )
+
+        async def record_progress(text):
+            progress.append(text)
+
+        async def record_final(text):
+            final_text.append(text)
+
+        result = await use_case.execute(
+            user_id="user_a",
+            message="帮我查一下。",
+            conversation_mode="call",
+            on_text_delta=record_final,
+            on_progress_text=record_progress,
+        )
+
+        self.assertEqual(progress, ["好，我查一下。"])
+        self.assertEqual(final_text, ["查到的结果是这样。"])
+        self.assertEqual(result.reply, "查到的结果是这样。")
+        self.assertEqual(
+            repository.persisted_turns[0]["assistant_reply"],
+            "查到的结果是这样。",
+        )
 
     async def test_call_mode_keeps_text_reply_when_voice_synthesis_fails(self):
         use_case, _ = self.build_send_use_case(voice_synthesizer=FailingVoiceReplySynthesizer())
