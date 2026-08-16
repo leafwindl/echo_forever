@@ -268,6 +268,12 @@ class Settings(BaseSettings):
         ge=8,
         le=120,
     )
+    echo_device_tts_prefetch_phrases: int = Field(
+        default=2,
+        validation_alias="ECHO_DEVICE_TTS_PREFETCH_PHRASES",
+        ge=0,
+        le=4,
+    )
     echo_device_audio_queue_max_packets: int = Field(
         default=40,
         validation_alias="ECHO_DEVICE_AUDIO_QUEUE_MAX_PACKETS",

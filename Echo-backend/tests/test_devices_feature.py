@@ -485,6 +485,58 @@ class DeviceStreamingTurnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(notifier.user_id, "user-1")
         self.assertEqual(conversation.arguments[-1], False)
 
+    async def test_prefetches_next_phrase_while_first_phrase_is_streaming(self):
+        class Recognizer:
+            async def recognize_pcm16(self, audio):
+                del audio
+                return "用户问题"
+
+        class CoordinatedSpeech:
+            def __init__(self):
+                self.first_finished = False
+                self.second_started = asyncio.Event()
+                self.second_started_before_first_finished = False
+
+            async def _stream(self, text):
+                if text == "第一句。":
+                    await asyncio.wait_for(self.second_started.wait(), timeout=1)
+                    yield b"\x00\x00" * 1440
+                    self.first_finished = True
+                    return
+                self.second_started_before_first_finished = not self.first_finished
+                self.second_started.set()
+                yield b"\x00\x00" * 1440
+
+            def stream_pcm16(self, text):
+                return self._stream(text)
+
+        async def ignore(*_args):
+            return None
+
+        speech = CoordinatedSpeech()
+        turn = StreamDeviceVoiceTurn(
+            recognizer=Recognizer(),
+            conversation=FakeStreamingConversation(),
+            speech=speech,
+            notifier=FakeStreamingNotifier(),
+            chunk_max_chars=24,
+            queue_max_packets=40,
+            prefetch_phrases=1,
+        )
+
+        await turn.execute(
+            user_id="user-1",
+            pcm16_audio=b"\x00\x00" * 16000,
+            request_id="device-prefetch",
+            on_recognized=ignore,
+            on_tts_start=ignore,
+            on_sentence_start=ignore,
+            on_audio_packet=ignore,
+            on_tts_stop=ignore,
+        )
+
+        self.assertTrue(speech.second_started_before_first_finished)
+
 
 class DeviceWebSocketTests(unittest.TestCase):
     def test_realtime_asr_feeds_capture_and_passes_final_text_to_streaming_turn(self):

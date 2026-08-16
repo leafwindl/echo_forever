@@ -34,6 +34,7 @@ def get_stream_device_voice_turn() -> StreamDeviceVoiceTurn:
             notifier=EchoChatNotifier(),
             chunk_max_chars=settings.echo_device_tts_chunk_max_chars,
             queue_max_packets=settings.echo_device_audio_queue_max_packets,
+            prefetch_phrases=settings.echo_device_tts_prefetch_phrases,
         )
     return _stream_device_voice_turn
 

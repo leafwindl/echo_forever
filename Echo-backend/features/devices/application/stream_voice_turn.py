@@ -5,6 +5,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
+from dataclasses import dataclass
 
 from features.devices.application.latency import DeviceLatencyTracker
 from features.devices.application.sentence_chunker import SentenceChunker
@@ -23,6 +24,12 @@ PacketCallback = Callable[[bytes], Awaitable[None]]
 EventCallback = Callable[[], Awaitable[None]]
 
 
+@dataclass(frozen=True)
+class _QueuedPhrase:
+    text: str
+    audio_task: asyncio.Task[tuple[bytes, ...]] | None = None
+
+
 class StreamDeviceVoiceTurn:
     """Run one device turn while handing completed text phrases to TTS."""
 
@@ -35,6 +42,7 @@ class StreamDeviceVoiceTurn:
         notifier: DeviceChatNotifier,
         chunk_max_chars: int,
         queue_max_packets: int,
+        prefetch_phrases: int = 2,
     ):
         self.recognizer = recognizer
         self.conversation = conversation
@@ -42,6 +50,7 @@ class StreamDeviceVoiceTurn:
         self.notifier = notifier
         self.chunk_max_chars = chunk_max_chars
         self.queue_max_packets = queue_max_packets
+        self.prefetch_phrases = max(0, prefetch_phrases)
 
     async def execute(
         self,
@@ -71,26 +80,61 @@ class StreamDeviceVoiceTurn:
             latency.mark("asr_final")
         await on_recognized(user_text)
 
-        phrase_queue: asyncio.Queue[str | None] = asyncio.Queue(
+        phrase_queue: asyncio.Queue[_QueuedPhrase | None] = asyncio.Queue(
             maxsize=max(1, self.queue_max_packets // 4)
         )
         chunker = SentenceChunker(max_chars=self.chunk_max_chars)
         tts_started = False
         delta_received = False
         first_sentence_ready = False
+        phrase_index = 0
+        prefetch_slots = asyncio.Semaphore(max(1, self.prefetch_phrases))
+        prefetch_tasks: set[asyncio.Task[tuple[bytes, ...]]] = set()
+
+        async def collect_prefetched_audio(text: str, index: int) -> tuple[bytes, ...]:
+            started_at = time.perf_counter()
+            chunks: list[bytes] = []
+            async with prefetch_slots:
+                async for chunk in self.speech.stream_pcm16(text):
+                    chunks.append(chunk)
+            logger.info(
+                "Echo device TTS phrase prefetched request_id=%s phrase_index=%s "
+                "text_length=%s chunks=%s bytes=%s duration_ms=%.1f",
+                request_id,
+                index,
+                len(text),
+                len(chunks),
+                sum(len(chunk) for chunk in chunks),
+                (time.perf_counter() - started_at) * 1000,
+            )
+            return tuple(chunks)
+
+        async def enqueue_phrase(phrase: str) -> None:
+            nonlocal first_sentence_ready, phrase_index
+            if not phrase:
+                return
+            if not first_sentence_ready and latency is not None:
+                first_sentence_ready = True
+                latency.mark("llm_first_sentence")
+
+            current_index = phrase_index
+            phrase_index += 1
+            audio_task: asyncio.Task[tuple[bytes, ...]] | None = None
+            if current_index > 0 and self.prefetch_phrases > 0:
+                audio_task = asyncio.create_task(
+                    collect_prefetched_audio(phrase, current_index)
+                )
+                prefetch_tasks.add(audio_task)
+            await phrase_queue.put(_QueuedPhrase(text=phrase, audio_task=audio_task))
 
         async def on_text_delta(delta: str) -> None:
-            nonlocal delta_received, first_sentence_ready
+            nonlocal delta_received
             if delta:
                 if not delta_received and latency is not None:
                     latency.mark("llm_first_delta")
                 delta_received = True
             for phrase in chunker.push(delta):
-                if phrase:
-                    if not first_sentence_ready and latency is not None:
-                        first_sentence_ready = True
-                        latency.mark("llm_first_sentence")
-                    await phrase_queue.put(phrase)
+                await enqueue_phrase(phrase)
 
         async def consume_phrases() -> None:
             nonlocal tts_started
@@ -98,21 +142,32 @@ class StreamDeviceVoiceTurn:
 
             encoder = StreamingPcmOpusEncoder(sample_rate=24000, frame_duration_ms=60)
             first_pcm_received = False
+
+            async def emit_pcm_chunk(pcm16_chunk: bytes) -> None:
+                nonlocal first_pcm_received
+                if not first_pcm_received:
+                    first_pcm_received = True
+                    if latency is not None:
+                        latency.mark("tts_first_pcm")
+                for packet in encoder.push(pcm16_chunk):
+                    await on_audio_packet(packet)
+
             while True:
-                phrase = await phrase_queue.get()
-                if phrase is None:
+                queued_phrase = await phrase_queue.get()
+                if queued_phrase is None:
                     break
                 if not tts_started:
                     tts_started = True
                     await on_tts_start()
-                await on_sentence_start(phrase)
-                async for pcm16_chunk in self.speech.stream_pcm16(phrase):
-                    if not first_pcm_received:
-                        first_pcm_received = True
-                        if latency is not None:
-                            latency.mark("tts_first_pcm")
-                    for packet in encoder.push(pcm16_chunk):
-                        await on_audio_packet(packet)
+                await on_sentence_start(queued_phrase.text)
+                if queued_phrase.audio_task is None:
+                    async for pcm16_chunk in self.speech.stream_pcm16(
+                        queued_phrase.text
+                    ):
+                        await emit_pcm_chunk(pcm16_chunk)
+                else:
+                    for pcm16_chunk in await queued_phrase.audio_task:
+                        await emit_pcm_chunk(pcm16_chunk)
             for packet in encoder.finish():
                 await on_audio_packet(packet)
             if tts_started:
@@ -132,15 +187,9 @@ class StreamDeviceVoiceTurn:
                 latency.mark("reply_persisted")
             if not delta_received and result.reply.strip():
                 for phrase in chunker.push(result.reply):
-                    if phrase and not first_sentence_ready and latency is not None:
-                        first_sentence_ready = True
-                        latency.mark("llm_first_sentence")
-                    await phrase_queue.put(phrase)
+                    await enqueue_phrase(phrase)
             for phrase in chunker.finish():
-                if phrase and not first_sentence_ready and latency is not None:
-                    first_sentence_ready = True
-                    latency.mark("llm_first_sentence")
-                await phrase_queue.put(phrase)
+                await enqueue_phrase(phrase)
             await phrase_queue.put(None)
             await consumer_task
             await self.notifier.notify_latest_turn(user_id)
@@ -158,6 +207,10 @@ class StreamDeviceVoiceTurn:
         except BaseException:
             if not consumer_task.done():
                 consumer_task.cancel()
+            for task in tuple(prefetch_tasks):
+                task.cancel()
+            if prefetch_tasks:
+                await asyncio.gather(*prefetch_tasks, return_exceptions=True)
             with suppress(asyncio.CancelledError, Exception):
                 await consumer_task
             raise

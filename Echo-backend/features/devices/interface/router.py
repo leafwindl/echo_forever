@@ -194,6 +194,9 @@ async def device_websocket(websocket: WebSocket):
 
             if settings.echo_device_streaming_enabled:
                 playback_started_at: float | None = None
+                last_packet_sent_at: float | None = None
+                maximum_packet_gap = 0.0
+                schedule_rebases = 0
                 packet_index = 0
 
                 async def send_tts_start() -> None:
@@ -213,7 +216,8 @@ async def device_websocket(websocket: WebSocket):
                     )
 
                 async def send_audio_packet(packet: bytes) -> None:
-                    nonlocal playback_started_at, packet_index
+                    nonlocal last_packet_sent_at, maximum_packet_gap, packet_index
+                    nonlocal playback_started_at, schedule_rebases
                     loop = asyncio.get_running_loop()
                     if playback_started_at is None:
                         playback_started_at = loop.time()
@@ -222,7 +226,17 @@ async def device_websocket(websocket: WebSocket):
                         delay = send_at - loop.time()
                         if delay > 0:
                             await asyncio.sleep(delay)
+                        elif delay < -0.09:
+                            playback_started_at = loop.time() - packet_index * 0.06
+                            schedule_rebases += 1
                     await websocket.send_bytes(packet)
+                    sent_at = loop.time()
+                    if last_packet_sent_at is not None:
+                        maximum_packet_gap = max(
+                            maximum_packet_gap,
+                            sent_at - last_packet_sent_at,
+                        )
+                    last_packet_sent_at = sent_at
                     latency.mark("device_first_packet")
                     packet_index += 1
 
@@ -246,10 +260,12 @@ async def device_websocket(websocket: WebSocket):
                 latency.log_summary(device_id=device_id, packet_count=packet_index)
                 logger.info(
                     "Echo streaming device turn delivered device_id=%s duration_ms=%.1f "
-                    "packets=%s",
+                    "packets=%s max_packet_gap_ms=%.1f schedule_rebases=%s",
                     device_id,
                     (time.perf_counter() - started_at) * 1000,
                     packet_index,
+                    maximum_packet_gap * 1000,
+                    schedule_rebases,
                 )
                 return
 
