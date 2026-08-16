@@ -23,6 +23,20 @@ TextCallback = Callable[[str], Awaitable[None]]
 PacketCallback = Callable[[bytes], Awaitable[None]]
 EventCallback = Callable[[], Awaitable[None]]
 
+_NON_ACTIONABLE_FILLERS = frozenset("嗯啊呃额唔")
+_FILLER_PUNCTUATION = frozenset("。！？!?，,、；;：:… .")
+
+
+def is_actionable_device_text(text: str) -> bool:
+    """Reject filler-only noise that commonly comes from an open microphone."""
+    clean_text = text.strip()
+    if not clean_text:
+        return False
+    return not all(
+        character in _NON_ACTIONABLE_FILLERS or character in _FILLER_PUNCTUATION
+        for character in clean_text
+    )
+
 
 @dataclass(frozen=True)
 class _QueuedPhrase:
@@ -78,6 +92,15 @@ class StreamDeviceVoiceTurn:
             raise ValueError("Device speech was not recognized")
         if latency is not None:
             latency.mark("asr_final")
+        if not is_actionable_device_text(user_text):
+            if latency is not None:
+                latency.mark("turn_complete")
+            logger.info(
+                "Echo device ignored filler-only recognition request_id=%s text_length=%s",
+                request_id,
+                len(user_text),
+            )
+            return DeviceTurnResult(user_text=user_text, reply="", audio_urls=())
         await on_recognized(user_text)
 
         phrase_queue: asyncio.Queue[_QueuedPhrase | None] = asyncio.Queue(

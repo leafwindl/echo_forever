@@ -133,7 +133,7 @@ class Settings(BaseSettings):
         default="zh-CN-XiaoxiaoNeural",
         validation_alias="TTS_VOICE_ID",
     )
-    tts_speed: float = Field(default=1.0, validation_alias="TTS_SPEED", ge=0.5, le=2.0)
+    tts_speed: float = Field(default=1.05, validation_alias="TTS_SPEED", ge=0.5, le=2.0)
     tts_reply_max_chars: int = Field(
         default=600,
         validation_alias="TTS_REPLY_MAX_CHARS",
@@ -209,13 +209,13 @@ class Settings(BaseSettings):
         le=3000,
     )
     echo_device_auto_minimum_speech_ms: int = Field(
-        default=180,
+        default=360,
         validation_alias="ECHO_DEVICE_AUTO_MINIMUM_SPEECH_MS",
         ge=60,
         le=2000,
     )
     echo_device_auto_speech_rms_threshold: int = Field(
-        default=500,
+        default=700,
         validation_alias="ECHO_DEVICE_AUTO_SPEECH_RMS_THRESHOLD",
         ge=1,
         le=32767,
@@ -273,6 +273,12 @@ class Settings(BaseSettings):
         validation_alias="ECHO_DEVICE_TTS_PREFETCH_PHRASES",
         ge=0,
         le=4,
+    )
+    echo_device_streaming_prebuffer_packets: int = Field(
+        default=4,
+        validation_alias="ECHO_DEVICE_STREAMING_PREBUFFER_PACKETS",
+        ge=1,
+        le=12,
     )
     echo_device_audio_queue_max_packets: int = Field(
         default=40,

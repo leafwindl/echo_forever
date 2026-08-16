@@ -165,12 +165,15 @@ async def device_websocket(websocket: WebSocket):
             latency = DeviceLatencyTracker(request_id, started_at=speech_ended_at)
             latency.mark("endpoint_detected")
             recognized_text = ""
+            realtime_asr_succeeded = False
             if asr_session is not None:
                 try:
                     await asr_session.finish()
                     recognized_text = await drain_realtime_asr(asr_session)
                     if getattr(asr_session, "failed", False):
                         recognized_text = ""
+                    else:
+                        realtime_asr_succeeded = True
                     logger.info(
                         "Echo device realtime ASR finalized device_id=%s text_length=%s",
                         device_id,
@@ -187,6 +190,18 @@ async def device_websocket(websocket: WebSocket):
                     with suppress(Exception):
                         await asr_session.close()
 
+            if asr_session is not None and realtime_asr_succeeded and not recognized_text:
+                latency.mark("asr_final")
+                latency.mark("turn_complete")
+                logger.info(
+                    "Echo device ignored empty realtime ASR result device_id=%s",
+                    device_id,
+                )
+                await websocket.send_json(
+                    {"session_id": session_id, "type": "tts", "state": "stop"}
+                )
+                return
+
             async def send_recognized(user_text: str) -> None:
                 await websocket.send_json(
                     {"session_id": session_id, "type": "stt", "text": user_text}
@@ -198,6 +213,9 @@ async def device_websocket(websocket: WebSocket):
                 maximum_packet_gap = 0.0
                 schedule_rebases = 0
                 packet_index = 0
+                streaming_prebuffer_packets = (
+                    settings.echo_device_streaming_prebuffer_packets
+                )
 
                 async def send_tts_start() -> None:
                     await websocket.send_json(
@@ -221,13 +239,14 @@ async def device_websocket(websocket: WebSocket):
                     loop = asyncio.get_running_loop()
                     if playback_started_at is None:
                         playback_started_at = loop.time()
-                    else:
-                        send_at = playback_started_at + packet_index * 0.06
+                    elif packet_index >= streaming_prebuffer_packets:
+                        paced_index = packet_index - streaming_prebuffer_packets + 1
+                        send_at = playback_started_at + paced_index * 0.06
                         delay = send_at - loop.time()
                         if delay > 0:
                             await asyncio.sleep(delay)
                         elif delay < -0.09:
-                            playback_started_at = loop.time() - packet_index * 0.06
+                            playback_started_at = loop.time() - paced_index * 0.06
                             schedule_rebases += 1
                     await websocket.send_bytes(packet)
                     sent_at = loop.time()
@@ -241,6 +260,12 @@ async def device_websocket(websocket: WebSocket):
                     packet_index += 1
 
                 async def send_tts_stop() -> None:
+                    buffered_tail_packets = min(
+                        packet_index,
+                        streaming_prebuffer_packets,
+                    )
+                    if buffered_tail_packets:
+                        await asyncio.sleep(buffered_tail_packets * 0.06)
                     await websocket.send_json(
                         {"session_id": session_id, "type": "tts", "state": "stop"}
                     )
@@ -257,13 +282,17 @@ async def device_websocket(websocket: WebSocket):
                     recognized_text=recognized_text or None,
                     latency=latency,
                 )
+                if not result.reply and packet_index == 0:
+                    await send_tts_stop()
                 latency.log_summary(device_id=device_id, packet_count=packet_index)
                 logger.info(
                     "Echo streaming device turn delivered device_id=%s duration_ms=%.1f "
-                    "packets=%s max_packet_gap_ms=%.1f schedule_rebases=%s",
+                    "packets=%s prebuffer_packets=%s max_packet_gap_ms=%.1f "
+                    "schedule_rebases=%s",
                     device_id,
                     (time.perf_counter() - started_at) * 1000,
                     packet_index,
+                    min(packet_index, streaming_prebuffer_packets),
                     maximum_packet_gap * 1000,
                     schedule_rebases,
                 )
@@ -441,13 +470,17 @@ async def device_websocket(websocket: WebSocket):
                             logger.info(
                                 "Echo device endpoint detected device_id=%s buffered_bytes=%s "
                                 "audio_duration_ms=%.1f capture_ms=%.1f speech_elapsed_ms=%.1f "
-                                "trailing_silence_ms=%.1f configured_silence_ms=%s",
+                                "voiced_ms=%.1f trailing_silence_ms=%.1f noise_floor_rms=%.1f "
+                                "active_rms_threshold=%.1f configured_silence_ms=%s",
                                 device_id,
                                 decoder.buffered_bytes,
                                 decoder.buffered_bytes * 1000 / (16000 * 2),
                                 capture_duration_ms,
                                 endpoint_detector.speech_elapsed_ms,
+                                endpoint_detector.voiced_ms,
                                 endpoint_detector.trailing_silence_ms,
+                                endpoint_detector.noise_floor_rms,
+                                endpoint_detector.active_rms_threshold,
                                 settings.echo_device_auto_silence_ms,
                             )
                             await start_processing()

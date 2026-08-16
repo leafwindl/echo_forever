@@ -368,6 +368,12 @@ class FakeDeviceRealtimeAsrSession:
         self.closed = True
 
 
+class FakeEmptyDeviceRealtimeAsrSession(FakeDeviceRealtimeAsrSession):
+    async def finish(self):
+        self.finished = True
+        await self._updates.put(type("Update", (), {"text": "", "is_final": True})())
+
+
 class FakeStreamingDeviceTurn:
     def __init__(self):
         self.recognized_text = None
@@ -401,6 +407,42 @@ class FakeStreamingDeviceTurn:
 
 
 class DeviceStreamingTurnTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ignores_filler_only_recognition(self):
+        class Recognizer:
+            async def recognize_pcm16(self, audio):
+                del audio
+                return "嗯。"
+
+        class RejectingConversation:
+            async def reply(self, **_kwargs):
+                raise AssertionError("Filler audio must not reach the conversation")
+
+        callbacks = [AsyncMock() for _ in range(5)]
+        turn = StreamDeviceVoiceTurn(
+            recognizer=Recognizer(),
+            conversation=RejectingConversation(),
+            speech=FakeStreamingSpeech(),
+            notifier=FakeStreamingNotifier(),
+            chunk_max_chars=24,
+            queue_max_packets=40,
+        )
+
+        result = await turn.execute(
+            user_id="user-1",
+            pcm16_audio=b"\x00\x00" * 16000,
+            request_id="device-filler",
+            on_recognized=callbacks[0],
+            on_tts_start=callbacks[1],
+            on_sentence_start=callbacks[2],
+            on_audio_packet=callbacks[3],
+            on_tts_stop=callbacks[4],
+        )
+
+        self.assertEqual(result.user_text, "嗯。")
+        self.assertEqual(result.reply, "")
+        for callback in callbacks:
+            callback.assert_not_awaited()
+
     async def test_uses_final_reply_when_no_stream_delta_is_available(self):
         class Recognizer:
             async def recognize_pcm16(self, audio):
@@ -539,6 +581,67 @@ class DeviceStreamingTurnTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DeviceWebSocketTests(unittest.TestCase):
+    def test_empty_realtime_asr_does_not_fall_back_to_batch(self):
+        app = FastAPI()
+        app.include_router(device_router.router)
+        asr_session = FakeEmptyDeviceRealtimeAsrSession()
+        stream_turn = FakeStreamingDeviceTurn()
+        packets = _encode_pcm_packets(_sine_pcm(16000, 0.18), 16000)
+
+        with (
+            patch.object(device_router.settings, "echo_device_token", "device-secret"),
+            patch.object(
+                device_router.settings,
+                "echo_device_user_map_json",
+                '{"aa:bb|client-1":"user-1"}',
+            ),
+            patch.object(device_router.settings, "echo_device_streaming_enabled", True),
+            patch.object(device_router.settings, "echo_device_realtime_asr_enabled", True),
+            patch.object(device_router.settings, "voice_streaming_asr_enabled", True),
+            patch.object(
+                device_router,
+                "open_streaming_voice_recognition",
+                new=AsyncMock(return_value=asr_session),
+            ),
+            patch.object(
+                device_router,
+                "get_stream_device_voice_turn",
+                return_value=stream_turn,
+            ),
+            TestClient(app) as client,
+            client.websocket_connect(
+                "/devices/ws",
+                headers={
+                    "Device-Id": "aa:bb",
+                    "Client-Id": "client-1",
+                    "Authorization": "Bearer device-secret",
+                },
+            ) as websocket,
+        ):
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "version": 1,
+                    "audio_params": {
+                        "format": "opus",
+                        "sample_rate": 16000,
+                        "channels": 1,
+                        "frame_duration": 60,
+                    },
+                }
+            )
+            websocket.receive_json()
+            websocket.send_json({"type": "listen", "state": "start"})
+            for packet in packets:
+                websocket.send_bytes(packet)
+            websocket.send_json({"type": "listen", "state": "stop"})
+
+            self.assertEqual(websocket.receive_json()["state"], "stop")
+
+        self.assertTrue(asr_session.finished)
+        self.assertTrue(asr_session.closed)
+        self.assertIsNone(stream_turn.recognized_text)
+
     def test_realtime_asr_feeds_capture_and_passes_final_text_to_streaming_turn(self):
         app = FastAPI()
         app.include_router(device_router.router)
