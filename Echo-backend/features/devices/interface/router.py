@@ -345,6 +345,8 @@ async def device_websocket(websocket: WebSocket):
                 audio_bytes,
                 output_sample_rate=24000,
                 frame_duration_ms=60,
+                maximum_silence_ms=settings.echo_device_tts_max_silence_ms,
+                silence_rms_threshold=settings.echo_device_tts_silence_rms_threshold,
             )
             audio_encoded_at = time.perf_counter()
             await websocket.send_json(

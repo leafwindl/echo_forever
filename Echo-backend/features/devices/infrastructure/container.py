@@ -36,6 +36,8 @@ def get_stream_device_voice_turn() -> StreamDeviceVoiceTurn:
             chunk_min_chars=settings.echo_device_tts_chunk_min_chars,
             queue_max_packets=settings.echo_device_audio_queue_max_packets,
             prefetch_phrases=settings.echo_device_tts_prefetch_phrases,
+            maximum_silence_ms=settings.echo_device_tts_max_silence_ms,
+            silence_rms_threshold=settings.echo_device_tts_silence_rms_threshold,
         )
     return _stream_device_voice_turn
 

@@ -316,6 +316,18 @@ class Settings(BaseSettings):
         ge=0,
         le=4,
     )
+    echo_device_tts_max_silence_ms: int = Field(
+        default=240,
+        validation_alias="ECHO_DEVICE_TTS_MAX_SILENCE_MS",
+        ge=60,
+        le=1000,
+    )
+    echo_device_tts_silence_rms_threshold: int = Field(
+        default=300,
+        validation_alias="ECHO_DEVICE_TTS_SILENCE_RMS_THRESHOLD",
+        ge=0,
+        le=5000,
+    )
     echo_device_streaming_prebuffer_packets: int = Field(
         default=4,
         validation_alias="ECHO_DEVICE_STREAMING_PREBUFFER_PACKETS",

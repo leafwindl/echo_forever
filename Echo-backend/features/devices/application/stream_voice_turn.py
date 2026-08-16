@@ -61,6 +61,8 @@ class StreamDeviceVoiceTurn:
         queue_max_packets: int,
         chunk_min_chars: int = 12,
         prefetch_phrases: int = 1,
+        maximum_silence_ms: int = 240,
+        silence_rms_threshold: int = 300,
     ):
         self.recognizer = recognizer
         self.conversation = conversation
@@ -70,6 +72,8 @@ class StreamDeviceVoiceTurn:
         self.chunk_min_chars = chunk_min_chars
         self.queue_max_packets = queue_max_packets
         self.prefetch_phrases = max(0, prefetch_phrases)
+        self.maximum_silence_ms = maximum_silence_ms
+        self.silence_rms_threshold = silence_rms_threshold
 
     async def execute(
         self,
@@ -202,7 +206,12 @@ class StreamDeviceVoiceTurn:
             nonlocal tts_started
             from features.devices.infrastructure.audio_codec import StreamingPcmOpusEncoder
 
-            encoder = StreamingPcmOpusEncoder(sample_rate=24000, frame_duration_ms=60)
+            encoder = StreamingPcmOpusEncoder(
+                sample_rate=24000,
+                frame_duration_ms=60,
+                maximum_silence_ms=self.maximum_silence_ms,
+                silence_rms_threshold=self.silence_rms_threshold,
+            )
             first_pcm_received = False
 
             async def emit_pcm_chunk(pcm16_chunk: bytes) -> None:
@@ -247,6 +256,13 @@ class StreamDeviceVoiceTurn:
                             await emit_pcm_chunk(pcm16_chunk)
                 for packet in encoder.finish():
                     await on_audio_packet(packet)
+                if encoder.trimmed_silence_ms:
+                    logger.info(
+                        "Echo streaming device TTS silence compacted request_id=%s "
+                        "trimmed_ms=%.1f",
+                        request_id,
+                        encoder.trimmed_silence_ms,
+                    )
             finally:
                 if tts_started:
                     with suppress(Exception):

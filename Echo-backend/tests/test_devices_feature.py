@@ -25,6 +25,7 @@ from features.devices.domain.entities import DeviceTurnResult
 from features.devices.infrastructure.adapters import parse_personal_device_map
 from features.devices.infrastructure.audio_codec import (
     OpusPacketDecoder,
+    Pcm16SilenceLimiter,
     StreamingPcmOpusEncoder,
     encode_audio_bytes_to_opus_packets,
 )
@@ -106,6 +107,46 @@ class DeviceAudioCodecTests(unittest.TestCase):
             decoder.push(packet)
         result = decoder.finish()
         self.assertGreater(len(result), 24000)
+
+    def test_limits_long_tts_silence_without_trimming_speech(self):
+        limiter = Pcm16SilenceLimiter(
+            sample_rate=24000,
+            maximum_silence_ms=240,
+            rms_threshold=300,
+        )
+        speech = _constant_pcm(24000, 0.3, 4000)
+        long_silence = _constant_pcm(24000, 0.8, 0)
+        source = speech + long_silence + speech
+
+        output = bytearray()
+        for offset in range(0, len(source), 1379):
+            output.extend(limiter.push(source[offset : offset + 1379]))
+        output.extend(limiter.finish())
+
+        expected_bytes = len(speech) * 2 + 24000 * 2 * 240 // 1000
+        self.assertEqual(len(output), expected_bytes)
+        self.assertAlmostEqual(limiter.trimmed_silence_ms, 560.0, places=1)
+
+    def test_non_streaming_encoder_compacts_long_tts_silence(self):
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(24000)
+            wav.writeframes(
+                _constant_pcm(24000, 0.3, 4000)
+                + _constant_pcm(24000, 0.8, 0)
+                + _constant_pcm(24000, 0.3, 4000)
+            )
+
+        original = encode_audio_bytes_to_opus_packets(output.getvalue())
+        compacted = encode_audio_bytes_to_opus_packets(
+            output.getvalue(),
+            maximum_silence_ms=240,
+            silence_rms_threshold=300,
+        )
+
+        self.assertGreater(len(original) - len(compacted), 7)
 
 
 class SentenceChunkerTests(unittest.TestCase):
