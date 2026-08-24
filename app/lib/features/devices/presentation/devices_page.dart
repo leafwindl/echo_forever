@@ -1,5 +1,6 @@
 import 'package:echo_app/features/devices/domain/device.dart';
 import 'package:echo_app/features/devices/presentation/device_controller.dart';
+import 'package:echo_app/features/devices/presentation/device_provisioning_page.dart';
 import 'package:echo_app/shared/widgets/echo_error_view.dart';
 import 'package:echo_app/shared/widgets/echo_loading_view.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +18,8 @@ class DevicesPage extends ConsumerWidget {
         actions: [
           IconButton(
             tooltip: '刷新设备',
-            onPressed: () => ref.read(deviceControllerProvider.notifier).refresh(),
+            onPressed: () =>
+                ref.read(deviceControllerProvider.notifier).refresh(),
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
@@ -35,20 +37,37 @@ class DevicesPage extends ConsumerWidget {
         ),
         data: (value) {
           if (value.devices.isEmpty) {
-            return const Center(
+            return Center(
               child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text('还没有绑定 Echo 设备'),
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('还没有绑定 Echo 设备'),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const DeviceProvisioningPage(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.wifi_tethering_rounded),
+                      label: const Text('先为设备配网'),
+                    ),
+                  ],
+                ),
               ),
             );
           }
           return RefreshIndicator(
-            onRefresh: () => ref.read(deviceControllerProvider.notifier).refresh(),
+            onRefresh: () =>
+                ref.read(deviceControllerProvider.notifier).refresh(),
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               itemCount: value.devices.length,
               separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, index) => _DeviceTile(device: value.devices[index]),
+              itemBuilder: (context, index) =>
+                  _DeviceTile(device: value.devices[index]),
             ),
           );
         },
@@ -78,17 +97,25 @@ class DevicesPage extends ConsumerWidget {
                 controller: codeController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: '6 位配对码'),
-                validator: (value) => value == null || !RegExp(r'^\d{6}$').hasMatch(value.trim()) ? '请输入 6 位数字' : null,
+                validator: (value) =>
+                    value == null || !RegExp(r'^\d{6}$').hasMatch(value.trim())
+                    ? '请输入 6 位数字'
+                    : null,
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
           FilledButton(
             onPressed: () async {
               if (!(formKey.currentState?.validate() ?? false)) return;
-              final ok = await ref.read(deviceControllerProvider.notifier).claimPairing(
+              final ok = await ref
+                  .read(deviceControllerProvider.notifier)
+                  .claimPairing(
                     pairingId: pairingController.text.trim(),
                     code: codeController.text.trim(),
                   );
@@ -104,9 +131,9 @@ class DevicesPage extends ConsumerWidget {
     if (claimed == false && context.mounted) {
       final error = ref.read(deviceControllerProvider).asData?.value.error;
       if (error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.detail ?? '设备操作失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.detail ?? '设备操作失败')));
       }
     }
   }
@@ -119,7 +146,9 @@ class _DeviceTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final color = device.isOnline ? Colors.green : Theme.of(context).colorScheme.outline;
+    final color = device.isOnline
+        ? Colors.green
+        : Theme.of(context).colorScheme.outline;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       leading: CircleAvatar(
@@ -127,7 +156,9 @@ class _DeviceTile extends ConsumerWidget {
         child: Icon(Icons.speaker_rounded, color: color),
       ),
       title: Text(device.displayName),
-      subtitle: Text('${device.statusLabel} · 固件 ${device.firmwareVersion.isEmpty ? '未知' : device.firmwareVersion}'),
+      subtitle: Text(
+        '${device.statusLabel} · 固件 ${device.firmwareVersion.isEmpty ? '未知' : device.firmwareVersion}',
+      ),
       trailing: IconButton(
         tooltip: '设备设置',
         icon: const Icon(Icons.more_vert_rounded),
@@ -145,29 +176,64 @@ class _DeviceTile extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('重命名'), onTap: () => Navigator.pop(sheetContext, 'rename')),
-            ListTile(leading: const Icon(Icons.key_outlined), title: const Text('轮换设备凭证'), onTap: () => Navigator.pop(sheetContext, 'rotate')),
-            ListTile(leading: const Icon(Icons.link_off_rounded), title: const Text('解绑设备'), onTap: () => Navigator.pop(sheetContext, 'unbind')),
+            ListTile(
+              leading: const Icon(Icons.wifi_tethering_rounded),
+              title: const Text('重新配网'),
+              subtitle: const Text('连接设备热点并设置家庭 Wi-Fi'),
+              onTap: () => Navigator.pop(sheetContext, 'provision'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('重命名'),
+              onTap: () => Navigator.pop(sheetContext, 'rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.key_outlined),
+              title: const Text('轮换设备凭证'),
+              onTap: () => Navigator.pop(sheetContext, 'rotate'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.link_off_rounded),
+              title: const Text('解绑设备'),
+              onTap: () => Navigator.pop(sheetContext, 'unbind'),
+            ),
           ],
         ),
       ),
     );
     if (!context.mounted) return;
-    if (action == 'rename') {
+    if (action == 'provision') {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(builder: (_) => const DeviceProvisioningPage()),
+      );
+    } else if (action == 'rename') {
       final nameController = TextEditingController(text: device.displayName);
       final name = await showDialog<String>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('重命名设备'),
-          content: TextField(controller: nameController, autofocus: true, maxLength: 40),
+          content: TextField(
+            controller: nameController,
+            autofocus: true,
+            maxLength: 40,
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('取消')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, nameController.text.trim()), child: const Text('保存')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, nameController.text.trim()),
+              child: const Text('保存'),
+            ),
           ],
         ),
       );
       nameController.dispose();
-      if (name != null && name.isNotEmpty) await controller.rename(device, name);
+      if (name != null && name.isNotEmpty) {
+        await controller.rename(device, name);
+      }
     } else if (action == 'unbind') {
       final confirmed = await showDialog<bool>(
         context: context,
@@ -175,21 +241,34 @@ class _DeviceTile extends ConsumerWidget {
           title: const Text('解绑设备？'),
           content: const Text('解绑后设备需要重新配对才能使用。'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('取消')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('解绑')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('解绑'),
+            ),
           ],
         ),
       );
       if (confirmed == true) await controller.unbind(device);
     } else if (action == 'rotate') {
-      final credential = await ref.read(deviceRepositoryProvider).rotateCredential(device.deviceId);
+      final credential = await ref
+          .read(deviceRepositoryProvider)
+          .rotateCredential(device.deviceId);
       if (context.mounted) {
         await showDialog<void>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('新设备凭证'),
             content: SelectableText(credential.credential),
-            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('完成'))],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('完成'),
+              ),
+            ],
           ),
         );
       }
