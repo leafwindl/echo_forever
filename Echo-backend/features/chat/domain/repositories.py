@@ -2,6 +2,8 @@ from typing import Protocol
 
 from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
+    CHAT_CHANNEL_APP,
+    CHAT_VISIBILITY_MAIN,
     ChatBatchInput,
     ChatDeliveryPresentation,
     ChatHistoryMessage,
@@ -29,6 +31,8 @@ class ChatConversationRepository(Protocol):
         assistant_message_type: str,
         user_content_parts: tuple[ContentPart, ...] = (),
         assistant_content_parts: tuple[ContentPart, ...] = (),
+        channel: str = CHAT_CHANNEL_APP,
+        visibility: str = CHAT_VISIBILITY_MAIN,
     ) -> tuple[int, int]: ...
 
     def count_user_messages(self, user_id: str, conversation_id: str) -> int: ...

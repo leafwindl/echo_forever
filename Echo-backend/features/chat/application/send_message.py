@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable
 from features.agent.domain.entities import ContentPart
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.domain.entities import (
+    CHAT_CHANNEL_APP,
+    CHAT_VISIBILITY_MAIN,
     CONVERSATION_MODES,
     ChatReplyDeliveryResult,
     ChatRequestClaimStatus,
@@ -46,6 +48,11 @@ class SendChatMessage:
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         synthesize_voice: bool = True,
         tools_enabled: bool | None = None,
+        message_channel: str = CHAT_CHANNEL_APP,
+        message_visibility: str = CHAT_VISIBILITY_MAIN,
+        speaker_role: str | None = None,
+        speaker_confidence: float = 0.0,
+        memory_enabled: bool = True,
     ) -> ChatReplyDeliveryResult:
         clean_user_id = user_id.strip()
         clean_mode = conversation_mode.strip().lower()
@@ -66,6 +73,11 @@ class SendChatMessage:
             sticker_intent,
             user_content_parts,
             tools_enabled,
+            message_channel,
+            message_visibility,
+            speaker_role,
+            speaker_confidence,
+            memory_enabled,
         )
         claimed_request = False
         if clean_request_id and self.request_result_repository is not None:
@@ -92,18 +104,27 @@ class SendChatMessage:
             raise ChatRequestInProgressError("上一条消息还在处理中，请稍后再试")
 
         try:
-            chat_result = await self.chat_reply_generator.execute(
-                user_id=clean_user_id,
-                message=message,
-                user_message_type=resolved_user_message_type,
-                assistant_message_type=assistant_message_type,
-                conversation_mode=clean_mode,
-                sticker_intent=sticker_intent,
-                user_content_parts=user_content_parts,
-                on_text_delta=on_text_delta,
-                on_progress_text=on_progress_text,
-                tools_enabled=tools_enabled,
-            )
+            generator_kwargs = {
+                "user_id": clean_user_id,
+                "message": message,
+                "user_message_type": resolved_user_message_type,
+                "assistant_message_type": assistant_message_type,
+                "conversation_mode": clean_mode,
+                "sticker_intent": sticker_intent,
+                "user_content_parts": user_content_parts,
+                "on_text_delta": on_text_delta,
+                "on_progress_text": on_progress_text,
+                "tools_enabled": tools_enabled,
+                "message_channel": message_channel,
+                "message_visibility": message_visibility,
+            }
+            if speaker_role is not None:
+                generator_kwargs.update(
+                    speaker_role=speaker_role,
+                    speaker_confidence=speaker_confidence,
+                    memory_enabled=memory_enabled,
+                )
+            chat_result = await self.chat_reply_generator.execute(**generator_kwargs)
 
             audio_urls: tuple[str, ...] = ()
             if is_call and synthesize_voice:
@@ -129,6 +150,9 @@ class SendChatMessage:
                 audio_urls=audio_urls,
                 sources=chat_result.sources,
                 content_parts=content_parts,
+                user_message_id=chat_result.user_message_id,
+                assistant_message_id=chat_result.assistant_message_id,
+                conversation_id=chat_result.conversation_id,
             )
             if claimed_request and self.request_result_repository is not None:
                 self.request_result_repository.complete(
@@ -158,6 +182,11 @@ class SendChatMessage:
         sticker_intent: str,
         user_content_parts: tuple[ContentPart, ...],
         tools_enabled: bool | None,
+        message_channel: str,
+        message_visibility: str,
+        speaker_role: str | None,
+        speaker_confidence: float,
+        memory_enabled: bool,
     ) -> str:
         payload = {
             "user_id": user_id,
@@ -166,9 +195,14 @@ class SendChatMessage:
             "user_message_type": user_message_type,
             "sticker_intent": sticker_intent,
             "tools_enabled": tools_enabled,
+            "message_channel": message_channel,
+            "message_visibility": message_visibility,
             "content_parts": [
                 {"type": part.type, "sticker_id": part.sticker_id} for part in user_content_parts
             ],
+            "speaker_role": speaker_role,
+            "speaker_confidence": speaker_confidence,
+            "memory_enabled": memory_enabled,
         }
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
         return hashlib.sha256(encoded).hexdigest()

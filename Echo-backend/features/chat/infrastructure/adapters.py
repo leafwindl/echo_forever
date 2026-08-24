@@ -7,6 +7,8 @@ from features.agent.domain.entities import ContentPart, SourceReference
 from features.agent.domain.services import ProactiveDecisionPlanner
 from features.agent.public import plan_proactive_message, run_chat_agent
 from features.chat.domain.entities import (
+    CHAT_CHANNEL_APP,
+    CHAT_VISIBILITY_MAIN,
     ChatContext,
     ChatHistoryMessage,
     ChatReplyDeliveryResult,
@@ -129,6 +131,8 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
         assistant_message_type: str,
         user_content_parts=(),
         assistant_content_parts=(),
+        channel: str = CHAT_CHANNEL_APP,
+        visibility: str = CHAT_VISIBILITY_MAIN,
     ) -> tuple[int, int]:
         return postgres_repositories.add_chat_turn(
             user_id=user_id,
@@ -139,6 +143,8 @@ class ChatConversationRepositoryAdapter(ChatConversationRepository):
             assistant_message_type=assistant_message_type,
             user_content_parts=user_content_parts,
             assistant_content_parts=assistant_content_parts,
+            channel=channel,
+            visibility=visibility,
         )
 
     def count_user_messages(self, user_id: str, conversation_id: str) -> int:
@@ -212,6 +218,9 @@ class PostgresChatRequestResultRepositoryAdapter(ChatRequestResultRepository):
             {
                 "reply": result.reply,
                 "audio_urls": list(result.audio_urls),
+                "user_message_id": result.user_message_id,
+                "assistant_message_id": result.assistant_message_id,
+                "conversation_id": result.conversation_id,
                 "sources": [vars(source) for source in result.sources],
                 "content_parts": [vars(part) for part in result.content_parts],
             },
@@ -239,6 +248,17 @@ class PostgresChatRequestResultRepositoryAdapter(ChatRequestResultRepository):
                 for item in payload.get("content_parts") or []
                 if isinstance(item, dict)
             ),
+            user_message_id=(
+                int(payload["user_message_id"])
+                if payload.get("user_message_id") is not None
+                else None
+            ),
+            assistant_message_id=(
+                int(payload["assistant_message_id"])
+                if payload.get("assistant_message_id") is not None
+                else None
+            ),
+            conversation_id=str(payload.get("conversation_id") or ""),
         )
 
 
@@ -250,6 +270,8 @@ class ChatContextProviderAdapter(ChatContextProvider):
         conversation_id: str,
         conversation_mode: str,
         history_before_message_id: int | None = None,
+        speaker_role: str | None = None,
+        memory_enabled: bool = True,
     ) -> ChatContext:
         context = await build_chat_context(
             user_id,
@@ -257,6 +279,8 @@ class ChatContextProviderAdapter(ChatContextProvider):
             conversation_id=conversation_id,
             conversation_mode=conversation_mode,
             history_before_message_id=history_before_message_id,
+            speaker_role=speaker_role,
+            memory_enabled=memory_enabled,
         )
         return ChatContext(
             messages=context.messages,

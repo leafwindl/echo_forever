@@ -7,7 +7,6 @@ class RouteNames {
   static const onboarding = 'onboarding';
   static const chat = 'chat';
   static const home = 'home';
-  static const call = 'call';
   static const persona = 'persona';
   static const memory = 'memory';
   static const letters = 'letters';
@@ -16,4 +15,5 @@ class RouteNames {
   static const proactiveChatSettings = 'proactive-chat-settings';
   static const scheduledTasks = 'scheduled-tasks';
   static const studyFocus = 'study-focus';
+  static const devices = 'devices';
 }

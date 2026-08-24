@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.agent.domain.delivery import AgentDeliveryPlanError
+from features.chat.domain.entities import ChatReplyDeliveryResult
 from features.devices.application.process_voice_turn import ProcessDeviceVoiceTurn
 from features.devices.application.sentence_chunker import SentenceChunker
 from features.devices.application.stream_voice_turn import StreamDeviceVoiceTurn
@@ -22,7 +23,10 @@ from features.devices.application.transcript_guard import (
     maximum_transcript_chars,
 )
 from features.devices.domain.entities import DeviceTurnResult
-from features.devices.infrastructure.adapters import parse_personal_device_map
+from features.devices.infrastructure.adapters import (
+    EchoConversationService,
+    parse_personal_device_map,
+)
 from features.devices.infrastructure.audio_codec import (
     OpusPacketDecoder,
     Pcm16SilenceLimiter,
@@ -317,7 +321,7 @@ class FakeNotifier:
 
 
 class DeviceVoiceTurnTests(unittest.IsolatedAsyncioTestCase):
-    async def test_recognizes_runs_echo_and_notifies_app(self):
+    async def test_recognizes_runs_echo_and_notifies_turn_completion(self):
         recognizer = FakeRecognizer()
         conversation = FakeConversation()
         notifier = FakeNotifier()
@@ -339,6 +343,32 @@ class DeviceVoiceTurnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(conversation.call, ("user-1", "我回来了", "request-1"))
         self.assertEqual(notifier.user_id, "user-1")
         on_recognized.assert_awaited_once_with("我回来了")
+
+    async def test_device_conversation_persists_hidden_device_channel(self):
+        delivery = ChatReplyDeliveryResult(reply="我在。")
+        with patch(
+            "features.devices.infrastructure.adapters.send_chat_message",
+            new=AsyncMock(return_value=delivery),
+        ) as send_message:
+            result = await EchoConversationService().reply(
+                user_id="user-1",
+                user_text="你好",
+                request_id="device-request",
+                synthesize_voice=False,
+            )
+
+        self.assertEqual(result.reply, "我在。")
+        send_message.assert_awaited_once_with(
+            user_id="user-1",
+            message="你好",
+            conversation_mode="call",
+            request_id="device-request",
+            on_text_delta=None,
+            on_progress_text=None,
+            synthesize_voice=False,
+            message_channel="device_voice",
+            message_visibility="device_history",
+        )
 
     def test_parses_personal_device_mapping(self):
         mapping = parse_personal_device_map(

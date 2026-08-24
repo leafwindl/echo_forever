@@ -20,6 +20,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 enum _ChatMenuAction {
   studyFocus,
+  devices,
   persona,
   memory,
   stickers,
@@ -87,12 +88,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               child: const Icon(Icons.mail_outline_rounded),
             ),
           ),
-          IconButton(
-            key: const Key('open-call-button'),
-            tooltip: '与 Echo 通话',
-            onPressed: state.isBusy ? null : () => context.push('/call'),
-            icon: const Icon(Icons.call_rounded),
-          ),
           PopupMenuButton<_ChatMenuAction>(
             tooltip: '聊天菜单',
             enabled: !state.isBusy,
@@ -104,6 +99,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.menu_book_rounded),
                   title: Text('一起学习'),
+                ),
+              ),
+              PopupMenuItem<_ChatMenuAction>(
+                value: _ChatMenuAction.devices,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.speaker_rounded),
+                  title: Text('我的 Echo'),
                 ),
               ),
               PopupMenuItem<_ChatMenuAction>(
@@ -243,6 +246,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     switch (action) {
       case _ChatMenuAction.studyFocus:
         unawaited(context.pushNamed(RouteNames.studyFocus));
+      case _ChatMenuAction.devices:
+        unawaited(context.pushNamed(RouteNames.devices));
       case _ChatMenuAction.persona:
         unawaited(context.pushNamed(RouteNames.persona));
       case _ChatMenuAction.memory:

@@ -45,7 +45,7 @@ class HomePage extends ConsumerWidget {
               Text('欢迎回来', style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 8),
               Text(
-                '登录已完成，聊天与通话功能将在后续里程碑接入。',
+                '登录已完成，聊天与设备功能将在后续里程碑接入。',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge,
               ),

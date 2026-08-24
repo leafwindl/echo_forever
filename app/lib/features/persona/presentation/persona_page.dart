@@ -91,7 +91,7 @@ class _PersonaPageState extends ConsumerState<PersonaPage> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '这里的设置会直接影响聊天和通话里的称呼、语气、关系节奏和长期记忆。',
+                              '这里的设置会直接影响文字聊天和硬件语音中的称呼、语气、关系节奏和长期记忆。',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ],

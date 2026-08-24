@@ -8,7 +8,12 @@ from shared.config import settings
 
 from features.agent.domain.entities import ContentPart, SourceReference
 from features.auth.public import ensure_user_identity
-from features.chat.domain.entities import ChatHistoryMessage, ExternalAssistantDelivery
+from features.chat.domain.entities import (
+    CHAT_CHANNEL_APP,
+    CHAT_VISIBILITY_MAIN,
+    ChatHistoryMessage,
+    ExternalAssistantDelivery,
+)
 from features.chat.domain.temporal_context import day_period, format_gap_seconds, weekday_name
 from features.stickers.public import resolve_sticker_asset_url
 
@@ -174,6 +179,8 @@ def _add_message_record(
     sequence_in_group: int = 0,
     in_reply_to_message_id: int | None = None,
     source: str | None = None,
+    channel: str = CHAT_CHANNEL_APP,
+    visibility: str = CHAT_VISIBILITY_MAIN,
 ) -> tuple[int, str]:
     ensure_user_identity(user_id=user_id, conn=conn)
     message_id = f"msg_{uuid.uuid4().hex}"
@@ -183,9 +190,9 @@ def _add_message_record(
             INSERT INTO chat_messages (
                 message_id, client_message_id, user_id, conversation_id, role,
                 content, message_type, agent_turn_id, reply_group_id,
-                sequence_in_group, in_reply_to_message_id, source
+                sequence_in_group, in_reply_to_message_id, source, channel, visibility
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -201,6 +208,8 @@ def _add_message_record(
                 sequence_in_group,
                 in_reply_to_message_id,
                 source,
+                channel,
+                visibility,
             ),
         )
         inserted_row = cursor.fetchone()
@@ -371,6 +380,8 @@ def add_chat_turn(
     assistant_message_type: str = "text",
     user_content_parts: tuple[ContentPart, ...] = (),
     assistant_content_parts: tuple[ContentPart, ...] = (),
+    channel: str = CHAT_CHANNEL_APP,
+    visibility: str = CHAT_VISIBILITY_MAIN,
 ) -> tuple[int, int]:
     with transaction() as conn:
         user_message_id, user_stable_message_id = _add_message_record(
@@ -380,6 +391,8 @@ def add_chat_turn(
             conversation_id=conversation_id,
             message_type=user_message_type,
             conn=conn,
+            channel=channel,
+            visibility=visibility,
         )
         _add_message_attachments(
             conn,
@@ -395,6 +408,8 @@ def add_chat_turn(
             conversation_id=conversation_id,
             message_type=assistant_message_type,
             conn=conn,
+            channel=channel,
+            visibility=visibility,
         )
         _add_message_attachments(
             conn,
@@ -416,6 +431,11 @@ def count_user_messages(user_id: str, conversation_id: str) -> int:
                   AND conversation_id = %s
                   AND role = 'user'
                   AND status = 'active'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM device_voice_turns dvt
+                      WHERE dvt.speaker_role = 'unknown'
+                        AND dvt.user_message_id = chat_messages.id
+                  )
                 """,
             (user_id, conversation_id),
         )
@@ -437,6 +457,11 @@ def list_recent_user_messages(
                   AND conversation_id = %s
                   AND role = 'user'
                   AND status = 'active'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM device_voice_turns dvt
+                      WHERE dvt.speaker_role = 'unknown'
+                        AND dvt.user_message_id = chat_messages.id
+                  )
                 ORDER BY id DESC
                 LIMIT %s
                 """,
@@ -513,6 +538,12 @@ def get_history(
                       AND id > %s
                       {before_clause}
                       AND status = 'active'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM device_voice_turns dvt
+                          WHERE dvt.speaker_role = 'unknown'
+                            AND (dvt.user_message_id = chat_messages.id
+                                 OR dvt.assistant_message_id = chat_messages.id)
+                      )
                     ORDER BY id DESC
                     LIMIT %s
                     """,
@@ -531,6 +562,12 @@ def get_history(
                       AND id > %s
                       {before_clause}
                       AND status = 'active'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM device_voice_turns dvt
+                          WHERE dvt.speaker_role = 'unknown'
+                            AND (dvt.user_message_id = chat_messages.id
+                                 OR dvt.assistant_message_id = chat_messages.id)
+                      )
                     ORDER BY id DESC
                     LIMIT %s
                     """,
@@ -661,11 +698,13 @@ def list_messages_page(
                 f"""
                 SELECT id, message_id, client_message_id, role, content,
                        message_type, agent_turn_id, reply_group_id,
-                       sequence_in_group, in_reply_to_message_id, created_at
+                       sequence_in_group, in_reply_to_message_id, created_at,
+                       channel, visibility
                 FROM chat_messages
                 WHERE user_id = %s
                   AND conversation_id = %s
                   AND status = 'active'
+                  AND visibility = 'main_chat'
                   {cursor_clause}
                 ORDER BY id {order_direction}
                 LIMIT %s
@@ -706,6 +745,8 @@ def list_messages_page(
                     else None
                 ),
                 "created_at": row["created_at"],
+                "channel": str(row["channel"] or CHAT_CHANNEL_APP),
+                "visibility": str(row["visibility"] or CHAT_VISIBILITY_MAIN),
             }
             for row in page_rows
         ],

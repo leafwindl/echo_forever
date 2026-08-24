@@ -52,6 +52,8 @@ class FakeConversationRepository:
         assistant_message_type,
         user_content_parts=(),
         assistant_content_parts=(),
+        channel="app_chat",
+        visibility="main_chat",
     ):
         self.persisted_turns.append(
             {
@@ -63,6 +65,8 @@ class FakeConversationRepository:
                 "assistant_message_type": assistant_message_type,
                 "user_content_parts": user_content_parts,
                 "assistant_content_parts": assistant_content_parts,
+                "channel": channel,
+                "visibility": visibility,
             }
         )
         return 10, 11

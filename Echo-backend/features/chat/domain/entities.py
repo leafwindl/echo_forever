@@ -5,6 +5,10 @@ from enum import StrEnum
 from features.agent.domain.entities import ContentPart, SourceReference
 
 CONVERSATION_MODES = ("chat", "call")
+CHAT_CHANNEL_APP = "app_chat"
+CHAT_CHANNEL_DEVICE = "device_voice"
+CHAT_VISIBILITY_MAIN = "main_chat"
+CHAT_VISIBILITY_DEVICE_HISTORY = "device_history"
 
 
 class ChatValidationError(ValueError):
@@ -95,6 +99,9 @@ class ChatReplyDeliveryResult:
     audio_urls: tuple[str, ...] = ()
     sources: tuple[SourceReference, ...] = ()
     content_parts: tuple[ContentPart, ...] = ()
+    user_message_id: int | None = None
+    assistant_message_id: int | None = None
+    conversation_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -124,6 +131,8 @@ class ChatHistoryMessage:
     sequence_in_group: int = 0
     in_reply_to_message_id: int | None = None
     sources: tuple[SourceReference, ...] = ()
+    channel: str = CHAT_CHANNEL_APP
+    visibility: str = CHAT_VISIBILITY_MAIN
 
 
 @dataclass(frozen=True)

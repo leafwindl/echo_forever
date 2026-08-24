@@ -34,6 +34,8 @@ class ProcessDeviceVoiceTurn:
         request_id: str,
         on_recognized: Callable[[str], Awaitable[None]] | None = None,
         recognized_text: str | None = None,
+        speaker_role: str | None = None,
+        speaker_confidence: float = 0.0,
     ) -> DeviceTurnResult:
         clean_user_id = user_id.strip()
         if not clean_user_id:
@@ -54,11 +56,17 @@ class ProcessDeviceVoiceTurn:
             await on_recognized(user_text)
 
         conversation_started_at = time.perf_counter()
-        result = await self.conversation.reply(
-            user_id=clean_user_id,
-            user_text=user_text,
-            request_id=request_id,
-        )
+        reply_kwargs = {
+            "user_id": clean_user_id,
+            "user_text": user_text,
+            "request_id": request_id,
+        }
+        if speaker_role is not None:
+            reply_kwargs.update(
+                speaker_role=speaker_role,
+                speaker_confidence=speaker_confidence,
+            )
+        result = await self.conversation.reply(**reply_kwargs)
         conversation_completed_at = time.perf_counter()
         await self.notifier.notify_latest_turn(clean_user_id)
         completed_at = time.perf_counter()

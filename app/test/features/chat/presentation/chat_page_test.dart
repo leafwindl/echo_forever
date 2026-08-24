@@ -24,6 +24,7 @@ void main() {
     expect(find.byKey(const Key('static-character-renderer')), findsOneWidget);
     expect(find.byKey(const Key('character-idle-image')), findsOneWidget);
     expect(find.byKey(const Key('chat-input')), findsOneWidget);
+    expect(find.byKey(const Key('open-call-button')), findsNothing);
   });
 
   testWidgets('shows the unread letter badge in the chat toolbar', (

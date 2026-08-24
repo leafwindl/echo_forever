@@ -16,6 +16,8 @@ from features.chat.domain.dialogue_style import (
     find_dialogue_style_violations,
 )
 from features.chat.domain.entities import (
+    CHAT_CHANNEL_APP,
+    CHAT_VISIBILITY_MAIN,
     ChatTurnResult,
     ChatValidationError,
     MemoryExtractionScheduleResult,
@@ -92,8 +94,11 @@ class GenerateChatReply:
         assistant_message_type: str,
         user_content_parts: tuple[ContentPart, ...],
         assistant_content_parts: tuple[ContentPart, ...],
+        channel: str,
+        visibility: str,
         reply_segments: tuple[str, ...] = (),
         sticker_placement: str = "after_text",
+        memory_enabled: bool = True,
     ) -> ChatTurnResult:
         user_message_id, assistant_message_id = self.conversation_repository.add_chat_turn(
             user_id=clean_user_id,
@@ -104,6 +109,8 @@ class GenerateChatReply:
             assistant_message_type=assistant_message_type,
             user_content_parts=user_content_parts,
             assistant_content_parts=assistant_content_parts,
+            channel=channel,
+            visibility=visibility,
         )
 
         summary_updated, memory_gate = await self._run_post_persistence(
@@ -112,6 +119,7 @@ class GenerateChatReply:
             resolved_conversation_id=resolved_conversation_id,
             reply=reply,
             source_message_id=user_message_id,
+            memory_enabled=memory_enabled,
         )
 
         return ChatTurnResult(
@@ -136,7 +144,13 @@ class GenerateChatReply:
         resolved_conversation_id: str,
         reply: str,
         source_message_id: int,
+        memory_enabled: bool = True,
     ) -> tuple[bool, MemoryExtractionScheduleResult]:
+        if not memory_enabled:
+            return False, MemoryExtractionScheduleResult(
+                should_extract=False,
+                reason="speaker_unknown",
+            )
         summary_updated = False
         if self.summary_update_in_background:
             self._schedule_summary_update(clean_user_id, resolved_conversation_id)
@@ -183,6 +197,7 @@ class GenerateChatReply:
         user_message: str,
         assistant_reply: str,
         source_message_id: int,
+        memory_enabled: bool = True,
     ) -> None:
         await self._run_post_persistence(
             clean_user_id=user_id,
@@ -190,6 +205,7 @@ class GenerateChatReply:
             resolved_conversation_id=conversation_id,
             reply=assistant_reply,
             source_message_id=source_message_id,
+            memory_enabled=memory_enabled,
         )
 
     async def prepare(
@@ -206,6 +222,9 @@ class GenerateChatReply:
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         tools_enabled: bool | None = None,
+        speaker_role: str | None = None,
+        speaker_confidence: float = 0.0,
+        memory_enabled: bool = True,
     ) -> PreparedChatReply:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -215,12 +234,18 @@ class GenerateChatReply:
             raise ChatValidationError("Empty message")
 
         context_started_at = time.perf_counter()
+        context_kwargs = {}
+        if speaker_role is not None:
+            context_kwargs["speaker_role"] = speaker_role
+        if not memory_enabled:
+            context_kwargs["memory_enabled"] = False
         if history_before_message_id is None:
             context = await self.context_provider.build_context(
                 clean_user_id,
                 clean_message,
                 conversation_id,
                 conversation_mode,
+                **context_kwargs,
             )
         else:
             context = await self.context_provider.build_context(
@@ -229,9 +254,21 @@ class GenerateChatReply:
                 conversation_id,
                 conversation_mode,
                 history_before_message_id=history_before_message_id,
+                **context_kwargs,
             )
         if self.agent_orchestrator is None:
             raise RuntimeError("Unified Agent runtime is not configured")
+        if speaker_role:
+            context.messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        f"当前设备声纹判断：{speaker_role}，置信度 {max(0.0, min(1.0, speaker_confidence)):.2f}。"
+                        if speaker_role == "owner"
+                        else "当前设备声纹未确认主人身份。"
+                    ),
+                }
+            )
         agent_messages = context.messages
         agent_message = clean_message
         call_reply_limiter: CallReplyStreamLimiter | None = None
@@ -429,6 +466,11 @@ class GenerateChatReply:
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         tools_enabled: bool | None = None,
+        message_channel: str = CHAT_CHANNEL_APP,
+        message_visibility: str = CHAT_VISIBILITY_MAIN,
+        speaker_role: str | None = None,
+        speaker_confidence: float = 0.0,
+        memory_enabled: bool = True,
     ) -> ChatTurnResult:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -454,6 +496,9 @@ class GenerateChatReply:
             on_text_delta=on_text_delta,
             on_progress_text=on_progress_text,
             tools_enabled=tools_enabled,
+            speaker_role=speaker_role,
+            speaker_confidence=speaker_confidence,
+            memory_enabled=memory_enabled,
         )
         logger.info(
             "LLM reply generated for user_id=%s text_length=%s duration_ms=%.1f",
@@ -471,8 +516,11 @@ class GenerateChatReply:
             assistant_message_type=assistant_message_type,
             user_content_parts=user_content_parts,
             assistant_content_parts=prepared.content_parts,
+            channel=message_channel,
+            visibility=message_visibility,
             reply_segments=prepared.reply_segments,
             sticker_placement=prepared.sticker_placement,
+            memory_enabled=memory_enabled,
         )
         result.sources = prepared.sources
         result.content_parts = prepared.content_parts

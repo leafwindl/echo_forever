@@ -252,14 +252,22 @@ async def build_chat_context(
     conversation_id: str | None = None,
     conversation_mode: str = "chat",
     history_before_message_id: int | None = None,
+    speaker_role: str | None = None,
+    memory_enabled: bool = True,
 ) -> ChatContext:
     is_call = conversation_mode == "call"
     use_extended_call_context = is_call and _call_requires_extended_context(user_message)
+    clean_speaker_role = (speaker_role or "").strip().lower()
+    unknown_speaker = clean_speaker_role == "unknown"
     timezone_name = postgres_repositories.get_user_timezone(
         user_id,
         settings.default_user_timezone,
     )
-    if is_call and not use_extended_call_context:
+    if unknown_speaker or not memory_enabled:
+        long_term_memories, memory_retrieval_mode = [], (
+            "speaker_unknown" if unknown_speaker else "disabled"
+        )
+    elif is_call and not use_extended_call_context:
         long_term_memories, memory_retrieval_mode = [], "call_skipped"
     else:
         long_term_memories, memory_retrieval_mode = await _load_long_term_memories(
@@ -268,18 +276,27 @@ async def build_chat_context(
         )
     summary_text = ""
     summary_message_id = 0
-    if conversation_id and (not is_call or use_extended_call_context):
+    if (
+        conversation_id
+        and (not is_call or use_extended_call_context)
+        and memory_enabled
+        and not unknown_speaker
+    ):
         summary_state = postgres_repositories.get_conversation_summary(user_id, conversation_id)
         summary_text = str(summary_state["summary"])
         summary_message_id = int(summary_state["summary_message_id"])
 
-    history = postgres_repositories.get_history(
-        user_id,
-        limit=settings.call_history_messages if is_call else MAX_HISTORY_MESSAGES,
-        conversation_id=conversation_id,
-        after_message_id=summary_message_id,
-        before_message_id=history_before_message_id,
-        timezone_name=timezone_name,
+    history = (
+        []
+        if unknown_speaker
+        else postgres_repositories.get_history(
+            user_id,
+            limit=settings.call_history_messages if is_call else MAX_HISTORY_MESSAGES,
+            conversation_id=conversation_id,
+            after_message_id=summary_message_id,
+            before_message_id=history_before_message_id,
+            timezone_name=timezone_name,
+        )
     )
     if is_call:
         history = _build_call_history(history)
@@ -334,23 +351,30 @@ async def build_chat_context(
         conversation_gap_state,
     )
 
-    try:
-        persona = get_persona(user_id)
-    except Exception:
-        logger.warning("Persona loading unavailable", exc_info=True)
+    if unknown_speaker:
         persona = None
+    else:
+        try:
+            persona = get_persona(user_id)
+        except Exception:
+            logger.warning("Persona loading unavailable", exc_info=True)
+            persona = None
 
     assistant_persona = get_assistant_persona(settings.assistant_persona_version)
     try:
-        relationship = get_relationship_context(
-            user_id=user_id,
-            user_message=user_message,
-            relationship_pace=(
-                persona.relationship_pace if persona and persona.enabled else "natural"
-            ),
-            affection_style=(
-                persona.affection_style if persona and persona.enabled else "contextual"
-            ),
+        relationship = (
+            None
+            if unknown_speaker
+            else get_relationship_context(
+                user_id=user_id,
+                user_message=user_message,
+                relationship_pace=(
+                    persona.relationship_pace if persona and persona.enabled else "natural"
+                ),
+                affection_style=(
+                    persona.affection_style if persona and persona.enabled else "contextual"
+                ),
+            )
         )
     except Exception:
         logger.warning("Relationship state loading unavailable", exc_info=True)
@@ -369,6 +393,16 @@ async def build_chat_context(
         relationship=relationship,
         conversation_mode=conversation_mode,
     )
+    if unknown_speaker:
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "当前说话者尚未通过 Echo 主人声纹确认。请正常回答当前问题，"
+                    "但不要引用、透露或写入主人的私人记忆、称呼、关系状态或历史细节。"
+                ),
+            }
+        )
     messages.append(
         {
             "role": "system",

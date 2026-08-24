@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
-from pydantic import ValidationError
 from starlette.datastructures import UploadFile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -21,11 +20,10 @@ from features.chat.domain.entities import (
     ChatTurnStatus,
 )
 from features.chat.interface.router import accept_message, chat_clear
-from features.chat.interface.schemas import AsyncChatMessageRequest, ChatRequest
+from features.chat.interface.schemas import AsyncChatMessageRequest
 from features.stickers.domain.entities import Sticker
 from features.system.interface.router import readiness_check
 from features.voice.interface.router import read_upload_with_limit
-from shared.config import settings
 from shared.interface.dependencies import CurrentUser
 from shared.security.logging_filter import SensitiveDataFilter
 
@@ -45,23 +43,6 @@ class RequestSafetyTests(unittest.IsolatedAsyncioTestCase):
             await read_upload_with_limit(upload, max_bytes=5)
 
         self.assertEqual(error.exception.status_code, 413)
-
-    def test_chat_message_uses_configured_length_limit(self):
-        original_limit = settings.chat_message_max_chars
-        settings.chat_message_max_chars = 5
-        try:
-            with self.assertRaises(ValidationError):
-                ChatRequest(message="123456")
-            with self.assertRaises(ValidationError):
-                ChatRequest(message="   ")
-        finally:
-            settings.chat_message_max_chars = original_limit
-
-    def test_chat_request_is_call_only(self):
-        request = ChatRequest(message="你好")
-        self.assertEqual(request.mode, "call")
-        with self.assertRaises(ValidationError):
-            ChatRequest(message="你好", mode="chat")
 
     async def test_async_sticker_message_uses_server_metadata(self):
         sticker = Sticker(

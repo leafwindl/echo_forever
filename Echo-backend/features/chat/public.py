@@ -2,6 +2,8 @@ from collections.abc import Awaitable, Callable
 
 from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
+    CHAT_CHANNEL_APP,
+    CHAT_VISIBILITY_MAIN,
     ChatContextClearResult,
     ChatHistoryPage,
     ChatMessageAcceptance,
@@ -74,6 +76,11 @@ async def generate_chat_reply(
     on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     on_progress_text: Callable[[str], Awaitable[None]] | None = None,
     tools_enabled: bool | None = None,
+    message_channel: str = CHAT_CHANNEL_APP,
+    message_visibility: str = CHAT_VISIBILITY_MAIN,
+    speaker_role: str | None = None,
+    speaker_confidence: float = 0.0,
+    memory_enabled: bool = True,
 ) -> ChatTurnResult:
     use_case = get_generate_chat_reply_use_case()
     return await use_case.execute(
@@ -88,6 +95,11 @@ async def generate_chat_reply(
         on_text_delta=on_text_delta,
         on_progress_text=on_progress_text,
         tools_enabled=tools_enabled,
+        message_channel=message_channel,
+        message_visibility=message_visibility,
+        speaker_role=speaker_role,
+        speaker_confidence=speaker_confidence,
+        memory_enabled=memory_enabled,
     )
 
 
@@ -103,6 +115,11 @@ async def send_chat_message(
     on_progress_text: Callable[[str], Awaitable[None]] | None = None,
     synthesize_voice: bool = True,
     tools_enabled: bool | None = None,
+    message_channel: str = CHAT_CHANNEL_APP,
+    message_visibility: str = CHAT_VISIBILITY_MAIN,
+    speaker_role: str | None = None,
+    speaker_confidence: float = 0.0,
+    memory_enabled: bool = True,
 ) -> ChatReplyDeliveryResult:
     use_case = get_send_chat_message_use_case()
     return await use_case.execute(
@@ -117,6 +134,11 @@ async def send_chat_message(
         on_progress_text=on_progress_text,
         synthesize_voice=synthesize_voice,
         tools_enabled=tools_enabled,
+        message_channel=message_channel,
+        message_visibility=message_visibility,
+        speaker_role=speaker_role,
+        speaker_confidence=speaker_confidence,
+        memory_enabled=memory_enabled,
     )
 
 

@@ -73,6 +73,93 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS devices (
+            id BIGSERIAL PRIMARY KEY,
+            device_id TEXT NOT NULL UNIQUE,
+            client_id TEXT NOT NULL DEFAULT '',
+            owner_user_id TEXT,
+            display_name TEXT NOT NULL DEFAULT '我的 Echo',
+            firmware_version TEXT NOT NULL DEFAULT '',
+            status VARCHAR(16) NOT NULL DEFAULT 'unclaimed'
+                CHECK (status IN ('unclaimed', 'online', 'offline', 'revoked')),
+            last_seen_at TIMESTAMPTZ,
+            wifi_ssid TEXT NOT NULL DEFAULT '',
+            bound_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS device_credentials (
+            id BIGSERIAL PRIMARY KEY,
+            device_id TEXT NOT NULL,
+            credential_hash TEXT NOT NULL UNIQUE,
+            status VARCHAR(16) NOT NULL DEFAULT 'active'
+                CHECK (status IN ('active', 'revoked')),
+            issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_used_at TIMESTAMPTZ,
+            revoked_at TIMESTAMPTZ
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS device_pairings (
+            pairing_id TEXT PRIMARY KEY,
+            device_id TEXT NOT NULL,
+            client_id TEXT NOT NULL DEFAULT '',
+            code_hash TEXT NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            expires_at TIMESTAMPTZ NOT NULL,
+            claimed_at TIMESTAMPTZ,
+            claimed_by_user_id TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS speaker_profiles (
+            id BIGSERIAL PRIMARY KEY,
+            speaker_profile_id TEXT NOT NULL UNIQUE,
+            owner_user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            display_name TEXT NOT NULL DEFAULT '主人',
+            role VARCHAR(24) NOT NULL DEFAULT 'owner',
+            embedding JSONB NOT NULL DEFAULT '[]'::jsonb,
+            model_name TEXT NOT NULL DEFAULT 'echo-prototype-features',
+            model_version TEXT NOT NULL DEFAULT '1',
+            verification_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.78,
+            status VARCHAR(16) NOT NULL DEFAULT 'active',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(owner_user_id, device_id)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS speaker_enrollment_samples (
+            id BIGSERIAL PRIMARY KEY,
+            speaker_profile_id TEXT NOT NULL,
+            audio_duration_ms INTEGER NOT NULL DEFAULT 0,
+            quality_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+            embedding JSONB NOT NULL DEFAULT '[]'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS device_voice_turns (
+            id BIGSERIAL PRIMARY KEY,
+            device_id TEXT NOT NULL,
+            user_id TEXT,
+            request_id TEXT NOT NULL UNIQUE,
+            user_message_id BIGINT,
+            assistant_message_id BIGINT,
+            speaker_profile_id TEXT,
+            speaker_role VARCHAR(24) NOT NULL DEFAULT 'unknown',
+            speaker_confidence DOUBLE PRECISION NOT NULL DEFAULT 0,
+            verification_status VARCHAR(24) NOT NULL DEFAULT 'unknown',
+            asr_text TEXT NOT NULL DEFAULT '',
+            audio_duration_ms INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS chat_messages (
             id BIGSERIAL PRIMARY KEY,
             message_id TEXT UNIQUE,
@@ -87,6 +174,8 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             sequence_in_group INTEGER NOT NULL DEFAULT 0,
             in_reply_to_message_id BIGINT,
             source TEXT,
+            channel TEXT NOT NULL DEFAULT 'app_chat',
+            visibility TEXT NOT NULL DEFAULT 'main_chat',
             status TEXT NOT NULL DEFAULT 'active',
             summarized_at TIMESTAMPTZ,
             delete_after TIMESTAMPTZ,
@@ -101,6 +190,21 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         ADD COLUMN IF NOT EXISTS sequence_in_group INTEGER NOT NULL DEFAULT 0
         """,
         "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS in_reply_to_message_id BIGINT",
+        """
+        ALTER TABLE chat_messages
+        ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'app_chat'
+        """,
+        """
+        ALTER TABLE chat_messages
+        ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'main_chat'
+        """,
+        """
+        UPDATE chat_messages
+        SET channel = 'device_voice', visibility = 'device_history'
+        WHERE message_type IN ('voice_asr', 'voice_reply')
+          AND channel = 'app_chat'
+          AND visibility = 'main_chat'
+        """,
         """
         CREATE TABLE IF NOT EXISTS chat_request_results (
             user_id TEXT NOT NULL,
@@ -665,6 +769,12 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         ON auth_refresh_tokens(expires_at)
         WHERE revoked_at IS NULL
         """,
+        "CREATE INDEX IF NOT EXISTS idx_devices_owner_status ON devices(owner_user_id, status, updated_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_devices_last_seen ON devices(last_seen_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_device_credentials_device_status ON device_credentials(device_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_device_pairings_expires ON device_pairings(expires_at) WHERE claimed_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_speaker_profiles_owner_device ON speaker_profiles(owner_user_id, device_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_device_voice_turns_device_created ON device_voice_turns(device_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)",
         """
         CREATE INDEX IF NOT EXISTS idx_conversations_user_status_updated
@@ -673,6 +783,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         """
         CREATE INDEX IF NOT EXISTS idx_chat_messages_user_conversation_id
         ON chat_messages(user_id, conversation_id, id)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_main_chat_page
+        ON chat_messages(user_id, conversation_id, visibility, id DESC)
         """,
         "CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_id ON chat_messages(conversation_id)",
         "CREATE INDEX IF NOT EXISTS idx_chat_messages_user_created ON chat_messages(user_id, created_at DESC)",

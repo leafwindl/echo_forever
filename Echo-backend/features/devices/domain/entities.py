@@ -21,3 +21,6 @@ class DeviceTurnResult:
     user_text: str
     reply: str
     audio_urls: tuple[str, ...]
+    user_message_id: int | None = None
+    assistant_message_id: int | None = None
+    conversation_id: str = ""

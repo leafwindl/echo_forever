@@ -16,7 +16,6 @@ from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
     ChatHistoryMessage,
     ChatQueueFullError,
-    ChatRequestInProgressError,
     ChatValidationError,
 )
 from features.chat.infrastructure.container import get_async_chat_repository
@@ -28,8 +27,6 @@ from features.chat.interface.schemas import (
     ChatHistoryMessageResponse,
     ChatHistoryResponse,
     ChatMessageAcceptedResponse,
-    ChatRequest,
-    ChatResponse,
     ChatSource,
     ClearChatResponse,
 )
@@ -37,7 +34,6 @@ from features.chat.public import (
     accept_chat_message,
     clear_chat_context,
     list_chat_messages,
-    send_chat_message,
 )
 from features.stickers.infrastructure.postgres_repository import PostgresStickerRepository
 
@@ -77,6 +73,8 @@ def _history_message_response(item: ChatHistoryMessage) -> ChatHistoryMessageRes
         reply_group_id=item.reply_group_id,
         sequence_in_group=item.sequence_in_group,
         in_reply_to_message_id=item.in_reply_to_message_id,
+        channel=item.channel,
+        visibility=item.visibility,
         created_at=item.created_at,
     )
 
@@ -243,48 +241,6 @@ async def chat_events(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
-    )
-
-
-@router.post("/send", response_model=ChatResponse)
-async def call_send(
-    body: ChatRequest,
-    request: Request,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)],
-):
-    """Synchronous Agent + TTS delivery used only by voice calls."""
-    try:
-        consume_chat_quota(current_user.user_id)
-    except RateLimitExceeded as exc:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="消息发送过于频繁，请稍后再试",
-            headers={"Retry-After": str(exc.retry_after_seconds)},
-        ) from exc
-
-    try:
-        result = await send_chat_message(
-            user_id=current_user.user_id,
-            message=body.message.strip(),
-            conversation_mode="call",
-            request_id=request.headers.get("X-Request-ID", "")[:80],
-        )
-    except ChatValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except ChatRequestInProgressError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except Exception as exc:
-        logger.exception("Voice call chat failed")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="内部服务器错误",
-        ) from exc
-
-    return ChatResponse(
-        reply=result.reply,
-        audio_urls=list(result.audio_urls),
-        content_parts=[ChatContentPart(**vars(part)) for part in result.content_parts],
-        sources=[ChatSource(**vars(source)) for source in result.sources],
     )
 
 

@@ -60,6 +60,24 @@ class DioClient {
     }
   }
 
+  Future<Response<T>> patch<T>(
+    String path, {
+    Object? data,
+    Options? options,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      return await dio.patch<T>(
+        path,
+        data: data,
+        options: options,
+        cancelToken: cancelToken,
+      );
+    } on DioException catch (error) {
+      throw AppException.fromDio(error);
+    }
+  }
+
   Future<Response<T>> delete<T>(
     String path, {
     Object? data,

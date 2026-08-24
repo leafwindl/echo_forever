@@ -88,6 +88,8 @@ class StreamDeviceVoiceTurn:
         on_tts_stop: EventCallback,
         recognized_text: str | None = None,
         latency: DeviceLatencyTracker | None = None,
+        speaker_role: str | None = None,
+        speaker_confidence: float = 0.0,
     ) -> DeviceTurnResult:
         if not user_id.strip():
             raise ValueError("Device is not mapped to an Echo user")
@@ -271,14 +273,20 @@ class StreamDeviceVoiceTurn:
         consumer_task = asyncio.create_task(consume_phrases())
         started_at = time.perf_counter()
         try:
-            result = await self.conversation.reply(
-                user_id=user_id,
-                user_text=user_text,
-                request_id=request_id,
-                on_reply_delta=on_text_delta,
-                on_progress_text=on_progress_text,
-                synthesize_voice=False,
-            )
+            reply_kwargs = {
+                "user_id": user_id,
+                "user_text": user_text,
+                "request_id": request_id,
+                "on_reply_delta": on_text_delta,
+                "on_progress_text": on_progress_text,
+                "synthesize_voice": False,
+            }
+            if speaker_role is not None:
+                reply_kwargs.update(
+                    speaker_role=speaker_role,
+                    speaker_confidence=speaker_confidence,
+                )
+            result = await self.conversation.reply(**reply_kwargs)
             if latency is not None:
                 latency.mark("reply_persisted")
             if not delta_received and result.reply.strip():

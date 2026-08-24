@@ -24,6 +24,17 @@ class PostgresSchemaTests(unittest.TestCase):
         self.assertIn("summarized_at TIMESTAMPTZ", schema_text)
         self.assertIn("delete_after TIMESTAMPTZ", schema_text)
         self.assertIn("CREATE TABLE IF NOT EXISTS voice_files", schema_text)
+
+    def test_schema_contains_device_identity_and_speaker_tables(self):
+        schema_text = build_postgres_schema_text()
+        self.assertIn("CREATE TABLE IF NOT EXISTS devices", schema_text)
+        self.assertIn("CREATE TABLE IF NOT EXISTS device_credentials", schema_text)
+        self.assertIn("CREATE TABLE IF NOT EXISTS device_pairings", schema_text)
+        self.assertIn("CREATE TABLE IF NOT EXISTS speaker_profiles", schema_text)
+        self.assertIn("CREATE TABLE IF NOT EXISTS device_voice_turns", schema_text)
+        self.assertIn("channel TEXT NOT NULL DEFAULT 'app_chat'", schema_text)
+        self.assertIn("visibility TEXT NOT NULL DEFAULT 'main_chat'", schema_text)
+        self.assertIn("SET channel = 'device_voice', visibility = 'device_history'", schema_text)
         self.assertIn("storage_provider TEXT NOT NULL", schema_text)
 
     def test_schema_contains_user_persona_settings(self):

@@ -5,8 +5,8 @@ import 'package:echo_app/core/routing/route_names.dart';
 import 'package:echo_app/features/auth/presentation/auth_controller.dart';
 import 'package:echo_app/features/auth/presentation/phone_login_page.dart';
 import 'package:echo_app/features/auth/presentation/verification_code_page.dart';
-import 'package:echo_app/features/call/presentation/call_page.dart';
 import 'package:echo_app/features/chat/presentation/chat_page.dart';
+import 'package:echo_app/features/devices/presentation/devices_page.dart';
 import 'package:echo_app/features/letters/presentation/letters_page.dart';
 import 'package:echo_app/features/memory/presentation/memory_page.dart';
 import 'package:echo_app/features/onboarding/presentation/onboarding_page.dart';
@@ -103,11 +103,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ChatPage(),
       ),
       GoRoute(
-        path: '/call',
-        name: RouteNames.call,
-        builder: (context, state) => const CallPage(),
-      ),
-      GoRoute(
         path: '/persona',
         name: RouteNames.persona,
         builder: (context, state) => const PersonaPage(),
@@ -146,6 +141,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/study-focus',
         name: RouteNames.studyFocus,
         builder: (context, state) => const StudyFocusPage(),
+      ),
+      GoRoute(
+        path: '/devices',
+        name: RouteNames.devices,
+        builder: (context, state) => const DevicesPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

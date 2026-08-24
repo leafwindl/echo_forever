@@ -2,27 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
-from shared.config import settings
-
-
-class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=10000)
-    mode: Literal["call"] = "call"
-
-    @field_validator("message")
-    @classmethod
-    def validate_message_length(cls, value: str) -> str:
-        clean_value = value.strip()
-        if len(clean_value) > settings.chat_message_max_chars:
-            raise ValueError(f"Message exceeds {settings.chat_message_max_chars} characters")
-        return value
-
-    @model_validator(mode="after")
-    def validate_content(self):
-        if not self.message.strip():
-            raise ValueError("Message must not be empty")
-        return self
+from pydantic import BaseModel, Field, model_validator
 
 
 class AsyncChatMessageRequest(BaseModel):
@@ -46,13 +26,6 @@ class AsyncChatMessageRequest(BaseModel):
             if clean_text:
                 raise ValueError("Sticker message cannot include text")
         return self
-
-
-class ChatResponse(BaseModel):
-    reply: str
-    audio_urls: list[str] = Field(default_factory=list)
-    content_parts: list["ChatContentPart"] = Field(default_factory=list)
-    sources: list["ChatSource"] = Field(default_factory=list)
 
 
 class ChatContentPart(BaseModel):
@@ -87,6 +60,8 @@ class ChatHistoryMessageResponse(BaseModel):
     reply_group_id: str = ""
     sequence_in_group: int = 0
     in_reply_to_message_id: int | None = None
+    channel: str = "app_chat"
+    visibility: str = "main_chat"
     created_at: datetime
 
 

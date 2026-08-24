@@ -9,7 +9,6 @@ import 'package:echo_app/features/chat/domain/chat_repository.dart';
 class ChatApi {
   const ChatApi(this._client);
 
-  static const sendPath = '/chat/send';
   static const messagesPath = '/chat/messages';
   static const eventsPath = '/chat/events';
   static const clearPath = '/chat/clear';
@@ -97,20 +96,6 @@ class ChatApi {
         cancelToken.cancel('chat event stream closed');
       }
     }
-  }
-
-  Future<ChatResponseDto> sendMessage(
-    ChatRequestDto request, {
-    ChatCancellation? cancellation,
-  }) async {
-    final cancelToken = _bindCancellation(cancellation);
-    final response = await _client.post<Map<String, dynamic>>(
-      sendPath,
-      data: request.toJson(),
-      options: Options(receiveTimeout: const Duration(seconds: 120)),
-      cancelToken: cancelToken,
-    );
-    return ChatResponseDto.fromJson(response.data!);
   }
 
   Future<ClearChatResponseDto> clearContext({

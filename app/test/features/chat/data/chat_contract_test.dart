@@ -14,14 +14,9 @@ import 'package:echo_app/features/chat/domain/chat_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('keeps POST /chat/send only for call delivery', () {
-    expect(ChatApi.sendPath, '/chat/send');
+  test('exposes text chat endpoints without the legacy call endpoint', () {
     expect(ChatApi.messagesPath, '/chat/messages');
     expect(ChatApi.clearPath, '/chat/clear');
-    expect(const ChatRequestDto(message: '你好').toJson(), <String, Object?>{
-      'message': '你好',
-      'mode': 'call',
-    });
   });
 
   test('preserves UTF-8 characters split across SSE network chunks', () async {
@@ -69,53 +64,12 @@ void main() {
     );
   });
 
-  test('parses the complete backend chat response schema', () {
-    final response = ChatResponseDto.fromJson(<String, dynamic>{
-      'reply': '一起去散步吧。',
-      'audio_urls': <String>['https://cdn.example.test/reply.mp3'],
-      'content_parts': <Map<String, Object?>>[
-        <String, Object?>{
-          'type': 'text',
-          'text': '一起去散步吧。',
-          'sticker_id': '',
-          'url': '',
-        },
-        <String, Object?>{
-          'type': 'sticker',
-          'text': '',
-          'sticker_id': 'wave',
-          'url': 'https://cdn.example.test/wave.png',
-        },
-      ],
-      'sources': <Map<String, Object?>>[
-        <String, Object?>{
-          'title': 'Echo 来源',
-          'url': 'https://example.test/source',
-          'snippet': '摘要',
-          'published_at': '2026-08-04T08:00:00Z',
-        },
-      ],
-    });
-
-    expect(response.reply, '一起去散步吧。');
-    expect(response.audioUrls, <String>['https://cdn.example.test/reply.mp3']);
-    expect(response.contentParts, hasLength(2));
-    expect(response.contentParts.last.type, 'sticker');
-    expect(response.contentParts.last.stickerId, 'wave');
-    expect(response.sources.single.snippet, '摘要');
-    expect(response.sources.single.publishedAt, '2026-08-04T08:00:00Z');
-  });
-
-  test('parses clear counts and defaults optional response arrays', () {
-    final response = ChatResponseDto.fromJson(<String, dynamic>{'reply': '收到'});
+  test('parses clear counts', () {
     final cleared = ClearChatResponseDto.fromJson(<String, dynamic>{
       'deleted_messages': 7,
       'reset_conversations': 2,
     });
 
-    expect(response.audioUrls, isEmpty);
-    expect(response.contentParts, isEmpty);
-    expect(response.sources, isEmpty);
     expect(cleared.deletedMessages, 7);
     expect(cleared.resetConversations, 2);
   });
@@ -197,11 +151,14 @@ void main() {
         ),
       );
 
-      final response = await ChatApi(
-        DioClient(dio),
-      ).sendMessage(const ChatRequestDto(message: '你好', mode: 'call'));
+      final response = await ChatApi(DioClient(dio)).acceptMessage(
+        const AsyncChatMessageRequestDto.text(
+          clientMessageId: '00000000-0000-4000-8000-000000000001',
+          text: '你好',
+        ),
+      );
 
-      expect(response.reply, 'Echo reply');
+      expect(response.message.content, '你好');
       expect(adapter.calls, 2);
       expect(refreshCalls, 1);
       expect(adapter.authorizationHeaders, <String>[
@@ -236,9 +193,12 @@ void main() {
     );
 
     await expectLater(
-      ChatApi(
-        DioClient(dio),
-      ).sendMessage(const ChatRequestDto(message: '你好', mode: 'call')),
+      ChatApi(DioClient(dio)).acceptMessage(
+        const AsyncChatMessageRequestDto.text(
+          clientMessageId: '00000000-0000-4000-8000-000000000001',
+          text: '你好',
+        ),
+      ),
       throwsA(anything),
     );
     expect(adapter.calls, 2);
@@ -276,10 +236,23 @@ class _QueueAdapter implements HttpClientAdapter {
     calls += 1;
     final body = status == 200
         ? <String, Object?>{
-            'reply': 'Echo reply',
-            'audio_urls': <String>[],
-            'content_parts': <Object>[],
-            'sources': <Object>[],
+            'conversation_id': 'conv-auth',
+            'message': <String, Object?>{
+              'message_id': 1,
+              'stable_message_id': 'msg-auth',
+              'client_message_id': '00000000-0000-4000-8000-000000000001',
+              'role': 'user',
+              'message_type': 'text',
+              'content': '你好',
+              'content_parts': <Object>[],
+              'sources': <Object>[],
+              'created_at': '2026-08-20T08:00:00Z',
+            },
+            'turn': <String, Object?>{
+              'turn_id': 'turn-auth',
+              'status': 'collecting',
+            },
+            'replayed': false,
           }
         : <String, Object?>{'detail': 'unauthorized'};
     return ResponseBody.fromString(

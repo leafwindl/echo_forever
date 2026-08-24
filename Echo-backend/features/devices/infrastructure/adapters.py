@@ -8,8 +8,11 @@ from urllib.parse import unquote, urlparse
 import httpx
 from shared.config import settings
 
-from features.chat.infrastructure.events import ChatEvent, get_chat_event_broker
-from features.chat.public import list_chat_messages, send_chat_message
+from features.chat.domain.entities import (
+    CHAT_CHANNEL_DEVICE,
+    CHAT_VISIBILITY_DEVICE_HISTORY,
+)
+from features.chat.public import send_chat_message
 from features.devices.domain.entities import DeviceTurnResult
 from features.voice.public import recognize_voice
 
@@ -30,20 +33,36 @@ class EchoConversationService:
         on_reply_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         synthesize_voice: bool = True,
+        speaker_role: str | None = None,
+        speaker_confidence: float = 0.0,
     ) -> DeviceTurnResult:
+        send_kwargs = {
+            "user_id": user_id,
+            "message": user_text,
+            "conversation_mode": "call",
+            "request_id": request_id,
+            "on_text_delta": on_reply_delta,
+            "on_progress_text": on_progress_text,
+            "synthesize_voice": synthesize_voice,
+            "message_channel": CHAT_CHANNEL_DEVICE,
+            "message_visibility": CHAT_VISIBILITY_DEVICE_HISTORY,
+        }
+        if speaker_role is not None:
+            send_kwargs.update(
+                speaker_role=speaker_role,
+                speaker_confidence=speaker_confidence,
+                memory_enabled=speaker_role == "owner",
+            )
         result = await send_chat_message(
-            user_id=user_id,
-            message=user_text,
-            conversation_mode="call",
-            request_id=request_id,
-            on_text_delta=on_reply_delta,
-            on_progress_text=on_progress_text,
-            synthesize_voice=synthesize_voice,
+            **send_kwargs,
         )
         return DeviceTurnResult(
             user_text=user_text,
             reply=result.reply,
             audio_urls=result.audio_urls,
+            user_message_id=result.user_message_id,
+            assistant_message_id=result.assistant_message_id,
+            conversation_id=result.conversation_id,
         )
 
 
@@ -89,36 +108,9 @@ class EchoAudioSource:
 
 class EchoChatNotifier:
     async def notify_latest_turn(self, user_id: str) -> None:
-        page = list_chat_messages(user_id, limit=2)
-        messages = [
-            {
-                "message_id": item.message_id,
-                "stable_message_id": item.stable_message_id,
-                "client_message_id": item.client_message_id,
-                "role": item.role,
-                "message_type": item.message_type,
-                "content": item.content,
-                "content_parts": [vars(part) for part in item.content_parts],
-                "sources": [vars(source) for source in item.sources],
-                "agent_turn_id": item.agent_turn_id,
-                "reply_group_id": item.reply_group_id,
-                "sequence_in_group": item.sequence_in_group,
-                "in_reply_to_message_id": item.in_reply_to_message_id,
-                "created_at": item.created_at.isoformat(),
-            }
-            for item in page.items
-        ]
-        await get_chat_event_broker().publish(
-            user_id,
-            ChatEvent(
-                event="chat.sync",
-                data={
-                    "conversation_id": page.conversation_id,
-                    "messages": messages,
-                    "origin": "echo_device",
-                },
-            ),
-        )
+        # Device turns remain available to Echo's shared context and memory,
+        # but are intentionally absent from the APP's main chat event stream.
+        del user_id
 
 
 def parse_personal_device_map(raw_value: str) -> dict[str, str]:

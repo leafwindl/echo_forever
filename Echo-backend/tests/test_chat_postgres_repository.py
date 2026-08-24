@@ -9,8 +9,9 @@ from features.chat.infrastructure import postgres_repositories
 
 
 class _FakeCursor:
-    def __init__(self):
+    def __init__(self, rows=None):
         self.calls: list[tuple[str, tuple | None]] = []
+        self.rows = list(rows or [])
 
     def __enter__(self):
         return self
@@ -24,6 +25,11 @@ class _FakeCursor:
     def fetchone(self):
         return {"id": 42}
 
+    def fetchall(self):
+        rows = self.rows
+        self.rows = []
+        return rows
+
 
 class _FakeConnection:
     def __init__(self, cursor):
@@ -31,6 +37,12 @@ class _FakeConnection:
 
     def cursor(self):
         return self._cursor
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
 
 
 class ChatPostgresRepositoryTests(unittest.TestCase):
@@ -71,6 +83,24 @@ class ChatPostgresRepositoryTests(unittest.TestCase):
         self.assertFalse(
             any("SET consecutive_unanswered = 0" in query for query, _ in cursor.calls)
         )
+
+    def test_main_chat_page_filters_visibility_before_pagination(self):
+        cursor = _FakeCursor()
+        connection = _FakeConnection(cursor)
+
+        with patch.object(postgres_repositories, "get_connection", return_value=connection):
+            rows, has_more = postgres_repositories.list_messages_page(
+                "user-a",
+                "conv-a",
+                before_id=None,
+                after_id=None,
+                limit=10,
+            )
+
+        self.assertEqual(rows, [])
+        self.assertFalse(has_more)
+        page_query = next(query for query, _ in cursor.calls if "FROM chat_messages" in query)
+        self.assertIn("visibility = 'main_chat'", page_query)
 
 
 if __name__ == "__main__":
