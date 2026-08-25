@@ -1,6 +1,6 @@
 # Echo 第三阶段：APP Wi-Fi 配网
 
-状态：已完成首版接入（2026-08-24）。
+状态：已完成首版接入（2026-08-25），测试发布版本 `1.1.1+16`。
 
 ## 已实现
 
@@ -24,7 +24,7 @@
 
 - `flutter analyze`：通过。
 - `flutter test`：通过，包含固件 `/scan`、`/submit` 协议测试。
-- Android Debug APK：需在当前环境继续构建验证。
+- Android Debug APK：已构建验证。
 - Android 真机：需连接实际 `Xiaozhi-*` 热点验证自动切换和提交。
 - iOS：首版走系统 Wi-Fi 设置和浏览器回退，待 iOS 真机后再决定是否增加专用 Wi-Fi 桥接。
 
