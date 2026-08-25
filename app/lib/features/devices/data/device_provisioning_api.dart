@@ -38,6 +38,16 @@ class DeviceProvisioningApi {
       );
     }
   }
+
+  Future<void> exitConfigMode() async {
+    final response = await _dio.post<Map<String, dynamic>>('/exit');
+    final body = response.data ?? const <String, dynamic>{};
+    if (body['success'] != true) {
+      throw DeviceProvisioningException(
+        body['error'] as String? ?? '设备无法退出配网模式',
+      );
+    }
+  }
 }
 
 class DeviceProvisioningException implements Exception {

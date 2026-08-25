@@ -76,6 +76,26 @@ void main() {
       throwsA(isA<DeviceProvisioningException>()),
     );
   });
+
+  test('exits firmware config mode after credentials are accepted', () async {
+    late RequestOptions captured;
+    final dio = Dio()
+      ..httpClientAdapter = _Adapter((request) {
+        captured = request;
+        return ResponseBody.fromString(
+          '{"success":true}',
+          200,
+          headers: <String, List<String>>{
+            Headers.contentTypeHeader: <String>['application/json'],
+          },
+        );
+      });
+
+    await DeviceProvisioningApi(dio: dio).exitConfigMode();
+
+    expect(captured.method, 'POST');
+    expect(captured.path, '/exit');
+  });
 }
 
 class _Adapter implements HttpClientAdapter {

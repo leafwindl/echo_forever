@@ -92,6 +92,10 @@ class MainActivity : FlutterActivity() {
         val specifier = WifiNetworkSpecifier.Builder().setSsid(ssid).build()
         val request = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            // The device SoftAP is intentionally local-only. Removing the
+            // INTERNET capability prevents Android captive-portal detection
+            // from opening a browser sign-in page for 192.168.4.1.
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .setNetworkSpecifier(specifier)
             .build()
         val callback = object : ConnectivityManager.NetworkCallback() {

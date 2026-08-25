@@ -116,6 +116,10 @@ class _DeviceProvisioningPageState extends State<DeviceProvisioningPage> {
     });
     try {
       await _api.submit(ssid: ssid, password: _passwordController.text);
+      // /submit validates and stores credentials; /exit is what tells the
+      // firmware to stop the SoftAP and start the station connection.
+      await _api.exitConfigMode();
+      await Future<void>.delayed(const Duration(milliseconds: 800));
       await _wifi.disconnect();
       if (!mounted) return;
       setState(() => _phase = ProvisioningPhase.success);
