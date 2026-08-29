@@ -46,6 +46,7 @@ class ChatContext:
     temporal_context: dict[str, object] = field(default_factory=dict)
     proactive_writer_messages: list[dict[str, str]] = field(default_factory=list)
     proactive_safe_facts: dict[str, str] = field(default_factory=dict)
+    proactive_planner_input: dict[str, object] = field(default_factory=dict)
 
 
 _MESSAGE_TIME_PREFIX = re.compile(
@@ -219,6 +220,51 @@ def _build_proactive_safe_facts(
     if clean_intent:
         facts["task_intent"] = f"后端确认的主动任务目的：{clean_intent}"
     return facts
+
+
+def _build_proactive_planner_input(
+    temporal_context: dict[str, object],
+    history: list[dict[str, str]],
+    task_intent: str = "",
+) -> dict[str, object]:
+    """Build the small, untrusted fact payload used only by the proactive planner."""
+    planner_input: dict[str, object] = {"trigger_type": "spontaneous"}
+    for source_key, target_key in (
+        ("local_datetime", "local_datetime"),
+        ("local_date", "local_date"),
+        ("local_time", "local_time"),
+        ("weekday", "weekday"),
+        ("day_period", "current_day_period"),
+        ("timezone", "timezone"),
+    ):
+        value = temporal_context.get(source_key)
+        if value:
+            planner_input[target_key] = str(value)
+
+    gap = temporal_context.get("conversation_gap")
+    if isinstance(gap, dict):
+        planner_input["conversation_gap"] = {
+            key: gap[key]
+            for key in ("gap_seconds", "state", "should_acknowledge_gap")
+            if key in gap
+        }
+
+    last_user = next(
+        (
+            _clean_proactive_history_content(str(item.get("content") or ""))[:240]
+            for item in reversed(history)
+            if item.get("role") == "user"
+            and _clean_proactive_history_content(str(item.get("content") or ""))
+        ),
+        "",
+    )
+    if last_user:
+        planner_input["last_user_message"] = last_user
+
+    clean_intent = task_intent.strip().replace("\r", " ").replace("\n", " ")[:240]
+    if clean_intent:
+        planner_input["task_intent"] = clean_intent
+    return planner_input
 
 
 def _build_proactive_writer_messages(
@@ -438,6 +484,7 @@ async def build_chat_context(
 
     proactive_safe_facts: dict[str, str] = {}
     proactive_writer_messages: list[dict[str, str]] = []
+    proactive_planner_input: dict[str, object] = {}
     if conversation_mode == "proactive":
         writer_base_messages = render_prompt_layers(
             product_identity=settings.system_prompt,
@@ -462,6 +509,7 @@ async def build_chat_context(
             }
         )
         proactive_safe_facts = _build_proactive_safe_facts(temporal_context, history)
+        proactive_planner_input = _build_proactive_planner_input(temporal_context, history)
         proactive_writer_messages = _build_proactive_writer_messages(
             writer_base_messages,
         )
@@ -490,4 +538,5 @@ async def build_chat_context(
         temporal_context=temporal_context,
         proactive_writer_messages=proactive_writer_messages,
         proactive_safe_facts=proactive_safe_facts,
+        proactive_planner_input=proactive_planner_input,
     )

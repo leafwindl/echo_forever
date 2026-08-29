@@ -190,11 +190,10 @@ class FakeProactivePlanner:
         self.decision = decision
         self.calls = []
 
-    async def decide(self, messages, available_fact_ids, *, force_send=False):
+    async def decide(self, planner_facts, *, force_send=False):
         self.calls.append(
             {
-                "messages": list(messages),
-                "available_fact_ids": tuple(available_fact_ids),
+                "planner_facts": dict(planner_facts),
                 "force_send": force_send,
             }
         )
@@ -206,11 +205,10 @@ class FailedProactivePlanner:
         self.code = code
         self.calls = []
 
-    async def decide(self, messages, available_fact_ids, *, force_send=False):
+    async def decide(self, planner_facts, *, force_send=False):
         self.calls.append(
             {
-                "messages": list(messages),
-                "available_fact_ids": tuple(available_fact_ids),
+                "planner_facts": dict(planner_facts),
                 "force_send": force_send,
             }
         )
@@ -708,11 +706,9 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         writer_content = "\n".join(
             str(item.get("content") or "") for item in agent.calls[0]["messages"]
         )
-        planner_content = "\n".join(
-            str(item.get("content") or "")
-            for item in planner.calls[0]["messages"]
-        )
-        self.assertIn("[消息时间", planner_content)
+        planner_facts = planner.calls[0]["planner_facts"]
+        self.assertNotIn("[消息时间", str(planner_facts))
+        self.assertNotIn("[会话时间边界", str(planner_facts))
         self.assertNotIn("[消息时间", writer_content)
         self.assertIn("2小时50分钟", writer_content)
         self.assertNotIn("准备吃饭", writer_content)

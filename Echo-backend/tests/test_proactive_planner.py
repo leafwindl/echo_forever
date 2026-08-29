@@ -4,11 +4,29 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.agent.domain.entities import AgentModelResponse, ProactiveAction
+from features.agent.domain.entities import (
+    AgentModelResponse,
+    AgentToolCall,
+    ProactiveAction,
+)
 from features.agent.domain.services import AgentModelTimeoutError, ProactivePlannerError
 from features.agent.infrastructure.proactive_planner import (
     ProviderProactiveDecisionPlanner,
 )
+
+
+def tool_response(arguments, request_id=""):
+    return AgentModelResponse(
+        tool_calls=(
+            AgentToolCall(
+                call_id="call-1",
+                tool_name="decide_proactive_message",
+                arguments=arguments,
+            ),
+        ),
+        finish_reason="tool_calls",
+        provider_request_id=request_id,
+    )
 
 
 class SequenceModel:
@@ -39,89 +57,74 @@ class SequenceModel:
 
 
 class ProactivePlannerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_valid_decision_uses_only_available_fact_ids(self):
+    async def test_valid_decision_uses_compact_facts_and_required_tool(self):
         model = SequenceModel(
             [
-                AgentModelResponse(
-                    text=(
-                        '{"action":"send","topic":"casual_check_in",'
-                        '"tone":"warm","safe_fact_ids":'
-                        '["conversation_gap","last_user_message"],"reason":"natural"}'
-                    )
+                tool_response(
+                    {
+                        "action": "send",
+                        "topic": "follow_up_past_topic",
+                        "tone": "encouraging",
+                        "safe_fact_ids": ["conversation_gap", "last_user_message"],
+                        "reason": "natural",
+                    }
                 )
             ]
         )
         planner = ProviderProactiveDecisionPlanner(model)
 
         decision = await planner.decide(
-            [{"role": "system", "content": "internal context"}],
-            ("conversation_gap",),
+            {
+                "current_local_time": "2026-08-29T21:00:00+08:00",
+                "current_day_period": "晚上",
+                "conversation_gap": {"gap_seconds": 7200, "state": "long_absence"},
+                "last_user_message": "今天任务有点多",
+                "ignored_attachment": "should not be sent",
+            }
         )
 
         self.assertEqual(ProactiveAction.SEND, decision.action)
-        self.assertEqual(("conversation_gap",), decision.safe_fact_ids)
-        self.assertTrue(model.calls[0]["structured_output"])
-        self.assertEqual((), model.calls[0]["tools"])
-        self.assertEqual("none", model.calls[0]["tool_choice"])
-        prompt = "\n".join(str(item.get("content") or "") for item in model.calls[0]["messages"])
-        self.assertIn('"action":"send"', prompt)
-        self.assertIn('"safe_fact_ids":["conversation_gap"]', prompt)
-        self.assertIn("Do not wrap the object in Markdown fences", prompt)
-
-    async def test_malformed_spontaneous_decision_retries_then_reports_technical_failure(self):
-        model = SequenceModel(
-            [
-                AgentModelResponse(text='{"action"', provider_request_id="request-1"),
-                AgentModelResponse(text="not-json", provider_request_id="request-2"),
-            ]
+        self.assertEqual(("conversation_gap", "last_user_message"), decision.safe_fact_ids)
+        self.assertFalse(model.calls[0]["structured_output"])
+        self.assertEqual(
+            "decide_proactive_message",
+            model.calls[0]["tool_choice"]["function"]["name"],
         )
-        planner = ProviderProactiveDecisionPlanner(model)
+        self.assertEqual(1, len(model.calls[0]["tools"]))
+        prompt = "\n".join(str(item.get("content") or "") for item in model.calls[0]["messages"])
+        self.assertIn("Backend proactive facts", prompt)
+        self.assertIn("今天任务有点多", prompt)
+        self.assertNotIn("ignored_attachment", prompt)
 
-        with self.assertRaises(ProactivePlannerError) as raised:
-            await planner.decide([], ("conversation_gap",))
-
-        self.assertEqual("planner_output_invalid", raised.exception.code)
-        self.assertEqual(2, len(model.calls))
-        retry_prompt = str(model.calls[1]["messages"][-1]["content"])
-        self.assertIn("previous planner response", retry_prompt.lower())
-
-    async def test_empty_spontaneous_decision_can_recover_on_retry(self):
+    async def test_invalid_tool_arguments_retry_then_report_technical_failure(self):
         model = SequenceModel(
             [
-                AgentModelResponse(text="", finish_reason="stop"),
+                tool_response({"action": "skip"}, request_id="request-1"),
                 AgentModelResponse(
-                    text=(
-                        '{"action":"send","topic":"share_presence",'
-                        '"tone":"gentle","safe_fact_ids":["conversation_gap"],'
-                        '"reason":"natural"}'
-                    ),
-                    provider_request_id="request-recovered",
+                    text="not-a-tool-call",
+                    finish_reason="stop",
+                    provider_request_id="request-2",
                 ),
             ]
         )
         planner = ProviderProactiveDecisionPlanner(model)
 
-        decision = await planner.decide([], ("conversation_gap",))
+        with self.assertRaises(ProactivePlannerError) as raised:
+            await planner.decide({"conversation_gap": {"state": "returned"}})
 
-        self.assertEqual(ProactiveAction.SEND, decision.action)
-        self.assertEqual(("conversation_gap",), decision.safe_fact_ids)
+        self.assertEqual("planner_output_invalid", raised.exception.code)
         self.assertEqual(2, len(model.calls))
+        retry_prompt = str(model.calls[1]["messages"][-1]["content"])
+        self.assertIn("decide_proactive_message", retry_prompt)
 
-    async def test_empty_spontaneous_decision_has_specific_error_code(self):
-        model = SequenceModel([AgentModelResponse(text="")])
+    async def test_prose_or_json_content_without_tool_is_rejected(self):
+        model = SequenceModel(
+            [AgentModelResponse(text='{"action":"skip"}', finish_reason="stop")]
+        )
         planner = ProviderProactiveDecisionPlanner(model, format_retries=0)
 
         with self.assertRaises(ProactivePlannerError) as raised:
-            await planner.decide([], ("conversation_gap",))
-
-        self.assertEqual("planner_output_empty", raised.exception.code)
-
-    async def test_missing_required_fields_are_rejected(self):
-        model = SequenceModel([AgentModelResponse(text='{"action":"skip"}')])
-        planner = ProviderProactiveDecisionPlanner(model, format_retries=0)
-
-        with self.assertRaises(ProactivePlannerError) as raised:
-            await planner.decide([], ("conversation_gap",))
+            await planner.decide({"conversation_gap": {"state": "returned"}})
 
         self.assertEqual("planner_output_invalid", raised.exception.code)
 
@@ -130,7 +133,7 @@ class ProactivePlannerTests(unittest.IsolatedAsyncioTestCase):
         planner = ProviderProactiveDecisionPlanner(model)
 
         with self.assertRaises(ProactivePlannerError) as raised:
-            await planner.decide([], ("conversation_gap",))
+            await planner.decide({"conversation_gap": {"state": "returned"}})
 
         self.assertEqual("planner_timeout", raised.exception.code)
         self.assertEqual(1, len(model.calls))
@@ -138,15 +141,18 @@ class ProactivePlannerTests(unittest.IsolatedAsyncioTestCase):
     async def test_malformed_explicit_schedule_uses_minimum_safe_send_plan(self):
         model = SequenceModel(
             [
-                AgentModelResponse(text="not-json"),
-                AgentModelResponse(text='{"action"'),
+                AgentModelResponse(text="not-a-tool-call"),
+                AgentModelResponse(text="still-not-a-tool-call"),
             ]
         )
         planner = ProviderProactiveDecisionPlanner(model)
 
         decision = await planner.decide(
-            [],
-            ("task_intent", "current_day_period", "last_user_message"),
+            {
+                "task_intent": "提醒用户确认组会材料",
+                "current_day_period": "晚上",
+                "last_user_message": "准备明天的组会",
+            },
             force_send=True,
         )
 

@@ -53,6 +53,7 @@ class ChatContext:
     temporal_context: dict[str, object] = field(default_factory=dict)
     proactive_writer_messages: list[dict[str, str]] = field(default_factory=list)
     proactive_safe_facts: dict[str, str] = field(default_factory=dict)
+    proactive_planner_input: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

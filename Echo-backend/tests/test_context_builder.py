@@ -9,6 +9,7 @@ from features.chat.domain.temporal_context import build_temporal_context
 from features.chat.infrastructure.context_builder import (
     _build_call_history,
     _build_call_temporal_context,
+    _build_proactive_planner_input,
     _build_proactive_safe_facts,
     _build_proactive_writer_messages,
     _call_requires_extended_context,
@@ -283,6 +284,39 @@ class ContextBuilderTests(unittest.TestCase):
         self.assertNotIn("temporal_context=", content)
         self.assertNotIn("[消息时间", content)
         self.assertNotIn("[会话时间边界", content)
+
+    def test_proactive_planner_input_is_compact_and_strips_protocol_metadata(self):
+        planner_input = _build_proactive_planner_input(
+            {
+                "local_datetime": "2026-08-29T21:00:00+08:00",
+                "local_date": "2026-08-29",
+                "local_time": "21:00:00",
+                "weekday": "周六",
+                "day_period": "晚上",
+                "timezone": "Asia/Shanghai",
+                "conversation_gap": {
+                    "gap_seconds": 7200,
+                    "state": "long_absence",
+                    "should_acknowledge_gap": True,
+                },
+            },
+            [
+                {
+                    "role": "user",
+                    "content": (
+                        "[消息时间 2026-08-29T19:00:00+08:00 周六 晚上]\n"
+                        "今天任务有点多。\n"
+                        "[本条消息的可信结构化附件]\n- 表情包语义标签：加油"
+                    ),
+                }
+            ],
+        )
+
+        self.assertEqual("2026-08-29T21:00:00+08:00", planner_input["local_datetime"])
+        self.assertEqual("long_absence", planner_input["conversation_gap"]["state"])
+        self.assertIn("今天任务有点多", planner_input["last_user_message"])
+        self.assertNotIn("消息时间", planner_input["last_user_message"])
+        self.assertNotIn("可信结构化附件", planner_input["last_user_message"])
 
 
 if __name__ == "__main__":

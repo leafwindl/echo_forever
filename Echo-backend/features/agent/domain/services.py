@@ -81,8 +81,7 @@ class StickerSemanticAnalyzer(Protocol):
 class ProactiveDecisionPlanner(Protocol):
     async def decide(
         self,
-        messages: list[dict],
-        available_fact_ids: tuple[str, ...],
+        planner_facts: dict[str, object],
         *,
         force_send: bool = False,
     ) -> ProactiveDecision: ...

@@ -72,14 +72,12 @@ class ChatAgentOrchestratorAdapter(ChatAgentOrchestrator):
 class ProactiveDecisionPlannerAdapter(ProactiveDecisionPlanner):
     async def decide(
         self,
-        messages: list[dict],
-        available_fact_ids: tuple[str, ...],
+        planner_facts: dict[str, object],
         *,
         force_send: bool = False,
     ):
         return await plan_proactive_message(
-            messages,
-            available_fact_ids,
+            planner_facts,
             force_send=force_send,
         )
 
@@ -295,6 +293,7 @@ class ChatContextProviderAdapter(ChatContextProvider):
             temporal_context=context.temporal_context,
             proactive_writer_messages=context.proactive_writer_messages,
             proactive_safe_facts=context.proactive_safe_facts,
+            proactive_planner_input=context.proactive_planner_input,
         )
 
 

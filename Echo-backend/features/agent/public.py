@@ -90,14 +90,12 @@ async def run_daily_letter_agent(
 
 
 async def plan_proactive_message(
-    messages: list[dict],
-    available_fact_ids: tuple[str, ...],
+    planner_facts: dict[str, object],
     *,
     force_send: bool = False,
 ) -> ProactiveDecision:
     return await get_proactive_planner().decide(
-        messages,
-        available_fact_ids,
+        planner_facts,
         force_send=force_send,
     )
 

@@ -286,13 +286,17 @@ class GenerateChatReply:
             effective_on_text_delta = call_reply_limiter.push
         if conversation_mode == "proactive" and self.proactive_planner is not None:
             safe_facts = dict(context.proactive_safe_facts)
+            planner_facts = dict(context.proactive_planner_input)
+            planner_facts["trigger_type"] = (
+                "scheduled" if proactive_force_send else "spontaneous"
+            )
             clean_intent = proactive_intent.strip().replace("\r", " ").replace("\n", " ")[:240]
             if clean_intent:
                 safe_facts["task_intent"] = f"后端确认的主动任务目的：{clean_intent}"
+                planner_facts["task_intent"] = clean_intent
             try:
                 decision = await self.proactive_planner.decide(
-                    context.messages,
-                    tuple(safe_facts),
+                    planner_facts,
                     force_send=proactive_force_send,
                 )
             except ProactivePlannerError as exc:
