@@ -128,6 +128,27 @@ class ProactivePlannerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("planner_output_invalid", raised.exception.code)
 
+    async def test_verbose_internal_reason_is_bounded_without_rejecting_decision(self):
+        model = SequenceModel(
+            [
+                tool_response(
+                    {
+                        "action": "send",
+                        "topic": "casual_check_in",
+                        "tone": "warm",
+                        "safe_fact_ids": ["last_user_message"],
+                        "reason": "x" * 400,
+                    }
+                )
+            ]
+        )
+        planner = ProviderProactiveDecisionPlanner(model, format_retries=0)
+
+        decision = await planner.decide({"last_user_message": "今天任务有点多"})
+
+        self.assertEqual(ProactiveAction.SEND, decision.action)
+        self.assertEqual(160, len(decision.reason))
+
     async def test_timeout_is_not_reported_as_business_skip(self):
         model = SequenceModel([AgentModelTimeoutError("timeout")])
         planner = ProviderProactiveDecisionPlanner(model)

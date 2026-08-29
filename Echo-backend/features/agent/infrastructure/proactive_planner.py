@@ -264,7 +264,12 @@ class ProviderProactiveDecisionPlanner:
         if call.tool_name != "decide_proactive_message":
             raise _PlannerPayloadError("planner_output_invalid")
         try:
-            return _ProactiveDecisionPayload.model_validate(call.arguments)
+            arguments = dict(call.arguments)
+            # `reason` is internal telemetry; bound it deterministically so a verbose
+            # provider explanation cannot suppress an otherwise valid decision.
+            if isinstance(arguments.get("reason"), str):
+                arguments["reason"] = arguments["reason"].strip()[:160]
+            return _ProactiveDecisionPayload.model_validate(arguments)
         except (ValidationError, ValueError, TypeError) as exc:
             raise _PlannerPayloadError("planner_output_invalid") from exc
 
