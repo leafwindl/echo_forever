@@ -5,6 +5,7 @@ memory from the existing local container; never print them or write a file.
 Run from the project root with the existing backend Python environment.
 """
 import argparse
+import ipaddress
 import json
 import os
 import secrets
@@ -66,7 +67,18 @@ if __name__ == "__main__":
     parser.add_argument("--test", action="store_true")
     parser.add_argument("--hardware-lab", action="store_true",
                         help="Listen on the computer hotspot and allow the designated physical device")
+    parser.add_argument("--hardware-ip", default="192.168.137.190",
+                        help="Current verified hardware IPv4 address on the lab hotspot")
     args = parser.parse_args()
+    if args.hardware_lab:
+        try:
+            hardware_ip = ipaddress.IPv4Address(args.hardware_ip)
+            if hardware_ip not in ipaddress.IPv4Network("192.168.137.0/24") or str(hardware_ip) in {
+                "192.168.137.0", "192.168.137.1", "192.168.137.255"
+            }:
+                raise ValueError("Not a hardware address on the lab hotspot")
+        except ValueError:
+            parser.error("--hardware-ip must be a hardware address within 192.168.137.2-254")
     hardware = ("e0:72:a1:d5:34:2c", "f7d10172-9ca7-4409-a529-4a88c4768e68") if args.hardware_lab else None
     configure(hardware)
     if args.test:
@@ -86,7 +98,7 @@ if __name__ == "__main__":
             async def restricted_app(scope, receive, send):
                 if scope["type"] in ("http", "websocket"):
                     peer = (scope.get("client") or ("",))[0]
-                    if peer not in {"127.0.0.1", "192.168.137.190"}:
+                    if peer not in {"127.0.0.1", str(hardware_ip)}:
                         if scope["type"] == "websocket":
                             await send({"type": "websocket.close", "code": 1008})
                         else:

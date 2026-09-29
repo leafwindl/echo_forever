@@ -1,0 +1,37 @@
+services:
+  echo-speaker:
+    build:
+      context: .
+      dockerfile: Dockerfile.speaker
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+    environment:
+      ECHO_SPEAKER_MODEL: /models/campplus-zh.onnx
+    volumes:
+      - ./data/speaker-models:/models:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 128
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18100/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  echo-backend:
+    environment:
+      ECHO_SPEAKER_SERVICE_URL: http://echo-speaker:18100
+      ECHO_VOICE_ENROLLMENT_ENABLED: "true"
+    depends_on:
+      echo-speaker:
+        condition: service_healthy

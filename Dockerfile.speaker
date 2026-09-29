@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+WORKDIR /app
+ARG PIP_INDEX_URL=https://pypi.org/simple
+COPY scripts/speaker-service-requirements.txt /app/requirements.txt
+RUN python -m pip install --index-url "${PIP_INDEX_URL}" -r requirements.txt
+COPY scripts/speaker_service.py /app/speaker_service.py
+USER 65534:65534
+CMD ["uvicorn", "speaker_service:app", "--host", "0.0.0.0", "--port", "18100", "--workers", "1"]
