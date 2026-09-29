@@ -304,7 +304,7 @@ async def build_chat_context(
     is_call = conversation_mode == "call"
     use_extended_call_context = is_call and _call_requires_extended_context(user_message)
     clean_speaker_role = (speaker_role or "").strip().lower()
-    unknown_speaker = clean_speaker_role == "unknown"
+    unknown_speaker = clean_speaker_role in {"unknown", "known"}
     timezone_name = postgres_repositories.get_user_timezone(
         user_id,
         settings.default_user_timezone,
@@ -334,7 +334,7 @@ async def build_chat_context(
 
     history = (
         []
-        if unknown_speaker
+        if unknown_speaker or not memory_enabled
         else postgres_repositories.get_history(
             user_id,
             limit=settings.call_history_messages if is_call else MAX_HISTORY_MESSAGES,
@@ -371,10 +371,14 @@ async def build_chat_context(
         completed_turns_without_sticker=completed_turns_without_sticker,
         target_turns=settings.sticker_proactive_target_turns,
     )
-    conversation_timing = postgres_repositories.get_conversation_timing(
-        user_id,
-        conversation_id,
-        current_message_id=history_before_message_id,
+    conversation_timing = (
+        None
+        if unknown_speaker or not memory_enabled
+        else postgres_repositories.get_conversation_timing(
+            user_id,
+            conversation_id,
+            current_message_id=history_before_message_id,
+        )
     )
     temporal_context = build_temporal_context(
         now_utc=datetime.now(UTC),

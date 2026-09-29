@@ -31,8 +31,10 @@ class _EchoAppState extends ConsumerState<EchoApp> {
     super.initState();
     _lifecycleObserver = AppLifecycleObserver(_onAppLifecycleChanged);
     WidgetsBinding.instance.addObserver(_lifecycleObserver);
-    final appUpdates = ref.read(appUpdateControllerProvider.notifier);
-    unawaited(appUpdates.initialize());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ref.read(appUpdateControllerProvider.notifier).initialize());
+    });
     _appUpdateTimer = Timer.periodic(
       AppUpdateController.automaticCheckInterval,
       (_) => _checkForUpdateInBackground(),

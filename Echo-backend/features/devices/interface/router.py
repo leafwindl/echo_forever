@@ -5,44 +5,32 @@ import hmac
 import inspect
 import json
 import logging
+import os
 import time
 import uuid
 from contextlib import suppress
-
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, status
-from shared.interface.dependencies import CurrentUser, get_current_user
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from shared.config import settings
+from shared.interface.dependencies import CurrentUser, get_current_user
 
 from features.devices.application.latency import DeviceLatencyTracker
+from features.devices.application.device_probe import DeviceProbe
 from features.devices.application.transcript_guard import is_plausible_device_transcript
 from features.devices.domain.entities import DeviceAudioFormat
 from features.devices.infrastructure.adapters import EchoAudioSource, parse_personal_device_map
-from features.devices.infrastructure.device_management import (
-    authenticate_database_device,
-    claim_pairing,
-    create_pairing,
-    delete_speaker_profile,
-    get_device_speaker_profile,
-    get_user_device,
-    ensure_bootstrap_credential,
-    list_speaker_profile,
-    list_user_devices,
-    rotate_device_credential,
-    record_voice_turn,
-    save_speaker_sample,
-    touch_device,
-    update_voice_turn_messages,
-    unbind_user_device,
-    update_user_device,
-    validate_device_credential,
-)
-from features.devices.infrastructure.speaker_verification import (
-    audio_quality,
-    cosine_similarity,
-    extract_speaker_embedding,
-)
 from features.devices.infrastructure.audio_codec import (
     OpusPacketDecoder,
     encode_audio_bytes_to_opus_packets,
@@ -51,25 +39,51 @@ from features.devices.infrastructure.container import (
     get_process_device_voice_turn,
     get_stream_device_voice_turn,
 )
+from features.devices.infrastructure.device_management import (
+    authenticate_database_device,
+    bind_legacy_device,
+    claim_pairing,
+    claim_provisioning_session,
+    create_pairing,
+    create_provisioning_session,
+    delete_speaker_profile,
+    ensure_bootstrap_credential,
+    get_user_device,
+    list_speaker_profile,
+    list_user_devices,
+    record_voice_turn,
+    rotate_device_credential,
+    touch_device,
+    unbind_user_device,
+    update_user_device,
+    update_voice_turn_messages,
+    validate_device_credential,
+)
+from features.firmware_releases.public import get_latest_firmware_release
+from shared.storage import get_cos_object_storage
 from features.devices.infrastructure.endpoint_detector import AudioEndpointDetector
 from features.devices.interface.schemas import (
-    DeviceBootstrapResponse,
     DeviceActivationResponse,
+    DeviceBootstrapResponse,
     DeviceCredentialResponse,
+    DeviceFirmwareResponse,
     DeviceHeartbeatRequest,
     DeviceListResponse,
     DevicePairingClaimRequest,
     DevicePairingResponse,
+    DeviceProvisioningSessionResponse,
     DeviceSummary,
     DeviceUpdateRequest,
+    DeviceWebSocketConfig,
     SpeakerEnrollmentResponse,
     SpeakerProfileResponse,
-    DeviceFirmwareResponse,
-    DeviceWebSocketConfig,
 )
-from features.voice.public import open_streaming_voice_recognition
+from features.voice.public import open_streaming_voice_recognition, synthesize_voice_reply
 
 logger = logging.getLogger(__name__)
+
+_active_device_sessions: dict[str, WebSocket] = {}
+_device_probe = DeviceProbe()
 router = APIRouter(prefix="/devices", tags=["devices"])
 CurrentUserDependency = Annotated[CurrentUser, Depends(get_current_user)]
 
@@ -92,9 +106,7 @@ def _device_key(device_id: str, client_id: str) -> str:
 def _resolve_device_user(device_id: str, client_id: str) -> str | None:
     device_map = _device_map()
     exact_key = _device_key(device_id, client_id)
-    return device_map.get(exact_key) or device_map.get(
-        _device_key(device_id, "*")
-    )
+    return device_map.get(exact_key) or device_map.get(_device_key(device_id, "*"))
 
 
 def _authenticate_personal_device(
@@ -131,20 +143,8 @@ def _device_request_token(authorization: str | None) -> bool:
 
 def _verify_device_speaker(device_id: str, pcm16_audio: bytes) -> dict[str, object]:
     try:
-        profile = get_device_speaker_profile(device_id)
-        embedding = extract_speaker_embedding(pcm16_audio)
-        stored = profile.get("embedding") if profile else None
-        if not profile or not isinstance(stored, list) or not embedding:
-            return {"speaker_role": "unknown", "confidence": 0.0, "status": "unknown"}
-        confidence = max(0.0, min(1.0, cosine_similarity(embedding, [float(v) for v in stored])))
-        threshold = float(profile.get("verification_threshold") or 0.78)
-        is_owner = confidence >= threshold
-        return {
-            "speaker_profile_id": profile.get("speaker_profile_id"),
-            "speaker_role": "owner" if is_owner else "unknown",
-            "confidence": confidence,
-            "status": "verified" if is_owner else "rejected",
-        }
+        from features.devices.interface.speaker_router import recognize
+        return recognize(device_id, pcm16_audio)
     except Exception:
         logger.warning("Speaker verification failed device_id=%s", device_id, exc_info=True)
         return {"speaker_role": "unknown", "confidence": 0.0, "status": "unavailable"}
@@ -159,16 +159,38 @@ def _websocket_url() -> str:
     return f"{base}/devices/ws"
 
 
+def _device_firmware_version(firmware_version: str | None) -> str:
+    reported_version = str(firmware_version or "").strip()
+    if not reported_version or len(reported_version) > 80:
+        return settings.echo_firmware_version
+    return reported_version
+
+
 @router.api_route(
     "/firmware/config",
     methods=["GET", "POST"],
     response_model=DeviceBootstrapResponse,
 )
 async def device_bootstrap(
+    request: Request = None,
     device_id: str = Header(default="", alias="Device-Id"),
     client_id: str = Header(default="", alias="Client-Id"),
     authorization: str | None = Header(default=None, alias="Authorization"),
+    echo_bind_token: str | None = Header(default=None, alias="Echo-Bind-Token"),
+    firmware_version: str | None = Header(default=None, alias="Firmware-Version"),
 ):
+    board_type = ""
+    board_variant = ""
+    if request is not None and request.method == "POST":
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+        board = payload.get("board", {}) if isinstance(payload, dict) else {}
+        if isinstance(board, dict):
+            board_type = str(board.get("type") or "").strip()[:120]
+            board_variant = str(board.get("name") or "").strip()[:120]
+    device_firmware_version = _device_firmware_version(firmware_version)
     database_user = None
     provided_token = _clean_bearer(authorization)
     credential_row = None
@@ -183,18 +205,49 @@ async def device_bootstrap(
         except Exception:
             logger.debug("Database device bootstrap lookup unavailable", exc_info=True)
     legacy_user = _resolve_device_user(device_id, client_id)
-    if database_user is None and credential_row is None and legacy_user is None and not device_id.strip():
+    direct_credential = None
+    if echo_bind_token:
+        try:
+            direct_credential = claim_provisioning_session(
+                claim_token=echo_bind_token,
+                device_id=device_id,
+                client_id=client_id,
+                firmware_version=device_firmware_version,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        except Exception:
+            logger.debug("Device provisioning session claim unavailable", exc_info=True)
+    if direct_credential is None and database_user is None and legacy_user is not None:
+        try:
+            direct_credential = bind_legacy_device(
+                user_id=legacy_user,
+                device_id=device_id,
+                client_id=client_id,
+                firmware_version=device_firmware_version,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        except Exception:
+            logger.debug("Legacy device binding unavailable", exc_info=True)
+    if (
+        direct_credential is None
+        and database_user is None
+        and legacy_user is None
+        and not device_id.strip()
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Device is not allowed")
     activation = None
     bootstrap_token = ""
-    if credential_row is None and legacy_user is None:
+    if direct_credential is None and database_user is None and legacy_user is None:
         try:
             pairing = create_pairing(
                 device_id=device_id,
                 client_id=client_id,
-                firmware_version=settings.echo_firmware_version,
+                firmware_version=device_firmware_version,
             )
-            bootstrap_token = ensure_bootstrap_credential(device_id=device_id)
+            if credential_row is None:
+                bootstrap_token = ensure_bootstrap_credential(device_id=device_id)
             activation = DeviceActivationResponse(
                 pairing_id=pairing["pairing_id"],
                 code=pairing["code"],
@@ -204,22 +257,56 @@ async def device_bootstrap(
         except Exception:
             logger.debug("Device bootstrap pairing unavailable", exc_info=True)
     try:
-        touch_device(device_id=device_id, client_id=client_id, firmware_version=settings.echo_firmware_version)
+        touch_device(
+            device_id=device_id,
+            client_id=client_id,
+            firmware_version=device_firmware_version,
+        )
     except Exception:
         logger.debug("Device bootstrap heartbeat unavailable", exc_info=True)
+    firmware = None
+    if board_type:
+        try:
+            firmware = get_latest_firmware_release(board_type, board_variant)
+        except Exception:
+            logger.debug("Hardware firmware release lookup unavailable", exc_info=True)
+    firmware_response = DeviceFirmwareResponse(version=settings.echo_firmware_version)
+    if firmware is not None:
+        try:
+            firmware_response = DeviceFirmwareResponse(
+                version=firmware.version,
+                url=get_cos_object_storage().download_url(firmware.cos_object_key),
+                sha256=firmware.sha256,
+                size_bytes=firmware.size_bytes,
+                board_type=firmware.board_type,
+                board_variant=firmware.board_variant,
+            )
+        except Exception:
+            logger.warning("Hardware firmware URL generation failed", exc_info=True)
     return DeviceBootstrapResponse(
-        firmware=DeviceFirmwareResponse(version=settings.echo_firmware_version),
+        firmware=firmware_response,
         websocket=DeviceWebSocketConfig(
             url=_websocket_url(),
             token=(
-                provided_token
-                if credential_row is not None
+                direct_credential["credential"]
+                if direct_credential is not None
+                else provided_token
+                if database_user is not None
                 else bootstrap_token
+                or (provided_token if credential_row is not None else "")
                 or (settings.echo_device_token if legacy_user is not None else "")
             ),
         ),
         activation=activation,
     )
+
+
+@router.post("/provisioning/sessions", response_model=DeviceProvisioningSessionResponse)
+def create_device_provisioning_session(current_user: CurrentUserDependency):
+    try:
+        return create_provisioning_session(user_id=current_user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/pairings", response_model=DevicePairingResponse)
@@ -229,7 +316,9 @@ def create_device_pairing(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ):
     if not _device_request_token(authorization):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid device credential")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid device credential"
+        )
     try:
         return create_pairing(device_id=device_id, client_id=client_id)
     except ValueError as exc:
@@ -239,14 +328,20 @@ def create_device_pairing(
 @router.post("/pairings/claim", response_model=DeviceCredentialResponse)
 def claim_device_pairing(body: DevicePairingClaimRequest, current_user: CurrentUserDependency):
     try:
-        return claim_pairing(user_id=current_user.user_id, pairing_id=body.pairing_id, code=body.code)
+        return claim_pairing(
+            user_id=current_user.user_id, pairing_id=body.pairing_id, code=body.code
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.get("", response_model=DeviceListResponse)
 def get_devices(current_user: CurrentUserDependency):
-    return {"items": [DeviceSummary.model_validate(item) for item in list_user_devices(current_user.user_id)]}
+    return {
+        "items": [
+            DeviceSummary.model_validate(item) for item in list_user_devices(current_user.user_id)
+        ]
+    }
 
 
 @router.get("/{device_id}", response_model=DeviceSummary)
@@ -255,6 +350,32 @@ def get_device(device_id: str, current_user: CurrentUserDependency):
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
     return item
+
+
+@router.post("/{device_id}/connect")
+@router.post("/{device_id}/probe")
+async def connect_device(device_id: str, current_user: CurrentUserDependency):
+    item = get_user_device(current_user.user_id, device_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+    websocket = _active_device_sessions.get(device_id.strip().lower())
+    if websocket is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="设备当前没有在线会话，请检查硬件网络",
+        )
+    try:
+        await _device_probe.check(device_id.strip().lower(), websocket)
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="设备未在时限内回应，请检查硬件状态") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail="设备检测忙碌或被硬件拒绝，请稍后重试") from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="设备会话已断开，请等待硬件重新联网",
+        ) from exc
+    return {"connected": True, "acknowledged": True, "device_id": device_id}
 
 
 @router.patch("/{device_id}", response_model=DeviceSummary)
@@ -280,7 +401,11 @@ def rotate_credential(device_id: str, current_user: CurrentUserDependency):
     if credential is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
     item = get_user_device(current_user.user_id, device_id) or {}
-    return {"device_id": item.get("device_id", device_id), "client_id": item.get("client_id", ""), "credential": credential}
+    return {
+        "device_id": item.get("device_id", device_id),
+        "client_id": item.get("client_id", ""),
+        "credential": credential,
+    }
 
 
 @router.post("/heartbeat", status_code=status.HTTP_204_NO_CONTENT)
@@ -291,8 +416,15 @@ def device_heartbeat(
     authorization: str | None = Header(default=None, alias="Authorization"),
 ):
     if _authenticate_personal_device(device_id, client_id, authorization) is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid device credential")
-    touch_device(device_id=device_id, client_id=client_id, firmware_version=body.firmware_version, wifi_ssid=body.wifi_ssid)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid device credential"
+        )
+    touch_device(
+        device_id=device_id,
+        client_id=client_id,
+        firmware_version=body.firmware_version,
+        wifi_ssid=body.wifi_ssid,
+    )
 
 
 @router.get("/{device_id}/speaker", response_model=SpeakerProfileResponse | None)
@@ -312,26 +444,15 @@ async def enroll_speaker(
     device = get_user_device(current_user.user_id, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
-    audio_bytes = await audio.read(settings.voice_upload_max_bytes)
-    embedding = extract_speaker_embedding(audio_bytes)
-    if not embedding:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Voice sample is too short or silent")
-    duration_ms = int(len(audio_bytes) * 1000 / (16000 * 2))
-    quality = audio_quality(audio_bytes)
-    result = save_speaker_sample(
-        user_id=current_user.user_id,
-        device_id=device_id,
-        embedding=embedding,
-        quality_score=quality,
-        duration_ms=duration_ms,
-    )
-    return {**result, "quality_score": quality, "duration_ms": duration_ms}
+    raise HTTPException(status_code=410, detail="旧版声纹录入已停用，请使用人员声纹重新录入")
 
 
 @router.delete("/{device_id}/speaker", status_code=status.HTTP_204_NO_CONTENT)
 def delete_speaker(device_id: str, current_user: CurrentUserDependency):
     if not delete_speaker_profile(current_user.user_id, device_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Speaker profile not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Speaker profile not found"
+        )
 
 
 @router.websocket("/ws")
@@ -348,6 +469,10 @@ async def device_websocket(websocket: WebSocket):
         return
 
     await websocket.accept()
+    session_key = device_id.strip().lower()
+    from features.devices.interface.speaker_router import voice_enrollment
+    voice_enrollment.disconnect(session_key)
+    _active_device_sessions[session_key] = websocket
     try:
         touch_device(device_id=device_id, client_id=client_id, online=True)
     except Exception:
@@ -362,9 +487,13 @@ async def device_websocket(websocket: WebSocket):
     maximum_utterance_bytes = settings.echo_device_max_utterance_seconds * 16000 * 2
 
     def new_auto_endpoint_detector() -> AudioEndpointDetector:
+        from features.devices.interface.speaker_router import hardware_calibration
         return AudioEndpointDetector(
             sample_rate=16000,
-            silence_ms=settings.echo_device_auto_silence_ms,
+            silence_ms=(
+                1800 if hardware_calibration.active(user_id, session_key)
+                else settings.echo_device_auto_silence_ms
+            ),
             minimum_speech_ms=settings.echo_device_auto_minimum_speech_ms,
             speech_rms_threshold=settings.echo_device_auto_speech_rms_threshold,
         )
@@ -393,17 +522,28 @@ async def device_websocket(websocket: WebSocket):
         asr_session=None,
         *,
         speech_ended_at: float | None = None,
+        speaker_pcm16_audio: bytes | None = None,
     ) -> None:
         started_at = time.perf_counter()
         tts_stop_sent = False
         try:
+            from features.devices.interface.speaker_router import hardware_calibration
+            calibrating = hardware_calibration.active(user_id, session_key)
             request_id = f"device-{session_id}-{uuid.uuid4().hex[:12]}"
             latency = DeviceLatencyTracker(request_id, started_at=speech_ended_at)
             latency.mark("endpoint_detected")
-            speaker = _verify_device_speaker(device_id, pcm16_audio)
+            speaker = (
+                {"status": "unknown", "speaker_role": "unknown", "confidence": 0.0}
+                if calibrating else await asyncio.to_thread(
+                    _verify_device_speaker, device_id, speaker_pcm16_audio or pcm16_audio,
+                )
+            )
             recognized_text = ""
             realtime_asr_succeeded = False
-            if asr_session is not None:
+            if calibrating and asr_session is not None:
+                with suppress(Exception):
+                    await asr_session.close()
+            elif asr_session is not None:
                 try:
                     await asr_session.finish()
                     recognized_text = await drain_realtime_asr(asr_session)
@@ -418,8 +558,7 @@ async def device_websocket(websocket: WebSocket):
                     )
                 except Exception:
                     logger.warning(
-                        "Echo device realtime ASR failed; falling back to batch ASR "
-                        "device_id=%s",
+                        "Echo device realtime ASR failed; falling back to batch ASR device_id=%s",
                         device_id,
                         exc_info=True,
                     )
@@ -441,7 +580,7 @@ async def device_websocket(websocket: WebSocket):
                 recognized_text = ""
                 realtime_asr_succeeded = False
 
-            if asr_session is not None and realtime_asr_succeeded and not recognized_text:
+            if not calibrating and asr_session is not None and realtime_asr_succeeded and not recognized_text:
                 latency.mark("asr_final")
                 latency.mark("turn_complete")
                 logger.info(
@@ -466,23 +605,47 @@ async def device_websocket(websocket: WebSocket):
                     )
                 except Exception:
                     logger.debug("Device voice turn persistence unavailable", exc_info=True)
-                await websocket.send_json({
-                    "session_id": session_id,
-                    "type": "stt",
-                    "text": user_text,
-                    "speaker": speaker,
-                })
+                await websocket.send_json(
+                    {
+                        "session_id": session_id,
+                        "type": "stt",
+                        "text": user_text,
+                        "speaker": speaker,
+                    }
+                )
 
-            if settings.echo_device_streaming_enabled:
+            # Local opt-in: intercept enrollment before sending speech to the chat agent.
+            enrollment_reply = None
+            if calibrating:
+                from features.devices.infrastructure.neural_speaker import extract
+                enrollment_reply = await asyncio.to_thread(
+                    hardware_calibration.consume, user_id, session_key,
+                    speaker_pcm16_audio or pcm16_audio, extract,
+                )
+                if enrollment_reply is None:
+                    enrollment_reply = "校准已取消"
+            elif os.environ.get("ECHO_VOICE_ENROLLMENT_ENABLED", "").lower() == "true":
+                from features.devices.interface.speaker_router import voice_enrollment
+                if not recognized_text:
+                    recognized_text = await get_process_device_voice_turn().recognizer.recognize_pcm16(pcm16_audio)
+                try:
+                    enrollment_reply = await voice_enrollment.handle(
+                        user_id, session_key, recognized_text, pcm16_audio,
+                    )
+                except HTTPException as error:
+                    enrollment_reply = str(error.detail) + "。请重新读这一段，或说取消录入。"
+                except Exception:
+                    logger.warning("Voice enrollment temporarily unavailable", exc_info=True)
+                    enrollment_reply = "声纹录入服务暂不可用，请稍后重试或取消录入。"
+
+            if settings.echo_device_streaming_enabled and enrollment_reply is None:
                 playback_started_at: float | None = None
                 last_packet_sent_at: float | None = None
                 maximum_packet_gap = 0.0
                 schedule_rebases = 0
                 packet_index = 0
                 tts_started = False
-                streaming_prebuffer_packets = (
-                    settings.echo_device_streaming_prebuffer_packets
-                )
+                streaming_prebuffer_packets = settings.echo_device_streaming_prebuffer_packets
 
                 async def send_tts_start() -> None:
                     nonlocal tts_started
@@ -561,6 +724,7 @@ async def device_websocket(websocket: WebSocket):
                 if "speaker_role" in inspect.signature(stream_turn.execute).parameters:
                     stream_kwargs["speaker_role"] = str(speaker.get("speaker_role") or "unknown")
                     stream_kwargs["speaker_confidence"] = float(speaker.get("confidence") or 0.0)
+                    stream_kwargs["speaker_name"] = speaker.get("display_name") if speaker.get("speaker_role") == "known" else None
                 result = await stream_turn.execute(**stream_kwargs)
                 if result.user_message_id or result.assistant_message_id:
                     try:
@@ -599,7 +763,15 @@ async def device_websocket(websocket: WebSocket):
             if "speaker_role" in inspect.signature(process_turn.execute).parameters:
                 process_kwargs["speaker_role"] = str(speaker.get("speaker_role") or "unknown")
                 process_kwargs["speaker_confidence"] = float(speaker.get("confidence") or 0.0)
-            result = await process_turn.execute(**process_kwargs)
+                process_kwargs["speaker_name"] = speaker.get("display_name") if speaker.get("speaker_role") == "known" else None
+            if enrollment_reply is not None:
+                from features.devices.domain.entities import DeviceTurnResult
+                speech = await synthesize_voice_reply(enrollment_reply)
+                result = DeviceTurnResult(
+                    user_text=recognized_text, reply=enrollment_reply, audio_urls=speech.audio_urls,
+                )
+            else:
+                result = await process_turn.execute(**process_kwargs)
             if result.user_message_id or result.assistant_message_id:
                 try:
                     update_voice_turn_messages(
@@ -625,9 +797,7 @@ async def device_websocket(websocket: WebSocket):
                 silence_rms_threshold=settings.echo_device_tts_silence_rms_threshold,
             )
             audio_encoded_at = time.perf_counter()
-            await websocket.send_json(
-                {"session_id": session_id, "type": "tts", "state": "start"}
-            )
+            await websocket.send_json({"session_id": session_id, "type": "tts", "state": "start"})
             await websocket.send_json(
                 {
                     "session_id": session_id,
@@ -664,9 +834,7 @@ async def device_websocket(websocket: WebSocket):
             if settings.echo_device_playback_stop_grace_ms:
                 await asyncio.sleep(settings.echo_device_playback_stop_grace_ms / 1000)
             tts_stop_sent = True
-            await websocket.send_json(
-                {"session_id": session_id, "type": "tts", "state": "stop"}
-            )
+            await websocket.send_json({"session_id": session_id, "type": "tts", "state": "stop"})
             logger.info(
                 "Echo device turn completed device_id=%s input_bytes=%s output_packets=%s "
                 "prebuffer_packets=%s reply_ready_ms=%.1f audio_load_ms=%.1f "
@@ -715,6 +883,7 @@ async def device_websocket(websocket: WebSocket):
         endpoint_detector = None
         asr_session = realtime_asr_session
         realtime_asr_session = None
+        speaker_pcm16_audio = pcm16_audio[: 16000 * 2 * 12]
         if detector is not None:
             pcm16_audio = detector.trim(pcm16_audio)
         if len(pcm16_audio) > maximum_utterance_bytes:
@@ -733,6 +902,7 @@ async def device_websocket(websocket: WebSocket):
                 pcm16_audio,
                 asr_session,
                 speech_ended_at=speech_ended_at,
+                speaker_pcm16_audio=speaker_pcm16_audio,
             )
         )
 
@@ -807,7 +977,10 @@ async def device_websocket(websocket: WebSocket):
                         elif (
                             endpoint_detector.speech_started
                             and endpoint_detector.speech_elapsed_ms
-                            >= settings.echo_device_auto_maximum_speech_ms
+                            >= (
+                                10000 if hardware_calibration.active(user_id, session_key)
+                                else settings.echo_device_auto_maximum_speech_ms
+                            )
                         ):
                             logger.info(
                                 "Echo device maximum speech duration reached device_id=%s "
@@ -831,6 +1004,9 @@ async def device_websocket(websocket: WebSocket):
                 continue
             payload = json.loads(text)
             message_type = str(payload.get("type", ""))
+            if message_type == "mcp":
+                _device_probe.receive(session_key, websocket, payload.get("payload"))
+                continue
             if message_type == "hello":
                 version = int(payload.get("version", 0))
                 params = payload.get("audio_params", {})
@@ -868,13 +1044,11 @@ async def device_websocket(websocket: WebSocket):
                     decoder = OpusPacketDecoder(output_sample_rate=16000)
                     capture_started_at = time.perf_counter()
                     mode = str(payload.get("mode", ""))
-                    endpoint_detector = (
-                        new_auto_endpoint_detector()
-                        if mode == "auto"
-                        else None
-                    )
+                    endpoint_detector = new_auto_endpoint_detector() if mode == "auto" else None
+                    from features.devices.interface.speaker_router import hardware_calibration
                     if (
-                        settings.echo_device_realtime_asr_enabled
+                        not hardware_calibration.active(user_id, session_key)
+                        and settings.echo_device_realtime_asr_enabled
                         and settings.voice_streaming_asr_enabled
                     ):
                         try:
@@ -916,10 +1090,16 @@ async def device_websocket(websocket: WebSocket):
         with suppress(Exception):
             await websocket.close(code=1011, reason="Device session failed")
     finally:
-        try:
-            touch_device(device_id=device_id, client_id=client_id, online=False)
-        except Exception:
-            logger.debug("Device offline heartbeat persistence unavailable", exc_info=True)
+        _device_probe.disconnect(session_key, websocket)
+        if _active_device_sessions.get(session_key) is websocket:
+            from features.devices.interface.speaker_router import hardware_calibration
+            hardware_calibration.cancel(user_id, session_key)
+            voice_enrollment.disconnect(session_key)
+            _active_device_sessions.pop(session_key, None)
+            try:
+                touch_device(device_id=device_id, client_id=client_id, online=False)
+            except Exception:
+                logger.debug("Device offline heartbeat persistence unavailable", exc_info=True)
         if processing_task is not None:
             if not processing_task.done():
                 processing_task.cancel()

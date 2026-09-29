@@ -90,6 +90,7 @@ class StreamDeviceVoiceTurn:
         latency: DeviceLatencyTracker | None = None,
         speaker_role: str | None = None,
         speaker_confidence: float = 0.0,
+        speaker_name: str | None = None,
     ) -> DeviceTurnResult:
         if not user_id.strip():
             raise ValueError("Device is not mapped to an Echo user")
@@ -285,6 +286,7 @@ class StreamDeviceVoiceTurn:
                 reply_kwargs.update(
                     speaker_role=speaker_role,
                     speaker_confidence=speaker_confidence,
+                    speaker_name=speaker_name,
                 )
             result = await self.conversation.reply(**reply_kwargs)
             if latency is not None:

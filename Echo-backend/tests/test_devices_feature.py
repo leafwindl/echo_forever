@@ -370,6 +370,20 @@ class DeviceVoiceTurnTests(unittest.IsolatedAsyncioTestCase):
             message_visibility="device_history",
         )
 
+    async def test_known_speaker_has_name_but_no_owner_memory_or_tools(self):
+        with patch(
+            "features.devices.infrastructure.adapters.send_chat_message",
+            new=AsyncMock(return_value=ChatReplyDeliveryResult(reply="你好。")),
+        ) as send_message:
+            await EchoConversationService().reply(
+                user_id="user-1", user_text="你好", request_id="known-request",
+                speaker_role="known", speaker_confidence=0.8, speaker_name="家人",
+            )
+        kwargs = send_message.await_args.kwargs
+        self.assertEqual(kwargs["speaker_name"], "家人")
+        self.assertFalse(kwargs["memory_enabled"])
+        self.assertFalse(kwargs["tools_enabled"])
+
     def test_parses_personal_device_mapping(self):
         mapping = parse_personal_device_map(
             '{"AA:BB|CLIENT-1":"user-1"}'

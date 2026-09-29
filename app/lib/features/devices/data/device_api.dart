@@ -29,6 +29,13 @@ class DeviceApi {
     return DevicePairingClaim.fromJson(response.data!);
   }
 
+  Future<DeviceProvisioningSession> createProvisioningSession() async {
+    final response = await _client.post<Map<String, dynamic>>(
+      Endpoints.deviceProvisioningSessions,
+    );
+    return DeviceProvisioningSession.fromJson(response.data!);
+  }
+
   Future<EchoDevice> updateDevice(String deviceId, String displayName) async {
     final response = await _client.patch<Map<String, dynamic>>(
       Endpoints.device(deviceId),
@@ -37,7 +44,17 @@ class DeviceApi {
     return EchoDevice.fromJson(response.data!);
   }
 
-  Future<void> unbindDevice(String deviceId) => _client.delete<void>(Endpoints.device(deviceId));
+  Future<void> connectDevice(String deviceId) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      Endpoints.deviceConnect(deviceId),
+    );
+    if (response.data?['acknowledged'] != true) {
+      throw StateError('未收到硬件检测回执');
+    }
+  }
+
+  Future<void> unbindDevice(String deviceId) =>
+      _client.delete<void>(Endpoints.device(deviceId));
 
   Future<DevicePairingClaim> rotateCredential(String deviceId) async {
     final response = await _client.post<Map<String, dynamic>>(
@@ -47,14 +64,20 @@ class DeviceApi {
   }
 
   Future<SpeakerProfile?> getSpeaker(String deviceId) async {
-    final response = await _client.get<Map<String, dynamic>?>(Endpoints.deviceSpeaker(deviceId));
+    final response = await _client.get<Map<String, dynamic>?>(
+      Endpoints.deviceSpeaker(deviceId),
+    );
     final data = response.data;
     return data == null ? null : SpeakerProfile.fromJson(data);
   }
 
-  Future<void> deleteSpeaker(String deviceId) => _client.delete<void>(Endpoints.deviceSpeaker(deviceId));
+  Future<void> deleteSpeaker(String deviceId) =>
+      _client.delete<void>(Endpoints.deviceSpeaker(deviceId));
 
-  Future<void> enrollSpeaker(String deviceId, List<int> pcm16Audio) async {
+  Future<SpeakerEnrollment> enrollSpeaker(
+    String deviceId,
+    List<int> pcm16Audio,
+  ) async {
     final form = FormData.fromMap(<String, dynamic>{
       'audio': MultipartFile.fromBytes(
         pcm16Audio,
@@ -62,9 +85,10 @@ class DeviceApi {
         contentType: DioMediaType('audio', 'L16'),
       ),
     });
-    await _client.post<Map<String, dynamic>>(
+    final response = await _client.post<Map<String, dynamic>>(
       Endpoints.deviceSpeakerEnrollment(deviceId),
       data: form,
     );
+    return SpeakerEnrollment.fromJson(response.data!);
   }
 }

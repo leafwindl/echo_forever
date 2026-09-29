@@ -36,6 +36,7 @@ class ProcessDeviceVoiceTurn:
         recognized_text: str | None = None,
         speaker_role: str | None = None,
         speaker_confidence: float = 0.0,
+        speaker_name: str | None = None,
     ) -> DeviceTurnResult:
         clean_user_id = user_id.strip()
         if not clean_user_id:
@@ -65,6 +66,7 @@ class ProcessDeviceVoiceTurn:
             reply_kwargs.update(
                 speaker_role=speaker_role,
                 speaker_confidence=speaker_confidence,
+                speaker_name=speaker_name,
             )
         result = await self.conversation.reply(**reply_kwargs)
         conversation_completed_at = time.perf_counter()

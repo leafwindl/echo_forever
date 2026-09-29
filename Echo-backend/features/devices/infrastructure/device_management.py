@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 
 from db.postgres_connection import get_connection, transaction
 
+PROVISIONING_SESSION_EXPIRES_SECONDS = 600
+
 
 def normalize_device_id(value: str) -> str:
     return str(value or "").strip().lower()
@@ -36,6 +38,173 @@ def _device_row(row: dict | None) -> dict | None:
         if isinstance(value, datetime):
             result[key] = value.astimezone(UTC).isoformat()
     return result
+
+
+def _bind_device_to_user(
+    cursor,
+    *,
+    user_id: str,
+    device_id: str,
+    client_id: str,
+    firmware_version: str = "",
+) -> dict:
+    clean_device_id = normalize_device_id(device_id)
+    clean_client_id = normalize_client_id(client_id)
+    clean_user_id = str(user_id or "").strip()
+    if not clean_device_id:
+        raise ValueError("device_id is required")
+    if not clean_user_id:
+        raise ValueError("user_id is required")
+
+    cursor.execute(
+        "SELECT owner_user_id FROM devices WHERE device_id = %s FOR UPDATE",
+        (clean_device_id,),
+    )
+    device = cursor.fetchone()
+    if device and device["owner_user_id"] and str(device["owner_user_id"]) != clean_user_id:
+        raise ValueError("Device is already bound to another account")
+
+    if device:
+        cursor.execute(
+            """
+            UPDATE devices
+            SET client_id = %s,
+                owner_user_id = %s,
+                status = 'offline',
+                firmware_version = COALESCE(NULLIF(%s, ''), firmware_version),
+                last_seen_at = NOW(),
+                bound_at = COALESCE(bound_at, NOW()),
+                updated_at = NOW()
+            WHERE device_id = %s
+            """,
+            (clean_client_id, clean_user_id, firmware_version.strip(), clean_device_id),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO devices (
+                device_id, client_id, owner_user_id, firmware_version,
+                status, last_seen_at, bound_at
+            )
+            VALUES (%s, %s, %s, %s, 'offline', NOW(), NOW())
+            """,
+            (clean_device_id, clean_client_id, clean_user_id, firmware_version.strip()),
+        )
+
+    credential, credential_hash = issue_device_credential()
+    cursor.execute(
+        """
+        UPDATE device_credentials
+        SET status = 'revoked', revoked_at = NOW()
+        WHERE device_id = %s AND status = 'active'
+        """,
+        (clean_device_id,),
+    )
+    cursor.execute(
+        """
+        INSERT INTO device_credentials (device_id, credential_hash)
+        VALUES (%s, %s)
+        """,
+        (clean_device_id, credential_hash),
+    )
+    return {
+        "device_id": clean_device_id,
+        "client_id": clean_client_id,
+        "credential": credential,
+    }
+
+
+def create_provisioning_session(*, user_id: str) -> dict:
+    clean_user_id = str(user_id or "").strip()
+    if not clean_user_id:
+        raise ValueError("user_id is required")
+    claim_token = f"ep_{secrets.token_urlsafe(32)}"
+    session_id = f"prov_{uuid.uuid4().hex}"
+    with transaction() as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO device_provisioning_sessions (
+                session_id, owner_user_id, token_hash, expires_at
+            )
+            VALUES (%s, %s, %s, NOW() + INTERVAL '10 minutes')
+            """,
+            (session_id, clean_user_id, hash_credential(claim_token)),
+        )
+    return {
+        "claim_token": claim_token,
+        "expires_in": PROVISIONING_SESSION_EXPIRES_SECONDS,
+    }
+
+
+def claim_provisioning_session(
+    *,
+    claim_token: str,
+    device_id: str,
+    client_id: str,
+    firmware_version: str = "",
+) -> dict | None:
+    clean_token = str(claim_token or "").strip()
+    if not clean_token:
+        return None
+    clean_device_id = normalize_device_id(device_id)
+    if not clean_device_id:
+        raise ValueError("device_id is required")
+
+    with transaction() as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT session_id, owner_user_id, expires_at, consumed_at
+            FROM device_provisioning_sessions
+            WHERE token_hash = %s
+            FOR UPDATE
+            """,
+            (hash_credential(clean_token),),
+        )
+        session = cursor.fetchone()
+        if (
+            not session
+            or session["consumed_at"] is not None
+            or session["expires_at"] <= datetime.now(UTC)
+        ):
+            return None
+
+        credential = _bind_device_to_user(
+            cursor,
+            user_id=str(session["owner_user_id"]),
+            device_id=clean_device_id,
+            client_id=client_id,
+            firmware_version=firmware_version,
+        )
+        cursor.execute(
+            """
+            UPDATE device_provisioning_sessions
+            SET consumed_at = NOW(), device_id = %s, client_id = %s
+            WHERE session_id = %s
+            """,
+            (
+                credential["device_id"],
+                credential["client_id"],
+                session["session_id"],
+            ),
+        )
+    return credential
+
+
+def bind_legacy_device(
+    *,
+    user_id: str,
+    device_id: str,
+    client_id: str,
+    firmware_version: str = "",
+) -> dict:
+    with transaction() as conn, conn.cursor() as cursor:
+        return _bind_device_to_user(
+            cursor,
+            user_id=user_id,
+            device_id=device_id,
+            client_id=client_id,
+            firmware_version=firmware_version,
+        )
 
 
 def create_pairing(*, device_id: str, client_id: str, firmware_version: str = "") -> dict:
@@ -103,32 +272,15 @@ def claim_pairing(*, user_id: str, pairing_id: str, code: str) -> dict:
         if not hmac.compare_digest(str(pairing["code_hash"]), hash_credential(clean_code)):
             cursor.execute(
                 "UPDATE device_pairings SET attempts = attempts + 1 WHERE pairing_id = %s",
-                (pairing_id.strip(),),
+                (str(pairing["pairing_id"]),),
             )
             raise ValueError("Pairing code is invalid")
 
-        cursor.execute(
-            "SELECT owner_user_id, status FROM devices WHERE device_id = %s FOR UPDATE",
-            (pairing["device_id"],),
-        )
-        device = cursor.fetchone()
-        if device and device["owner_user_id"] and device["owner_user_id"] != user_id:
-            raise ValueError("Device is already bound to another account")
-        credential, credential_hash = issue_device_credential()
-        cursor.execute(
-            """
-            UPDATE devices
-            SET owner_user_id = %s, status = 'offline', bound_at = COALESCE(bound_at, NOW()), updated_at = NOW()
-            WHERE device_id = %s
-            """,
-            (user_id, pairing["device_id"]),
-        )
-        cursor.execute(
-            """
-            INSERT INTO device_credentials (device_id, credential_hash)
-            VALUES (%s, %s)
-            """,
-            (pairing["device_id"], credential_hash),
+        credential = _bind_device_to_user(
+            cursor,
+            user_id=user_id,
+            device_id=pairing["device_id"],
+            client_id=pairing["client_id"],
         )
         cursor.execute(
             """
@@ -136,13 +288,9 @@ def claim_pairing(*, user_id: str, pairing_id: str, code: str) -> dict:
             SET claimed_at = NOW(), claimed_by_user_id = %s
             WHERE pairing_id = %s
             """,
-            (user_id, pairing_id.strip()),
+            (user_id, str(pairing["pairing_id"])),
         )
-    return {
-        "device_id": pairing["device_id"],
-        "client_id": pairing["client_id"],
-        "credential": credential,
-    }
+    return credential
 
 
 def list_user_devices(user_id: str) -> list[dict]:
@@ -173,7 +321,9 @@ def get_user_device(user_id: str, device_id: str) -> dict | None:
         return _device_row(cursor.fetchone())
 
 
-def update_user_device(user_id: str, device_id: str, *, display_name: str | None = None) -> dict | None:
+def update_user_device(
+    user_id: str, device_id: str, *, display_name: str | None = None
+) -> dict | None:
     clean_name = (display_name or "").strip()
     if not clean_name or len(clean_name) > 40:
         raise ValueError("display_name must contain 1-40 characters")
@@ -242,9 +392,13 @@ def authenticate_database_device(device_id: str, client_id: str, credential: str
             (clean_device_id, hash_credential(credential)),
         )
         row = cursor.fetchone()
-        if not row or not row["owner_user_id"] or row["status"] == 'revoked':
+        if not row or not row["owner_user_id"] or row["status"] == "revoked":
             return None
-        if row["client_id"] and clean_client_id and normalize_client_id(row["client_id"]) != clean_client_id:
+        if (
+            row["client_id"]
+            and clean_client_id
+            and normalize_client_id(row["client_id"]) != clean_client_id
+        ):
             return None
         cursor.execute(
             "UPDATE device_credentials SET last_used_at = NOW() WHERE id = %s",
@@ -271,9 +425,15 @@ def validate_device_credential(device_id: str, client_id: str, credential: str) 
         row = cursor.fetchone()
         if not row or row["status"] == "revoked":
             return None
-        if row["client_id"] and clean_client_id and normalize_client_id(row["client_id"]) != clean_client_id:
+        if (
+            row["client_id"]
+            and clean_client_id
+            and normalize_client_id(row["client_id"]) != clean_client_id
+        ):
             return None
-        cursor.execute("UPDATE device_credentials SET last_used_at = NOW() WHERE id = %s", (row["id"],))
+        cursor.execute(
+            "UPDATE device_credentials SET last_used_at = NOW() WHERE id = %s", (row["id"],)
+        )
         return dict(row)
 
 
@@ -294,7 +454,14 @@ def ensure_bootstrap_credential(*, device_id: str) -> str:
     return raw
 
 
-def touch_device(*, device_id: str, client_id: str, firmware_version: str = "", wifi_ssid: str = "", online: bool = True) -> None:
+def touch_device(
+    *,
+    device_id: str,
+    client_id: str,
+    firmware_version: str = "",
+    wifi_ssid: str = "",
+    online: bool = True,
+) -> None:
     with transaction() as conn, conn.cursor() as cursor:
         cursor.execute(
             """
@@ -307,7 +474,13 @@ def touch_device(*, device_id: str, client_id: str, firmware_version: str = "", 
                 last_seen_at = NOW(), wifi_ssid = COALESCE(NULLIF(EXCLUDED.wifi_ssid, ''), devices.wifi_ssid),
                 updated_at = NOW()
             """,
-            (normalize_device_id(device_id), normalize_client_id(client_id), firmware_version.strip(), 'online' if online else 'offline', wifi_ssid.strip()),
+            (
+                normalize_device_id(device_id),
+                normalize_client_id(client_id),
+                firmware_version.strip(),
+                "online" if online else "offline",
+                wifi_ssid.strip(),
+            ),
         )
 
 
@@ -330,7 +503,9 @@ def get_device_speaker_profile(device_id: str) -> dict | None:
         return cursor.fetchone()
 
 
-def save_speaker_sample(*, user_id: str, device_id: str, embedding: list[float], quality_score: float, duration_ms: int) -> dict:
+def save_speaker_sample(
+    *, user_id: str, device_id: str, embedding: list[float], quality_score: float, duration_ms: int
+) -> dict:
     clean_device_id = normalize_device_id(device_id)
     with transaction() as conn, conn.cursor() as cursor:
         cursor.execute(
@@ -338,11 +513,25 @@ def save_speaker_sample(*, user_id: str, device_id: str, embedding: list[float],
             (user_id, clean_device_id),
         )
         profile = cursor.fetchone()
-        profile_id = str(profile["speaker_profile_id"]) if profile else f"speaker_{uuid.uuid4().hex}"
+        profile_id = (
+            str(profile["speaker_profile_id"]) if profile else f"speaker_{uuid.uuid4().hex}"
+        )
         previous = profile.get("embedding") if profile else None
+        if isinstance(previous, str):
+            try:
+                previous = json.loads(previous)
+            except json.JSONDecodeError:
+                previous = []
         previous = previous if isinstance(previous, list) else []
+        if len(previous) != len(embedding) or not all(
+            isinstance(value, (int, float)) for value in previous
+        ):
+            previous = []
         vectors = [previous, embedding] if previous else [embedding]
-        merged = [sum(vector[index] for vector in vectors) / len(vectors) for index in range(len(embedding))]
+        merged = [
+            sum(vector[index] for vector in vectors) / len(vectors)
+            for index in range(len(embedding))
+        ]
         if profile:
             cursor.execute(
                 "UPDATE speaker_profiles SET embedding = %s::jsonb, updated_at = NOW() WHERE speaker_profile_id = %s",
@@ -357,7 +546,16 @@ def save_speaker_sample(*, user_id: str, device_id: str, embedding: list[float],
             "INSERT INTO speaker_enrollment_samples (speaker_profile_id, audio_duration_ms, quality_score, embedding) VALUES (%s, %s, %s, %s::jsonb)",
             (profile_id, duration_ms, quality_score, json.dumps(embedding)),
         )
-    return {"speaker_profile_id": profile_id, "samples_added": 1}
+        cursor.execute(
+            "SELECT COUNT(*) FROM speaker_enrollment_samples WHERE speaker_profile_id = %s",
+            (profile_id,),
+        )
+        samples_total = int(cursor.fetchone()["count"])
+    return {
+        "speaker_profile_id": profile_id,
+        "samples_added": 1,
+        "samples_total": samples_total,
+    }
 
 
 def delete_speaker_profile(user_id: str, device_id: str) -> bool:
@@ -377,7 +575,15 @@ def list_speaker_profile(user_id: str, device_id: str) -> dict | None:
     return profile
 
 
-def record_voice_turn(*, device_id: str, user_id: str | None, request_id: str, speaker: dict[str, object], asr_text: str, audio_duration_ms: int) -> None:
+def record_voice_turn(
+    *,
+    device_id: str,
+    user_id: str | None,
+    request_id: str,
+    speaker: dict[str, object],
+    asr_text: str,
+    audio_duration_ms: int,
+) -> None:
     with transaction() as conn, conn.cursor() as cursor:
         cursor.execute(
             """
@@ -388,7 +594,17 @@ def record_voice_turn(*, device_id: str, user_id: str | None, request_id: str, s
                 speaker_confidence = EXCLUDED.speaker_confidence, verification_status = EXCLUDED.verification_status,
                 asr_text = EXCLUDED.asr_text, audio_duration_ms = EXCLUDED.audio_duration_ms
             """,
-            (device_id, user_id, request_id, speaker.get("speaker_profile_id"), speaker.get("speaker_role", "unknown"), float(speaker.get("confidence", 0.0)), speaker.get("status", "unknown"), asr_text, audio_duration_ms),
+            (
+                device_id,
+                user_id,
+                request_id,
+                speaker.get("speaker_profile_id"),
+                speaker.get("speaker_role", "unknown"),
+                float(speaker.get("confidence", 0.0)),
+                speaker.get("status", "unknown"),
+                asr_text,
+                audio_duration_ms,
+            ),
         )
 
 

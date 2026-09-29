@@ -115,6 +115,50 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS device_provisioning_sessions (
+            session_id TEXT PRIMARY KEY,
+            owner_user_id TEXT NOT NULL,
+            token_hash TEXT NOT NULL UNIQUE,
+            device_id TEXT,
+            client_id TEXT NOT NULL DEFAULT '',
+            expires_at TIMESTAMPTZ NOT NULL,
+            consumed_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS speaker_people (
+            person_id TEXT PRIMARY KEY,
+            owner_user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'collecting'
+                CHECK (status IN ('collecting', 'verifying', 'active')),
+            samples JSONB NOT NULL DEFAULT '[]'::jsonb,
+            sample_hashes JSONB NOT NULL DEFAULT '[]'::jsonb,
+            embedding JSONB NOT NULL DEFAULT '[]'::jsonb,
+            model_id TEXT NOT NULL DEFAULT '',
+            consented_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS speaker_device_calibrations (
+            person_id TEXT PRIMARY KEY REFERENCES speaker_people(person_id) ON DELETE CASCADE,
+            device_id TEXT NOT NULL,
+            owner_user_id TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            samples JSONB NOT NULL,
+            embedding JSONB NOT NULL,
+            verified_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        ALTER TABLE speaker_people
+        ADD COLUMN IF NOT EXISTS sample_hashes JSONB NOT NULL DEFAULT '[]'::jsonb
+        """,
+        """
         CREATE TABLE IF NOT EXISTS speaker_profiles (
             id BIGSERIAL PRIMARY KEY,
             speaker_profile_id TEXT NOT NULL UNIQUE,
@@ -722,6 +766,25 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS firmware_releases (
+            id BIGSERIAL PRIMARY KEY,
+            release_id TEXT NOT NULL UNIQUE,
+            board_type TEXT NOT NULL,
+            board_variant TEXT NOT NULL DEFAULT '',
+            version VARCHAR(80) NOT NULL,
+            cos_object_key TEXT NOT NULL,
+            sha256 CHAR(64) NOT NULL,
+            size_bytes BIGINT NOT NULL CHECK (size_bytes > 0),
+            release_notes JSONB NOT NULL DEFAULT '[]'::jsonb,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft'
+                CHECK (status IN ('draft', 'active', 'revoked')),
+            published_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(board_type, board_variant, version)
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS study_focus_sessions (
             session_id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -773,6 +836,8 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_devices_last_seen ON devices(last_seen_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_device_credentials_device_status ON device_credentials(device_id, status)",
         "CREATE INDEX IF NOT EXISTS idx_device_pairings_expires ON device_pairings(expires_at) WHERE claimed_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_device_provisioning_sessions_expires ON device_provisioning_sessions(expires_at) WHERE consumed_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_device_provisioning_sessions_owner ON device_provisioning_sessions(owner_user_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_speaker_profiles_owner_device ON speaker_profiles(owner_user_id, device_id, status)",
         "CREATE INDEX IF NOT EXISTS idx_device_voice_turns_device_created ON device_voice_turns(device_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)",
@@ -875,6 +940,11 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         """
         CREATE INDEX IF NOT EXISTS idx_app_releases_latest
         ON app_releases(platform, channel, version_code DESC)
+        WHERE status='active'
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_firmware_releases_latest
+        ON firmware_releases(board_type, board_variant, version DESC)
         WHERE status='active'
         """,
     ]

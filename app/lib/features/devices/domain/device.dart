@@ -40,11 +40,11 @@ class EchoDevice {
 
   bool get isOnline => status == 'online';
   String get statusLabel => switch (status) {
-        'online' => '在线',
-        'unclaimed' => '待绑定',
-        'revoked' => '已撤销',
-        _ => '离线',
-      };
+    'online' => '在线',
+    'unclaimed' => '待绑定',
+    'revoked' => '已撤销',
+    _ => '离线',
+  };
 }
 
 class DevicePairingClaim {
@@ -65,6 +65,23 @@ class DevicePairingClaim {
   final String deviceId;
   final String clientId;
   final String credential;
+}
+
+class DeviceProvisioningSession {
+  const DeviceProvisioningSession({
+    required this.claimToken,
+    required this.expiresIn,
+  });
+
+  factory DeviceProvisioningSession.fromJson(Map<String, dynamic> json) {
+    return DeviceProvisioningSession(
+      claimToken: json['claim_token'] as String? ?? '',
+      expiresIn: json['expires_in'] as int? ?? 0,
+    );
+  }
+
+  final String claimToken;
+  final int expiresIn;
 }
 
 class SpeakerProfile {
@@ -100,4 +117,31 @@ class SpeakerProfile {
   final String modelVersion;
   final String? createdAt;
   final String? updatedAt;
+}
+
+class SpeakerEnrollment {
+  const SpeakerEnrollment({
+    required this.speakerProfileId,
+    required this.samplesAdded,
+    required this.samplesTotal,
+    required this.qualityScore,
+    required this.durationMs,
+  });
+
+  factory SpeakerEnrollment.fromJson(Map<String, dynamic> json) {
+    return SpeakerEnrollment(
+      speakerProfileId: json['speaker_profile_id'] as String? ?? '',
+      samplesAdded: json['samples_added'] as int? ?? 0,
+      samplesTotal: json['samples_total'] as int? ??
+          (json['samples_added'] as int? ?? 0),
+      qualityScore: (json['quality_score'] as num?)?.toDouble() ?? 0,
+      durationMs: json['duration_ms'] as int? ?? 0,
+    );
+  }
+
+  final String speakerProfileId;
+  final int samplesAdded;
+  final int samplesTotal;
+  final double qualityScore;
+  final int durationMs;
 }

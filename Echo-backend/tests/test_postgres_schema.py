@@ -30,6 +30,8 @@ class PostgresSchemaTests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS devices", schema_text)
         self.assertIn("CREATE TABLE IF NOT EXISTS device_credentials", schema_text)
         self.assertIn("CREATE TABLE IF NOT EXISTS device_pairings", schema_text)
+        self.assertIn("CREATE TABLE IF NOT EXISTS device_provisioning_sessions", schema_text)
+        self.assertIn("token_hash TEXT NOT NULL UNIQUE", schema_text)
         self.assertIn("CREATE TABLE IF NOT EXISTS speaker_profiles", schema_text)
         self.assertIn("CREATE TABLE IF NOT EXISTS device_voice_turns", schema_text)
         self.assertIn("channel TEXT NOT NULL DEFAULT 'app_chat'", schema_text)
@@ -81,6 +83,13 @@ class PostgresSchemaTests(unittest.TestCase):
         self.assertIn("CREATE TABLE IF NOT EXISTS app_releases", schema_text)
         self.assertIn("UNIQUE(platform, channel, version_code)", schema_text)
         self.assertIn("idx_app_releases_latest", schema_text)
+
+    def test_schema_contains_firmware_releases(self):
+        schema_text = build_postgres_schema_text(vector_dimension=1024)
+
+        self.assertIn("CREATE TABLE IF NOT EXISTS firmware_releases", schema_text)
+        self.assertIn("UNIQUE(board_type, board_variant, version)", schema_text)
+        self.assertIn("idx_firmware_releases_latest", schema_text)
 
 
 if __name__ == "__main__":

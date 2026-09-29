@@ -14,13 +14,18 @@ import android.os.Build
 import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val wifiChannelName = "echo/device_wifi"
+    private val blufiChannelName = "echo/device_blufi"
+    private val blufiEventsChannelName = "echo/device_blufi/events"
     private var wifiCallback: ConnectivityManager.NetworkCallback? = null
     private var wifiNetwork: Network? = null
     private lateinit var directUpdatePlugin: DirectUpdatePlugin
+    private lateinit var blufiBridge: BlufiProvisioningBridge
+    private var blufiEventSink: EventChannel.EventSink? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +46,11 @@ class MainActivity : FlutterActivity() {
         directUpdatePlugin = DirectUpdatePlugin(this)
         directUpdatePlugin.register(flutterEngine.dartExecutor.binaryMessenger)
         directUpdatePlugin.handleInstallResult(intent)
+        blufiBridge = BlufiProvisioningBridge(this) { event ->
+            runOnUiThread {
+                blufiEventSink?.success(event)
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, wifiChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "connectToHotspot" -> connectToHotspot(call.argument<String>("ssid"), result)
@@ -52,6 +62,55 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            blufiChannelName,
+        ).setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "start" -> {
+                        val address = call.argument<String>("address")
+                        blufiBridge.start(address ?: error("BLE 设备地址不能为空"))
+                        result.success(null)
+                    }
+
+                    "configure" -> {
+                        val ssid = call.argument<String>("ssid") ?: ""
+                        val password = call.argument<String>("password") ?: ""
+                        val claimToken = call.argument<String>("claimToken") ?: ""
+                        blufiBridge.configure(ssid, password, claimToken)
+                        result.success(null)
+                    }
+
+                    "disconnect" -> {
+                        blufiBridge.close()
+                        result.success(null)
+                    }
+
+                    else -> result.notImplemented()
+                }
+            } catch (error: IllegalArgumentException) {
+                result.error("BLUFI_ERROR", error.message, null)
+            } catch (error: IllegalStateException) {
+                result.error("BLUFI_ERROR", error.message, null)
+            } catch (error: SecurityException) {
+                result.error("BLUFI_PERMISSION_ERROR", error.message, null)
+            } catch (error: Exception) {
+                result.error("BLUFI_ERROR", error.message ?: "BluFi 操作失败", null)
+            }
+        }
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            blufiEventsChannelName,
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                blufiEventSink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                blufiEventSink = null
+            }
+        })
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -64,6 +123,9 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         disconnectFromHotspot(null)
+        if (::blufiBridge.isInitialized) {
+            blufiBridge.close(silent = true)
+        }
         if (::directUpdatePlugin.isInitialized) {
             directUpdatePlugin.dispose()
         }

@@ -1,10 +1,15 @@
-from pydantic import BaseModel, Field
 from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class DeviceFirmwareResponse(BaseModel):
     version: str = ""
     url: str = ""
+    sha256: str = ""
+    size_bytes: int = 0
+    board_type: str = ""
+    board_variant: str = ""
 
 
 class DeviceWebSocketConfig(BaseModel):
@@ -29,6 +34,11 @@ class DeviceBootstrapResponse(BaseModel):
 class DevicePairingResponse(BaseModel):
     pairing_id: str
     code: str
+    expires_in: int
+
+
+class DeviceProvisioningSessionResponse(BaseModel):
+    claim_token: str
     expires_in: int
 
 
@@ -83,5 +93,6 @@ class SpeakerProfileResponse(BaseModel):
 class SpeakerEnrollmentResponse(BaseModel):
     speaker_profile_id: str
     samples_added: int
+    samples_total: int
     quality_score: float
     duration_ms: int

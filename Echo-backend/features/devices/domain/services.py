@@ -20,6 +20,7 @@ class DeviceConversationService(Protocol):
         synthesize_voice: bool = True,
         speaker_role: str | None = None,
         speaker_confidence: float = 0.0,
+        speaker_name: str | None = None,
     ) -> DeviceTurnResult: ...
 
 

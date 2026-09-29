@@ -52,6 +52,7 @@ class SendChatMessage:
         message_visibility: str = CHAT_VISIBILITY_MAIN,
         speaker_role: str | None = None,
         speaker_confidence: float = 0.0,
+        speaker_name: str | None = None,
         memory_enabled: bool = True,
     ) -> ChatReplyDeliveryResult:
         clean_user_id = user_id.strip()
@@ -77,6 +78,7 @@ class SendChatMessage:
             message_visibility,
             speaker_role,
             speaker_confidence,
+            speaker_name,
             memory_enabled,
         )
         claimed_request = False
@@ -122,6 +124,7 @@ class SendChatMessage:
                 generator_kwargs.update(
                     speaker_role=speaker_role,
                     speaker_confidence=speaker_confidence,
+                    speaker_name=speaker_name,
                     memory_enabled=memory_enabled,
                 )
             chat_result = await self.chat_reply_generator.execute(**generator_kwargs)
@@ -186,6 +189,7 @@ class SendChatMessage:
         message_visibility: str,
         speaker_role: str | None,
         speaker_confidence: float,
+        speaker_name: str | None,
         memory_enabled: bool,
     ) -> str:
         payload = {
@@ -202,6 +206,7 @@ class SendChatMessage:
             ],
             "speaker_role": speaker_role,
             "speaker_confidence": speaker_confidence,
+            "speaker_name": speaker_name,
             "memory_enabled": memory_enabled,
         }
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")

@@ -224,6 +224,7 @@ class GenerateChatReply:
         tools_enabled: bool | None = None,
         speaker_role: str | None = None,
         speaker_confidence: float = 0.0,
+        speaker_name: str | None = None,
         memory_enabled: bool = True,
     ) -> PreparedChatReply:
         clean_user_id = user_id.strip()
@@ -259,13 +260,19 @@ class GenerateChatReply:
         if self.agent_orchestrator is None:
             raise RuntimeError("Unified Agent runtime is not configured")
         if speaker_role:
+            safe_name = (speaker_name or "").strip()[:40]
             context.messages.append(
                 {
                     "role": "system",
                     "content": (
                         f"当前设备声纹判断：{speaker_role}，置信度 {max(0.0, min(1.0, speaker_confidence)):.2f}。"
                         if speaker_role == "owner"
-                        else "当前设备声纹未确认主人身份。"
+                        else (
+                            f"当前说话者的声纹匹配称呼为{safe_name!r}，仅可用作称呼；"
+                            "这不是身份授权，不得透露账号历史、记忆或私人信息。"
+                            if speaker_role == "known" and safe_name
+                            else "当前设备声纹未确认主人身份。"
+                        )
                     ),
                 }
             )
@@ -474,6 +481,7 @@ class GenerateChatReply:
         message_visibility: str = CHAT_VISIBILITY_MAIN,
         speaker_role: str | None = None,
         speaker_confidence: float = 0.0,
+        speaker_name: str | None = None,
         memory_enabled: bool = True,
     ) -> ChatTurnResult:
         clean_user_id = user_id.strip()
@@ -502,6 +510,7 @@ class GenerateChatReply:
             tools_enabled=tools_enabled,
             speaker_role=speaker_role,
             speaker_confidence=speaker_confidence,
+            speaker_name=speaker_name,
             memory_enabled=memory_enabled,
         )
         logger.info(

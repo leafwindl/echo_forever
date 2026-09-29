@@ -35,6 +35,7 @@ class EchoConversationService:
         synthesize_voice: bool = True,
         speaker_role: str | None = None,
         speaker_confidence: float = 0.0,
+        speaker_name: str | None = None,
     ) -> DeviceTurnResult:
         send_kwargs = {
             "user_id": user_id,
@@ -51,7 +52,9 @@ class EchoConversationService:
             send_kwargs.update(
                 speaker_role=speaker_role,
                 speaker_confidence=speaker_confidence,
+                speaker_name=speaker_name if speaker_role == "known" else None,
                 memory_enabled=speaker_role == "owner",
+                tools_enabled=speaker_role == "owner",
             )
         result = await send_chat_message(
             **send_kwargs,

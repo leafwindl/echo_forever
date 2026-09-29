@@ -1,6 +1,9 @@
 import 'package:echo_app/features/devices/domain/device.dart';
+import 'package:echo_app/features/devices/presentation/device_ble_provisioning_page.dart';
 import 'package:echo_app/features/devices/presentation/device_controller.dart';
+import 'package:echo_app/features/devices/presentation/device_network_connection_dialog.dart';
 import 'package:echo_app/features/devices/presentation/device_provisioning_page.dart';
+import 'package:echo_app/features/devices/presentation/speaker_people_dialog.dart';
 import 'package:echo_app/shared/widgets/echo_error_view.dart';
 import 'package:echo_app/shared/widgets/echo_loading_view.dart';
 import 'package:flutter/material.dart';
@@ -24,11 +27,6 @@ class DevicesPage extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showClaimDialog(context, ref),
-        icon: const Icon(Icons.add_link_rounded),
-        label: const Text('绑定设备'),
-      ),
       body: state.when(
         loading: () => const EchoLoadingView(label: '正在加载设备'),
         error: (error, _) => EchoErrorView(
@@ -46,11 +44,18 @@ class DevicesPage extends ConsumerWidget {
                     const Text('还没有绑定 Echo 设备'),
                     const SizedBox(height: 16),
                     OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const DeviceProvisioningPage(),
-                        ),
-                      ),
+                      onPressed: () async {
+                        await Navigator.of(context).push<bool>(
+                          MaterialPageRoute<bool>(
+                            builder: (_) => const DeviceBleProvisioningPage(),
+                          ),
+                        );
+                        if (context.mounted) {
+                          await ref
+                              .read(deviceControllerProvider.notifier)
+                              .refresh();
+                        }
+                      },
                       icon: const Icon(Icons.wifi_tethering_rounded),
                       label: const Text('先为设备配网'),
                     ),
@@ -73,69 +78,6 @@ class DevicesPage extends ConsumerWidget {
         },
       ),
     );
-  }
-
-  Future<void> _showClaimDialog(BuildContext context, WidgetRef ref) async {
-    final pairingController = TextEditingController();
-    final codeController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    final claimed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('绑定 Echo'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: pairingController,
-                decoration: const InputDecoration(labelText: '配对会话 ID（可选）'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: codeController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: '6 位配对码'),
-                validator: (value) =>
-                    value == null || !RegExp(r'^\d{6}$').hasMatch(value.trim())
-                    ? '请输入 6 位数字'
-                    : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              if (!(formKey.currentState?.validate() ?? false)) return;
-              final ok = await ref
-                  .read(deviceControllerProvider.notifier)
-                  .claimPairing(
-                    pairingId: pairingController.text.trim(),
-                    code: codeController.text.trim(),
-                  );
-              if (dialogContext.mounted) Navigator.of(dialogContext).pop(ok);
-            },
-            child: const Text('绑定'),
-          ),
-        ],
-      ),
-    );
-    pairingController.dispose();
-    codeController.dispose();
-    if (claimed == false && context.mounted) {
-      final error = ref.read(deviceControllerProvider).asData?.value.error;
-      if (error != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.detail ?? '设备操作失败')));
-      }
-    }
   }
 }
 
@@ -173,36 +115,78 @@ class _DeviceTile extends ConsumerWidget {
       context: context,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.wifi_tethering_rounded),
-              title: const Text('重新配网'),
-              subtitle: const Text('连接设备热点并设置家庭 Wi-Fi'),
-              onTap: () => Navigator.pop(sheetContext, 'provision'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('重命名'),
-              onTap: () => Navigator.pop(sheetContext, 'rename'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.key_outlined),
-              title: const Text('轮换设备凭证'),
-              onTap: () => Navigator.pop(sheetContext, 'rotate'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.link_off_rounded),
-              title: const Text('解绑设备'),
-              onTap: () => Navigator.pop(sheetContext, 'unbind'),
-            ),
-          ],
+        child: FractionallySizedBox(
+          heightFactor: 0.92,
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 12),
+            shrinkWrap: true,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.network_check_rounded),
+                title: const Text('设备检测'),
+                onTap: () => Navigator.pop(sheetContext, 'ble_connect'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.bluetooth_searching_rounded),
+                title: const Text('蓝牙配网'),
+                subtitle: const Text('扫描并连接 Echo BLE 设备'),
+                onTap: () => Navigator.pop(sheetContext, 'ble_provision'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.wifi_tethering_rounded),
+                title: const Text('重新配网'),
+                subtitle: const Text('连接设备热点并设置家庭 Wi-Fi'),
+                onTap: () => Navigator.pop(sheetContext, 'provision'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('重命名'),
+                onTap: () => Navigator.pop(sheetContext, 'rename'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.key_outlined),
+                title: const Text('轮换设备凭证'),
+                onTap: () => Navigator.pop(sheetContext, 'rotate'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.record_voice_over_rounded),
+                title: const Text('人员声纹'),
+                onTap: () => Navigator.pop(sheetContext, 'speaker'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.link_off_rounded),
+                title: const Text('解绑设备'),
+                onTap: () => Navigator.pop(sheetContext, 'unbind'),
+              ),
+            ],
+          ),
         ),
       ),
     );
     if (!context.mounted) return;
-    if (action == 'provision') {
+    if (action == 'ble_connect') {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => DeviceNetworkConnectionDialog(
+          connect: () async {
+            return controller.connectDevice(device.deviceId);
+          },
+        ),
+      );
+      if (context.mounted) {
+        await controller.refresh();
+      }
+    } else if (action == 'ble_provision') {
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          builder: (_) => const DeviceBleProvisioningPage(),
+        ),
+      );
+      if (context.mounted) {
+        await controller.refresh();
+      }
+    } else if (action == 'provision') {
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(builder: (_) => const DeviceProvisioningPage()),
       );
@@ -272,6 +256,12 @@ class _DeviceTile extends ConsumerWidget {
           ),
         );
       }
+    } else if (action == 'speaker') {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => SpeakerPeopleDialog(deviceId: device.deviceId),
+      );
     }
   }
 }

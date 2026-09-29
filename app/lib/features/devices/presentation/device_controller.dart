@@ -50,21 +50,77 @@ class DeviceController extends AsyncNotifier<DeviceState> {
     state = AsyncData(current.copyWith(isBusy: true, clearError: true));
     try {
       final devices = await ref.read(deviceRepositoryProvider).listDevices();
-      state = AsyncData(current.copyWith(devices: devices, isBusy: false, clearError: true));
+      state = AsyncData(
+        current.copyWith(devices: devices, isBusy: false, clearError: true),
+      );
     } on Object catch (error) {
-      state = AsyncData(current.copyWith(isBusy: false, error: _asException(error)));
+      state = AsyncData(
+        current.copyWith(isBusy: false, error: _asException(error)),
+      );
     }
   }
 
-  Future<bool> claimPairing({required String pairingId, required String code}) async {
+  Future<bool> waitUntilOnline(String deviceId) async {
+    final repository = ref.read(deviceRepositoryProvider);
+    for (var attempt = 0; attempt < 20; attempt++) {
+      final devices = await repository.listDevices();
+      EchoDevice? device;
+      for (final item in devices) {
+        if (item.deviceId == deviceId) {
+          device = item;
+          break;
+        }
+      }
+      if (device?.isOnline == true) {
+        state = AsyncData(
+          (state.asData?.value ?? const DeviceState(devices: [])).copyWith(
+            devices: devices,
+            clearError: true,
+          ),
+        );
+        return true;
+      }
+      if (attempt < 19) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+    }
+    await refresh();
+    return false;
+  }
+
+  Future<bool> connectDevice(String deviceId) async {
+    try {
+      await ref.read(deviceRepositoryProvider).connectDevice(deviceId);
+      state = AsyncData(
+        (state.asData?.value ?? const DeviceState(devices: [])).copyWith(clearError: true),
+      );
+      return true;
+    } on Object catch (error) {
+      state = AsyncData(
+        (state.asData?.value ?? const DeviceState(devices: [])).copyWith(
+          error: _asException(error),
+        ),
+      );
+      rethrow;
+    }
+  }
+
+  Future<bool> claimPairing({
+    required String pairingId,
+    required String code,
+  }) async {
     final current = state.asData?.value ?? const DeviceState(devices: []);
     state = AsyncData(current.copyWith(isBusy: true, clearError: true));
     try {
-      await ref.read(deviceRepositoryProvider).claimPairing(pairingId: pairingId, code: code);
+      await ref
+          .read(deviceRepositoryProvider)
+          .claimPairing(pairingId: pairingId, code: code);
       await refresh();
       return true;
     } on Object catch (error) {
-      state = AsyncData(current.copyWith(isBusy: false, error: _asException(error)));
+      state = AsyncData(
+        current.copyWith(isBusy: false, error: _asException(error)),
+      );
       return false;
     }
   }
@@ -73,12 +129,20 @@ class DeviceController extends AsyncNotifier<DeviceState> {
     final current = state.asData?.value ?? const DeviceState(devices: []);
     state = AsyncData(current.copyWith(isBusy: true, clearError: true));
     try {
-      final updated = await ref.read(deviceRepositoryProvider).updateDevice(device.deviceId, name);
-      final devices = current.devices.map((item) => item.deviceId == updated.deviceId ? updated : item).toList();
-      state = AsyncData(current.copyWith(devices: devices, isBusy: false, clearError: true));
+      final updated = await ref
+          .read(deviceRepositoryProvider)
+          .updateDevice(device.deviceId, name);
+      final devices = current.devices
+          .map((item) => item.deviceId == updated.deviceId ? updated : item)
+          .toList();
+      state = AsyncData(
+        current.copyWith(devices: devices, isBusy: false, clearError: true),
+      );
       return true;
     } on Object catch (error) {
-      state = AsyncData(current.copyWith(isBusy: false, error: _asException(error)));
+      state = AsyncData(
+        current.copyWith(isBusy: false, error: _asException(error)),
+      );
       return false;
     }
   }
@@ -88,26 +152,65 @@ class DeviceController extends AsyncNotifier<DeviceState> {
     state = AsyncData(current.copyWith(isBusy: true, clearError: true));
     try {
       await ref.read(deviceRepositoryProvider).unbindDevice(device.deviceId);
-      state = AsyncData(current.copyWith(
-        devices: current.devices.where((item) => item.deviceId != device.deviceId).toList(),
-        isBusy: false,
-        clearError: true,
-      ));
+      state = AsyncData(
+        current.copyWith(
+          devices: current.devices
+              .where((item) => item.deviceId != device.deviceId)
+              .toList(),
+          isBusy: false,
+          clearError: true,
+        ),
+      );
       return true;
     } on Object catch (error) {
-      state = AsyncData(current.copyWith(isBusy: false, error: _asException(error)));
+      state = AsyncData(
+        current.copyWith(isBusy: false, error: _asException(error)),
+      );
       return false;
     }
   }
 
   Future<SpeakerProfile?> loadSpeaker(EchoDevice device) async {
     try {
-      final profile = await ref.read(deviceRepositoryProvider).getSpeaker(device.deviceId);
+      final profile = await ref
+          .read(deviceRepositoryProvider)
+          .getSpeaker(device.deviceId);
       final current = state.asData?.value ?? const DeviceState(devices: []);
-      state = AsyncData(current.copyWith(speakers: <String, SpeakerProfile?>{...current.speakers, device.deviceId: profile}));
+      state = AsyncData(
+        current.copyWith(
+          speakers: <String, SpeakerProfile?>{
+            ...current.speakers,
+            device.deviceId: profile,
+          },
+        ),
+      );
       return profile;
     } on Object catch (error) {
-      state = AsyncData((state.asData?.value ?? const DeviceState(devices: [])).copyWith(error: _asException(error)));
+      state = AsyncData(
+        (state.asData?.value ?? const DeviceState(devices: [])).copyWith(
+          error: _asException(error),
+        ),
+      );
+      return null;
+    }
+  }
+
+  Future<SpeakerEnrollment?> enrollSpeaker(
+    EchoDevice device,
+    List<int> pcm16Audio,
+  ) async {
+    try {
+      final result = await ref
+          .read(deviceRepositoryProvider)
+          .enrollSpeaker(device.deviceId, pcm16Audio);
+      await loadSpeaker(device);
+      return result;
+    } on Object catch (error) {
+      state = AsyncData(
+        (state.asData?.value ?? const DeviceState(devices: [])).copyWith(
+          error: _asException(error),
+        ),
+      );
       return null;
     }
   }
@@ -116,17 +219,36 @@ class DeviceController extends AsyncNotifier<DeviceState> {
     try {
       await ref.read(deviceRepositoryProvider).deleteSpeaker(device.deviceId);
       final current = state.asData?.value ?? const DeviceState(devices: []);
-      state = AsyncData(current.copyWith(speakers: <String, SpeakerProfile?>{...current.speakers, device.deviceId: null}, clearError: true));
+      state = AsyncData(
+        current.copyWith(
+          speakers: <String, SpeakerProfile?>{
+            ...current.speakers,
+            device.deviceId: null,
+          },
+          clearError: true,
+        ),
+      );
       return true;
     } on Object catch (error) {
-      state = AsyncData((state.asData?.value ?? const DeviceState(devices: [])).copyWith(error: _asException(error)));
+      state = AsyncData(
+        (state.asData?.value ?? const DeviceState(devices: [])).copyWith(
+          error: _asException(error),
+        ),
+      );
       return false;
     }
   }
 
-  AppException _asException(Object error) => error is AppException ? error : const AppException(kind: AppExceptionKind.unexpected);
+  AppException _asException(Object error) => error is AppException
+      ? error
+      : const AppException(kind: AppExceptionKind.unexpected);
 }
 
-final deviceApiProvider = Provider<DeviceApi>((ref) => DeviceApi(ref.watch(authenticatedDioClientProvider)));
-final deviceRepositoryProvider = Provider<DeviceRepository>((ref) => DeviceRepositoryImpl(ref.watch(deviceApiProvider)));
-final deviceControllerProvider = AsyncNotifierProvider<DeviceController, DeviceState>(DeviceController.new);
+final deviceApiProvider = Provider<DeviceApi>(
+  (ref) => DeviceApi(ref.watch(authenticatedDioClientProvider)),
+);
+final deviceRepositoryProvider = Provider<DeviceRepository>(
+  (ref) => DeviceRepositoryImpl(ref.watch(deviceApiProvider)),
+);
+final deviceControllerProvider =
+    AsyncNotifierProvider<DeviceController, DeviceState>(DeviceController.new);

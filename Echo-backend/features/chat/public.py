@@ -80,6 +80,7 @@ async def generate_chat_reply(
     message_visibility: str = CHAT_VISIBILITY_MAIN,
     speaker_role: str | None = None,
     speaker_confidence: float = 0.0,
+    speaker_name: str | None = None,
     memory_enabled: bool = True,
 ) -> ChatTurnResult:
     use_case = get_generate_chat_reply_use_case()
@@ -99,6 +100,7 @@ async def generate_chat_reply(
         message_visibility=message_visibility,
         speaker_role=speaker_role,
         speaker_confidence=speaker_confidence,
+        speaker_name=speaker_name,
         memory_enabled=memory_enabled,
     )
 
@@ -119,6 +121,7 @@ async def send_chat_message(
     message_visibility: str = CHAT_VISIBILITY_MAIN,
     speaker_role: str | None = None,
     speaker_confidence: float = 0.0,
+    speaker_name: str | None = None,
     memory_enabled: bool = True,
 ) -> ChatReplyDeliveryResult:
     use_case = get_send_chat_message_use_case()
@@ -138,6 +141,7 @@ async def send_chat_message(
         message_visibility=message_visibility,
         speaker_role=speaker_role,
         speaker_confidence=speaker_confidence,
+        speaker_name=speaker_name,
         memory_enabled=memory_enabled,
     )
 
