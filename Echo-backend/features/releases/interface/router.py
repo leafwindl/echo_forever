@@ -109,7 +109,8 @@ def _download_filename(release: AppRelease) -> str:
     version = re.sub(r"[^0-9A-Za-z._-]+", "-", release.version_name).strip(".-_")
     if not version:
         version = str(release.version_code)
-    return f"Echo-v{version}.apk"
+    suffix = ".hap" if release.platform == "harmonyos" else ".apk"
+    return f"Echo-v{version}{suffix}"
 
 
 def _download_url(
@@ -132,7 +133,7 @@ def latest_release(
     request: Request,
     response: Response,
     repository: Annotated[PostgresReleaseRepository, Depends(get_release_repository)],
-    platform: Literal["android"] = Query(default="android"),
+    platform: Literal["android", "harmonyos"] = Query(default="android"),
     channel: Literal["internal"] = Query(default="internal"),
     version_code: int = Query(gt=0),
 ) -> LatestReleaseResponse:
@@ -156,6 +157,27 @@ def bootstrap_android_release(
 ) -> RedirectResponse:
     _consume_rate_limit(request, "bootstrap")
     release = repository.find_latest("android", channel)
+    if release is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Release is unavailable",
+        )
+    return RedirectResponse(
+        _download_url(request, release, storage),
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.get("/bootstrap/harmonyos", response_class=RedirectResponse)
+def bootstrap_harmony_release(
+    request: Request,
+    repository: Annotated[PostgresReleaseRepository, Depends(get_release_repository)],
+    storage: Annotated[CosObjectStorage, Depends(get_cos_object_storage)],
+    channel: Literal["internal"] = Query(default="internal"),
+) -> RedirectResponse:
+    _consume_rate_limit(request, "bootstrap")
+    release = repository.find_latest("harmonyos", channel)
     if release is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -201,7 +223,11 @@ def release_artifact(
         )
     return StreamingResponse(
         storage.stream_bytes(release.cos_object_key),
-        media_type="application/vnd.android.package-archive",
+        media_type=(
+            "application/vnd.huawei.hap"
+            if release.platform == "harmonyos"
+            else "application/vnd.android.package-archive"
+        ),
         headers={
             "Cache-Control": "private, no-store",
             "Content-Disposition": (f'attachment; filename="{_download_filename(release)}"'),

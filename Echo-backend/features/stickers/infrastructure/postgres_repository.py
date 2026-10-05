@@ -166,7 +166,7 @@ class PostgresStickerRepository:
         self,
         user_id: str,
         query: str = "",
-        limit: int = 50,
+        limit: int = 100,
         *,
         conversation_id: str | None = None,
         purpose: str = "explicit_request",

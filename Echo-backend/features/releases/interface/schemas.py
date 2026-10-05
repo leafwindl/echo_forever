@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class ReleaseResponse(BaseModel):
     release_id: str
-    platform: Literal["android"]
+    platform: Literal["android", "harmonyos"]
     channel: Literal["internal"]
     package_name: str
     version_name: str
@@ -25,7 +25,7 @@ class LatestReleaseResponse(BaseModel):
 
 
 class ReleaseDownloadRequest(BaseModel):
-    platform: Literal["android"] = "android"
+    platform: Literal["android", "harmonyos"] = "android"
     channel: Literal["internal"] = "internal"
     version_code: int = Field(gt=0)
 

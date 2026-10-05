@@ -232,6 +232,32 @@ class ReleaseFeatureTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_harmony_release_uses_hap_metadata_and_content_type(self):
+        self.repository.release = release_fixture(
+            platform="harmonyos",
+            package_name="cn.echoaiforever.echo_app.dev",
+            cos_object_key="echo/releases/harmonyos/internal/1.1.8+24/entry.hap",
+        )
+        latest = self.client.get(
+            "/releases/latest",
+            params={"platform": "harmonyos", "channel": "internal", "version_code": 2},
+        )
+        self.assertEqual(latest.status_code, 200)
+        self.assertEqual(latest.json()["release"]["platform"], "harmonyos")
+
+        download = self.client.post(
+            "/releases/release_test/download",
+            json={"platform": "harmonyos", "channel": "internal", "version_code": 2},
+        )
+        self.assertEqual(download.status_code, 200)
+        artifact = self.client.get(download.json()["download_url"])
+        self.assertEqual(artifact.status_code, 200)
+        self.assertEqual(artifact.headers["content-type"], "application/vnd.huawei.hap")
+        self.assertEqual(
+            artifact.headers["content-disposition"],
+            'attachment; filename="Echo-v1.0.0.hap"',
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

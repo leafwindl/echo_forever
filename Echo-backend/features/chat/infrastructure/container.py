@@ -25,6 +25,9 @@ from features.chat.infrastructure.async_postgres_repository import (
     PostgresAsyncChatRepository,
 )
 from features.chat.infrastructure.events import get_chat_event_broker
+from features.proactive_chat.infrastructure.postgres_repository import (
+    PostgresProactiveChatRepository,
+)
 
 _generate_chat_reply_use_case: GenerateChatReply | None = None
 _send_chat_message_use_case: SendChatMessage | None = None
@@ -57,6 +60,7 @@ def get_generate_chat_reply_use_case() -> GenerateChatReply:
             relationship_recorder=RelationshipTurnRecorderAdapter(),
             agent_orchestrator=ChatAgentOrchestratorAdapter(),
             proactive_planner=ProactiveDecisionPlannerAdapter(),
+            schedule_repository=PostgresProactiveChatRepository(),
             summary_update_in_background=True,
             call_reply_max_chars=settings.call_reply_max_chars,
         )

@@ -43,7 +43,7 @@ def _response(item) -> StickerResponse:
 def list_stickers(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     query: str = Query(default="", max_length=100),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=100, ge=1, le=100),
 ):
     return StickerListResponse(
         items=[
@@ -52,7 +52,7 @@ def list_stickers(
                 current_user.user_id,
                 query,
                 limit,
-                include_echo=False,
+                include_echo=True,
                 include_user=True,
             )
         ]

@@ -132,7 +132,7 @@ class StickersState {
 }
 
 class StickersController extends AsyncNotifier<StickersState> {
-  static const int defaultLimit = 50;
+  static const int defaultLimit = 100;
   static const int maxUploadBytes = 5 * 1024 * 1024;
   static const List<String> _allowedExtensions = <String>[
     '.png',

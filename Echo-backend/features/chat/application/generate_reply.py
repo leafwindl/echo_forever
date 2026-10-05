@@ -3,6 +3,7 @@ import inspect
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 from features.agent.domain.delivery import (
     build_natural_delivery_plan,
@@ -30,6 +31,9 @@ from features.chat.domain.services import (
     ConversationSummaryUpdater,
     MemoryExtractionScheduler,
     RelationshipTurnRecorder,
+)
+from features.proactive_chat.application.explicit_reminders import (
+    parse_explicit_relative_reminder,
 )
 
 logger = logging.getLogger(__name__)
@@ -86,6 +90,7 @@ class GenerateChatReply:
         relationship_recorder: RelationshipTurnRecorder | None = None,
         agent_orchestrator: ChatAgentOrchestrator | None = None,
         proactive_planner: ProactiveDecisionPlanner | None = None,
+        schedule_repository=None,
         summary_update_in_background: bool = False,
         call_reply_max_chars: int = 80,
     ):
@@ -96,6 +101,7 @@ class GenerateChatReply:
         self.relationship_recorder = relationship_recorder
         self.agent_orchestrator = agent_orchestrator
         self.proactive_planner = proactive_planner
+        self.schedule_repository = schedule_repository
         self.summary_update_in_background = summary_update_in_background
         self.call_reply_max_chars = call_reply_max_chars
         self._summary_tasks: set[asyncio.Task[bool]] = set()
@@ -272,6 +278,34 @@ class GenerateChatReply:
             raise ChatValidationError("Missing user_id")
         if not clean_message:
             raise ChatValidationError("Empty message")
+
+        if conversation_mode == "chat" and self.schedule_repository is not None:
+            reminder = parse_explicit_relative_reminder(
+                clean_message,
+                now=datetime.now(UTC),
+            )
+            if reminder is not None:
+                try:
+                    schedule = self.schedule_repository.create_schedule(
+                        user_id=clean_user_id,
+                        conversation_id=conversation_id,
+                        created_by="user_request",
+                        schedule_type="once",
+                        intent=reminder.intent,
+                        user_visible_label=reminder.user_visible_label,
+                        local_datetime=reminder.local_datetime,
+                        timezone=reminder.timezone,
+                    )
+                except (ValueError, RuntimeError):
+                    logger.exception("Explicit relative reminder creation failed")
+                else:
+                    label = schedule.user_visible_label or schedule.intent
+                    confirmation = f"好，已经帮你设置好了：{label}。"
+                    return PreparedChatReply(
+                        reply=confirmation,
+                        reply_segments=(confirmation,),
+                        run_id=schedule.schedule_id,
+                    )
 
         context_started_at = time.perf_counter()
         context_kwargs = {}
