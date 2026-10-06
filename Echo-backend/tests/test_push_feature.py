@@ -154,6 +154,8 @@ class GetuiNotificationSenderTests(unittest.IsolatedAsyncioTestCase):
         notification = body["push_message"]["notification"]
         self.assertEqual(notification["body"], "Echo 发来了一条消息")
         self.assertEqual(notification["click_type"], "payload")
+        self.assertNotIn("slot_type", notification)
+        self.assertNotIn("push_channel", body)
         self.assertEqual(json.loads(notification["payload"])["route"], "chat")
         self.assertEqual(repository.sent, ("notification-1", ("device-1",)))
 
@@ -222,6 +224,21 @@ class GetuiNotificationSenderTests(unittest.IsolatedAsyncioTestCase):
             b"harmony-app-key1000000harmony-master-secret"
         ).hexdigest()
         self.assertEqual(auth_request["json"]["sign"], expected_sign)
+        body = client.requests[1][1]["json"]
+        notification = body["push_message"]["notification"]
+        self.assertEqual(notification["slot_type"], 1)
+        vendor_notification = body["push_channel"]["harmony"]["notification"]
+        self.assertEqual(vendor_notification["category"], "social")
+        self.assertEqual(vendor_notification["click_type"], "startapp")
+        want = json.loads(vendor_notification["want"])
+        self.assertEqual(want["bundleName"], "cn.echoaiforever.echo_app.dev")
+        self.assertEqual(want["abilityName"], "EntryAbility")
+        self.assertEqual(want["action"], "action.system.home")
+        self.assertEqual(want["parameters"]["route"], "chat")
+        self.assertEqual(
+            json.loads(want["parameters"]["payload"])["route"],
+            "chat",
+        )
         self.assertEqual(repository.sent, ("notification-1", ("device-harmony",)))
 
     async def test_missing_credentials_uses_existing_retry_policy(self):

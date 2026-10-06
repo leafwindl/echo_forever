@@ -17,6 +17,9 @@ from features.push.infrastructure.postgres_repository import (
 
 logger = logging.getLogger(__name__)
 
+_HARMONY_BUNDLE_NAME = "cn.echoaiforever.echo_app.dev"
+_HARMONY_ABILITY_NAME = "EntryAbility"
+
 
 @dataclass(frozen=True)
 class _AccessToken:
@@ -219,22 +222,52 @@ class GetuiNotificationSender:
             separators=(",", ":"),
         )
         request_id = hashlib.sha256(item.notification_id.encode()).hexdigest()[:32]
-        return {
+        notification = {
+            "title": item.title or "Echo",
+            "body": body or "Echo 发来了一条消息",
+            "click_type": "payload",
+            "payload": click_payload,
+            "channel_id": "echo_messages",
+            "channel_name": "Echo 消息",
+            "channel_level": 4,
+        }
+        request: dict[str, object] = {
             "request_id": request_id,
             "settings": {"ttl": 3_600_000},
             "audience": {"cid": [target.token]},
             "push_message": {
-                "notification": {
-                    "title": item.title or "Echo",
-                    "body": body or "Echo 发来了一条消息",
-                    "click_type": "payload",
-                    "payload": click_payload,
-                    "channel_id": "echo_messages",
-                    "channel_name": "Echo 消息",
-                    "channel_level": 4,
-                }
+                "notification": notification,
             },
         }
+        if target.platform == "harmonyos":
+            # HarmonyOS otherwise classifies the notification as an unknown
+            # slot and suppresses the banner, icon, sound, and vibration.
+            notification["slot_type"] = 1
+            request["push_channel"] = {
+                "harmony": {
+                    "notification": {
+                        "title": notification["title"],
+                        "body": notification["body"],
+                        "category": "social",
+                        "click_type": "startapp",
+                        "want": json.dumps(
+                            {
+                                "deviceId": "",
+                                "bundleName": _HARMONY_BUNDLE_NAME,
+                                "abilityName": _HARMONY_ABILITY_NAME,
+                                "action": "action.system.home",
+                                "parameters": {
+                                    "route": "chat",
+                                    "payload": click_payload,
+                                },
+                            },
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        ),
+                    }
+                }
+            }
+        return request
 
     @staticmethod
     def _response_payload(response: httpx.Response) -> dict[str, object]:
