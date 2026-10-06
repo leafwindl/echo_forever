@@ -160,6 +160,7 @@ const { StartupHarness } = compile(`
     }
     describeError(error) { return String(error); }
     scrollChatToBottom() { this.scrolled++; }
+    registerHarmonyPushToken() { return Promise.resolve(); }
     startEvents() { this.streams++; return new Promise(() => {}); }
     greetingMessage() { return { id: 0, content: 'greeting' }; }
     restartGreetingMessage() { return { id: 0, content: 'restart' }; }

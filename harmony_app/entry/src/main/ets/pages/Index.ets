@@ -14,7 +14,6 @@ import {
   ChatMessage,
   ChatSchedule,
   DailyLetter,
-  EchoDevice,
   MemoryListResult,
   MemoryRecord,
   PersonaProfile,
@@ -22,7 +21,11 @@ import {
   RelationshipState,
   StickerItem
 } from '../model/ApiModels';
-import { HarmonyPlatformBridge } from '../platform/PlatformBridge';
+import { HarmonyNotifications } from '../platform/HarmonyNotifications';
+import { HarmonyPush } from '../platform/HarmonyPush';
+import { NotificationsPage } from './NotificationsPage';
+import { DevicesPage } from './DevicesPage';
+import { UpdatePanel } from './UpdatePanel';
 
 interface HarmonyFocusSession {
   sessionId: string;
@@ -111,7 +114,6 @@ struct Index {
   @State private verificationId: string = '';
   @State private messages: ChatMessage[] = [];
   @State private input: string = '';
-  @State private devices: EchoDevice[] = [];
   @State private memories: MemoryRecord[] = [];
   @State private memoryTab: string = 'active';
   @State private memoryCount: number = 0;
@@ -172,6 +174,8 @@ struct Index {
   @State private focusNow: number = Date.now();
   @State private focusHistoryOpen: boolean = false;
   @State private focusVideoFailed: boolean = false;
+  @StorageProp('pushEpoch') @Watch('onPushEpoch') private pushEpoch: number = 0;
+  @StorageProp('foregroundEpoch') @Watch('onForegroundEpoch') private foregroundEpoch: number = 0;
   @State private personaName: string = '';
   @State private personaProfile: PersonaProfile = {
     preferredName: '',
@@ -197,6 +201,10 @@ struct Index {
   @State private onboardingName: string = '';
   @State private chatExpanded: boolean = false;
   @State private menuOpen: boolean = false;
+  @State private updateOpen: boolean = false;
+  @State private updateLocked: boolean = false;
+  private deviceBackHandler?: () => void;
+  @State private clearingContext: boolean = false;
   @State private eventConnected: boolean = false;
   @State private echoTyping: boolean = false;
   @State private sending: boolean = false;
@@ -214,10 +222,12 @@ struct Index {
   private serverTyping: boolean = false;
   private pendingRevealIds: Set<number> = new Set<number>();
   private focusTimer: number | undefined = undefined;
+  private pushRegistrationInFlight: boolean = false;
+  private foregroundRecoveryInFlight: boolean = false;
 
   private store: SecureStore = new SecureStore();
   private repository?: EchoRepository;
-  private bridge: HarmonyPlatformBridge = new HarmonyPlatformBridge();
+  private notifications: HarmonyNotifications = new HarmonyNotifications();
   private focusVideoController: VideoController = new VideoController();
   private focusMedia: StudyFocusMedia = new StudyFocusMedia();
 
@@ -252,6 +262,17 @@ struct Index {
     void this.focusMedia.dispose();
   }
 
+  onBackPress(): boolean {
+    if (this.updateOpen) {
+      if (!this.updateLocked) this.updateOpen = false;
+      return true;
+    }
+    if (this.menuOpen) { this.menuOpen = false; return true; }
+    if (this.page === 'devices' && this.deviceBackHandler) { this.deviceBackHandler(); return true; }
+    if (this.page !== 'chat') { this.navigate('chat'); return true; }
+    return false;
+  }
+
   private async restoreSession(): Promise<void> {
     if (!this.repository) return;
     try {
@@ -265,9 +286,10 @@ struct Index {
     }
     // A profile failure must not skip history, and the long-lived SSE stream must not block startup.
     if (this.loggedIn && !this.onboarding) {
-      this.page = 'chat';
-      await this.loadChat();
-      if (this.loggedIn) void this.startEvents();
+          this.page = 'chat';
+          await this.loadChat();
+          void this.registerHarmonyPushToken();
+          if (this.loggedIn) void this.startEvents();
     }
   }
 
@@ -339,6 +361,7 @@ struct Index {
       this.configureRepository(session);
       this.loggedIn = true;
       await this.restoreSession();
+      void this.registerHarmonyPushToken();
       this.page = this.onboarding ? 'onboarding' : 'chat';
     } catch (error) {
       this.statusText = `登录失败：${this.describeError(error)}`;
@@ -371,6 +394,71 @@ struct Index {
       await this.store.set('device_id', id);
     }
     return id;
+  }
+
+  private async registerHarmonyPushToken(): Promise<void> {
+    if (!this.repository || !this.loggedIn || this.pushRegistrationInFlight) return;
+    this.pushRegistrationInFlight = true;
+    try {
+      const context = getContext(this) as common.UIAbilityContext;
+      await HarmonyPush.initialize(context);
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const clientId = HarmonyPush.getClientId();
+        if (clientId.length > 0) {
+          try {
+            await this.repository.registerPushToken(await this.getDeviceId(), clientId);
+            AppStorage.setOrCreate('pushStatus', 'registered');
+          } catch (error) {
+            AppStorage.setOrCreate('pushStatus', 'registration_failed');
+            AppStorage.setOrCreate('pushError', this.describeError(error));
+          }
+          return;
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+      }
+      if (HarmonyPush.getClientId().length === 0) {
+        AppStorage.setOrCreate('pushStatus', 'unconfigured');
+      }
+    } finally {
+      this.pushRegistrationInFlight = false;
+    }
+  }
+
+  private onPushEpoch(): void {
+    // The SDK can return the CID after the initial login attempt. Retry when
+    // the callback updates AppStorage instead of giving up after six seconds.
+    if (this.loggedIn && HarmonyPush.getClientId().length > 0) {
+      void this.registerHarmonyPushToken();
+    }
+  }
+
+  private onForegroundEpoch(): void {
+    // HarmonyOS may suspend the SSE socket while the ability is in the
+    // background. Rehydrate durable chat state and restart the stream when
+    // the ability becomes visible again.
+    void this.recoverAfterForeground();
+  }
+
+  private async recoverAfterForeground(): Promise<void> {
+    if (!this.loggedIn || this.initializing || this.onboarding || !this.repository) return;
+    if (this.foregroundRecoveryInFlight) return;
+    this.foregroundRecoveryInFlight = true;
+    try {
+      const context = getContext(this) as common.UIAbilityContext;
+      await HarmonyPush.initialize(context);
+      await this.loadChat();
+      if (this.loggedIn && !this.onboarding && this.repository) {
+        void this.registerHarmonyPushToken();
+        // Invalidate callbacks and retry timers belonging to the suspended
+        // stream before creating the replacement connection.
+        this.eventGeneration += 1;
+        void this.startEvents();
+      }
+    } catch (error) {
+      this.statusText = `鍥炲埌鍓嶅彴鍚屾澶辫触锛?{this.describeError(error)}`;
+    } finally {
+      this.foregroundRecoveryInFlight = false;
+    }
   }
 
   private createUuid(): string {
@@ -637,7 +725,9 @@ struct Index {
     } catch (_) {
       if (generation !== this.eventGeneration) return;
       this.eventConnected = false;
-      setTimeout(() => this.startEvents(), 3000);
+      setTimeout(() => {
+        if (generation === this.eventGeneration) void this.startEvents();
+      }, 3000);
     }
   }
 
@@ -957,7 +1047,6 @@ struct Index {
     if (!this.repository) return;
     this.loading = true;
     try {
-      if (this.page === 'devices') this.devices = await this.repository.listDevices();
       if (this.page === 'memory') {
         this.memoryError = '';
         const result: MemoryListResult = await this.repository.listMemories(this.memoryTab);
@@ -1269,6 +1358,21 @@ struct Index {
 
   private async focusSaveActive(session: HarmonyFocusSession): Promise<void> {
     await this.store.set('study_focus.active', JSON.stringify(session));
+    void this.focusUpdateReminder(session);
+  }
+
+  private async focusUpdateReminder(session?: HarmonyFocusSession): Promise<void> {
+    try {
+      const context = getContext(this) as common.UIAbilityContext;
+      if (session?.status === 'running') {
+        const end = Date.now() + this.focusRemaining(session, Date.now()) * 1000;
+        await this.notifications.schedule(context, end);
+      } else {
+        await this.notifications.cancel(context);
+      }
+    } catch (error) {
+      console.warn(`[EchoStudy] local reminder unavailable: ${String(error)}`);
+    }
   }
 
   private async focusAppendHistory(session: HarmonyFocusSession): Promise<void> {
@@ -1421,6 +1525,7 @@ struct Index {
       this.focusNow = now;
       this.focusBusy = false;
       this.focusStopTimer();
+      void this.focusUpdateReminder();
       void this.focusMedia.stop();
       this.focusVideoStop();
       void this.focusSyncUpdate(finished);
@@ -2347,6 +2452,8 @@ struct Index {
     this.cancelRevealQueue();
     await this.store.remove('session');
     this.loggedIn = false;
+    this.updateOpen = false;
+    void this.focusUpdateReminder();
     this.onboarding = false;
     this.verificationId = '';
     this.phone = '';
@@ -2718,15 +2825,28 @@ struct Index {
       .onClick(() => {
         this.menuOpen = false;
         if (action === 'logout') void this.logout();
-        else if (action === 'clear') void this.clearContext();
+        else if (action === 'clear') this.confirmClearContext();
+        else if (action === 'update') this.updateOpen = true;
         else this.navigate(action === 'study' ? 'study' : action === 'notifications' ? 'notifications' : action === 'proactive' ? 'proactive' : action === 'update' ? 'update' : action);
       })
   }
 
+  private confirmClearContext(): void {
+    if (this.clearingContext) return;
+    AlertDialog.show({
+      title: '清除聊天上下文',
+      message: '会清除聊天记录和会话摘要，长期记忆仍会保留。',
+      primaryButton: { value: '取消', action: () => {} },
+      secondaryButton: { value: '清除', action: () => void this.clearContext() }
+    });
+  }
+
   private async clearContext(): Promise<void> {
+    if (!this.repository || this.clearingContext) return;
+    this.clearingContext = true;
     try {
+      await this.repository.clearChat();
       this.cancelRevealQueue();
-      await this.repository?.clearChat();
       this.greetingOverride = 'restart';
       this.messages = [this.restartGreetingMessage()];
       this.nextBeforeId = 0;
@@ -2734,6 +2854,9 @@ struct Index {
       this.toast('聊天上下文已清除，长期记忆仍会保留');
     } catch (error) {
       this.statusText = `清除失败：${this.describeError(error)}`;
+      this.toast(this.statusText);
+    } finally {
+      this.clearingContext = false;
     }
   }
 
@@ -4135,7 +4258,10 @@ struct Index {
     } else if (this.page === 'chat') {
       this.chatView();
     } else if (this.page === 'devices') {
-      this.listPage('我的 Echo', this.devices.map((item) => `${item.displayName} · ${item.status} · 固件 ${item.firmwareVersion || '未知'}`));
+      DevicesPage({
+        repository: this.repository, onBack: () => this.navigate('chat'),
+        onBackHandler: (handler?: () => void) => this.deviceBackHandler = handler
+      })
     } else if (this.page === 'memory') {
       this.memoryPage();
     } else if (this.page === 'stickers') {
@@ -4148,7 +4274,9 @@ struct Index {
       this.studyFocusPage();
     } else if (this.page === 'proactive') {
       this.proactivePage();
-    } else if (this.page === 'more' || this.page === 'notifications' || this.page === 'update') {
+    } else if (this.page === 'notifications') {
+      NotificationsPage({ onBack: () => this.navigate('chat') })
+    } else if (this.page === 'more' || this.page === 'update') {
       this.listPage('功能', ['通知设置', '一起学习', '检查更新', '设备蓝牙配网', 'Wi-Fi 热点配网', '声纹录入']);
     }
   }
@@ -4190,8 +4318,15 @@ struct Index {
     } else if (this.onboarding) {
       Row() { this.onboardingView() }.height('100%').backgroundColor('#FFF8F5')
     } else {
-      Column() {
+      Stack() {
         this.pageView()
+        if (this.updateOpen) {
+          UpdatePanel({
+            repository: this.repository,
+            onClose: () => this.updateOpen = false,
+            onLockChange: (locked: boolean) => this.updateLocked = locked
+          })
+        }
       }
       .height('100%')
       .backgroundColor('#F8F7FC')

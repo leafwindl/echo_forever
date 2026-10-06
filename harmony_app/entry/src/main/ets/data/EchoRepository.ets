@@ -1,5 +1,6 @@
 import { ApiClient } from '../common/ApiClient';
 import { AppConfig, encodePath } from '../common/AppConfig';
+import { validateDownloadUrl } from '../model/AppRelease';
 import {
   AuthSession,
   ChatMessage,
@@ -133,7 +134,8 @@ export class EchoRepository {
   }
 
   async connectDevice(deviceId: string): Promise<void> {
-    await this.api.post<Record<string, Object>>(`/devices/${encodePath(deviceId)}/probe`);
+    const response = await this.api.post<Record<string, Object>>(`/devices/${encodePath(deviceId)}/probe`);
+    if (response.acknowledged !== true) throw new Error('未收到硬件检测回执');
   }
 
   async rotateDeviceCredential(deviceId: string): Promise<Record<string, Object>> {
@@ -341,7 +343,7 @@ export class EchoRepository {
   async registerPushToken(deviceId: string, token: string): Promise<void> {
     const request: Record<string, Object> = {};
     request.device_id = deviceId;
-    request.platform = AppConfig.appPlatform;
+    request.platform = AppConfig.pushRegistrationPlatform;
     request.provider = 'getui';
     request.token = token;
     request.app_version = AppConfig.appVersion;
@@ -364,6 +366,69 @@ export class EchoRepository {
     releaseQuery.channel = AppConfig.channel;
     releaseQuery.version_code = String(versionCode);
     return this.api.get<Record<string, Object>>('/releases/latest', releaseQuery, false);
+  }
+
+  async releaseDownload(releaseId: string, versionCode: number): Promise<string> {
+    const body: Record<string, Object> = {};
+    body.platform = AppConfig.appPlatform;
+    body.channel = AppConfig.channel;
+    body.version_code = versionCode;
+    const result = await this.api.post<Record<string, Object>>(
+      `/releases/${encodePath(releaseId)}/download`, body, false
+    );
+    return validateDownloadUrl(result.download_url);
+  }
+
+  async listSpeakerPeople(deviceId: string): Promise<Record<string, Object>[]> {
+    const result = await this.api.get<Record<string, Object>>(`/devices/${encodePath(deviceId)}/speakers`);
+    return this.asArray(result.items);
+  }
+
+  async createSpeakerPerson(deviceId: string, name: string): Promise<Record<string, Object>> {
+    const body: Record<string, Object> = {};
+    body.display_name = name.trim();
+    body.consent = true;
+    return this.api.post<Record<string, Object>>(`/devices/${encodePath(deviceId)}/speakers`, body);
+  }
+
+  async deleteSpeakerPerson(deviceId: string, personId: string): Promise<void> {
+    await this.api.delete<Record<string, Object>>(
+      `/devices/${encodePath(deviceId)}/speakers/${encodePath(personId)}`
+    );
+  }
+
+  async uploadSpeakerSample(deviceId: string, personId: string, path: string): Promise<Record<string, Object>> {
+    return this.api.uploadMultipartResponse(
+      `/devices/${encodePath(deviceId)}/speakers/${encodePath(personId)}/samples`,
+      path, 'sample.pcm', 'audio/L16', {}, 'audio'
+    );
+  }
+
+  async speakerState(deviceId: string, path: string): Promise<Record<string, Object>> {
+    return this.api.get<Record<string, Object>>(`/devices/${encodePath(deviceId)}/${path}`);
+  }
+
+  async approveSpeakerRequest(deviceId: string, sessionId: string, approved: boolean): Promise<void> {
+    const body: Record<string, Object> = {};
+    body.session_id = sessionId;
+    body.approved = approved;
+    await this.api.post<Record<string, Object>>(
+      `/devices/${encodePath(deviceId)}/speaker-enrollment-request`, body
+    );
+  }
+
+  async calibrateSpeaker(deviceId: string, personId: string): Promise<Record<string, Object>> {
+    const body: Record<string, Object> = {};
+    body.consent = true;
+    return this.api.post<Record<string, Object>>(
+      `/devices/${encodePath(deviceId)}/speakers/${encodePath(personId)}/calibration`, body
+    );
+  }
+
+  async cancelSpeakerCalibration(deviceId: string, personId?: string): Promise<void> {
+    const path = personId
+      ? `speakers/${encodePath(personId)}/calibration` : 'speaker-calibration';
+    await this.api.delete<Record<string, Object>>(`/devices/${encodePath(deviceId)}/${path}`);
   }
 
   private toDevice(item: Record<string, Object>): EchoDevice {

@@ -96,9 +96,10 @@ export class ApiClient {
     fileUri: string,
     fileName: string,
     contentType: string,
-    fields: Record<string, string>
+    fields: Record<string, string>,
+    fileField: string = 'file'
   ): Promise<Record<string, Object>> {
-    return this.uploadMultipartResponseAttempt(path, fileUri, fileName, contentType, fields, true);
+    return this.uploadMultipartResponseAttempt(path, fileUri, fileName, contentType, fields, true, fileField);
   }
 
   private async uploadMultipartResponseAttempt(
@@ -107,7 +108,8 @@ export class ApiClient {
     fileName: string,
     contentType: string,
     fields: Record<string, string>,
-    retryOnUnauthorized: boolean
+    retryOnUnauthorized: boolean,
+    fileField: string
   ): Promise<Record<string, Object>> {
     const session = await this.readSession();
     const formData: Array<http.MultiFormData> = [];
@@ -119,7 +121,7 @@ export class ApiClient {
       });
     });
     formData.push({
-      name: 'file',
+      name: fileField,
       contentType,
       remoteFileName: fileName,
       filePath: fileUri
@@ -151,7 +153,7 @@ export class ApiClient {
       if (response.responseCode === 401) {
         if (retryOnUnauthorized && await this.refreshSession()) {
           return this.uploadMultipartResponseAttempt(
-            path, fileUri, fileName, contentType, fields, false
+            path, fileUri, fileName, contentType, fields, false, fileField
           );
         }
         await this.clearSession();

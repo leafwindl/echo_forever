@@ -22,6 +22,9 @@
         "name": "ohos.permission.GET_WIFI_INFO"
       },
       {
+        "name": "ohos.permission.PUBLISH_AGENT_REMINDER"
+      },
+      {
         "name": "ohos.permission.ACCESS_BLUETOOTH",
         "reason": "$string:permission_bluetooth_reason",
         "usedScene": {
@@ -40,6 +43,16 @@
           ],
           "when": "inuse"
         }
+      }
+    ],
+    "metadata": [
+      {
+        "name": "GETUI_APPID",
+        "value": "u5JfZJNhsF65eKmzD17ok8"
+      },
+      {
+        "name": "GT_PUSH_LOG",
+        "value": "false"
       }
     ],
     "abilities": [

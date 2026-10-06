@@ -3,7 +3,10 @@ export class AppConfig {
   static readonly appVersion: string = '1.1.7';
   static readonly versionCode: number = 23;
   static readonly appPlatform: string = 'harmonyos';
+  static readonly pushRegistrationPlatform: string = 'harmonyos';
   static readonly channel: string = 'internal';
+  // Filled when the HarmonyOS app is created in the Getui console.
+  static readonly getuiAppId: string = 'u5JfZJNhsF65eKmzD17ok8';
 }
 
 export function encodePath(value: string): string {
