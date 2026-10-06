@@ -25,6 +25,9 @@ def get_push_sender() -> GetuiNotificationSender:
             app_id=settings.getui_app_id,
             app_key=settings.getui_app_key,
             master_secret=settings.getui_master_secret,
+            harmony_app_id=settings.getui_harmony_app_id,
+            harmony_app_key=settings.getui_harmony_app_key,
+            harmony_master_secret=settings.getui_harmony_master_secret,
             api_base_url=settings.getui_api_base_url,
         )
     return _sender

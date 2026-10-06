@@ -22,6 +22,7 @@ class NotificationOutboxItem:
 class PushTarget:
     device_id: str
     token: str
+    platform: str = "android"
 
 
 class PostgresPushRepository:
@@ -120,7 +121,7 @@ class PostgresPushRepository:
         with get_connection() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT device_id, token FROM push_targets
+                SELECT device_id, platform, token FROM push_targets
                 WHERE user_id = %s AND status = 'active' AND provider = 'getui'
                 ORDER BY last_seen_at DESC
                 """,
@@ -128,7 +129,12 @@ class PostgresPushRepository:
             )
             rows = cursor.fetchall()
         return tuple(
-            PushTarget(device_id=str(row["device_id"]), token=str(row["token"])) for row in rows
+            PushTarget(
+                device_id=str(row["device_id"]),
+                token=str(row["token"]),
+                platform=str(row["platform"] or "android"),
+            )
+            for row in rows
         )
 
     def mark_sent(self, notification_id: str, device_ids: tuple[str, ...]) -> None:

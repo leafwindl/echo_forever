@@ -24,6 +24,17 @@ class _AccessToken:
     expires_at_ms: int
 
 
+@dataclass(frozen=True)
+class _Credentials:
+    app_id: str
+    app_key: str
+    master_secret: str
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.app_id and self.app_key and self.master_secret)
+
+
 class GetuiNotificationSender:
     def __init__(
         self,
@@ -32,16 +43,26 @@ class GetuiNotificationSender:
         app_id: str,
         app_key: str,
         master_secret: str,
+        harmony_app_id: str = "",
+        harmony_app_key: str = "",
+        harmony_master_secret: str = "",
         api_base_url: str = "https://restapi.getui.com/v2",
         timeout_seconds: float = 15,
     ):
         self.repository = repository
-        self.app_id = app_id.strip()
-        self.app_key = app_key.strip()
-        self.master_secret = master_secret.strip()
+        self._credentials = {
+            "android": _Credentials(app_id.strip(), app_key.strip(), master_secret.strip()),
+            "ios": _Credentials(app_id.strip(), app_key.strip(), master_secret.strip()),
+            "web": _Credentials(app_id.strip(), app_key.strip(), master_secret.strip()),
+            "harmonyos": _Credentials(
+                harmony_app_id.strip(),
+                harmony_app_key.strip(),
+                harmony_master_secret.strip(),
+            ),
+        }
         self.api_base_url = api_base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
-        self._access_token: _AccessToken | None = None
+        self._access_tokens: dict[_Credentials, _AccessToken] = {}
         self._token_lock = asyncio.Lock()
 
     async def run_once(self) -> bool:
@@ -52,34 +73,51 @@ class GetuiNotificationSender:
         if not targets:
             self.repository.mark_discarded(item.notification_id, "no_active_target")
             return True
-        if not self._is_configured:
-            self.repository.mark_retry(item, "getui_credentials_unavailable")
-            logger.warning("Getui credentials are unavailable")
-            return True
 
         successes: list[str] = []
         transient_failure = False
-        async with httpx.AsyncClient(
-            base_url=f"{self.api_base_url}/{self.app_id}",
-            timeout=self.timeout_seconds,
-            trust_env=False,
-        ) as client:
-            try:
-                access_token = await self._get_access_token(client)
-            except Exception:
-                self.repository.mark_retry(item, "getui_auth_failed")
-                logger.warning("Getui authentication failed", exc_info=True)
-                return True
+        credentials_missing = False
+        credential_groups: dict[_Credentials, list[PushTarget]] = {}
+        for target in targets:
+            credentials = self._credentials_for(target.platform)
+            if not credentials.configured:
+                credentials_missing = True
+                logger.warning(
+                    "Getui credentials are unavailable for platform=%s",
+                    target.platform,
+                )
+                continue
+            credential_groups.setdefault(credentials, []).append(target)
 
-            for target in targets:
-                outcome = await self._send(client, access_token, item, target)
-                if outcome == "sent":
-                    successes.append(target.device_id)
-                elif outcome == "invalid":
-                    self.repository.invalidate_target(target.device_id)
-                else:
+        for credentials, grouped_targets in credential_groups.items():
+            async with httpx.AsyncClient(
+                base_url=f"{self.api_base_url}/{credentials.app_id}",
+                timeout=self.timeout_seconds,
+                trust_env=False,
+            ) as client:
+                try:
+                    access_token = await self._get_access_token(client, credentials)
+                except Exception:
                     transient_failure = True
+                    logger.warning(
+                        "Getui authentication failed for platform=%s",
+                        grouped_targets[0].platform,
+                        exc_info=True,
+                    )
+                    continue
 
+                for target in grouped_targets:
+                    outcome = await self._send(client, access_token, item, target)
+                    if outcome == "sent":
+                        successes.append(target.device_id)
+                    elif outcome == "invalid":
+                        self.repository.invalidate_target(target.device_id)
+                    else:
+                        transient_failure = True
+
+        if credentials_missing and not credential_groups:
+            self.repository.mark_retry(item, "getui_credentials_unavailable")
+            return True
         if successes:
             self.repository.mark_sent(item.notification_id, tuple(successes))
         elif transient_failure:
@@ -90,25 +128,32 @@ class GetuiNotificationSender:
 
     @property
     def _is_configured(self) -> bool:
-        return bool(self.app_id and self.app_key and self.master_secret)
+        return self._credentials["android"].configured
 
-    async def _get_access_token(self, client: httpx.AsyncClient) -> str:
+    def _credentials_for(self, platform: str) -> _Credentials:
+        return self._credentials.get(platform, self._credentials["android"])
+
+    async def _get_access_token(
+        self,
+        client: httpx.AsyncClient,
+        credentials: _Credentials,
+    ) -> str:
         async with self._token_lock:
             now_ms = int(time.time() * 1000)
-            cached = self._access_token
+            cached = self._access_tokens.get(credentials)
             if cached is not None and now_ms + 60_000 < cached.expires_at_ms:
                 return cached.value
 
             timestamp = str(now_ms)
             sign = hashlib.sha256(
-                f"{self.app_key}{timestamp}{self.master_secret}".encode()
+                f"{credentials.app_key}{timestamp}{credentials.master_secret}".encode()
             ).hexdigest()
             response = await client.post(
                 "/auth",
                 json={
                     "sign": sign,
                     "timestamp": timestamp,
-                    "appkey": self.app_key,
+                    "appkey": credentials.app_key,
                 },
             )
             payload = self._response_payload(response)
@@ -121,7 +166,7 @@ class GetuiNotificationSender:
             expires_at_ms = int(data.get("expire_time") or 0)
             if not token or expires_at_ms <= now_ms:
                 raise RuntimeError("Getui authentication returned an invalid token")
-            self._access_token = _AccessToken(token, expires_at_ms)
+            self._access_tokens[credentials] = _AccessToken(token, expires_at_ms)
             return token
 
     async def _send(
@@ -149,7 +194,11 @@ class GetuiNotificationSender:
         ):
             return "invalid"
         if payload.get("code") == 10001:
-            self._access_token = None
+            self._access_tokens = {
+                credentials: token
+                for credentials, token in self._access_tokens.items()
+                if token.value != access_token
+            }
         logger.warning(
             "Getui send failed notification_id=%s status=%s code=%s",
             item.notification_id,

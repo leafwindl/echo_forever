@@ -19,7 +19,7 @@ PushTargetManagerDependency = Annotated[
 
 class PushTokenRequest(BaseModel):
     device_id: str = Field(min_length=1, max_length=160)
-    platform: Literal["android", "ios", "web"]
+    platform: Literal["android", "harmonyos", "ios", "web"]
     provider: Literal["getui"] = "getui"
     token: str = Field(min_length=1, max_length=4096)
     app_version: str = Field(default="", max_length=80)

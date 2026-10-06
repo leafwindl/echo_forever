@@ -638,6 +638,18 @@ class Settings(BaseSettings):
         default="",
         validation_alias="GETUI_MASTER_SECRET",
     )
+    getui_harmony_app_id: str = Field(
+        default="",
+        validation_alias="GETUI_HARMONY_APP_ID",
+    )
+    getui_harmony_app_key: str = Field(
+        default="",
+        validation_alias="GETUI_HARMONY_APP_KEY",
+    )
+    getui_harmony_master_secret: str = Field(
+        default="",
+        validation_alias="GETUI_HARMONY_MASTER_SECRET",
+    )
     getui_api_base_url: str = Field(
         default="https://restapi.getui.com/v2",
         validation_alias="GETUI_API_BASE_URL",

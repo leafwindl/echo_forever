@@ -187,6 +187,43 @@ class GetuiNotificationSenderTests(unittest.IsolatedAsyncioTestCase):
             ("notification-1", "all_targets_invalid"),
         )
 
+    async def test_harmony_target_uses_harmony_credentials(self):
+        repository = FakePushRepository(
+            targets=(PushTarget("device-harmony", "cid-harmony", "harmonyos"),)
+        )
+        client = FakeAsyncClient(
+            [
+                (200, {"code": 0, "data": {"token": "harmony-token", "expire_time": 2_000_000}}),
+                (200, {"code": 0, "data": {"cid-harmony": "successed_online"}}),
+            ]
+        )
+        sender = GetuiNotificationSender(
+            repository=repository,
+            app_id="android-app-id",
+            app_key="android-app-key",
+            master_secret="android-master-secret",
+            harmony_app_id="harmony-app-id",
+            harmony_app_key="harmony-app-key",
+            harmony_master_secret="harmony-master-secret",
+        )
+
+        with (
+            patch(
+                "features.push.infrastructure.getui_sender.httpx.AsyncClient",
+                return_value=client,
+            ),
+            patch("features.push.infrastructure.getui_sender.time.time", return_value=1000),
+        ):
+            self.assertTrue(await sender.run_once())
+
+        auth_path, auth_request = client.requests[0]
+        self.assertEqual(auth_path, "/auth")
+        expected_sign = hashlib.sha256(
+            b"harmony-app-key1000000harmony-master-secret"
+        ).hexdigest()
+        self.assertEqual(auth_request["json"]["sign"], expected_sign)
+        self.assertEqual(repository.sent, ("notification-1", ("device-harmony",)))
+
     async def test_missing_credentials_uses_existing_retry_policy(self):
         repository = FakePushRepository()
         sender = GetuiNotificationSender(
