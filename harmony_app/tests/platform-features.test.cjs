@@ -163,6 +163,47 @@ test('SoftAP scan parses aps/rssi/authmode as Android does', async () => {
   assert.deepEqual(await harness.client.scan(), [{ ssid: 'Home', rssi: -55, authMode: 3 }]);
 });
 
+test('BLE unrestricted scan uses null filters and releases its listener on cancellation', async () => {
+  let callback;
+  let released = false;
+  let stopped = false;
+  const ble = {
+    on: (event, listener) => { assert.equal(event, 'BLEDeviceFind'); callback = listener; },
+    startBLEScan: (filters, options) => {
+      assert.equal(filters, null);
+      assert.equal(options.interval, 0);
+      callback([
+        { deviceId: 'a', deviceName: 'Xiaozhi-Blufi', rssi: -60 },
+        { deviceId: 'b', deviceName: 'Echo', rssi: -40 },
+        { deviceId: 'c', deviceName: 'Unrelated', rssi: -20 }
+      ]);
+      setImmediate(() => client.stopScan());
+    },
+    stopBLEScan: () => { stopped = true; },
+    off: (event, listener) => {
+      assert.equal(event, 'BLEDeviceFind');
+      assert.equal(listener, callback);
+      released = true;
+    }
+  };
+  const { DeviceCapabilities } = load('platform/DeviceCapabilities.ets', {
+    '@ohos.app.ability.common': { default: {} },
+    '@ohos.abilityAccessCtrl': { default: {
+      createAtManager: () => ({ requestPermissionsFromUser: async () => ({ authResults: [0] }) })
+    } },
+    '@ohos.bluetooth.ble': { default: ble },
+    '@ohos.multimedia.audio': { default: {} },
+    '@ohos.file.fs': { default: {} }
+  });
+  const client = new DeviceCapabilities();
+  assert.deepEqual(await client.scan({}), [
+    { address: 'b', name: 'Echo', rssi: -40 },
+    { address: 'a', name: 'Xiaozhi-Blufi', rssi: -60 }
+  ]);
+  assert.equal(stopped, true);
+  assert.equal(released, true);
+});
+
 const protocol = load('platform/BlufiProtocol.ets');
 test('BluFi CRC matches the complemented CCITT Android checksum', () => {
   // Standard CCITT-FALSE check vector 0x29b1, complemented by BlufiCRC.
@@ -173,6 +214,189 @@ test('BluFi frame preserves encrypted payload but checksums plaintext and asks f
   const frame = protocol.frameBlufi(8, 4, plain, new Uint8Array([0x82]), true, false, true);
   const crc = protocol.blufiCrc(new Uint8Array([4, 1, 1]));
   assert.deepEqual(Array.from(frame), [8, 11, 4, 1, 0x82, crc & 255, crc >> 8]);
+});
+
+test('BluFi DH uses native private length and derives the Android-compatible AES key', async () => {
+  let local;
+  let peer;
+  let secret;
+  const posts = [];
+  const cryptoMock = {
+    AsyKeySpecType: { COMMON_PARAMS_SPEC: 0, PUBLIC_KEY_SPEC: 1 },
+    AsyKeySpecItem: { DH_PK_BN: 2 },
+    createAsyKeyGeneratorBySpec: (spec) => ({
+      generateKeyPair: async () => {
+        assert.equal(spec.l, 0, 'Do not force a 1024-bit private exponent in the native DH backend');
+        assert.equal(spec.g, 2n);
+        const prime = Buffer.from(spec.p.toString(16), 'hex');
+        assert.equal(prime.length, 128);
+        local = crypto.createDiffieHellman(prime, 2);
+        peer = crypto.createDiffieHellman(prime, 2);
+        local.generateKeys();
+        peer.generateKeys();
+        return { priKey: local, pubKey: {
+          getAsyKeySpec: () => BigInt(`0x${local.getPublicKey('hex')}`)
+        } };
+      },
+      generatePubKey: async () => Buffer.from(spec.pk.toString(16).padStart(256, '0'), 'hex')
+    }),
+    createKeyAgreement: () => ({ generateSecret: async (privateKey, publicKey) => {
+      secret = privateKey.computeSecret(publicKey);
+      return { data: new Uint8Array(secret) };
+    } }),
+    createMd: () => {
+      const hash = crypto.createHash('md5');
+      return { update: async ({ data }) => hash.update(data),
+        digest: async () => ({ data: new Uint8Array(hash.digest()) }) };
+    },
+    createSymKeyGenerator: () => ({ convertKey: async ({ data }) => data })
+  };
+  const { HarmonyBlufi } = load('platform/HarmonyBlufi.ets', {
+    '@ohos.bluetooth.ble': { default: {} }, '@ohos.security.cryptoFramework': { default: cryptoMock },
+    '@ohos.util': { default: {} }, './BlufiProtocol': protocol
+  });
+  const client = new HarmonyBlufi();
+  client.post = async (...args) => posts.push(args);
+  client.wait = async (type) => {
+    assert.equal(type, 1);
+    return new Uint8Array(peer.getPublicKey());
+  };
+  await client.negotiate();
+  const expectedSecret = peer.computeSecret(local.getPublicKey());
+  assert.deepEqual(secret, expectedSecret);
+  let offset = 0;
+  while (offset < expectedSecret.length && expectedSecret[offset] === 0) offset++;
+  assert.deepEqual(Buffer.from(client.key), crypto.createHash('md5').update(expectedSecret.subarray(offset)).digest());
+  assert.deepEqual(Array.from(posts[0][1]), [0, 1, 7]);
+  assert.equal(posts[1][1].length, 264);
+  assert.deepEqual(posts[2], [4, new Uint8Array([3]), false, true]);
+});
+
+test('BluFi requests the device version before selecting v1 or v2 security', async () => {
+  const { HarmonyBlufi } = load('platform/HarmonyBlufi.ets', {
+    '@ohos.bluetooth.ble': { default: {} }, '@ohos.security.cryptoFramework': { default: {} },
+    '@ohos.util': { default: {} }, './BlufiProtocol': protocol
+  });
+  for (const [version, expected] of [[0x0103, 1], [0x0104, 2], [0x0105, 2]]) {
+    const client = new HarmonyBlufi();
+    client.post = async (type, data) => {
+      assert.equal(type, 0x1c);
+      assert.equal(data.length, 0);
+    };
+    client.wait = async (type) => {
+      assert.equal(type, 0x41);
+      return new Uint8Array([version >> 8, version & 255]);
+    };
+    await client.requestDeviceVersion();
+    assert.equal(client.deviceVersion, version);
+    assert.equal(client.securityVersion, expected);
+  }
+  const client = new HarmonyBlufi();
+  client.post = async () => {};
+  client.wait = async () => new Uint8Array([1]);
+  await assert.rejects(client.requestDeviceVersion(), /version response is invalid/);
+  const source = fs.readFileSync(path.join(ets, 'platform/HarmonyBlufi.ets'), 'utf8');
+  assert.ok(source.indexOf('await this.requestDeviceVersion();') < source.indexOf('await this.negotiate();'));
+});
+
+test('BluFi v2 matches Android 3072-bit DH, SHA-256 and continuous directional AES-CTR', async () => {
+  let local;
+  let peer;
+  let primeLength;
+  const posts = [];
+  const ciphers = [];
+  const cryptoMock = {
+    AsyKeySpecType: { COMMON_PARAMS_SPEC: 0, PUBLIC_KEY_SPEC: 1 },
+    AsyKeySpecItem: { DH_PK_BN: 2 },
+    CryptoMode: { ENCRYPT_MODE: 0, DECRYPT_MODE: 1 },
+    createAsyKeyGeneratorBySpec: (spec) => ({
+      generateKeyPair: async () => {
+        assert.equal(spec.l, 0);
+        const prime = Buffer.from(spec.p.toString(16), 'hex');
+        primeLength = prime.length;
+        assert.equal(primeLength, 384);
+        const android = fs.readFileSync(path.resolve(__dirname,
+          '../../app/android/app/src/main/java/blufi/espressif/BlufiClientImpl.java'), 'utf8');
+        const declaration = android.match(/DH_P_3072\s*=\s*([\s\S]*?);/)[1];
+        const androidPrime = [...declaration.matchAll(/"([A-F0-9]+)"/g)].map((part) => part[1]).join('');
+        assert.equal(prime.toString('hex').toUpperCase(), androidPrime);
+        local = crypto.createDiffieHellman(prime, 2);
+        peer = crypto.createDiffieHellman(prime, 2);
+        local.generateKeys();
+        peer.generateKeys();
+        return { priKey: local, pubKey: {
+          getAsyKeySpec: () => BigInt(`0x${local.getPublicKey('hex')}`)
+        } };
+      },
+      generatePubKey: async () => Buffer.from(spec.pk.toString(16).padStart(primeLength * 2, '0'), 'hex')
+    }),
+    createKeyAgreement: () => ({
+      generateSecret: async (privateKey, publicKey) => ({ data: new Uint8Array(privateKey.computeSecret(publicKey)) })
+    }),
+    createMd: (algorithm) => {
+      assert.equal(algorithm, 'SHA256');
+      const hash = crypto.createHash('sha256');
+      return { update: async ({ data }) => hash.update(data),
+        digest: async () => ({ data: new Uint8Array(hash.digest()) }) };
+    },
+    createSymKeyGenerator: (algorithm) => {
+      assert.equal(algorithm, 'AES256');
+      return { convertKey: async ({ data }) => data };
+    },
+    createCipher: (algorithm) => {
+      assert.equal(algorithm, 'AES256|CTR|NoPadding');
+      let stream;
+      return {
+        init: async (mode, key, params) => {
+          ciphers.push({ mode, iv: Buffer.from(params.iv.data) });
+          stream = mode === 0 ? crypto.createCipheriv('aes-256-ctr', key, params.iv.data) :
+            crypto.createDecipheriv('aes-256-ctr', key, params.iv.data);
+        },
+        update: async ({ data }) => ({ data: new Uint8Array(stream.update(data)) })
+      };
+    }
+  };
+  const { HarmonyBlufi } = load('platform/HarmonyBlufi.ets', {
+    '@ohos.bluetooth.ble': { default: {} }, '@ohos.security.cryptoFramework': { default: cryptoMock },
+    '@ohos.util': { default: { TextEncoder: class {
+      encodeInto(value) { return new Uint8Array(Buffer.from(value, 'utf8')); }
+    } } }, './BlufiProtocol': protocol
+  });
+  const client = new HarmonyBlufi();
+  client.securityVersion = 2;
+  client.post = async (...args) => posts.push(args);
+  client.wait = async () => new Uint8Array(peer.getPublicKey());
+  await client.negotiate();
+  const shared = peer.computeSecret(local.getPublicKey());
+  let offset = 0;
+  while (offset < shared.length && shared[offset] === 0) offset++;
+  const secret = shared.subarray(offset);
+  const key = crypto.createHash('sha256').update(secret).digest();
+  const iv = (domain) => crypto.createHash('sha256').update(domain).update(secret).digest().subarray(0, 16);
+  assert.deepEqual(Buffer.from(client.key), key);
+  assert.deepEqual(ciphers, [{ mode: 0, iv: iv('blufi_dec') }, { mode: 1, iv: iv('blufi_enc') }]);
+  assert.deepEqual(Array.from(posts[0][1]), [0, 3, 7]);
+  assert.equal(posts[1][1].length, 776);
+  assert.deepEqual(posts[2], [4, new Uint8Array([3]), false, true]);
+  const deviceDecrypt = crypto.createDecipheriv('aes-256-ctr', key, iv('blufi_dec'));
+  const deviceEncrypt = crypto.createCipheriv('aes-256-ctr', key, iv('blufi_enc'));
+  for (const [sequence, message] of ['binding', 'wifi-network', 'wifi-password'].entries()) {
+    const plain = Buffer.from(message);
+    const encrypted = await client.aes(plain, sequence, true);
+    assert.deepEqual(deviceDecrypt.update(encrypted), plain);
+    assert.deepEqual(Buffer.from(await client.aes(deviceEncrypt.update(plain), sequence, false)), plain);
+  }
+  client.disconnect();
+  assert.equal(client.encryptCipher, undefined);
+  assert.equal(client.decryptCipher, undefined);
+});
+
+test('device list exposes add-device action with and without existing devices', () => {
+  const source = fs.readFileSync(path.join(ets, 'pages/DevicesPage.ets'), 'utf8');
+  assert.equal([...source.matchAll(/Button\('添加新设备'\)/g)].length, 2);
+  for (const match of source.matchAll(/Button\('添加新设备'\)([\s\S]*?)void this\.scanBle\(\);/g)) {
+    assert.match(match[1], /this\.screen = 'ble'/);
+  }
 });
 
 function updaterHarness(bytes = Buffer.from('abc')) {

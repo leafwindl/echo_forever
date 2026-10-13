@@ -10,11 +10,38 @@ const DH_P = 'cf5cf5c38419a724957ff5dd323b9c45c3cdd261eb740f69aa94b8bb1a5c9640' 
   '9153bd76b24222d03274e4725a5406092e9e82e9135c643cae98132b0d95f7d6' +
   '5347c68afc1e677da90e51bbab5f5cf429c291b4ba39c6b2dc5e8c7231e46aa7' +
   '728e87664532cdf547be20c9a3fa8342be6e34371a27c06f7dc0edddd2f86373';
+const DH_P_3072 = 'FFFFFFFFFFFFFFFFADF85458A2BB4A9AAFDC5620273D3CF1' +
+  'D8B9C583CE2D3695A9E13641146433FBCC939DCE249B3EF9' +
+  '7D2FE363630C75D8F681B202AEC4617AD3DF1ED5D5FD6561' +
+  '2433F51F5F066ED0856365553DED1AF3B557135E7F57C935' +
+  '984F0C70E0E68B77E2A689DAF3EFE8721DF158A136ADE735' +
+  '30ACCA4F483A797ABC0AB182B324FB61D108A94BB2C8E3FB' +
+  'B96ADAB760D7F4681D4F42A3DE394DF4AE56EDE76372BB19' +
+  '0B07A7C8EE0A6D709E02FCE1CDF7E2ECC03404CD28342F61' +
+  '9172FE9CE98583FF8E4F1232EEF28183C3FE3B1B4C6FAD73' +
+  '3BB5FCBC2EC22005C58EF1837D1683B2C6F34A26C1B2EFFA' +
+  '886B4238611FCFDCDE355B3B6519035BBC34F4DEF99C0238' +
+  '61B46FC9D6E6C9077AD91D2691F7F7EE598CB0FAC186D91C' +
+  'AEFE130985139270B4130C93BC437944F4FD4452E2D74DD3' +
+  '64F2E21E71F54BFF5CAE82AB9C9DF69EE86D2BC522363A0D' +
+  'ABC521979B0DEADA1DBF9A42D5C4484E0ABCD06BFA53DDEF' +
+  '3C1B20EE3FD59D7C25E41D2B66C62E37FFFFFFFFFFFFFFFF';
+const BLUFI_VERSION_V2 = 0x0104;
+const CTRL_GET_VERSION = (0x07 << 2);
+const DATA_VERSION = (0x10 << 2) | 0x01;
+const CTRL_SET_SECURITY = (0x01 << 2);
+const DATA_ERROR = (0x12 << 2) | 0x01;
+const ENC_DOMAIN = 'blufi_enc';
+const DEC_DOMAIN = 'blufi_dec';
 
 export class HarmonyBlufi {
   private client?: ble.GattClientDevice;
   private writeCharacteristic?: ble.BLECharacteristic;
   private key?: crypto.SymKey;
+  private encryptCipher?: crypto.Cipher;
+  private decryptCipher?: crypto.Cipher;
+  private securityVersion: number = 1;
+  private deviceVersion: number = -1;
   private sendSequence: number = 0;
   private readSequence: number = 0;
   private fragmentType: number = -1;
@@ -53,6 +80,10 @@ export class HarmonyBlufi {
     this.failure = '';
     this.sendSequence = 0;
     this.readSequence = 0;
+    this.securityVersion = 1;
+    this.deviceVersion = -1;
+    this.encryptCipher = undefined;
+    this.decryptCipher = undefined;
     this.received.clear();
     this.fragments = [];
     this.receiveChain = Promise.resolve();
@@ -106,6 +137,7 @@ export class HarmonyBlufi {
       });
       await client.setCharacteristicChangeNotification(notify, true);
       this.checkGeneration(generation);
+      await this.requestDeviceVersion();
       await this.negotiate();
       if (generation !== this.generation) throw new Error('蓝牙连接已取消');
       this.ready = true;
@@ -116,6 +148,11 @@ export class HarmonyBlufi {
   }
 
   private async aes(bytes: Uint8Array, sequence: number, encrypt: boolean): Promise<Uint8Array> {
+    if (this.securityVersion === 2) {
+      const cipher = encrypt ? this.encryptCipher : this.decryptCipher;
+      if (!cipher) throw new Error('BluFi AES-CTR 通道尚未就绪');
+      return (await cipher.update({ data: bytes })).data;
+    }
     if (!this.key) throw new Error('BluFi 加密通道尚未就绪');
     const cipher = crypto.createCipher('AES128|CFB128|NoPadding');
     const iv = new Uint8Array(16);
@@ -186,25 +223,49 @@ export class HarmonyBlufi {
     const data = concatBytes([...this.fragments, plain]);
     this.fragments = [];
     this.fragmentType = -1;
-    if (type === ((0x12 << 2) | 1)) throw new Error(`设备返回 BluFi 错误，错误码 ${data[0] ?? -1}`);
+    if (type === DATA_ERROR) throw new Error(`BluFi device error ${data[0] ?? -1}`);
     this.received.set(type, data);
     this.wake?.();
   }
 
+  private async requestDeviceVersion(): Promise<void> {
+    this.received.delete(DATA_VERSION);
+    await this.post(CTRL_GET_VERSION, new Uint8Array());
+    const response = await this.wait(DATA_VERSION, 5000);
+    if (response.length !== 2) throw new Error('BluFi device version response is invalid');
+    this.deviceVersion = (response[0] << 8) | response[1];
+    this.securityVersion = this.deviceVersion >= BLUFI_VERSION_V2 ? 2 : 1;
+  }
+
+  private async digest(algorithm: string, data: Uint8Array): Promise<Uint8Array> {
+    const md = crypto.createMd(algorithm);
+    await md.update({ data });
+    return (await md.digest()).data;
+  }
+
+  private async createV2Cipher(domain: string, secret: Uint8Array, key: crypto.SymKey,
+    mode: crypto.CryptoMode): Promise<crypto.Cipher> {
+    const domainBytes = new util.TextEncoder().encodeInto(domain);
+    const iv = (await this.digest('SHA256', concatBytes([domainBytes, secret]))).slice(0, 16);
+    const cipher = crypto.createCipher('AES256|CTR|NoPadding');
+    const params: crypto.IvParamsSpec = { algName: 'IvParamsSpec', iv: { data: iv } };
+    await cipher.init(mode, key, params);
+    return cipher;
+  }
+
   private async negotiate(): Promise<void> {
-    // Android initiates the default BluFi v1 handshake before querying version.
-    // Use platform crypto for DH and AES; never downgrade to plaintext Wi-Fi.
     const generation = this.generation;
+    const dhPrime = this.securityVersion === 2 ? DH_P_3072 : DH_P;
     const params: crypto.DHCommonParamsSpec = {
       algName: 'DH', specType: crypto.AsyKeySpecType.COMMON_PARAMS_SPEC,
-      p: BigInt(`0x${DH_P}`), g: BigInt(2), l: 1024
+      p: BigInt(`0x${dhPrime}`), g: BigInt(2), l: 0
     };
     const keys = await crypto.createAsyKeyGeneratorBySpec(params).generateKeyPair();
     this.checkGeneration(generation);
     const publicValue = keys.pubKey.getAsyKeySpec(crypto.AsyKeySpecItem.DH_PK_BN) as bigint;
-    const p = hexBytes(DH_P);
+    const p = hexBytes(dhPrime);
     const g = new Uint8Array([2]);
-    const publicBytes = hexBytes(publicValue.toString(16).padStart(256, '0'));
+    const publicBytes = hexBytes(publicValue.toString(16).padStart(p.length * 2, '0'));
     const total = p.length + g.length + publicBytes.length + 6;
     await this.post(1, new Uint8Array([0, total >> 8, total & 255]));
     const all = concatBytes([new Uint8Array([1, p.length >> 8, p.length & 255]), p,
@@ -223,13 +284,18 @@ export class HarmonyBlufi {
     const shared = (await crypto.createKeyAgreement('DH').generateSecret(keys.priKey, peer)).data;
     let offset = 0;
     while (offset < shared.length && shared[offset] === 0) offset++;
-    const md = crypto.createMd('MD5');
-    await md.update({ data: shared.slice(offset) });
-    const key = await crypto.createSymKeyGenerator('AES128').convertKey(await md.digest());
+    const secret = shared.slice(offset);
+    const derived = await this.digest(this.securityVersion === 2 ? 'SHA256' : 'MD5', secret);
+    const key = await crypto.createSymKeyGenerator(this.securityVersion === 2 ? 'AES256' : 'AES128')
+      .convertKey({ data: derived });
     shared.fill(0);
     this.checkGeneration(generation);
     this.key = key;
-    await this.post(4, new Uint8Array([3]), false, true);
+    if (this.securityVersion === 2) {
+      this.encryptCipher = await this.createV2Cipher(DEC_DOMAIN, secret, key, crypto.CryptoMode.ENCRYPT_MODE);
+      this.decryptCipher = await this.createV2Cipher(ENC_DOMAIN, secret, key, crypto.CryptoMode.DECRYPT_MODE);
+    }
+    await this.post(CTRL_SET_SECURITY, new Uint8Array([3]), false, true);
   }
 
   async configure(ssid: string, password: string, claimToken: string, status: (text: string) => void): Promise<void> {
@@ -277,6 +343,8 @@ export class HarmonyBlufi {
     const client = this.client;
     this.client = undefined;
     this.key = undefined;
+    this.encryptCipher = undefined;
+    this.decryptCipher = undefined;
     this.writeCharacteristic = undefined;
     if (client) {
       try {

@@ -38,7 +38,17 @@ Echo-backend/static/voices/
 # Logs and temp files
 *.log
 *.tmp
+tmp/
+tmp_getui/
+
+# HarmonyOS generated files
+harmony_app/.hvigor/
+harmony_app/**/build/
+harmony_app/**/oh_modules/
 
 # OS garbage
 .DS_Store
 Thumbs.db
+
+# Local Codex/IDE configuration
+.mcp.json

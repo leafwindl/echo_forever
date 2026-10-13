@@ -208,6 +208,7 @@ export struct DevicesPage {
     if (this.busy || this.bleConnected) return;
     this.busy = true;
     this.error = '';
+    this.notice = '';
     try {
       this.bleDevices = await this.capabilities.scan(this.context());
       if (!this.bleDevices.length) this.notice = '未找到 Echo BLE 设备，请确认设备已进入配网模式';
@@ -226,7 +227,7 @@ export struct DevicesPage {
       this.bleConnected = device.address;
       this.bleReady = true;
       this.notice = '蓝牙配网已就绪，请填写家庭 Wi-Fi';
-    } catch (error) { this.error = String(error); this.bleReady = false; }
+    } catch (error) { this.error = String(error); this.bleReady = false; this.notice = ''; }
     finally { this.busy = false; }
   }
 
@@ -441,10 +442,15 @@ export struct DevicesPage {
     } else if (!this.devices.length && !this.error) {
       Column({ space: 16 }) {
         Text('还没有绑定 Echo 设备').fontSize(16).fontColor('#49454F')
-        Button('先为设备配网').fontColor('#6750A4').backgroundColor('#E8DEF8')
+        Button('添加新设备').fontColor('#6750A4').backgroundColor('#E8DEF8')
           .onClick(() => { this.screen = 'ble'; void this.scanBle(); })
       }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
     } else {
+      Button('添加新设备').fontSize(14).fontColor('#6750A4').backgroundColor(Color.Transparent)
+        .enabled(!this.busy).width('100%').onClick(() => {
+          this.screen = 'ble';
+          void this.scanBle();
+        })
       Refresh({ refreshing: $$this.refreshing }) {
         List({ space: 10 }) {
           ForEach(this.devices, (device: EchoDevice) => {
@@ -537,6 +543,7 @@ export struct DevicesPage {
       Button('使用设备热点配网').width('100%').fontColor('#6750A4').backgroundColor('#E8DEF8')
         .enabled(!this.busy).onClick(() => {
           this.blufi.disconnect(); this.bleReady = false; this.bleConnected = '';
+          this.error = ''; this.notice = '';
           this.screen = 'provision'; this.configured = false;
         })
     }.width('100%').padding(20)

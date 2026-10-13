@@ -41,7 +41,7 @@ export class DeviceCapabilities {
     };
     try {
       ble.on('BLEDeviceFind', this.scanCallback);
-      ble.startBLEScan([], { interval: 0 });
+      ble.startBLEScan(null, { interval: 0 });
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, 6000);
         this.scanDone = () => { clearTimeout(timer); resolve(); };
