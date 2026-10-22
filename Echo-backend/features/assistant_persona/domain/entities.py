@@ -17,4 +17,5 @@ class AssistantPersona:
     conversation_principles: tuple[str, ...]
     allowed_self_disclosures: tuple[str, ...]
     forbidden_claims: tuple[str, ...]
+    dialogue_examples: tuple[tuple[str, str], ...] = ()
 

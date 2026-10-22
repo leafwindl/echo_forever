@@ -130,7 +130,6 @@ class OrchestrateChatWithAgent:
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         allow_proactive_stickers: bool = True,
-        proactive_sticker_due: bool = False,
         tools_enabled: bool = True,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
@@ -144,7 +143,6 @@ class OrchestrateChatWithAgent:
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
             allow_proactive_stickers=allow_proactive_stickers,
-            proactive_sticker_due=proactive_sticker_due,
             call_route_instruction=call_route_instruction,
         )
         tool_results: list[AgentToolResult] = []
@@ -1031,9 +1029,9 @@ class OrchestrateChatWithAgent:
         conversation_mode: str,
         sticker_intent: str,
         allow_proactive_stickers: bool,
-        proactive_sticker_due: bool,
         call_route_instruction: str = "",
     ) -> list[dict]:
+        # Accepted for old callers; elapsed turns do not dictate expression.
         if conversation_mode == "call":
             sticker_rule = (
                 "当前是语音通话模式。不得检索、选择或发送表情包，即使用户明确要求也不"
@@ -1055,20 +1053,16 @@ class OrchestrateChatWithAgent:
                 "it naturally improves a light, everyday check-in. Never use a sticker to "
                 "force warmth or compensate for a weak topic."
             )
-        elif allow_proactive_stickers and proactive_sticker_due:
-            sticker_rule = (
-                "聊天模式可以使用表情包。用户明确要求时调用 send_sticker，purpose 使用 "
-                "explicit_request。当前回合进入主动表情包优先窗口；如果当前是轻松、日常或"
-                "适合表达情绪的语境，应主动调用 send_sticker，purpose 使用 proactive，intent "
-                "用自然语言描述想表达的情绪和语境。官方和用户"
-                "私人表情包都可以参与选择。严肃、安全、医疗、冲突或明显悲伤的话题可以暂缓，"
-                "不要为了完成频率要求而破坏语境。"
-            )
         elif allow_proactive_stickers:
             sticker_rule = (
                 "聊天模式可以使用表情包。用户明确要求时调用 send_sticker，purpose 使用 "
-                "explicit_request。轻松且确实合适时可以主动附带一张，purpose 使用 proactive，"
-                "intent 用自然语言描述表达意图；严肃、安全、医疗、冲突或明显悲伤时不要主动发送。"
+                "explicit_request。是否主动发图取决于本轮想表达的情绪和对话气氛，没有轮数配额。"
+                "可用文字、颜文字或一张贴切的表情包表达；不必叠加，也不必每轮装饰。"
+                "官方和用户私人表情包都可以参与选择。想轻轻得意、害羞、庆祝或安慰时，"
+                "确实适合才调用 send_sticker，purpose 使用 proactive。intent 描述 Echo 想传达的"
+                "态度、对象和语境，不是简单复制用户的情绪词；用户难过不等于要发哭脸。"
+                "严肃、安全、医疗、冲突或明显悲伤时优先认真文字回应，不主动发图。"
+                "没有贴切候选就正常聊天，不能为了有图而改换成无关表情。"
             )
         else:
             sticker_rule = (
@@ -1082,8 +1076,12 @@ class OrchestrateChatWithAgent:
                 "user-visible reply. Do not output JSON, Markdown fences, tool names, internal "
                 "metadata, or explanations of the Agent workflow. Use a blank line when a reply "
                 "naturally reads as separate chat messages; otherwise keep it as one message. "
-                "Most replies should still use one to three messages. Use more only when the reply "
-                "contains genuinely distinct thoughts, and never exceed six. If send_sticker "
+                "Choose message boundaries by meaning and conversational rhythm, not character "
+                "counts. Even a short reply may have two distinct beats; a complete thought may "
+                "stay together. In casual chat, say only what matters now and leave room for the "
+                "user; do not generate a long answer merely to split it. Keep lists, quotations, "
+                "URLs, code and kaomoji intact. Six messages is only a transport safety ceiling, "
+                "never a target. Plain text alone is a complete reply. If send_sticker "
                 "completed, the backend will attach the image separately and you must not claim "
                 "that you cannot send it. A sticker is sent only when send_sticker completes. "
                 "Never narrate or simulate sticker/image delivery in visible text, including "

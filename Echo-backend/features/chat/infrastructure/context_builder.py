@@ -1,19 +1,19 @@
 import json
 import logging
 import re
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from shared.config import settings
 
 from features.assistant_persona.public import get_assistant_persona
+from features.chat.domain.entities import ChatContext
 from features.chat.domain.dialogue_style import (
     should_pause_followup_questions,
     should_suppress_repeated_greeting,
 )
 from features.chat.domain.temporal_context import build_temporal_context, format_gap_seconds
 from features.chat.infrastructure import postgres_repositories
-from features.chat.infrastructure.prompt_renderer import (
+from shared.prompting.renderer import (
     render_prompt_layers,
     render_turn_focus_guidance,
 )
@@ -32,21 +32,6 @@ MAX_HISTORY_MESSAGES = MAX_ROUNDS * 2
 MAX_LONG_TERM_MEMORIES = 8
 
 
-@dataclass
-class ChatContext:
-    messages: list[dict[str, str]]
-    history_messages: list[dict[str, str]]
-    conversation_summary: str = ""
-    long_term_memories: list[dict[str, object]] = field(default_factory=list)
-    memory_retrieval_mode: str = "none"
-    pause_followup_questions: bool = False
-    suppress_repeated_greeting: bool = False
-    allow_proactive_stickers: bool = True
-    proactive_sticker_due: bool = False
-    temporal_context: dict[str, object] = field(default_factory=dict)
-    proactive_writer_messages: list[dict[str, str]] = field(default_factory=list)
-    proactive_safe_facts: dict[str, str] = field(default_factory=dict)
-    proactive_planner_input: dict[str, object] = field(default_factory=dict)
 
 
 _MESSAGE_TIME_PREFIX = re.compile(
@@ -159,16 +144,6 @@ def _build_call_temporal_context(
     return result
 
 
-def should_prioritize_proactive_sticker(
-    *,
-    allow_proactive_stickers: bool,
-    completed_turns_without_sticker: int,
-    target_turns: int,
-) -> bool:
-    return allow_proactive_stickers and completed_turns_without_sticker >= max(
-        target_turns - 1,
-        0,
-    )
 
 
 def _turn_input_message(user_message: str, conversation_mode: str) -> dict[str, str]:
@@ -356,21 +331,7 @@ async def build_chat_context(
             minimum_interval_seconds=settings.sticker_proactive_min_interval_seconds,
         )
     )
-    completed_turns_before_due = max(settings.sticker_proactive_target_turns - 1, 0)
-    completed_turns_without_sticker = (
-        postgres_repositories.count_recent_assistant_turns_without_sticker(
-            user_id,
-            conversation_id,
-            maximum_turns=max(completed_turns_before_due, 1),
-        )
-        if allow_proactive_stickers
-        else 0
-    )
-    proactive_sticker_due = should_prioritize_proactive_sticker(
-        allow_proactive_stickers=allow_proactive_stickers,
-        completed_turns_without_sticker=completed_turns_without_sticker,
-        target_turns=settings.sticker_proactive_target_turns,
-    )
+    # Cooldown is an upper bound on interruptions, never a minimum sending cadence.
     conversation_timing = (
         None
         if unknown_speaker or not memory_enabled
@@ -540,7 +501,6 @@ async def build_chat_context(
         pause_followup_questions=pause_followup_questions,
         suppress_repeated_greeting=suppress_repeated_greeting,
         allow_proactive_stickers=allow_proactive_stickers,
-        proactive_sticker_due=proactive_sticker_due,
         temporal_context=temporal_context,
         proactive_writer_messages=proactive_writer_messages,
         proactive_safe_facts=proactive_safe_facts,

@@ -263,17 +263,17 @@ class AgentDomainTests(unittest.TestCase):
 
         self.assertEqual(_tool_names(descriptions), ["search_web"])
 
-    def test_due_turn_prioritizes_proactive_sticker_without_excluding_private_library(self):
+    def test_sticker_policy_has_no_elapsed_turn_quota(self):
         messages = OrchestrateChatWithAgent._build_initial_messages(
             messages=[{"role": "user", "content": "今天心情不错"}],
             conversation_mode="chat",
             sticker_intent="",
             allow_proactive_stickers=True,
-            proactive_sticker_due=True,
         )
 
         instruction = messages[0]["content"]
-        self.assertIn("主动表情包优先窗口", instruction)
+        self.assertNotIn("主动表情包优先窗口", instruction)
+        self.assertIn("没有轮数配额", instruction)
         self.assertIn("官方和用户私人表情包都可以参与选择", instruction)
 
 
@@ -283,7 +283,6 @@ class AgentDomainTests(unittest.TestCase):
             conversation_mode="proactive",
             sticker_intent="",
             allow_proactive_stickers=True,
-            proactive_sticker_due=False,
         )
 
         instruction = messages[0]["content"]

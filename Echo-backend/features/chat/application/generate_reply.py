@@ -401,7 +401,6 @@ class GenerateChatReply:
             "conversation_mode": conversation_mode,
             "sticker_intent": sticker_intent,
             "allow_proactive_stickers": context.allow_proactive_stickers,
-            "proactive_sticker_due": context.proactive_sticker_due,
         }
         if "conversation_id" in inspect.signature(self.agent_orchestrator.run).parameters:
             agent_kwargs["conversation_id"] = conversation_id

@@ -1,0 +1,564 @@
+{
+  "diagrams": [
+    {
+      "id": "d1",
+      "title": "从读取材料，到一份模型请求",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "curved"
+      },
+      "groups": [
+        {
+          "id": "d1g1",
+          "label": "业务准备",
+          "nodeIds": [
+            "d1n1",
+            "d1n2",
+            "d1n3",
+            "d1n4",
+            "d1n5"
+          ]
+        },
+        {
+          "id": "d1g2",
+          "label": "共享机制",
+          "nodeIds": [
+            "d1n6"
+          ]
+        },
+        {
+          "id": "d1g3",
+          "label": "请求组装",
+          "nodeIds": [
+            "d1n7",
+            "d1n8",
+            "d1n9",
+            "d1n10",
+            "d1n11"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "d1n1",
+          "label": "已接收消息批次",
+          "kind": "start",
+          "group": "d1g1"
+        },
+        {
+          "id": "d1n2",
+          "label": "准备本轮回复",
+          "kind": "process",
+          "group": "d1g1"
+        },
+        {
+          "id": "d1n3",
+          "label": "文件与配置",
+          "kind": "data",
+          "group": "d1g1"
+        },
+        {
+          "id": "d1n4",
+          "label": "数据库与计算",
+          "kind": "data",
+          "group": "d1g1"
+        },
+        {
+          "id": "d1n5",
+          "label": "读取并选择材料",
+          "kind": "process",
+          "group": "d1g1"
+        },
+        {
+          "id": "d1n6",
+          "label": "渲染基础消息",
+          "kind": "service",
+          "group": "d1g2"
+        },
+        {
+          "id": "d1n7",
+          "label": "追加本轮和历史",
+          "kind": "process",
+          "group": "d1g3"
+        },
+        {
+          "id": "d1n8",
+          "label": "前置执行合同",
+          "kind": "process",
+          "group": "d1g3"
+        },
+        {
+          "id": "d1n9",
+          "label": "筛选工具描述",
+          "kind": "service",
+          "group": "d1g3"
+        },
+        {
+          "id": "d1n10",
+          "label": "请求输入字段",
+          "kind": "data",
+          "group": "d1g3"
+        },
+        {
+          "id": "d1n11",
+          "label": "发送模型请求",
+          "kind": "service",
+          "group": "d1g3"
+        }
+      ],
+      "edges": [
+        {
+          "id": "d1e1",
+          "from": "d1n1",
+          "to": "d1n2",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e2",
+          "from": "d1n2",
+          "to": "d1n5",
+          "label": "常规路径",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e3",
+          "from": "d1n3",
+          "to": "d1n5",
+          "label": "稳定材料",
+          "kind": "data"
+        },
+        {
+          "id": "d1e4",
+          "from": "d1n4",
+          "to": "d1n5",
+          "label": "动态材料",
+          "kind": "data"
+        },
+        {
+          "id": "d1e5",
+          "from": "d1n5",
+          "to": "d1n6",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e6",
+          "from": "d1n6",
+          "to": "d1n7",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e7",
+          "from": "d1n7",
+          "to": "d1n8",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e8",
+          "from": "d1n8",
+          "to": "d1n10",
+          "label": "messages",
+          "kind": "data"
+        },
+        {
+          "id": "d1e9",
+          "from": "d1n9",
+          "to": "d1n10",
+          "label": "tools",
+          "kind": "data"
+        },
+        {
+          "id": "d1e10",
+          "from": "d1n10",
+          "to": "d1n11",
+          "label": "",
+          "kind": "flow"
+        }
+      ],
+      "notes": [
+        "主链从上到下；文件、数据库作为来源支路，工具在请求处汇入。此图是步骤概括，消息逐条顺序见下方拼接演示。",
+        "分组用节点颜色与详情标识；节点位置和连线由本地 Dagre 自动计算。"
+      ]
+    },
+    {
+      "id": "d2",
+      "title": "动态材料如何产生，并供下一轮读取",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "curved"
+      },
+      "groups": [
+        {
+          "id": "d2g1",
+          "label": "已保存对话",
+          "nodeIds": [
+            "d2n1"
+          ]
+        },
+        {
+          "id": "d2g2",
+          "label": "长期记忆",
+          "nodeIds": [
+            "d2n2",
+            "d2n3",
+            "d2n4",
+            "d2n5"
+          ]
+        },
+        {
+          "id": "d2g3",
+          "label": "摘要",
+          "nodeIds": [
+            "d2n6",
+            "d2n7",
+            "d2n8"
+          ]
+        },
+        {
+          "id": "d2g4",
+          "label": "关系",
+          "nodeIds": [
+            "d2n9",
+            "d2n10"
+          ]
+        },
+        {
+          "id": "d2g5",
+          "label": "后续读取",
+          "nodeIds": [
+            "d2n11"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "d2n1",
+          "label": "回复已持久化",
+          "kind": "start",
+          "group": "d2g1"
+        },
+        {
+          "id": "d2n2",
+          "label": "记忆抽取门槛",
+          "kind": "decision",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n3",
+          "label": "模型提出记忆",
+          "kind": "service",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n4",
+          "label": "检查并应用操作",
+          "kind": "process",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n5",
+          "label": "记忆与向量存储",
+          "kind": "data",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n6",
+          "label": "摘要数量门槛",
+          "kind": "decision",
+          "group": "d2g3"
+        },
+        {
+          "id": "d2n7",
+          "label": "模型合并摘要",
+          "kind": "service",
+          "group": "d2g3"
+        },
+        {
+          "id": "d2n8",
+          "label": "摘要与覆盖边界",
+          "kind": "data",
+          "group": "d2g3"
+        },
+        {
+          "id": "d2n9",
+          "label": "规则检测关系信号",
+          "kind": "process",
+          "group": "d2g4"
+        },
+        {
+          "id": "d2n10",
+          "label": "关系状态存储",
+          "kind": "data",
+          "group": "d2g4"
+        },
+        {
+          "id": "d2n11",
+          "label": "后续请求按需读",
+          "kind": "process",
+          "group": "d2g5"
+        }
+      ],
+      "edges": [
+        {
+          "id": "d2e1",
+          "from": "d2n1",
+          "to": "d2n2",
+          "label": "记忆分支",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e2",
+          "from": "d2n2",
+          "to": "d2n3",
+          "label": "达到门槛",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e3",
+          "from": "d2n3",
+          "to": "d2n4",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e4",
+          "from": "d2n4",
+          "to": "d2n5",
+          "label": "有效操作",
+          "kind": "data"
+        },
+        {
+          "id": "d2e5",
+          "from": "d2n5",
+          "to": "d2n11",
+          "label": "按输入召回",
+          "kind": "data"
+        },
+        {
+          "id": "d2e6",
+          "from": "d2n1",
+          "to": "d2n6",
+          "label": "摘要分支",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e7",
+          "from": "d2n6",
+          "to": "d2n7",
+          "label": "达到门槛",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e8",
+          "from": "d2n7",
+          "to": "d2n8",
+          "label": "非空结果",
+          "kind": "data"
+        },
+        {
+          "id": "d2e9",
+          "from": "d2n8",
+          "to": "d2n11",
+          "label": "按会话读取",
+          "kind": "data"
+        },
+        {
+          "id": "d2e10",
+          "from": "d2n1",
+          "to": "d2n9",
+          "label": "关系分支",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e11",
+          "from": "d2n9",
+          "to": "d2n10",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "d2e12",
+          "from": "d2n10",
+          "to": "d2n11",
+          "label": "状态加本轮",
+          "kind": "data"
+        }
+      ],
+      "notes": [
+        "记忆、摘要、关系三条分支并排。未达到门槛时跳过该分支，省略跳过连线以避免交叉。",
+        "分组用节点颜色与详情标识；节点位置和连线由本地 Dagre 自动计算。"
+      ]
+    },
+    {
+      "id": "d3",
+      "title": "工具调用后，上下文怎样继续增长",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "curved"
+      },
+      "groups": [
+        {
+          "id": "d3g1",
+          "label": "请求与模型",
+          "nodeIds": [
+            "d3n1",
+            "d3n2",
+            "d3n3",
+            "d3n8"
+          ]
+        },
+        {
+          "id": "d3g2",
+          "label": "受限执行",
+          "nodeIds": [
+            "d3n4",
+            "d3n5",
+            "d3n6",
+            "d3n7"
+          ]
+        },
+        {
+          "id": "d3g3",
+          "label": "交付",
+          "nodeIds": [
+            "d3n9"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "d3n1",
+          "label": "初始消息与工具",
+          "kind": "data",
+          "group": "d3g1"
+        },
+        {
+          "id": "d3n2",
+          "label": "模型生成",
+          "kind": "service",
+          "group": "d3g1"
+        },
+        {
+          "id": "d3n3",
+          "label": "需要工具吗",
+          "kind": "decision",
+          "group": "d3g1"
+        },
+        {
+          "id": "d3n4",
+          "label": "保留调用申请",
+          "kind": "data",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n5",
+          "label": "程序校验与预算",
+          "kind": "decision",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n6",
+          "label": "执行或返回失败",
+          "kind": "service",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n7",
+          "label": "回填配对结果",
+          "kind": "data",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n8",
+          "label": "携带结果再请求",
+          "kind": "process",
+          "group": "d3g1"
+        },
+        {
+          "id": "d3n9",
+          "label": "检查后交付回复",
+          "kind": "process",
+          "group": "d3g3"
+        }
+      ],
+      "edges": [
+        {
+          "id": "d3e1",
+          "from": "d3n1",
+          "to": "d3n2",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e2",
+          "from": "d3n2",
+          "to": "d3n3",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e3",
+          "from": "d3n3",
+          "to": "d3n4",
+          "label": "提出调用",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e4",
+          "from": "d3n4",
+          "to": "d3n5",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e5",
+          "from": "d3n5",
+          "to": "d3n6",
+          "label": "允许或拒绝",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e6",
+          "from": "d3n6",
+          "to": "d3n7",
+          "label": "真实状态",
+          "kind": "data"
+        },
+        {
+          "id": "d3e7",
+          "from": "d3n7",
+          "to": "d3n8",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e8",
+          "from": "d3n8",
+          "to": "d3n2",
+          "label": "预算内继续",
+          "kind": "optional"
+        },
+        {
+          "id": "d3e9",
+          "from": "d3n3",
+          "to": "d3n9",
+          "label": "最终文本",
+          "kind": "flow"
+        }
+      ],
+      "notes": [
+        "主回路从上到下；再次请求的回边走外围。多个工具调用在节点详情说明，不展开重复平行线。",
+        "分组用节点颜色与详情标识；节点位置和连线由本地 Dagre 自动计算。"
+      ]
+    }
+  ]
+}

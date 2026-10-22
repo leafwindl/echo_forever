@@ -49,7 +49,6 @@ class ChatAgentOrchestratorAdapter(ChatAgentOrchestrator):
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         allow_proactive_stickers: bool = True,
-        proactive_sticker_due: bool = False,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         tools_enabled: bool | None = None,
@@ -62,7 +61,6 @@ class ChatAgentOrchestratorAdapter(ChatAgentOrchestrator):
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
             allow_proactive_stickers=allow_proactive_stickers,
-            proactive_sticker_due=proactive_sticker_due,
             on_text_delta=on_text_delta,
             on_progress_text=on_progress_text,
             tools_enabled=tools_enabled,
@@ -280,21 +278,7 @@ class ChatContextProviderAdapter(ChatContextProvider):
             speaker_role=speaker_role,
             memory_enabled=memory_enabled,
         )
-        return ChatContext(
-            messages=context.messages,
-            history_messages=context.history_messages,
-            conversation_summary=context.conversation_summary,
-            long_term_memories=context.long_term_memories,
-            memory_retrieval_mode=context.memory_retrieval_mode,
-            pause_followup_questions=context.pause_followup_questions,
-            suppress_repeated_greeting=context.suppress_repeated_greeting,
-            allow_proactive_stickers=context.allow_proactive_stickers,
-            proactive_sticker_due=context.proactive_sticker_due,
-            temporal_context=context.temporal_context,
-            proactive_writer_messages=context.proactive_writer_messages,
-            proactive_safe_facts=context.proactive_safe_facts,
-            proactive_planner_input=context.proactive_planner_input,
-        )
+        return context
 
 
 class ConversationSummaryUpdaterAdapter(ConversationSummaryUpdater):

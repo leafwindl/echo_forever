@@ -1,0 +1,840 @@
+{
+  "diagrams": [
+    {
+      "id": "diagram-1",
+      "title": "发出去之前，先确认消息有效",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "d1g1",
+          "label": "客户端",
+          "nodeIds": [
+            "d1n1",
+            "d1n2",
+            "d1n3",
+            "d1n4",
+            "d1n12"
+          ]
+        },
+        {
+          "id": "d1g2",
+          "label": "服务端接收",
+          "nodeIds": [
+            "d1n5",
+            "d1n6",
+            "d1n7",
+            "d1n8",
+            "d1n9",
+            "d1n10",
+            "d1n11"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "d1n1",
+          "label": "点击发送",
+          "kind": "start",
+          "group": "d1g1"
+        },
+        {
+          "id": "d1n2",
+          "label": "本地校验",
+          "kind": "decision",
+          "group": "d1g1"
+        },
+        {
+          "id": "d1n3",
+          "label": "提示修改",
+          "kind": "process",
+          "group": "d1g1"
+        },
+        {
+          "id": "d1n4",
+          "label": "编号并显示",
+          "kind": "process",
+          "group": "d1g1"
+        },
+        {
+          "id": "d1n5",
+          "label": "身份与请求校验",
+          "kind": "decision",
+          "group": "d1g2"
+        },
+        {
+          "id": "d1n6",
+          "label": "检查消息编号",
+          "kind": "decision",
+          "group": "d1g2"
+        },
+        {
+          "id": "d1n7",
+          "label": "返回已有结果",
+          "kind": "data",
+          "group": "d1g2"
+        },
+        {
+          "id": "d1n8",
+          "label": "检查队列容量",
+          "kind": "decision",
+          "group": "d1g2"
+        },
+        {
+          "id": "d1n9",
+          "label": "保存并加入批次",
+          "kind": "data",
+          "group": "d1g2"
+        },
+        {
+          "id": "d1n10",
+          "label": "确认已接收",
+          "kind": "process",
+          "group": "d1g2"
+        },
+        {
+          "id": "d1n11",
+          "label": "拒绝并提示",
+          "kind": "process",
+          "group": "d1g2"
+        },
+        {
+          "id": "d1n12",
+          "label": "发送失败可重试",
+          "kind": "process",
+          "group": "d1g1"
+        }
+      ],
+      "edges": [
+        {
+          "id": "d1e1",
+          "from": "d1n1",
+          "to": "d1n2",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e2",
+          "from": "d1n2",
+          "to": "d1n3",
+          "label": "不通过",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e3",
+          "from": "d1n2",
+          "to": "d1n4",
+          "label": "通过",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e4",
+          "from": "d1n4",
+          "to": "d1n5",
+          "label": "提交请求",
+          "kind": "data"
+        },
+        {
+          "id": "d1e5",
+          "from": "d1n5",
+          "to": "d1n6",
+          "label": "通过",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e6",
+          "from": "d1n5",
+          "to": "d1n11",
+          "label": "拒绝",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e7",
+          "from": "d1n6",
+          "to": "d1n7",
+          "label": "相同内容",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e8",
+          "from": "d1n6",
+          "to": "d1n11",
+          "label": "内容冲突",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e9",
+          "from": "d1n6",
+          "to": "d1n8",
+          "label": "新编号",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e10",
+          "from": "d1n8",
+          "to": "d1n9",
+          "label": "有容量",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e11",
+          "from": "d1n8",
+          "to": "d1n11",
+          "label": "已满",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e12",
+          "from": "d1n9",
+          "to": "d1n10",
+          "label": "保存成功",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e13",
+          "from": "d1n7",
+          "to": "d1n10",
+          "label": "复用结果",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e14",
+          "from": "d1n11",
+          "to": "d1n12",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d1e15",
+          "from": "d1n4",
+          "to": "d1n12",
+          "label": "网络失败",
+          "kind": "optional"
+        },
+        {
+          "id": "d1e16",
+          "from": "d1n12",
+          "to": "d1n5",
+          "label": "原编号重试",
+          "kind": "optional"
+        }
+      ],
+      "notes": [
+        "主流程从上到下，拒绝和重试放在侧支；重试使用外围回边。",
+        "diagram-1 的“保存并加入批次”衔接 diagram-2；接收确认不等待模型。"
+      ]
+    },
+    {
+      "id": "diagram-2",
+      "title": "后台怎样理解并处理这轮消息",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "d2g1",
+          "label": "后台调度",
+          "nodeIds": [
+            "d2n1",
+            "d2n2",
+            "d2n3",
+            "d2n4"
+          ]
+        },
+        {
+          "id": "d2g2",
+          "label": "回复准备",
+          "nodeIds": [
+            "d2n5",
+            "d2n6",
+            "d2n7",
+            "d2n8",
+            "d2n9",
+            "d2n10",
+            "d2n11"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "d2n1",
+          "label": "等待批次就绪",
+          "kind": "start",
+          "group": "d2g1"
+        },
+        {
+          "id": "d2n2",
+          "label": "领取后台任务",
+          "kind": "service",
+          "group": "d2g1"
+        },
+        {
+          "id": "d2n3",
+          "label": "用户执行锁",
+          "kind": "decision",
+          "group": "d2g1"
+        },
+        {
+          "id": "d2n4",
+          "label": "稍后再处理",
+          "kind": "process",
+          "group": "d2g1"
+        },
+        {
+          "id": "d2n5",
+          "label": "显示正在输入",
+          "kind": "process",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n6",
+          "label": "明确相对提醒",
+          "kind": "decision",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n7",
+          "label": "尝试创建提醒",
+          "kind": "service",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n8",
+          "label": "组装对话上下文",
+          "kind": "data",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n9",
+          "label": "运行模型与工具",
+          "kind": "service",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n10",
+          "label": "进入回复交付",
+          "kind": "process",
+          "group": "d2g2"
+        },
+        {
+          "id": "d2n11",
+          "label": "任务失败通知",
+          "kind": "process",
+          "group": "d2g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "d2e1",
+          "from": "d2n1",
+          "to": "d2n2",
+          "label": "批次到期",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e2",
+          "from": "d2n2",
+          "to": "d2n3",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e3",
+          "from": "d2n3",
+          "to": "d2n4",
+          "label": "被占用",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e4",
+          "from": "d2n4",
+          "to": "d2n1",
+          "label": "重新排队",
+          "kind": "optional"
+        },
+        {
+          "id": "d2e5",
+          "from": "d2n3",
+          "to": "d2n5",
+          "label": "已获得",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e6",
+          "from": "d2n5",
+          "to": "d2n6",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e7",
+          "from": "d2n6",
+          "to": "d2n7",
+          "label": "匹配",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e8",
+          "from": "d2n6",
+          "to": "d2n8",
+          "label": "未匹配",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e9",
+          "from": "d2n7",
+          "to": "d2n10",
+          "label": "创建成功",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e10",
+          "from": "d2n7",
+          "to": "d2n8",
+          "label": "创建失败",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e11",
+          "from": "d2n8",
+          "to": "d2n9",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "d2e12",
+          "from": "d2n9",
+          "to": "d2n10",
+          "label": "已准备",
+          "kind": "flow"
+        },
+        {
+          "id": "d2e13",
+          "from": "d2n9",
+          "to": "d2n11",
+          "label": "未恢复异常",
+          "kind": "optional"
+        }
+      ],
+      "notes": [
+        "提醒快捷分支与常规模型分支并排，随后汇合到交付节点。",
+        "diagram-3 展开“运行模型与工具”；diagram-4 展开回复交付。",
+        "失败节点概括整个任务处理期间未恢复的异常，避免给每个节点增加错误连线。"
+      ]
+    },
+    {
+      "id": "diagram-3",
+      "title": "模型提出调用，系统决定能否执行",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "d3g1",
+          "label": "模型回路",
+          "nodeIds": [
+            "d3n1",
+            "d3n2",
+            "d3n3",
+            "d3n4",
+            "d3n11",
+            "d3n12"
+          ]
+        },
+        {
+          "id": "d3g2",
+          "label": "工具执行门禁",
+          "nodeIds": [
+            "d3n5",
+            "d3n6",
+            "d3n7",
+            "d3n8",
+            "d3n9",
+            "d3n10"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "d3n1",
+          "label": "接收对话上下文",
+          "kind": "start",
+          "group": "d3g1"
+        },
+        {
+          "id": "d3n2",
+          "label": "模型生成下一步",
+          "kind": "service",
+          "group": "d3g1"
+        },
+        {
+          "id": "d3n3",
+          "label": "是否申请工具",
+          "kind": "decision",
+          "group": "d3g1"
+        },
+        {
+          "id": "d3n4",
+          "label": "检查运行预算",
+          "kind": "decision",
+          "group": "d3g1"
+        },
+        {
+          "id": "d3n5",
+          "label": "检查工具与模式",
+          "kind": "decision",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n6",
+          "label": "去重与次数检查",
+          "kind": "decision",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n7",
+          "label": "校验工具参数",
+          "kind": "decision",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n8",
+          "label": "限时执行工具",
+          "kind": "service",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n9",
+          "label": "记录真实结果",
+          "kind": "data",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n10",
+          "label": "生成拒绝结果",
+          "kind": "data",
+          "group": "d3g2"
+        },
+        {
+          "id": "d3n11",
+          "label": "收尾或失败兜底",
+          "kind": "process",
+          "group": "d3g1"
+        },
+        {
+          "id": "d3n12",
+          "label": "形成最终回复",
+          "kind": "process",
+          "group": "d3g1"
+        }
+      ],
+      "edges": [
+        {
+          "id": "d3e1",
+          "from": "d3n1",
+          "to": "d3n2",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "d3e2",
+          "from": "d3n2",
+          "to": "d3n3",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e3",
+          "from": "d3n3",
+          "to": "d3n12",
+          "label": "直接回答",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e4",
+          "from": "d3n3",
+          "to": "d3n4",
+          "label": "申请调用",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e5",
+          "from": "d3n4",
+          "to": "d3n5",
+          "label": "仍有预算",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e6",
+          "from": "d3n4",
+          "to": "d3n11",
+          "label": "已耗尽",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e7",
+          "from": "d3n5",
+          "to": "d3n6",
+          "label": "允许",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e8",
+          "from": "d3n5",
+          "to": "d3n10",
+          "label": "拒绝",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e9",
+          "from": "d3n6",
+          "to": "d3n7",
+          "label": "允许",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e10",
+          "from": "d3n6",
+          "to": "d3n10",
+          "label": "拒绝",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e11",
+          "from": "d3n7",
+          "to": "d3n8",
+          "label": "通过",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e12",
+          "from": "d3n7",
+          "to": "d3n10",
+          "label": "不通过",
+          "kind": "flow"
+        },
+        {
+          "id": "d3e13",
+          "from": "d3n8",
+          "to": "d3n9",
+          "label": "执行结果",
+          "kind": "data"
+        },
+        {
+          "id": "d3e14",
+          "from": "d3n10",
+          "to": "d3n9",
+          "label": "拒绝原因",
+          "kind": "data"
+        },
+        {
+          "id": "d3e15",
+          "from": "d3n9",
+          "to": "d3n2",
+          "label": "回填再判断",
+          "kind": "data"
+        },
+        {
+          "id": "d3e16",
+          "from": "d3n11",
+          "to": "d3n12",
+          "label": "",
+          "kind": "flow"
+        }
+      ],
+      "notes": [
+        "校验节点沿主流程排列，拒绝结果放在侧边；回填模型使用外围回边。",
+        "相同参数去重仅覆盖本轮已记录结果，不代表重启后动作绝不重复。"
+      ]
+    },
+    {
+      "id": "diagram-4",
+      "title": "回复怎样显示，断线后怎样补齐",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "d4g1",
+          "label": "服务端交付",
+          "nodeIds": [
+            "d4n1",
+            "d4n2",
+            "d4n3",
+            "d4n4"
+          ]
+        },
+        {
+          "id": "d4g2",
+          "label": "客户端展示与恢复",
+          "nodeIds": [
+            "d4n5",
+            "d4n6",
+            "d4n7",
+            "d4n8",
+            "d4n9",
+            "d4n10"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "d4n1",
+          "label": "检查交付内容",
+          "kind": "start",
+          "group": "d4g1"
+        },
+        {
+          "id": "d4n2",
+          "label": "保存整组回复",
+          "kind": "data",
+          "group": "d4g1"
+        },
+        {
+          "id": "d4n3",
+          "label": "执行保存后处理",
+          "kind": "process",
+          "group": "d4g1"
+        },
+        {
+          "id": "d4n4",
+          "label": "发布回复事件",
+          "kind": "service",
+          "group": "d4g1"
+        },
+        {
+          "id": "d4n5",
+          "label": "连接是否正常",
+          "kind": "decision",
+          "group": "d4g2"
+        },
+        {
+          "id": "d4n6",
+          "label": "排队展示回复",
+          "kind": "process",
+          "group": "d4g2"
+        },
+        {
+          "id": "d4n7",
+          "label": "按编号合并消息",
+          "kind": "process",
+          "group": "d4g2"
+        },
+        {
+          "id": "d4n8",
+          "label": "回复显示完成",
+          "kind": "process",
+          "group": "d4g2"
+        },
+        {
+          "id": "d4n9",
+          "label": "延迟后自动重连",
+          "kind": "process",
+          "group": "d4g2"
+        },
+        {
+          "id": "d4n10",
+          "label": "补发遗漏历史",
+          "kind": "data",
+          "group": "d4g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "d4e1",
+          "from": "d4n1",
+          "to": "d4n2",
+          "label": "通过检查",
+          "kind": "flow"
+        },
+        {
+          "id": "d4e2",
+          "from": "d4n2",
+          "to": "d4n3",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d4e3",
+          "from": "d4n3",
+          "to": "d4n4",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d4e4",
+          "from": "d4n4",
+          "to": "d4n5",
+          "label": "事件通道",
+          "kind": "data"
+        },
+        {
+          "id": "d4e5",
+          "from": "d4n5",
+          "to": "d4n6",
+          "label": "正常",
+          "kind": "flow"
+        },
+        {
+          "id": "d4e6",
+          "from": "d4n6",
+          "to": "d4n7",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d4e7",
+          "from": "d4n7",
+          "to": "d4n8",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "d4e8",
+          "from": "d4n5",
+          "to": "d4n9",
+          "label": "断开",
+          "kind": "flow"
+        },
+        {
+          "id": "d4e9",
+          "from": "d4n9",
+          "to": "d4n10",
+          "label": "携带编号",
+          "kind": "data"
+        },
+        {
+          "id": "d4e10",
+          "from": "d4n10",
+          "to": "d4n7",
+          "label": "合并历史",
+          "kind": "data"
+        },
+        {
+          "id": "d4e11",
+          "from": "d4n10",
+          "to": "d4n5",
+          "label": "恢复订阅",
+          "kind": "flow"
+        }
+      ],
+      "notes": [
+        "正常展示与重连补发并排，统一汇入消息合并节点。",
+        "图中“回复显示完成”只表示本轮展示完成，事件通道继续保持。"
+      ]
+    }
+  ]
+}

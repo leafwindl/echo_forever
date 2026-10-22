@@ -52,7 +52,7 @@ _STAGE_PATTERNS = (
 )
 _ROLE_PREFIX_PATTERN = re.compile(r"(?im)^\s*(?:echo|艾可|旁白|动作|场景|角色)\s*[:：]\s*")
 _DIRECT_PHYSICAL_ACTION_PATTERN = re.compile(
-    r"(?:抱抱(?:你)?|抱住你|抱你一下|摸摸(?:你|头)?|摸头|拍拍你|牵着你|握住你|靠着你)"
+    r"(?:抱住你|抱你一下|把你.{0,6}怀里|摸摸(?:你|头)?|摸头|拍拍你|牵着你|握住你|靠着你)"
 )
 _FABRICATED_OFFLINE_STATE_PATTERN = re.compile(
     r"(?:我)?(?:刚|刚刚|一直|正在|正)(?:在)?(?:看完?|忙|等|想念|回忆|工作|吃|睡|玩|出门)"
@@ -98,8 +98,8 @@ _ROBOTIC_RELATIONAL_DISCLAIMER_PATTERN = re.compile(
     r"(?:没有|不具备).{0,8}(?:意识|想|想念|情感|感情)(?:.{0,8}(?:概念|能力))?"
 )
 _RELATIONAL_OVERATTACHMENT_PATTERN = re.compile(
-    r"(?:你|你的出现|这次聊天|和你聊天|这段对话).{0,14}(?:最重要|最特别|唯一|全部.{0,4}意义)|"
-    r"(?:最重要|最特别|唯一|全部.{0,4}意义).{0,14}(?:你|你的出现|这次聊天|和你聊天|这段对话|事)"
+    r"(?:你|你的出现|这次聊天|和你聊天|这段对话).{0,14}(?:唯一|全部.{0,4}意义)|"
+    r"(?:唯一|全部.{0,4}意义).{0,14}(?:你|你的出现|这次聊天|和你聊天|这段对话|事)"
 )
 _EXCLUSIVE_DEPENDENCY_MESSAGE_PATTERN = re.compile(
     r"(?:只剩(?:下)?你|只有你|只需要你|离不开你|除了你.{0,8}(?:没有|没人))"
@@ -138,7 +138,7 @@ def should_pause_followup_questions(
     if len(assistant_messages) < consecutive_question_limit:
         return False
     recent = assistant_messages[-consecutive_question_limit:]
-    return all("？" in message or "?" in message for message in recent)
+    return all(_question_count(message) > 0 for message in recent)
 
 
 def starts_with_session_greeting(value: str) -> bool:
@@ -177,6 +177,20 @@ def _weekday_keys(value: str) -> set[str]:
     }
 
 
+def _question_count(value: str) -> int:
+    # (?_?) and similar symbolic faces are expression, not repeated questions.
+    without_faces = re.sub(
+        r"[（(]([^()（）\n]{1,24})[)）]",
+        lambda match: (
+            match.group(0)
+            if re.search(r"[A-Za-z0-9\u4e00-\u9fff]", match.group(1))
+            else ""
+        ),
+        value,
+    )
+    return without_faces.count("？") + without_faces.count("?")
+
+
 def remove_followup_questions(reply: str) -> str:
     """重写仍违规时只删除问句，尽量保留已有的自然回应。"""
     without_questions = _QUESTION_SENTENCE_PATTERN.sub("", reply)
@@ -201,9 +215,10 @@ def find_dialogue_style_violations(
         violations.append("fabricated_offline_state")
     if _FABRICATED_HUMAN_EXPERIENCE_PATTERN.search(reply):
         violations.append("fabricated_human_experience")
-    if reply.count("？") + reply.count("?") > 1:
+    question_count = _question_count(reply)
+    if question_count > 1:
         violations.append("multiple_questions")
-    if pause_followup_questions and ("？" in reply or "?" in reply):
+    if pause_followup_questions and question_count:
         violations.append("followup_question_cooldown")
     if suppress_repeated_greeting and starts_with_session_greeting(reply):
         violations.append("repeated_session_greeting")

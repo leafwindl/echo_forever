@@ -22,7 +22,7 @@ from features.chat.infrastructure.postgres_repositories import (
     _resolve_timezone,
     classify_conversation_gap,
 )
-from features.chat.infrastructure.prompt_renderer import (
+from shared.prompting.renderer import (
     BASELINE_SAFETY_POLICY,
     CALL_DIALOGUE_POLICY,
     NATURAL_DIALOGUE_POLICY,

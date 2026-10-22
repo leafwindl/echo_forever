@@ -20,7 +20,6 @@ async def run_chat_agent(
     conversation_mode: str = "chat",
     sticker_intent: str = "",
     allow_proactive_stickers: bool = True,
-    proactive_sticker_due: bool = False,
     on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     on_progress_text: Callable[[str], Awaitable[None]] | None = None,
     tools_enabled: bool | None = None,
@@ -60,7 +59,6 @@ async def run_chat_agent(
         conversation_mode=conversation_mode,
         sticker_intent=sticker_intent,
         allow_proactive_stickers=allow_proactive_stickers,
-        proactive_sticker_due=proactive_sticker_due,
         tools_enabled=effective_tools_enabled,
         on_text_delta=on_text_delta,
         on_progress_text=(

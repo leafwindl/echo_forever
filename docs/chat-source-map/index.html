@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Echo 项目上下文来源、生成流程、规则定义、运行校验和测试定位。可离线使用的源码地图。">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'">
+<title>上下文来源与规则地图 · Echo 源码导览</title>
+<style>
+:root{--paper:#f5f3ec;--ink:#253a34;--muted:#64726a;--line:#d9dfd4;--green:#295c47;--lime:#dce8af;--orange:#ae6339;--white:#fffef9}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.7 system-ui,"Microsoft YaHei",sans-serif}button,a,summary{-webkit-tap-highlight-color:transparent}button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--orange);outline-offset:4px}header{max-width:1540px;margin:auto;padding:23px 42px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{font-size:19px;letter-spacing:1px;font-weight:750}.brand span{display:inline-grid;place-items:center;background:var(--green);color:var(--lime);border-radius:10px;width:32px;height:32px;margin-right:10px}.offline{font-size:12px;color:var(--green);border:1px solid #bccbb4;border-radius:30px;padding:5px 12px}.offline:before{content:"";display:inline-block;width:6px;height:6px;background:#6c8744;border-radius:50%;margin-right:7px}main{max-width:1540px;margin:auto;padding:44px 42px}.hero{display:grid;grid-template-columns:1.4fr 1fr;gap:60px;align-items:center;margin-bottom:36px}.eyebrow{font-size:11px;font-weight:700;letter-spacing:2px;color:var(--green)}h1{font-size:clamp(32px,4vw,51px);line-height:1.25;letter-spacing:-1.4px;margin:13px 0 20px}h1 em{font-style:normal;color:var(--green)}.lead{max-width:640px;color:var(--muted);font-size:16px;margin:0}.overview{border-left:2px solid #b7c4a2;padding:8px 0 8px 26px}.overview b{font-size:17px}.overview p{color:var(--muted);margin:9px 0 14px;font-size:13px}.chips{display:flex;gap:7px;flex-wrap:wrap}.chips span{background:#e9eddf;border-radius:5px;padding:3px 8px;font-size:11px;color:#526347}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px}.toolbar-label{font-size:11px;letter-spacing:1px;color:var(--muted)}.button{border:1px solid #bac5b6;border-radius:7px;background:transparent;color:var(--ink);padding:7px 13px;font-size:12px}.button:hover{background:#e6ebdc}.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-bottom:22px}.tab{display:flex;align-items:center;text-align:left;gap:12px;border:1px solid var(--line);border-radius:9px;padding:14px 16px;color:var(--muted);background:#f9f8f2}.tab .num{font-size:12px;border:1px solid #ccd5c5;border-radius:50%;width:28px;height:28px;display:grid;place-items:center;flex-shrink:0}.tab strong{display:block;font-size:14px}.tab small{font-size:11px}.tab[aria-selected=true]{background:var(--green);border-color:var(--green);color:#fff}.tab[aria-selected=true] .num{border-color:#a4bb91;color:var(--lime)}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:22px;align-items:start}.diagram-card{background:var(--white);border:1px solid var(--line);border-radius:12px;overflow:hidden}.card-head{padding:22px 26px 18px;border-bottom:1px solid #e6e9df}.card-head h2{font-size:21px;line-height:1.4;margin:0 0 7px}.card-head p{font-size:13px;color:var(--muted);margin:0}.legend{display:flex;flex-wrap:wrap;gap:15px;font-size:11px;color:var(--muted);padding:12px 26px;border-bottom:1px solid #edf0e6}.legend i{display:inline-block;width:9px;height:9px;border:1px solid #a4baac;margin-right:6px;border-radius:2px;background:#edf4e9}.legend .decision{background:#fff2dc;border-color:#cda977;transform:rotate(45deg)}.legend .data{background:#ebeff8;border-color:#9baeca}.graph-scroll{overflow:auto;max-height:760px;min-height:390px;background-image:radial-gradient(#dce1d5 .7px,transparent .7px);background-size:17px 17px;padding:20px 12px}svg{display:block;margin:auto;max-width:100%;height:auto}.edge-line{fill:none;stroke:#94a69a;stroke-width:1.4;stroke-linejoin:round}.edge-optional{stroke-dasharray:5 4}.edge-label{font-size:11px;fill:#5e7063;paint-order:stroke;stroke:var(--white);stroke-width:5px;stroke-linejoin:round}.node{cursor:pointer}.node .shape{fill:#f0f5ea;stroke:#9cb69f;stroke-width:1.2}.node.decision .shape{fill:#fff2dc;stroke:#cba36c}.node.data .shape{fill:#ebeff8;stroke:#a8b8cf}.node.service .shape{fill:#e2eee9;stroke:#89aa9a}.node.start .shape{fill:#dce8af;stroke:#93ac62}.node.selected .shape{stroke:#245f44;stroke-width:3;filter:drop-shadow(0 2px 4px #1f503b22)}.node text{font:13px system-ui,"Microsoft YaHei",sans-serif;fill:#263d32;pointer-events:none}.group-tag{font:11px system-ui,sans-serif;fill:#7b897f}.graph-foot{padding:12px 24px;background:#fafbf5;border-top:1px solid #e5eadb;font-size:11px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:12px}.graph-foot button{border:0;background:none;color:var(--green);padding:3px 0;font-size:12px}.aside-label{font-size:10px;letter-spacing:1.6px;font-weight:700;color:var(--muted);margin:0 0 10px}.takeaways{margin:0 0 22px;padding:0;list-style:none}.takeaways li{display:flex;align-items:flex-start;gap:10px;font-size:13px;padding:10px 0;border-bottom:1px solid var(--line)}.takeaways li:before{content:"✓";color:var(--green);font-weight:700}.detail{background:#e9eedc;border:1px solid #d0dcc0;border-radius:10px;padding:20px;margin-bottom:19px;min-height:190px}.detail h3{font-size:16px;margin:8px 0 10px}.detail p{font-size:13px;line-height:1.85;margin:0;color:#52644d}.detail .tag{font-size:10px;color:#62784f}.group-pills{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 20px}.group-pills span{font-size:11px;background:#e8ecdf;border-radius:4px;padding:4px 9px;color:#5a6d54}.read-next{font-size:12px;color:var(--muted);padding:14px 0;border-top:1px solid var(--line)}.audit{margin-top:30px;padding:25px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:220px 1fr;gap:28px}.audit h2{font-size:17px;margin:0 0 7px}.audit p{font-size:12px;color:var(--muted);margin:0}.audit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}.audit-item b{font-size:13px}.audit-item p{margin-top:6px}details{border-top:1px solid var(--line);padding:16px 0;font-size:12px;color:var(--muted)}summary{cursor:pointer;color:var(--ink)}.sources{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;padding:14px 0}.sources code{word-break:break-all;font-size:11px}footer{padding:16px 0;display:flex;justify-content:space-between;font-size:11px;color:#778276;gap:12px}.notice{background:#fff2dc;color:#7e5729;padding:12px 16px;border-radius:7px;font-size:12px;margin-bottom:17px;display:none}@media(min-width:1150px){.graph-scroll svg{max-width:92%}}@media(max-width:950px){.workspace{grid-template-columns:minmax(0,1fr) 270px}.hero{gap:30px}.tab{padding:12px 10px;gap:8px}.tab small{display:none}.audit{grid-template-columns:1fr}}@media(max-width:740px){header{padding:18px 20px}main{padding:28px 18px}.hero{grid-template-columns:1fr;gap:24px}.overview{padding-left:18px}.workspace{grid-template-columns:1fr}.tabs{grid-template-columns:1fr 1fr}.card-head{padding:18px}.audit-grid{grid-template-columns:1fr;gap:17px}.sources{grid-template-columns:1fr}.graph-scroll{max-height:620px}.graph-scroll svg{min-width:540px}.detail{min-height:0}.toolbar-label{letter-spacing:0}.offline{font-size:10px}.brand{font-size:16px}.legend{padding-left:18px}.audit{margin-top:15px}}
+@media(prefers-reduced-motion:no-preference){.tab,.node .shape{transition:background .15s,stroke .15s}}@media print{header,main{padding:15px}.hero{margin-bottom:20px}.toolbar,.graph-foot button{display:none}.graph-scroll{max-height:none;overflow:visible}.workspace{grid-template-columns:1fr 240px}.node.selected .shape{filter:none}.tabs{margin-bottom:15px}body{background:#fff}details{display:none}}
+
+.tabs{gap:8px}.tab{padding:12px 10px;gap:8px}.tab strong{font-size:13px}.tab small{font-size:10px}.evidence{margin:0 0 22px}.source-item{border:1px solid #d9e1d1;border-radius:7px;background:#fafbf5;padding:10px 12px;margin:8px 0}.source-item strong{display:block;font-size:10px;letter-spacing:.2px;color:#56704f}.source-item code{display:block;font:11px/1.65 ui-monospace,Consolas,monospace;overflow-wrap:anywhere;user-select:all;color:#384e43;margin-top:4px}.source-item .symbol{color:#657263;font-size:10px}.source-item.test{border-style:dashed;background:transparent}.source-item.test strong{color:#916b3a}.rule-section{margin-top:38px;padding-top:25px;border-top:1px solid var(--line)}.section-heading{display:flex;justify-content:space-between;align-items:center;gap:30px}.section-heading h2{font-size:25px;margin:8px 0}.section-heading p{color:var(--muted);font-size:13px;max-width:660px}.section-heading label,details>label{display:block;font-size:12px;color:#53674f}input[type=search]{display:block;margin:7px 0;background:var(--white);border:1px solid #bccab2;border-radius:6px;padding:10px 12px;min-width:280px;max-width:100%;font:12px system-ui,sans-serif;color:var(--ink)}input:focus-visible{outline:3px solid #c4d992;outline-offset:2px}#rule-count,#file-count{font-size:11px;color:var(--muted)}.table-scroll{overflow:auto;margin-top:16px;border:1px solid var(--line);border-radius:9px}table{width:100%;min-width:1020px;border-collapse:collapse;text-align:left;table-layout:fixed;font-size:12px}th{background:#e9eedf;padding:13px 12px;font-size:11px;color:#52664b;vertical-align:top}td{padding:13px 12px;vertical-align:top;border-top:1px solid var(--line);background:#fffef9;overflow-wrap:anywhere}th:first-child{width:12%}th:nth-child(2){width:21%}th:nth-child(3){width:24%}th:nth-child(4){width:24%}th:last-child{width:19%}td .source-item{margin:0 0 8px;padding:7px 8px}td .source-item:last-child{margin-bottom:0}.reference-index{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;max-height:540px;overflow:auto}.reference-index .source-item{margin:0}.detail{min-height:0}.graph-scroll{max-height:830px}.group-pills{margin-top:14px}.card-head h2{font-size:20px}.legend{font-size:10px}
+@media(max-width:1100px){.tabs{grid-template-columns:repeat(3,1fr)}.workspace{grid-template-columns:minmax(0,1fr) 310px}.section-heading{display:block}}@media(max-width:740px){.workspace{grid-template-columns:1fr}.tabs{grid-template-columns:1fr 1fr}.reference-index{grid-template-columns:1fr}.section-heading h2{font-size:22px}.graph-scroll{max-height:680px}.section-heading{display:block}.toolbar-label{font-size:10px}.source-item code{font-size:11px}}
+</style>
+</head>
+<body>
+<header><div class="brand"><span>E</span>Echo / 来源与规则地图</div><div class="offline">完全离线 · 本地自动布局</div></header>
+<main>
+<section class="hero"><div><div class="eyebrow">PROJECT WALKTHROUGH / 03</div><h1>每一份上下文，<br>都能<em>找到来处。</em></h1><p class="lead">继续往项目里走一层：哪些内容是开发者写的，哪些由用户填写，哪些由规则计算或模型生成？沿着五张图，追到定义文件、保存位置、运行校验与测试。</p></div><div class="overview"><b>定义 → 生成或读取 → 校验 → 使用</b><p>点选任意节点，右侧就会显示项目文件、定位行和函数。下方规则对照表把“写了什么”和“实际怎么检查”放在一起；所有测试均标注为已定位、未运行。</p><div class="chips"><span>源码定位</span><span>生成生命周期</span><span>运行校验</span><span>测试证据</span></div></div></section>
+<div class="toolbar"><span class="toolbar-label">阅读路径　配置 → 用户状态 → 生成材料 → 请求组装 → 规则校验</span><button class="button" id="download">↓ 导出图表 JSON</button></div>
+<nav class="tabs" role="tablist" aria-label="源码导览章节"><button class="tab" id="tab-0" role="tab" aria-controls="panel" aria-selected="true" tabindex="0"><span class="num">01</span><span><strong>产品与人格</strong><small>人工定义与版本加载</small></span></button><button class="tab" id="tab-1" role="tab" aria-controls="panel" aria-selected="false" tabindex="-1"><span class="num">02</span><span><strong>用户偏好与关系</strong><small>填写、计算与持久化</small></span></button><button class="tab" id="tab-2" role="tab" aria-controls="panel" aria-selected="false" tabindex="-1"><span class="num">03</span><span><strong>记忆与摘要</strong><small>模型生成的生命周期</small></span></button><button class="tab" id="tab-3" role="tab" aria-controls="panel" aria-selected="false" tabindex="-1"><span class="num">04</span><span><strong>请求如何组装</strong><small>读取、渲染与回填</small></span></button><button class="tab" id="tab-4" role="tab" aria-controls="panel" aria-selected="false" tabindex="-1"><span class="num">05</span><span><strong>规则如何落地</strong><small>定义、校验与测试</small></span></button></nav>
+<div class="notice" id="error" role="alert"></div>
+<section class="workspace" id="panel" role="tabpanel" aria-labelledby="tab-0"><div class="diagram-card"><div class="card-head"><h2 id="chart-title"></h2><p id="chart-subtitle"></p></div><div class="legend"><span><i></i>处理 / 服务</span><span><i class="decision"></i>校验 / 分支</span><span><i class="data"></i>数据 / 结果</span><span>虚线：重试或异常</span></div><div class="graph-scroll" id="canvas" aria-label="自动布局流程图"></div><div class="graph-foot"><span id="graph-meta"></span><button id="next">下一部分 →</button></div></div><aside><p class="aside-label">WHAT TO REMEMBER / 核心要点</p><ul class="takeaways" id="points"></ul><p class="aside-label">EXPLORE / 点击节点追溯来源</p><div class="detail" aria-live="polite"><span class="tag" id="detail-tag"></span><h3 id="detail-title"></h3><p id="detail-copy"></p></div><section class="evidence" aria-label="当前节点的源码与测试"><p class="aside-label">SOURCE / 定义、执行与测试位置</p><div id="node-evidence"></div></section><div class="group-pills" id="groups"></div><p class="read-next" id="relation"></p></aside></section>
+<section class="rule-section" aria-labelledby="rules-title"><div class="section-heading"><div><p class="eyebrow">RULE CROSSWALK / 定义与检查对照</p><h2 id="rules-title">一条规则，沿着四个位置查。</h2><p>先读定义，再看执行与断言。这里记录的是测试位置，不是测试通过状态。</p></div><div><label for="rule-search">搜索规则、文件或函数</label><input type="search" id="rule-search" placeholder="例如：摘要、追问、execute_tool" autocomplete="off"><span id="rule-count" role="status"></span></div></div><div class="table-scroll"><table><thead><tr><th scope="col">规则</th><th scope="col">在哪里定义</th><th scope="col">在哪里执行或检查</th><th scope="col">对应测试 · 未运行</th><th scope="col">实际边界</th></tr></thead><tbody id="rule-rows"></tbody></table></div></section><section class="audit"><div><h2>先记住三个区别</h2><p>理解上下文，最容易混淆的是这些。</p></div><div class="audit-grid"><div class="audit-item"><b>01 / 找到定义，再看执行</b><p>改了一句 Prompt，不代表增加了运行门禁。先定位定义，再检查谁消费这条规则、如何处理失败。</p></div><div class="audit-item"><b>02 / 生成内容，保留出处</b><p>记忆和摘要是模型产物。需要能回看用户原话、保存边界与生成规则；背景标记不能替代事实核验。</p></div><div class="audit-item"><b>03 / 测试存在 ≠ 已验证通过</b><p>有些测试只断言文案存在，有些验证假模型与执行器。既要查看断言内容，也要实际运行，不能据文件名认定覆盖完整。</p></div></div></section>
+<details><summary>依据与范围：基于当前工作区代码阅读，查看关键文件</summary><p>本页基于当前工作区的常规文字聊天代码。文件和定位符在构建时检查存在，行号是构建时快照；代码修改后行号可能变化。未读取 .env 内容、用户数据库或部署密钥；不展示私人数据。未运行后端测试、真实模型评测或安全审计。规则测试均为“已定位、未运行”，不是通过报告。</p><p>完整文件、函数和测试位置可在上方节点说明、规则对照表及下方定位清单中查询。行号随工作区变化，请优先结合函数名定位。</p></details>
+<details><summary>完整源码定位清单 · 可搜索</summary><label for="file-search">按项目路径或定位符筛选</label><input id="file-search" type="search" placeholder="例如：default_persona.py、user_personas、test_" autocomplete="off"><p id="file-count" role="status"></p><div id="all-references" class="reference-index"></div></details><details><summary>布局与离线说明</summary><p>节点、边、分组与布局意图来自语义 JSON。页面内置 Dagre 1.1.5 自动布局引擎，渲染器根据引擎输出生成 SVG；未为具体图表手工指定坐标。导出的 JSON 不含坐标、尺寸或路径。渲染器采用折线路由，分组以标签与节点说明表达，不强制聚类边框。所有脚本与样式内嵌，禁止页面发起网络连接。</p><pre style="white-space:pre-wrap">Copyright (c) 2012-2014 Chris Pettitt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+</pre></details>
+<footer><span>Echo · 上下文来源与规则地图</span><span>中文入门 / 结构规格可导出 / 无外部资源</span></footer>
+<noscript>请启用浏览器 JavaScript 以运行离线布局引擎与流程图交互。</noscript>
+</main>
+<script>(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.dagre=f()}})(function(){var define,module,exports;return function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r}()({1:[function(require,module,exports){
+/*
+Copyright (c) 2012-2014 Chris Pettitt
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+module.exports={graphlib:require("@dagrejs/graphlib"),layout:require("./lib/layout"),debug:require("./lib/debug"),util:{time:require("./lib/util").time,notime:require("./lib/util").notime},version:require("./lib/version")}},{"./lib/debug":6,"./lib/layout":8,"./lib/util":27,"./lib/version":28,"@dagrejs/graphlib":29}],2:[function(require,module,exports){"use strict";let greedyFAS=require("./greedy-fas");let uniqueId=require("./util").uniqueId;module.exports={run:run,undo:undo};function run(g){let fas=g.graph().acyclicer==="greedy"?greedyFAS(g,weightFn(g)):dfsFAS(g);fas.forEach(e=>{let label=g.edge(e);g.removeEdge(e);label.forwardName=e.name;label.reversed=true;g.setEdge(e.w,e.v,label,uniqueId("rev"))});function weightFn(g){return e=>{return g.edge(e).weight}}}function dfsFAS(g){let fas=[];let stack={};let visited={};function dfs(v){if(Object.hasOwn(visited,v)){return}visited[v]=true;stack[v]=true;g.outEdges(v).forEach(e=>{if(Object.hasOwn(stack,e.w)){fas.push(e)}else{dfs(e.w)}});delete stack[v]}g.nodes().forEach(dfs);return fas}function undo(g){g.edges().forEach(e=>{let label=g.edge(e);if(label.reversed){g.removeEdge(e);let forwardName=label.forwardName;delete label.reversed;delete label.forwardName;g.setEdge(e.w,e.v,label,forwardName)}})}},{"./greedy-fas":7,"./util":27}],3:[function(require,module,exports){let util=require("./util");module.exports=addBorderSegments;function addBorderSegments(g){function dfs(v){let children=g.children(v);let node=g.node(v);if(children.length){children.forEach(dfs)}if(Object.hasOwn(node,"minRank")){node.borderLeft=[];node.borderRight=[];for(let rank=node.minRank,maxRank=node.maxRank+1;rank<maxRank;++rank){addBorderNode(g,"borderLeft","_bl",v,node,rank);addBorderNode(g,"borderRight","_br",v,node,rank)}}}g.children().forEach(dfs)}function addBorderNode(g,prop,prefix,sg,sgNode,rank){let label={width:0,height:0,rank:rank,borderType:prop};let prev=sgNode[prop][rank-1];let curr=util.addDummyNode(g,"border",label,prefix);sgNode[prop][rank]=curr;g.setParent(curr,sg);if(prev){g.setEdge(prev,curr,{weight:1})}}},{"./util":27}],4:[function(require,module,exports){"use strict";module.exports={adjust:adjust,undo:undo};function adjust(g){let rankDir=g.graph().rankdir.toLowerCase();if(rankDir==="lr"||rankDir==="rl"){swapWidthHeight(g)}}function undo(g){let rankDir=g.graph().rankdir.toLowerCase();if(rankDir==="bt"||rankDir==="rl"){reverseY(g)}if(rankDir==="lr"||rankDir==="rl"){swapXY(g);swapWidthHeight(g)}}function swapWidthHeight(g){g.nodes().forEach(v=>swapWidthHeightOne(g.node(v)));g.edges().forEach(e=>swapWidthHeightOne(g.edge(e)))}function swapWidthHeightOne(attrs){let w=attrs.width;attrs.width=attrs.height;attrs.height=w}function reverseY(g){g.nodes().forEach(v=>reverseYOne(g.node(v)));g.edges().forEach(e=>{let edge=g.edge(e);edge.points.forEach(reverseYOne);if(Object.hasOwn(edge,"y")){reverseYOne(edge)}})}function reverseYOne(attrs){attrs.y=-attrs.y}function swapXY(g){g.nodes().forEach(v=>swapXYOne(g.node(v)));g.edges().forEach(e=>{let edge=g.edge(e);edge.points.forEach(swapXYOne);if(Object.hasOwn(edge,"x")){swapXYOne(edge)}})}function swapXYOne(attrs){let x=attrs.x;attrs.x=attrs.y;attrs.y=x}},{}],5:[function(require,module,exports){
+/*
+ * Simple doubly linked list implementation derived from Cormen, et al.,
+ * "Introduction to Algorithms".
+ */
+class List{constructor(){let sentinel={};sentinel._next=sentinel._prev=sentinel;this._sentinel=sentinel}dequeue(){let sentinel=this._sentinel;let entry=sentinel._prev;if(entry!==sentinel){unlink(entry);return entry}}enqueue(entry){let sentinel=this._sentinel;if(entry._prev&&entry._next){unlink(entry)}entry._next=sentinel._next;sentinel._next._prev=entry;sentinel._next=entry;entry._prev=sentinel}toString(){let strs=[];let sentinel=this._sentinel;let curr=sentinel._prev;while(curr!==sentinel){strs.push(JSON.stringify(curr,filterOutLinks));curr=curr._prev}return"["+strs.join(", ")+"]"}}function unlink(entry){entry._prev._next=entry._next;entry._next._prev=entry._prev;delete entry._next;delete entry._prev}function filterOutLinks(k,v){if(k!=="_next"&&k!=="_prev"){return v}}module.exports=List},{}],6:[function(require,module,exports){let util=require("./util");let Graph=require("@dagrejs/graphlib").Graph;module.exports={debugOrdering:debugOrdering};
+/* istanbul ignore next */function debugOrdering(g){let layerMatrix=util.buildLayerMatrix(g);let h=new Graph({compound:true,multigraph:true}).setGraph({});g.nodes().forEach(v=>{h.setNode(v,{label:v});h.setParent(v,"layer"+g.node(v).rank)});g.edges().forEach(e=>h.setEdge(e.v,e.w,{},e.name));layerMatrix.forEach((layer,i)=>{let layerV="layer"+i;h.setNode(layerV,{rank:"same"});layer.reduce((u,v)=>{h.setEdge(u,v,{style:"invis"});return v})});return h}},{"./util":27,"@dagrejs/graphlib":29}],7:[function(require,module,exports){let Graph=require("@dagrejs/graphlib").Graph;let List=require("./data/list");
+/*
+ * A greedy heuristic for finding a feedback arc set for a graph. A feedback
+ * arc set is a set of edges that can be removed to make a graph acyclic.
+ * The algorithm comes from: P. Eades, X. Lin, and W. F. Smyth, "A fast and
+ * effective heuristic for the feedback arc set problem." This implementation
+ * adjusts that from the paper to allow for weighted edges.
+ */module.exports=greedyFAS;let DEFAULT_WEIGHT_FN=()=>1;function greedyFAS(g,weightFn){if(g.nodeCount()<=1){return[]}let state=buildState(g,weightFn||DEFAULT_WEIGHT_FN);let results=doGreedyFAS(state.graph,state.buckets,state.zeroIdx);
+// Expand multi-edges
+return results.flatMap(e=>g.outEdges(e.v,e.w))}function doGreedyFAS(g,buckets,zeroIdx){let results=[];let sources=buckets[buckets.length-1];let sinks=buckets[0];let entry;while(g.nodeCount()){while(entry=sinks.dequeue()){removeNode(g,buckets,zeroIdx,entry)}while(entry=sources.dequeue()){removeNode(g,buckets,zeroIdx,entry)}if(g.nodeCount()){for(let i=buckets.length-2;i>0;--i){entry=buckets[i].dequeue();if(entry){results=results.concat(removeNode(g,buckets,zeroIdx,entry,true));break}}}}return results}function removeNode(g,buckets,zeroIdx,entry,collectPredecessors){let results=collectPredecessors?[]:undefined;g.inEdges(entry.v).forEach(edge=>{let weight=g.edge(edge);let uEntry=g.node(edge.v);if(collectPredecessors){results.push({v:edge.v,w:edge.w})}uEntry.out-=weight;assignBucket(buckets,zeroIdx,uEntry)});g.outEdges(entry.v).forEach(edge=>{let weight=g.edge(edge);let w=edge.w;let wEntry=g.node(w);wEntry["in"]-=weight;assignBucket(buckets,zeroIdx,wEntry)});g.removeNode(entry.v);return results}function buildState(g,weightFn){let fasGraph=new Graph;let maxIn=0;let maxOut=0;g.nodes().forEach(v=>{fasGraph.setNode(v,{v:v,in:0,out:0})});
+// Aggregate weights on nodes, but also sum the weights across multi-edges
+// into a single edge for the fasGraph.
+g.edges().forEach(e=>{let prevWeight=fasGraph.edge(e.v,e.w)||0;let weight=weightFn(e);let edgeWeight=prevWeight+weight;fasGraph.setEdge(e.v,e.w,edgeWeight);maxOut=Math.max(maxOut,fasGraph.node(e.v).out+=weight);maxIn=Math.max(maxIn,fasGraph.node(e.w)["in"]+=weight)});let buckets=range(maxOut+maxIn+3).map(()=>new List);let zeroIdx=maxIn+1;fasGraph.nodes().forEach(v=>{assignBucket(buckets,zeroIdx,fasGraph.node(v))});return{graph:fasGraph,buckets:buckets,zeroIdx:zeroIdx}}function assignBucket(buckets,zeroIdx,entry){if(!entry.out){buckets[0].enqueue(entry)}else if(!entry["in"]){buckets[buckets.length-1].enqueue(entry)}else{buckets[entry.out-entry["in"]+zeroIdx].enqueue(entry)}}function range(limit){const range=[];for(let i=0;i<limit;i++){range.push(i)}return range}},{"./data/list":5,"@dagrejs/graphlib":29}],8:[function(require,module,exports){"use strict";let acyclic=require("./acyclic");let normalize=require("./normalize");let rank=require("./rank");let normalizeRanks=require("./util").normalizeRanks;let parentDummyChains=require("./parent-dummy-chains");let removeEmptyRanks=require("./util").removeEmptyRanks;let nestingGraph=require("./nesting-graph");let addBorderSegments=require("./add-border-segments");let coordinateSystem=require("./coordinate-system");let order=require("./order");let position=require("./position");let util=require("./util");let Graph=require("@dagrejs/graphlib").Graph;module.exports=layout;function layout(g,opts){let time=opts&&opts.debugTiming?util.time:util.notime;time("layout",()=>{let layoutGraph=time("  buildLayoutGraph",()=>buildLayoutGraph(g));time("  runLayout",()=>runLayout(layoutGraph,time,opts));time("  updateInputGraph",()=>updateInputGraph(g,layoutGraph))})}function runLayout(g,time,opts){time("    makeSpaceForEdgeLabels",()=>makeSpaceForEdgeLabels(g));time("    removeSelfEdges",()=>removeSelfEdges(g));time("    acyclic",()=>acyclic.run(g));time("    nestingGraph.run",()=>nestingGraph.run(g));time("    rank",()=>rank(util.asNonCompoundGraph(g)));time("    injectEdgeLabelProxies",()=>injectEdgeLabelProxies(g));time("    removeEmptyRanks",()=>removeEmptyRanks(g));time("    nestingGraph.cleanup",()=>nestingGraph.cleanup(g));time("    normalizeRanks",()=>normalizeRanks(g));time("    assignRankMinMax",()=>assignRankMinMax(g));time("    removeEdgeLabelProxies",()=>removeEdgeLabelProxies(g));time("    normalize.run",()=>normalize.run(g));time("    parentDummyChains",()=>parentDummyChains(g));time("    addBorderSegments",()=>addBorderSegments(g));time("    order",()=>order(g,opts));time("    insertSelfEdges",()=>insertSelfEdges(g));time("    adjustCoordinateSystem",()=>coordinateSystem.adjust(g));time("    position",()=>position(g));time("    positionSelfEdges",()=>positionSelfEdges(g));time("    removeBorderNodes",()=>removeBorderNodes(g));time("    normalize.undo",()=>normalize.undo(g));time("    fixupEdgeLabelCoords",()=>fixupEdgeLabelCoords(g));time("    undoCoordinateSystem",()=>coordinateSystem.undo(g));time("    translateGraph",()=>translateGraph(g));time("    assignNodeIntersects",()=>assignNodeIntersects(g));time("    reversePoints",()=>reversePointsForReversedEdges(g));time("    acyclic.undo",()=>acyclic.undo(g))}
+/*
+ * Copies final layout information from the layout graph back to the input
+ * graph. This process only copies whitelisted attributes from the layout graph
+ * to the input graph, so it serves as a good place to determine what
+ * attributes can influence layout.
+ */function updateInputGraph(inputGraph,layoutGraph){inputGraph.nodes().forEach(v=>{let inputLabel=inputGraph.node(v);let layoutLabel=layoutGraph.node(v);if(inputLabel){inputLabel.x=layoutLabel.x;inputLabel.y=layoutLabel.y;inputLabel.rank=layoutLabel.rank;if(layoutGraph.children(v).length){inputLabel.width=layoutLabel.width;inputLabel.height=layoutLabel.height}}});inputGraph.edges().forEach(e=>{let inputLabel=inputGraph.edge(e);let layoutLabel=layoutGraph.edge(e);inputLabel.points=layoutLabel.points;if(Object.hasOwn(layoutLabel,"x")){inputLabel.x=layoutLabel.x;inputLabel.y=layoutLabel.y}});inputGraph.graph().width=layoutGraph.graph().width;inputGraph.graph().height=layoutGraph.graph().height}let graphNumAttrs=["nodesep","edgesep","ranksep","marginx","marginy"];let graphDefaults={ranksep:50,edgesep:20,nodesep:50,rankdir:"tb"};let graphAttrs=["acyclicer","ranker","rankdir","align"];let nodeNumAttrs=["width","height","rank"];let nodeDefaults={width:0,height:0};let edgeNumAttrs=["minlen","weight","width","height","labeloffset"];let edgeDefaults={minlen:1,weight:1,width:0,height:0,labeloffset:10,labelpos:"r"};let edgeAttrs=["labelpos"];
+/*
+ * Constructs a new graph from the input graph, which can be used for layout.
+ * This process copies only whitelisted attributes from the input graph to the
+ * layout graph. Thus this function serves as a good place to determine what
+ * attributes can influence layout.
+ */function buildLayoutGraph(inputGraph){let g=new Graph({multigraph:true,compound:true});let graph=canonicalize(inputGraph.graph());g.setGraph(Object.assign({},graphDefaults,selectNumberAttrs(graph,graphNumAttrs),util.pick(graph,graphAttrs)));inputGraph.nodes().forEach(v=>{let node=canonicalize(inputGraph.node(v));const newNode=selectNumberAttrs(node,nodeNumAttrs);Object.keys(nodeDefaults).forEach(k=>{if(newNode[k]===undefined){newNode[k]=nodeDefaults[k]}});g.setNode(v,newNode);g.setParent(v,inputGraph.parent(v))});inputGraph.edges().forEach(e=>{let edge=canonicalize(inputGraph.edge(e));g.setEdge(e,Object.assign({},edgeDefaults,selectNumberAttrs(edge,edgeNumAttrs),util.pick(edge,edgeAttrs)))});return g}
+/*
+ * This idea comes from the Gansner paper: to account for edge labels in our
+ * layout we split each rank in half by doubling minlen and halving ranksep.
+ * Then we can place labels at these mid-points between nodes.
+ *
+ * We also add some minimal padding to the width to push the label for the edge
+ * away from the edge itself a bit.
+ */function makeSpaceForEdgeLabels(g){let graph=g.graph();graph.ranksep/=2;g.edges().forEach(e=>{let edge=g.edge(e);edge.minlen*=2;if(edge.labelpos.toLowerCase()!=="c"){if(graph.rankdir==="TB"||graph.rankdir==="BT"){edge.width+=edge.labeloffset}else{edge.height+=edge.labeloffset}}})}
+/*
+ * Creates temporary dummy nodes that capture the rank in which each edge's
+ * label is going to, if it has one of non-zero width and height. We do this
+ * so that we can safely remove empty ranks while preserving balance for the
+ * label's position.
+ */function injectEdgeLabelProxies(g){g.edges().forEach(e=>{let edge=g.edge(e);if(edge.width&&edge.height){let v=g.node(e.v);let w=g.node(e.w);let label={rank:(w.rank-v.rank)/2+v.rank,e:e};util.addDummyNode(g,"edge-proxy",label,"_ep")}})}function assignRankMinMax(g){let maxRank=0;g.nodes().forEach(v=>{let node=g.node(v);if(node.borderTop){node.minRank=g.node(node.borderTop).rank;node.maxRank=g.node(node.borderBottom).rank;maxRank=Math.max(maxRank,node.maxRank)}});g.graph().maxRank=maxRank}function removeEdgeLabelProxies(g){g.nodes().forEach(v=>{let node=g.node(v);if(node.dummy==="edge-proxy"){g.edge(node.e).labelRank=node.rank;g.removeNode(v)}})}function translateGraph(g){let minX=Number.POSITIVE_INFINITY;let maxX=0;let minY=Number.POSITIVE_INFINITY;let maxY=0;let graphLabel=g.graph();let marginX=graphLabel.marginx||0;let marginY=graphLabel.marginy||0;function getExtremes(attrs){let x=attrs.x;let y=attrs.y;let w=attrs.width;let h=attrs.height;minX=Math.min(minX,x-w/2);maxX=Math.max(maxX,x+w/2);minY=Math.min(minY,y-h/2);maxY=Math.max(maxY,y+h/2)}g.nodes().forEach(v=>getExtremes(g.node(v)));g.edges().forEach(e=>{let edge=g.edge(e);if(Object.hasOwn(edge,"x")){getExtremes(edge)}});minX-=marginX;minY-=marginY;g.nodes().forEach(v=>{let node=g.node(v);node.x-=minX;node.y-=minY});g.edges().forEach(e=>{let edge=g.edge(e);edge.points.forEach(p=>{p.x-=minX;p.y-=minY});if(Object.hasOwn(edge,"x")){edge.x-=minX}if(Object.hasOwn(edge,"y")){edge.y-=minY}});graphLabel.width=maxX-minX+marginX;graphLabel.height=maxY-minY+marginY}function assignNodeIntersects(g){g.edges().forEach(e=>{let edge=g.edge(e);let nodeV=g.node(e.v);let nodeW=g.node(e.w);let p1,p2;if(!edge.points){edge.points=[];p1=nodeW;p2=nodeV}else{p1=edge.points[0];p2=edge.points[edge.points.length-1]}edge.points.unshift(util.intersectRect(nodeV,p1));edge.points.push(util.intersectRect(nodeW,p2))})}function fixupEdgeLabelCoords(g){g.edges().forEach(e=>{let edge=g.edge(e);if(Object.hasOwn(edge,"x")){if(edge.labelpos==="l"||edge.labelpos==="r"){edge.width-=edge.labeloffset}switch(edge.labelpos){case"l":edge.x-=edge.width/2+edge.labeloffset;break;case"r":edge.x+=edge.width/2+edge.labeloffset;break}}})}function reversePointsForReversedEdges(g){g.edges().forEach(e=>{let edge=g.edge(e);if(edge.reversed){edge.points.reverse()}})}function removeBorderNodes(g){g.nodes().forEach(v=>{if(g.children(v).length){let node=g.node(v);let t=g.node(node.borderTop);let b=g.node(node.borderBottom);let l=g.node(node.borderLeft[node.borderLeft.length-1]);let r=g.node(node.borderRight[node.borderRight.length-1]);node.width=Math.abs(r.x-l.x);node.height=Math.abs(b.y-t.y);node.x=l.x+node.width/2;node.y=t.y+node.height/2}});g.nodes().forEach(v=>{if(g.node(v).dummy==="border"){g.removeNode(v)}})}function removeSelfEdges(g){g.edges().forEach(e=>{if(e.v===e.w){var node=g.node(e.v);if(!node.selfEdges){node.selfEdges=[]}node.selfEdges.push({e:e,label:g.edge(e)});g.removeEdge(e)}})}function insertSelfEdges(g){var layers=util.buildLayerMatrix(g);layers.forEach(layer=>{var orderShift=0;layer.forEach((v,i)=>{var node=g.node(v);node.order=i+orderShift;(node.selfEdges||[]).forEach(selfEdge=>{util.addDummyNode(g,"selfedge",{width:selfEdge.label.width,height:selfEdge.label.height,rank:node.rank,order:i+ ++orderShift,e:selfEdge.e,label:selfEdge.label},"_se")});delete node.selfEdges})})}function positionSelfEdges(g){g.nodes().forEach(v=>{var node=g.node(v);if(node.dummy==="selfedge"){var selfNode=g.node(node.e.v);var x=selfNode.x+selfNode.width/2;var y=selfNode.y;var dx=node.x-x;var dy=selfNode.height/2;g.setEdge(node.e,node.label);g.removeNode(v);node.label.points=[{x:x+2*dx/3,y:y-dy},{x:x+5*dx/6,y:y-dy},{x:x+dx,y:y},{x:x+5*dx/6,y:y+dy},{x:x+2*dx/3,y:y+dy}];node.label.x=node.x;node.label.y=node.y}})}function selectNumberAttrs(obj,attrs){return util.mapValues(util.pick(obj,attrs),Number)}function canonicalize(attrs){var newAttrs={};if(attrs){Object.entries(attrs).forEach(([k,v])=>{if(typeof k==="string"){k=k.toLowerCase()}newAttrs[k]=v})}return newAttrs}},{"./acyclic":2,"./add-border-segments":3,"./coordinate-system":4,"./nesting-graph":9,"./normalize":10,"./order":15,"./parent-dummy-chains":20,"./position":22,"./rank":24,"./util":27,"@dagrejs/graphlib":29}],9:[function(require,module,exports){let util=require("./util");module.exports={run:run,cleanup:cleanup};
+/*
+ * A nesting graph creates dummy nodes for the tops and bottoms of subgraphs,
+ * adds appropriate edges to ensure that all cluster nodes are placed between
+ * these boundaries, and ensures that the graph is connected.
+ *
+ * In addition we ensure, through the use of the minlen property, that nodes
+ * and subgraph border nodes to not end up on the same rank.
+ *
+ * Preconditions:
+ *
+ *    1. Input graph is a DAG
+ *    2. Nodes in the input graph has a minlen attribute
+ *
+ * Postconditions:
+ *
+ *    1. Input graph is connected.
+ *    2. Dummy nodes are added for the tops and bottoms of subgraphs.
+ *    3. The minlen attribute for nodes is adjusted to ensure nodes do not
+ *       get placed on the same rank as subgraph border nodes.
+ *
+ * The nesting graph idea comes from Sander, "Layout of Compound Directed
+ * Graphs."
+ */function run(g){let root=util.addDummyNode(g,"root",{},"_root");let depths=treeDepths(g);let depthsArr=Object.values(depths);let height=util.applyWithChunking(Math.max,depthsArr)-1;// Note: depths is an Object not an array
+let nodeSep=2*height+1;g.graph().nestingRoot=root;
+// Multiply minlen by nodeSep to align nodes on non-border ranks.
+g.edges().forEach(e=>g.edge(e).minlen*=nodeSep);
+// Calculate a weight that is sufficient to keep subgraphs vertically compact
+let weight=sumWeights(g)+1;
+// Create border nodes and link them up
+g.children().forEach(child=>dfs(g,root,nodeSep,weight,height,depths,child));
+// Save the multiplier for node layers for later removal of empty border
+// layers.
+g.graph().nodeRankFactor=nodeSep}function dfs(g,root,nodeSep,weight,height,depths,v){let children=g.children(v);if(!children.length){if(v!==root){g.setEdge(root,v,{weight:0,minlen:nodeSep})}return}let top=util.addBorderNode(g,"_bt");let bottom=util.addBorderNode(g,"_bb");let label=g.node(v);g.setParent(top,v);label.borderTop=top;g.setParent(bottom,v);label.borderBottom=bottom;children.forEach(child=>{dfs(g,root,nodeSep,weight,height,depths,child);let childNode=g.node(child);let childTop=childNode.borderTop?childNode.borderTop:child;let childBottom=childNode.borderBottom?childNode.borderBottom:child;let thisWeight=childNode.borderTop?weight:2*weight;let minlen=childTop!==childBottom?1:height-depths[v]+1;g.setEdge(top,childTop,{weight:thisWeight,minlen:minlen,nestingEdge:true});g.setEdge(childBottom,bottom,{weight:thisWeight,minlen:minlen,nestingEdge:true})});if(!g.parent(v)){g.setEdge(root,top,{weight:0,minlen:height+depths[v]})}}function treeDepths(g){var depths={};function dfs(v,depth){var children=g.children(v);if(children&&children.length){children.forEach(child=>dfs(child,depth+1))}depths[v]=depth}g.children().forEach(v=>dfs(v,1));return depths}function sumWeights(g){return g.edges().reduce((acc,e)=>acc+g.edge(e).weight,0)}function cleanup(g){var graphLabel=g.graph();g.removeNode(graphLabel.nestingRoot);delete graphLabel.nestingRoot;g.edges().forEach(e=>{var edge=g.edge(e);if(edge.nestingEdge){g.removeEdge(e)}})}},{"./util":27}],10:[function(require,module,exports){"use strict";let util=require("./util");module.exports={run:run,undo:undo};
+/*
+ * Breaks any long edges in the graph into short segments that span 1 layer
+ * each. This operation is undoable with the denormalize function.
+ *
+ * Pre-conditions:
+ *
+ *    1. The input graph is a DAG.
+ *    2. Each node in the graph has a "rank" property.
+ *
+ * Post-condition:
+ *
+ *    1. All edges in the graph have a length of 1.
+ *    2. Dummy nodes are added where edges have been split into segments.
+ *    3. The graph is augmented with a "dummyChains" attribute which contains
+ *       the first dummy in each chain of dummy nodes produced.
+ */function run(g){g.graph().dummyChains=[];g.edges().forEach(edge=>normalizeEdge(g,edge))}function normalizeEdge(g,e){let v=e.v;let vRank=g.node(v).rank;let w=e.w;let wRank=g.node(w).rank;let name=e.name;let edgeLabel=g.edge(e);let labelRank=edgeLabel.labelRank;if(wRank===vRank+1)return;g.removeEdge(e);let dummy,attrs,i;for(i=0,++vRank;vRank<wRank;++i,++vRank){edgeLabel.points=[];attrs={width:0,height:0,edgeLabel:edgeLabel,edgeObj:e,rank:vRank};dummy=util.addDummyNode(g,"edge",attrs,"_d");if(vRank===labelRank){attrs.width=edgeLabel.width;attrs.height=edgeLabel.height;attrs.dummy="edge-label";attrs.labelpos=edgeLabel.labelpos}g.setEdge(v,dummy,{weight:edgeLabel.weight},name);if(i===0){g.graph().dummyChains.push(dummy)}v=dummy}g.setEdge(v,w,{weight:edgeLabel.weight},name)}function undo(g){g.graph().dummyChains.forEach(v=>{let node=g.node(v);let origLabel=node.edgeLabel;let w;g.setEdge(node.edgeObj,origLabel);while(node.dummy){w=g.successors(v)[0];g.removeNode(v);origLabel.points.push({x:node.x,y:node.y});if(node.dummy==="edge-label"){origLabel.x=node.x;origLabel.y=node.y;origLabel.width=node.width;origLabel.height=node.height}v=w;node=g.node(v)}})}},{"./util":27}],11:[function(require,module,exports){module.exports=addSubgraphConstraints;function addSubgraphConstraints(g,cg,vs){let prev={},rootPrev;vs.forEach(v=>{let child=g.parent(v),parent,prevChild;while(child){parent=g.parent(child);if(parent){prevChild=prev[parent];prev[parent]=child}else{prevChild=rootPrev;rootPrev=child}if(prevChild&&prevChild!==child){cg.setEdge(prevChild,child);return}child=parent}});
+/*
+  function dfs(v) {
+    var children = v ? g.children(v) : g.children();
+    if (children.length) {
+      var min = Number.POSITIVE_INFINITY,
+          subgraphs = [];
+      children.forEach(function(child) {
+        var childMin = dfs(child);
+        if (g.children(child).length) {
+          subgraphs.push({ v: child, order: childMin });
+        }
+        min = Math.min(min, childMin);
+      });
+      _.sortBy(subgraphs, "order").reduce(function(prev, curr) {
+        cg.setEdge(prev.v, curr.v);
+        return curr;
+      });
+      return min;
+    }
+    return g.node(v).order;
+  }
+  dfs(undefined);
+  */}},{}],12:[function(require,module,exports){module.exports=barycenter;function barycenter(g,movable=[]){return movable.map(v=>{let inV=g.inEdges(v);if(!inV.length){return{v:v}}else{let result=inV.reduce((acc,e)=>{let edge=g.edge(e),nodeU=g.node(e.v);return{sum:acc.sum+edge.weight*nodeU.order,weight:acc.weight+edge.weight}},{sum:0,weight:0});return{v:v,barycenter:result.sum/result.weight,weight:result.weight}}})}},{}],13:[function(require,module,exports){let Graph=require("@dagrejs/graphlib").Graph;let util=require("../util");module.exports=buildLayerGraph;
+/*
+ * Constructs a graph that can be used to sort a layer of nodes. The graph will
+ * contain all base and subgraph nodes from the request layer in their original
+ * hierarchy and any edges that are incident on these nodes and are of the type
+ * requested by the "relationship" parameter.
+ *
+ * Nodes from the requested rank that do not have parents are assigned a root
+ * node in the output graph, which is set in the root graph attribute. This
+ * makes it easy to walk the hierarchy of movable nodes during ordering.
+ *
+ * Pre-conditions:
+ *
+ *    1. Input graph is a DAG
+ *    2. Base nodes in the input graph have a rank attribute
+ *    3. Subgraph nodes in the input graph has minRank and maxRank attributes
+ *    4. Edges have an assigned weight
+ *
+ * Post-conditions:
+ *
+ *    1. Output graph has all nodes in the movable rank with preserved
+ *       hierarchy.
+ *    2. Root nodes in the movable layer are made children of the node
+ *       indicated by the root attribute of the graph.
+ *    3. Non-movable nodes incident on movable nodes, selected by the
+ *       relationship parameter, are included in the graph (without hierarchy).
+ *    4. Edges incident on movable nodes, selected by the relationship
+ *       parameter, are added to the output graph.
+ *    5. The weights for copied edges are aggregated as need, since the output
+ *       graph is not a multi-graph.
+ */function buildLayerGraph(g,rank,relationship){let root=createRootNode(g),result=new Graph({compound:true}).setGraph({root:root}).setDefaultNodeLabel(v=>g.node(v));g.nodes().forEach(v=>{let node=g.node(v),parent=g.parent(v);if(node.rank===rank||node.minRank<=rank&&rank<=node.maxRank){result.setNode(v);result.setParent(v,parent||root);
+// This assumes we have only short edges!
+g[relationship](v).forEach(e=>{let u=e.v===v?e.w:e.v,edge=result.edge(u,v),weight=edge!==undefined?edge.weight:0;result.setEdge(u,v,{weight:g.edge(e).weight+weight})});if(Object.hasOwn(node,"minRank")){result.setNode(v,{borderLeft:node.borderLeft[rank],borderRight:node.borderRight[rank]})}}});return result}function createRootNode(g){var v;while(g.hasNode(v=util.uniqueId("_root")));return v}},{"../util":27,"@dagrejs/graphlib":29}],14:[function(require,module,exports){"use strict";let zipObject=require("../util").zipObject;module.exports=crossCount;
+/*
+ * A function that takes a layering (an array of layers, each with an array of
+ * ordererd nodes) and a graph and returns a weighted crossing count.
+ *
+ * Pre-conditions:
+ *
+ *    1. Input graph must be simple (not a multigraph), directed, and include
+ *       only simple edges.
+ *    2. Edges in the input graph must have assigned weights.
+ *
+ * Post-conditions:
+ *
+ *    1. The graph and layering matrix are left unchanged.
+ *
+ * This algorithm is derived from Barth, et al., "Bilayer Cross Counting."
+ */function crossCount(g,layering){let cc=0;for(let i=1;i<layering.length;++i){cc+=twoLayerCrossCount(g,layering[i-1],layering[i])}return cc}function twoLayerCrossCount(g,northLayer,southLayer){
+// Sort all of the edges between the north and south layers by their position
+// in the north layer and then the south. Map these edges to the position of
+// their head in the south layer.
+let southPos=zipObject(southLayer,southLayer.map((v,i)=>i));let southEntries=northLayer.flatMap(v=>{return g.outEdges(v).map(e=>{return{pos:southPos[e.w],weight:g.edge(e).weight}}).sort((a,b)=>a.pos-b.pos)});
+// Build the accumulator tree
+let firstIndex=1;while(firstIndex<southLayer.length)firstIndex<<=1;let treeSize=2*firstIndex-1;firstIndex-=1;let tree=new Array(treeSize).fill(0);
+// Calculate the weighted crossings
+let cc=0;southEntries.forEach(entry=>{let index=entry.pos+firstIndex;tree[index]+=entry.weight;let weightSum=0;while(index>0){if(index%2){weightSum+=tree[index+1]}index=index-1>>1;tree[index]+=entry.weight}cc+=entry.weight*weightSum});return cc}},{"../util":27}],15:[function(require,module,exports){"use strict";let initOrder=require("./init-order");let crossCount=require("./cross-count");let sortSubgraph=require("./sort-subgraph");let buildLayerGraph=require("./build-layer-graph");let addSubgraphConstraints=require("./add-subgraph-constraints");let Graph=require("@dagrejs/graphlib").Graph;let util=require("../util");module.exports=order;
+/*
+ * Applies heuristics to minimize edge crossings in the graph and sets the best
+ * order solution as an order attribute on each node.
+ *
+ * Pre-conditions:
+ *
+ *    1. Graph must be DAG
+ *    2. Graph nodes must be objects with a "rank" attribute
+ *    3. Graph edges must have the "weight" attribute
+ *
+ * Post-conditions:
+ *
+ *    1. Graph nodes will have an "order" attribute based on the results of the
+ *       algorithm.
+ */function order(g,opts){if(opts&&typeof opts.customOrder==="function"){opts.customOrder(g,order);return}let maxRank=util.maxRank(g),downLayerGraphs=buildLayerGraphs(g,util.range(1,maxRank+1),"inEdges"),upLayerGraphs=buildLayerGraphs(g,util.range(maxRank-1,-1,-1),"outEdges");let layering=initOrder(g);assignOrder(g,layering);if(opts&&opts.disableOptimalOrderHeuristic){return}let bestCC=Number.POSITIVE_INFINITY,best;for(let i=0,lastBest=0;lastBest<4;++i,++lastBest){sweepLayerGraphs(i%2?downLayerGraphs:upLayerGraphs,i%4>=2);layering=util.buildLayerMatrix(g);let cc=crossCount(g,layering);if(cc<bestCC){lastBest=0;best=Object.assign({},layering);bestCC=cc}}assignOrder(g,best)}function buildLayerGraphs(g,ranks,relationship){return ranks.map(function(rank){return buildLayerGraph(g,rank,relationship)})}function sweepLayerGraphs(layerGraphs,biasRight){let cg=new Graph;layerGraphs.forEach(function(lg){let root=lg.graph().root;let sorted=sortSubgraph(lg,root,cg,biasRight);sorted.vs.forEach((v,i)=>lg.node(v).order=i);addSubgraphConstraints(lg,cg,sorted.vs)})}function assignOrder(g,layering){Object.values(layering).forEach(layer=>layer.forEach((v,i)=>g.node(v).order=i))}},{"../util":27,"./add-subgraph-constraints":11,"./build-layer-graph":13,"./cross-count":14,"./init-order":16,"./sort-subgraph":18,"@dagrejs/graphlib":29}],16:[function(require,module,exports){"use strict";let util=require("../util");module.exports=initOrder;
+/*
+ * Assigns an initial order value for each node by performing a DFS search
+ * starting from nodes in the first rank. Nodes are assigned an order in their
+ * rank as they are first visited.
+ *
+ * This approach comes from Gansner, et al., "A Technique for Drawing Directed
+ * Graphs."
+ *
+ * Returns a layering matrix with an array per layer and each layer sorted by
+ * the order of its nodes.
+ */function initOrder(g){let visited={};let simpleNodes=g.nodes().filter(v=>!g.children(v).length);let simpleNodesRanks=simpleNodes.map(v=>g.node(v).rank);let maxRank=util.applyWithChunking(Math.max,simpleNodesRanks);let layers=util.range(maxRank+1).map(()=>[]);function dfs(v){if(visited[v])return;visited[v]=true;let node=g.node(v);layers[node.rank].push(v);g.successors(v).forEach(dfs)}let orderedVs=simpleNodes.sort((a,b)=>g.node(a).rank-g.node(b).rank);orderedVs.forEach(dfs);return layers}},{"../util":27}],17:[function(require,module,exports){"use strict";let util=require("../util");module.exports=resolveConflicts;
+/*
+ * Given a list of entries of the form {v, barycenter, weight} and a
+ * constraint graph this function will resolve any conflicts between the
+ * constraint graph and the barycenters for the entries. If the barycenters for
+ * an entry would violate a constraint in the constraint graph then we coalesce
+ * the nodes in the conflict into a new node that respects the contraint and
+ * aggregates barycenter and weight information.
+ *
+ * This implementation is based on the description in Forster, "A Fast and
+ * Simple Hueristic for Constrained Two-Level Crossing Reduction," thought it
+ * differs in some specific details.
+ *
+ * Pre-conditions:
+ *
+ *    1. Each entry has the form {v, barycenter, weight}, or if the node has
+ *       no barycenter, then {v}.
+ *
+ * Returns:
+ *
+ *    A new list of entries of the form {vs, i, barycenter, weight}. The list
+ *    `vs` may either be a singleton or it may be an aggregation of nodes
+ *    ordered such that they do not violate constraints from the constraint
+ *    graph. The property `i` is the lowest original index of any of the
+ *    elements in `vs`.
+ */function resolveConflicts(entries,cg){let mappedEntries={};entries.forEach((entry,i)=>{let tmp=mappedEntries[entry.v]={indegree:0,in:[],out:[],vs:[entry.v],i:i};if(entry.barycenter!==undefined){tmp.barycenter=entry.barycenter;tmp.weight=entry.weight}});cg.edges().forEach(e=>{let entryV=mappedEntries[e.v];let entryW=mappedEntries[e.w];if(entryV!==undefined&&entryW!==undefined){entryW.indegree++;entryV.out.push(mappedEntries[e.w])}});let sourceSet=Object.values(mappedEntries).filter(entry=>!entry.indegree);return doResolveConflicts(sourceSet)}function doResolveConflicts(sourceSet){let entries=[];function handleIn(vEntry){return uEntry=>{if(uEntry.merged){return}if(uEntry.barycenter===undefined||vEntry.barycenter===undefined||uEntry.barycenter>=vEntry.barycenter){mergeEntries(vEntry,uEntry)}}}function handleOut(vEntry){return wEntry=>{wEntry["in"].push(vEntry);if(--wEntry.indegree===0){sourceSet.push(wEntry)}}}while(sourceSet.length){let entry=sourceSet.pop();entries.push(entry);entry["in"].reverse().forEach(handleIn(entry));entry.out.forEach(handleOut(entry))}return entries.filter(entry=>!entry.merged).map(entry=>{return util.pick(entry,["vs","i","barycenter","weight"])})}function mergeEntries(target,source){let sum=0;let weight=0;if(target.weight){sum+=target.barycenter*target.weight;weight+=target.weight}if(source.weight){sum+=source.barycenter*source.weight;weight+=source.weight}target.vs=source.vs.concat(target.vs);target.barycenter=sum/weight;target.weight=weight;target.i=Math.min(source.i,target.i);source.merged=true}},{"../util":27}],18:[function(require,module,exports){let barycenter=require("./barycenter");let resolveConflicts=require("./resolve-conflicts");let sort=require("./sort");module.exports=sortSubgraph;function sortSubgraph(g,v,cg,biasRight){let movable=g.children(v);let node=g.node(v);let bl=node?node.borderLeft:undefined;let br=node?node.borderRight:undefined;let subgraphs={};if(bl){movable=movable.filter(w=>w!==bl&&w!==br)}let barycenters=barycenter(g,movable);barycenters.forEach(entry=>{if(g.children(entry.v).length){let subgraphResult=sortSubgraph(g,entry.v,cg,biasRight);subgraphs[entry.v]=subgraphResult;if(Object.hasOwn(subgraphResult,"barycenter")){mergeBarycenters(entry,subgraphResult)}}});let entries=resolveConflicts(barycenters,cg);expandSubgraphs(entries,subgraphs);let result=sort(entries,biasRight);if(bl){result.vs=[bl,result.vs,br].flat(true);if(g.predecessors(bl).length){let blPred=g.node(g.predecessors(bl)[0]),brPred=g.node(g.predecessors(br)[0]);if(!Object.hasOwn(result,"barycenter")){result.barycenter=0;result.weight=0}result.barycenter=(result.barycenter*result.weight+blPred.order+brPred.order)/(result.weight+2);result.weight+=2}}return result}function expandSubgraphs(entries,subgraphs){entries.forEach(entry=>{entry.vs=entry.vs.flatMap(v=>{if(subgraphs[v]){return subgraphs[v].vs}return v})})}function mergeBarycenters(target,other){if(target.barycenter!==undefined){target.barycenter=(target.barycenter*target.weight+other.barycenter*other.weight)/(target.weight+other.weight);target.weight+=other.weight}else{target.barycenter=other.barycenter;target.weight=other.weight}}},{"./barycenter":12,"./resolve-conflicts":17,"./sort":19}],19:[function(require,module,exports){let util=require("../util");module.exports=sort;function sort(entries,biasRight){let parts=util.partition(entries,entry=>{return Object.hasOwn(entry,"barycenter")});let sortable=parts.lhs,unsortable=parts.rhs.sort((a,b)=>b.i-a.i),vs=[],sum=0,weight=0,vsIndex=0;sortable.sort(compareWithBias(!!biasRight));vsIndex=consumeUnsortable(vs,unsortable,vsIndex);sortable.forEach(entry=>{vsIndex+=entry.vs.length;vs.push(entry.vs);sum+=entry.barycenter*entry.weight;weight+=entry.weight;vsIndex=consumeUnsortable(vs,unsortable,vsIndex)});let result={vs:vs.flat(true)};if(weight){result.barycenter=sum/weight;result.weight=weight}return result}function consumeUnsortable(vs,unsortable,index){let last;while(unsortable.length&&(last=unsortable[unsortable.length-1]).i<=index){unsortable.pop();vs.push(last.vs);index++}return index}function compareWithBias(bias){return(entryV,entryW)=>{if(entryV.barycenter<entryW.barycenter){return-1}else if(entryV.barycenter>entryW.barycenter){return 1}return!bias?entryV.i-entryW.i:entryW.i-entryV.i}}},{"../util":27}],20:[function(require,module,exports){module.exports=parentDummyChains;function parentDummyChains(g){let postorderNums=postorder(g);g.graph().dummyChains.forEach(v=>{let node=g.node(v);let edgeObj=node.edgeObj;let pathData=findPath(g,postorderNums,edgeObj.v,edgeObj.w);let path=pathData.path;let lca=pathData.lca;let pathIdx=0;let pathV=path[pathIdx];let ascending=true;while(v!==edgeObj.w){node=g.node(v);if(ascending){while((pathV=path[pathIdx])!==lca&&g.node(pathV).maxRank<node.rank){pathIdx++}if(pathV===lca){ascending=false}}if(!ascending){while(pathIdx<path.length-1&&g.node(pathV=path[pathIdx+1]).minRank<=node.rank){pathIdx++}pathV=path[pathIdx]}g.setParent(v,pathV);v=g.successors(v)[0]}})}
+// Find a path from v to w through the lowest common ancestor (LCA). Return the
+// full path and the LCA.
+function findPath(g,postorderNums,v,w){let vPath=[];let wPath=[];let low=Math.min(postorderNums[v].low,postorderNums[w].low);let lim=Math.max(postorderNums[v].lim,postorderNums[w].lim);let parent;let lca;
+// Traverse up from v to find the LCA
+parent=v;do{parent=g.parent(parent);vPath.push(parent)}while(parent&&(postorderNums[parent].low>low||lim>postorderNums[parent].lim));lca=parent;
+// Traverse from w to LCA
+parent=w;while((parent=g.parent(parent))!==lca){wPath.push(parent)}return{path:vPath.concat(wPath.reverse()),lca:lca}}function postorder(g){let result={};let lim=0;function dfs(v){let low=lim;g.children(v).forEach(dfs);result[v]={low:low,lim:lim++}}g.children().forEach(dfs);return result}},{}],21:[function(require,module,exports){"use strict";let Graph=require("@dagrejs/graphlib").Graph;let util=require("../util");
+/*
+ * This module provides coordinate assignment based on Brandes and Köpf, "Fast
+ * and Simple Horizontal Coordinate Assignment."
+ */module.exports={positionX:positionX,findType1Conflicts:findType1Conflicts,findType2Conflicts:findType2Conflicts,addConflict:addConflict,hasConflict:hasConflict,verticalAlignment:verticalAlignment,horizontalCompaction:horizontalCompaction,alignCoordinates:alignCoordinates,findSmallestWidthAlignment:findSmallestWidthAlignment,balance:balance};
+/*
+ * Marks all edges in the graph with a type-1 conflict with the "type1Conflict"
+ * property. A type-1 conflict is one where a non-inner segment crosses an
+ * inner segment. An inner segment is an edge with both incident nodes marked
+ * with the "dummy" property.
+ *
+ * This algorithm scans layer by layer, starting with the second, for type-1
+ * conflicts between the current layer and the previous layer. For each layer
+ * it scans the nodes from left to right until it reaches one that is incident
+ * on an inner segment. It then scans predecessors to determine if they have
+ * edges that cross that inner segment. At the end a final scan is done for all
+ * nodes on the current rank to see if they cross the last visited inner
+ * segment.
+ *
+ * This algorithm (safely) assumes that a dummy node will only be incident on a
+ * single node in the layers being scanned.
+ */function findType1Conflicts(g,layering){let conflicts={};function visitLayer(prevLayer,layer){let
+// last visited node in the previous layer that is incident on an inner
+// segment.
+k0=0,
+// Tracks the last node in this layer scanned for crossings with a type-1
+// segment.
+scanPos=0,prevLayerLength=prevLayer.length,lastNode=layer[layer.length-1];layer.forEach((v,i)=>{let w=findOtherInnerSegmentNode(g,v),k1=w?g.node(w).order:prevLayerLength;if(w||v===lastNode){layer.slice(scanPos,i+1).forEach(scanNode=>{g.predecessors(scanNode).forEach(u=>{let uLabel=g.node(u),uPos=uLabel.order;if((uPos<k0||k1<uPos)&&!(uLabel.dummy&&g.node(scanNode).dummy)){addConflict(conflicts,u,scanNode)}})});scanPos=i+1;k0=k1}});return layer}layering.length&&layering.reduce(visitLayer);return conflicts}function findType2Conflicts(g,layering){let conflicts={};function scan(south,southPos,southEnd,prevNorthBorder,nextNorthBorder){let v;util.range(southPos,southEnd).forEach(i=>{v=south[i];if(g.node(v).dummy){g.predecessors(v).forEach(u=>{let uNode=g.node(u);if(uNode.dummy&&(uNode.order<prevNorthBorder||uNode.order>nextNorthBorder)){addConflict(conflicts,u,v)}})}})}function visitLayer(north,south){let prevNorthPos=-1,nextNorthPos,southPos=0;south.forEach((v,southLookahead)=>{if(g.node(v).dummy==="border"){let predecessors=g.predecessors(v);if(predecessors.length){nextNorthPos=g.node(predecessors[0]).order;scan(south,southPos,southLookahead,prevNorthPos,nextNorthPos);southPos=southLookahead;prevNorthPos=nextNorthPos}}scan(south,southPos,south.length,nextNorthPos,north.length)});return south}layering.length&&layering.reduce(visitLayer);return conflicts}function findOtherInnerSegmentNode(g,v){if(g.node(v).dummy){return g.predecessors(v).find(u=>g.node(u).dummy)}}function addConflict(conflicts,v,w){if(v>w){let tmp=v;v=w;w=tmp}let conflictsV=conflicts[v];if(!conflictsV){conflicts[v]=conflictsV={}}conflictsV[w]=true}function hasConflict(conflicts,v,w){if(v>w){let tmp=v;v=w;w=tmp}return!!conflicts[v]&&Object.hasOwn(conflicts[v],w)}
+/*
+ * Try to align nodes into vertical "blocks" where possible. This algorithm
+ * attempts to align a node with one of its median neighbors. If the edge
+ * connecting a neighbor is a type-1 conflict then we ignore that possibility.
+ * If a previous node has already formed a block with a node after the node
+ * we're trying to form a block with, we also ignore that possibility - our
+ * blocks would be split in that scenario.
+ */function verticalAlignment(g,layering,conflicts,neighborFn){let root={},align={},pos={};
+// We cache the position here based on the layering because the graph and
+// layering may be out of sync. The layering matrix is manipulated to
+// generate different extreme alignments.
+layering.forEach(layer=>{layer.forEach((v,order)=>{root[v]=v;align[v]=v;pos[v]=order})});layering.forEach(layer=>{let prevIdx=-1;layer.forEach(v=>{let ws=neighborFn(v);if(ws.length){ws=ws.sort((a,b)=>pos[a]-pos[b]);let mp=(ws.length-1)/2;for(let i=Math.floor(mp),il=Math.ceil(mp);i<=il;++i){let w=ws[i];if(align[v]===v&&prevIdx<pos[w]&&!hasConflict(conflicts,v,w)){align[w]=v;align[v]=root[v]=root[w];prevIdx=pos[w]}}}})});return{root:root,align:align}}function horizontalCompaction(g,layering,root,align,reverseSep){
+// This portion of the algorithm differs from BK due to a number of problems.
+// Instead of their algorithm we construct a new block graph and do two
+// sweeps. The first sweep places blocks with the smallest possible
+// coordinates. The second sweep removes unused space by moving blocks to the
+// greatest coordinates without violating separation.
+let xs={},blockG=buildBlockGraph(g,layering,root,reverseSep),borderType=reverseSep?"borderLeft":"borderRight";function iterate(setXsFunc,nextNodesFunc){let stack=blockG.nodes();let elem=stack.pop();let visited={};while(elem){if(visited[elem]){setXsFunc(elem)}else{visited[elem]=true;stack.push(elem);stack=stack.concat(nextNodesFunc(elem))}elem=stack.pop()}}
+// First pass, assign smallest coordinates
+function pass1(elem){xs[elem]=blockG.inEdges(elem).reduce((acc,e)=>{return Math.max(acc,xs[e.v]+blockG.edge(e))},0)}
+// Second pass, assign greatest coordinates
+function pass2(elem){let min=blockG.outEdges(elem).reduce((acc,e)=>{return Math.min(acc,xs[e.w]-blockG.edge(e))},Number.POSITIVE_INFINITY);let node=g.node(elem);if(min!==Number.POSITIVE_INFINITY&&node.borderType!==borderType){xs[elem]=Math.max(xs[elem],min)}}iterate(pass1,blockG.predecessors.bind(blockG));iterate(pass2,blockG.successors.bind(blockG));
+// Assign x coordinates to all nodes
+Object.keys(align).forEach(v=>xs[v]=xs[root[v]]);return xs}function buildBlockGraph(g,layering,root,reverseSep){let blockGraph=new Graph,graphLabel=g.graph(),sepFn=sep(graphLabel.nodesep,graphLabel.edgesep,reverseSep);layering.forEach(layer=>{let u;layer.forEach(v=>{let vRoot=root[v];blockGraph.setNode(vRoot);if(u){var uRoot=root[u],prevMax=blockGraph.edge(uRoot,vRoot);blockGraph.setEdge(uRoot,vRoot,Math.max(sepFn(g,v,u),prevMax||0))}u=v})});return blockGraph}
+/*
+ * Returns the alignment that has the smallest width of the given alignments.
+ */function findSmallestWidthAlignment(g,xss){return Object.values(xss).reduce((currentMinAndXs,xs)=>{let max=Number.NEGATIVE_INFINITY;let min=Number.POSITIVE_INFINITY;Object.entries(xs).forEach(([v,x])=>{let halfWidth=width(g,v)/2;max=Math.max(x+halfWidth,max);min=Math.min(x-halfWidth,min)});const newMin=max-min;if(newMin<currentMinAndXs[0]){currentMinAndXs=[newMin,xs]}return currentMinAndXs},[Number.POSITIVE_INFINITY,null])[1]}
+/*
+ * Align the coordinates of each of the layout alignments such that
+ * left-biased alignments have their minimum coordinate at the same point as
+ * the minimum coordinate of the smallest width alignment and right-biased
+ * alignments have their maximum coordinate at the same point as the maximum
+ * coordinate of the smallest width alignment.
+ */function alignCoordinates(xss,alignTo){let alignToVals=Object.values(alignTo),alignToMin=util.applyWithChunking(Math.min,alignToVals),alignToMax=util.applyWithChunking(Math.max,alignToVals);["u","d"].forEach(vert=>{["l","r"].forEach(horiz=>{let alignment=vert+horiz,xs=xss[alignment];if(xs===alignTo)return;let xsVals=Object.values(xs);let delta=alignToMin-util.applyWithChunking(Math.min,xsVals);if(horiz!=="l"){delta=alignToMax-util.applyWithChunking(Math.max,xsVals)}if(delta){xss[alignment]=util.mapValues(xs,x=>x+delta)}})})}function balance(xss,align){return util.mapValues(xss.ul,(num,v)=>{if(align){return xss[align.toLowerCase()][v]}else{let xs=Object.values(xss).map(xs=>xs[v]).sort((a,b)=>a-b);return(xs[1]+xs[2])/2}})}function positionX(g){let layering=util.buildLayerMatrix(g);let conflicts=Object.assign(findType1Conflicts(g,layering),findType2Conflicts(g,layering));let xss={};let adjustedLayering;["u","d"].forEach(vert=>{adjustedLayering=vert==="u"?layering:Object.values(layering).reverse();["l","r"].forEach(horiz=>{if(horiz==="r"){adjustedLayering=adjustedLayering.map(inner=>{return Object.values(inner).reverse()})}let neighborFn=(vert==="u"?g.predecessors:g.successors).bind(g);let align=verticalAlignment(g,adjustedLayering,conflicts,neighborFn);let xs=horizontalCompaction(g,adjustedLayering,align.root,align.align,horiz==="r");if(horiz==="r"){xs=util.mapValues(xs,x=>-x)}xss[vert+horiz]=xs})});let smallestWidth=findSmallestWidthAlignment(g,xss);alignCoordinates(xss,smallestWidth);return balance(xss,g.graph().align)}function sep(nodeSep,edgeSep,reverseSep){return(g,v,w)=>{let vLabel=g.node(v);let wLabel=g.node(w);let sum=0;let delta;sum+=vLabel.width/2;if(Object.hasOwn(vLabel,"labelpos")){switch(vLabel.labelpos.toLowerCase()){case"l":delta=-vLabel.width/2;break;case"r":delta=vLabel.width/2;break}}if(delta){sum+=reverseSep?delta:-delta}delta=0;sum+=(vLabel.dummy?edgeSep:nodeSep)/2;sum+=(wLabel.dummy?edgeSep:nodeSep)/2;sum+=wLabel.width/2;if(Object.hasOwn(wLabel,"labelpos")){switch(wLabel.labelpos.toLowerCase()){case"l":delta=wLabel.width/2;break;case"r":delta=-wLabel.width/2;break}}if(delta){sum+=reverseSep?delta:-delta}delta=0;return sum}}function width(g,v){return g.node(v).width}},{"../util":27,"@dagrejs/graphlib":29}],22:[function(require,module,exports){"use strict";let util=require("../util");let positionX=require("./bk").positionX;module.exports=position;function position(g){g=util.asNonCompoundGraph(g);positionY(g);Object.entries(positionX(g)).forEach(([v,x])=>g.node(v).x=x)}function positionY(g){let layering=util.buildLayerMatrix(g);let rankSep=g.graph().ranksep;let prevY=0;layering.forEach(layer=>{const maxHeight=layer.reduce((acc,v)=>{const height=g.node(v).height;if(acc>height){return acc}else{return height}},0);layer.forEach(v=>g.node(v).y=prevY+maxHeight/2);prevY+=maxHeight+rankSep})}},{"../util":27,"./bk":21}],23:[function(require,module,exports){"use strict";var Graph=require("@dagrejs/graphlib").Graph;var slack=require("./util").slack;module.exports=feasibleTree;
+/*
+ * Constructs a spanning tree with tight edges and adjusted the input node's
+ * ranks to achieve this. A tight edge is one that is has a length that matches
+ * its "minlen" attribute.
+ *
+ * The basic structure for this function is derived from Gansner, et al., "A
+ * Technique for Drawing Directed Graphs."
+ *
+ * Pre-conditions:
+ *
+ *    1. Graph must be a DAG.
+ *    2. Graph must be connected.
+ *    3. Graph must have at least one node.
+ *    5. Graph nodes must have been previously assigned a "rank" property that
+ *       respects the "minlen" property of incident edges.
+ *    6. Graph edges must have a "minlen" property.
+ *
+ * Post-conditions:
+ *
+ *    - Graph nodes will have their rank adjusted to ensure that all edges are
+ *      tight.
+ *
+ * Returns a tree (undirected graph) that is constructed using only "tight"
+ * edges.
+ */function feasibleTree(g){var t=new Graph({directed:false});
+// Choose arbitrary node from which to start our tree
+var start=g.nodes()[0];var size=g.nodeCount();t.setNode(start,{});var edge,delta;while(tightTree(t,g)<size){edge=findMinSlackEdge(t,g);delta=t.hasNode(edge.v)?slack(g,edge):-slack(g,edge);shiftRanks(t,g,delta)}return t}
+/*
+ * Finds a maximal tree of tight edges and returns the number of nodes in the
+ * tree.
+ */function tightTree(t,g){function dfs(v){g.nodeEdges(v).forEach(e=>{var edgeV=e.v,w=v===edgeV?e.w:edgeV;if(!t.hasNode(w)&&!slack(g,e)){t.setNode(w,{});t.setEdge(v,w,{});dfs(w)}})}t.nodes().forEach(dfs);return t.nodeCount()}
+/*
+ * Finds the edge with the smallest slack that is incident on tree and returns
+ * it.
+ */function findMinSlackEdge(t,g){const edges=g.edges();return edges.reduce((acc,edge)=>{let edgeSlack=Number.POSITIVE_INFINITY;if(t.hasNode(edge.v)!==t.hasNode(edge.w)){edgeSlack=slack(g,edge)}if(edgeSlack<acc[0]){return[edgeSlack,edge]}return acc},[Number.POSITIVE_INFINITY,null])[1]}function shiftRanks(t,g,delta){t.nodes().forEach(v=>g.node(v).rank+=delta)}},{"./util":26,"@dagrejs/graphlib":29}],24:[function(require,module,exports){"use strict";var rankUtil=require("./util");var longestPath=rankUtil.longestPath;var feasibleTree=require("./feasible-tree");var networkSimplex=require("./network-simplex");module.exports=rank;
+/*
+ * Assigns a rank to each node in the input graph that respects the "minlen"
+ * constraint specified on edges between nodes.
+ *
+ * This basic structure is derived from Gansner, et al., "A Technique for
+ * Drawing Directed Graphs."
+ *
+ * Pre-conditions:
+ *
+ *    1. Graph must be a connected DAG
+ *    2. Graph nodes must be objects
+ *    3. Graph edges must have "weight" and "minlen" attributes
+ *
+ * Post-conditions:
+ *
+ *    1. Graph nodes will have a "rank" attribute based on the results of the
+ *       algorithm. Ranks can start at any index (including negative), we'll
+ *       fix them up later.
+ */function rank(g){var ranker=g.graph().ranker;if(ranker instanceof Function){return ranker(g)}switch(g.graph().ranker){case"network-simplex":networkSimplexRanker(g);break;case"tight-tree":tightTreeRanker(g);break;case"longest-path":longestPathRanker(g);break;case"none":break;default:networkSimplexRanker(g)}}
+// A fast and simple ranker, but results are far from optimal.
+var longestPathRanker=longestPath;function tightTreeRanker(g){longestPath(g);feasibleTree(g)}function networkSimplexRanker(g){networkSimplex(g)}},{"./feasible-tree":23,"./network-simplex":25,"./util":26}],25:[function(require,module,exports){"use strict";var feasibleTree=require("./feasible-tree");var slack=require("./util").slack;var initRank=require("./util").longestPath;var preorder=require("@dagrejs/graphlib").alg.preorder;var postorder=require("@dagrejs/graphlib").alg.postorder;var simplify=require("../util").simplify;module.exports=networkSimplex;
+// Expose some internals for testing purposes
+networkSimplex.initLowLimValues=initLowLimValues;networkSimplex.initCutValues=initCutValues;networkSimplex.calcCutValue=calcCutValue;networkSimplex.leaveEdge=leaveEdge;networkSimplex.enterEdge=enterEdge;networkSimplex.exchangeEdges=exchangeEdges;
+/*
+ * The network simplex algorithm assigns ranks to each node in the input graph
+ * and iteratively improves the ranking to reduce the length of edges.
+ *
+ * Preconditions:
+ *
+ *    1. The input graph must be a DAG.
+ *    2. All nodes in the graph must have an object value.
+ *    3. All edges in the graph must have "minlen" and "weight" attributes.
+ *
+ * Postconditions:
+ *
+ *    1. All nodes in the graph will have an assigned "rank" attribute that has
+ *       been optimized by the network simplex algorithm. Ranks start at 0.
+ *
+ *
+ * A rough sketch of the algorithm is as follows:
+ *
+ *    1. Assign initial ranks to each node. We use the longest path algorithm,
+ *       which assigns ranks to the lowest position possible. In general this
+ *       leads to very wide bottom ranks and unnecessarily long edges.
+ *    2. Construct a feasible tight tree. A tight tree is one such that all
+ *       edges in the tree have no slack (difference between length of edge
+ *       and minlen for the edge). This by itself greatly improves the assigned
+ *       rankings by shorting edges.
+ *    3. Iteratively find edges that have negative cut values. Generally a
+ *       negative cut value indicates that the edge could be removed and a new
+ *       tree edge could be added to produce a more compact graph.
+ *
+ * Much of the algorithms here are derived from Gansner, et al., "A Technique
+ * for Drawing Directed Graphs." The structure of the file roughly follows the
+ * structure of the overall algorithm.
+ */function networkSimplex(g){g=simplify(g);initRank(g);var t=feasibleTree(g);initLowLimValues(t);initCutValues(t,g);var e,f;while(e=leaveEdge(t)){f=enterEdge(t,g,e);exchangeEdges(t,g,e,f)}}
+/*
+ * Initializes cut values for all edges in the tree.
+ */function initCutValues(t,g){var vs=postorder(t,t.nodes());vs=vs.slice(0,vs.length-1);vs.forEach(v=>assignCutValue(t,g,v))}function assignCutValue(t,g,child){var childLab=t.node(child);var parent=childLab.parent;t.edge(child,parent).cutvalue=calcCutValue(t,g,child)}
+/*
+ * Given the tight tree, its graph, and a child in the graph calculate and
+ * return the cut value for the edge between the child and its parent.
+ */function calcCutValue(t,g,child){var childLab=t.node(child);var parent=childLab.parent;
+// True if the child is on the tail end of the edge in the directed graph
+var childIsTail=true;
+// The graph's view of the tree edge we're inspecting
+var graphEdge=g.edge(child,parent);
+// The accumulated cut value for the edge between this node and its parent
+var cutValue=0;if(!graphEdge){childIsTail=false;graphEdge=g.edge(parent,child)}cutValue=graphEdge.weight;g.nodeEdges(child).forEach(e=>{var isOutEdge=e.v===child,other=isOutEdge?e.w:e.v;if(other!==parent){var pointsToHead=isOutEdge===childIsTail,otherWeight=g.edge(e).weight;cutValue+=pointsToHead?otherWeight:-otherWeight;if(isTreeEdge(t,child,other)){var otherCutValue=t.edge(child,other).cutvalue;cutValue+=pointsToHead?-otherCutValue:otherCutValue}}});return cutValue}function initLowLimValues(tree,root){if(arguments.length<2){root=tree.nodes()[0]}dfsAssignLowLim(tree,{},1,root)}function dfsAssignLowLim(tree,visited,nextLim,v,parent){var low=nextLim;var label=tree.node(v);visited[v]=true;tree.neighbors(v).forEach(w=>{if(!Object.hasOwn(visited,w)){nextLim=dfsAssignLowLim(tree,visited,nextLim,w,v)}});label.low=low;label.lim=nextLim++;if(parent){label.parent=parent}else{
+// TODO should be able to remove this when we incrementally update low lim
+delete label.parent}return nextLim}function leaveEdge(tree){return tree.edges().find(e=>tree.edge(e).cutvalue<0)}function enterEdge(t,g,edge){var v=edge.v;var w=edge.w;
+// For the rest of this function we assume that v is the tail and w is the
+// head, so if we don't have this edge in the graph we should flip it to
+// match the correct orientation.
+if(!g.hasEdge(v,w)){v=edge.w;w=edge.v}var vLabel=t.node(v);var wLabel=t.node(w);var tailLabel=vLabel;var flip=false;
+// If the root is in the tail of the edge then we need to flip the logic that
+// checks for the head and tail nodes in the candidates function below.
+if(vLabel.lim>wLabel.lim){tailLabel=wLabel;flip=true}var candidates=g.edges().filter(edge=>{return flip===isDescendant(t,t.node(edge.v),tailLabel)&&flip!==isDescendant(t,t.node(edge.w),tailLabel)});return candidates.reduce((acc,edge)=>{if(slack(g,edge)<slack(g,acc)){return edge}return acc})}function exchangeEdges(t,g,e,f){var v=e.v;var w=e.w;t.removeEdge(v,w);t.setEdge(f.v,f.w,{});initLowLimValues(t);initCutValues(t,g);updateRanks(t,g)}function updateRanks(t,g){var root=t.nodes().find(v=>!g.node(v).parent);var vs=preorder(t,root);vs=vs.slice(1);vs.forEach(v=>{var parent=t.node(v).parent,edge=g.edge(v,parent),flipped=false;if(!edge){edge=g.edge(parent,v);flipped=true}g.node(v).rank=g.node(parent).rank+(flipped?edge.minlen:-edge.minlen)})}
+/*
+ * Returns true if the edge is in the tree.
+ */function isTreeEdge(tree,u,v){return tree.hasEdge(u,v)}
+/*
+ * Returns true if the specified node is descendant of the root node per the
+ * assigned low and lim attributes in the tree.
+ */function isDescendant(tree,vLabel,rootLabel){return rootLabel.low<=vLabel.lim&&vLabel.lim<=rootLabel.lim}},{"../util":27,"./feasible-tree":23,"./util":26,"@dagrejs/graphlib":29}],26:[function(require,module,exports){"use strict";const{applyWithChunking}=require("../util");module.exports={longestPath:longestPath,slack:slack};
+/*
+ * Initializes ranks for the input graph using the longest path algorithm. This
+ * algorithm scales well and is fast in practice, it yields rather poor
+ * solutions. Nodes are pushed to the lowest layer possible, leaving the bottom
+ * ranks wide and leaving edges longer than necessary. However, due to its
+ * speed, this algorithm is good for getting an initial ranking that can be fed
+ * into other algorithms.
+ *
+ * This algorithm does not normalize layers because it will be used by other
+ * algorithms in most cases. If using this algorithm directly, be sure to
+ * run normalize at the end.
+ *
+ * Pre-conditions:
+ *
+ *    1. Input graph is a DAG.
+ *    2. Input graph node labels can be assigned properties.
+ *
+ * Post-conditions:
+ *
+ *    1. Each node will be assign an (unnormalized) "rank" property.
+ */function longestPath(g){var visited={};function dfs(v){var label=g.node(v);if(Object.hasOwn(visited,v)){return label.rank}visited[v]=true;let outEdgesMinLens=g.outEdges(v).map(e=>{if(e==null){return Number.POSITIVE_INFINITY}return dfs(e.w)-g.edge(e).minlen});var rank=applyWithChunking(Math.min,outEdgesMinLens);if(rank===Number.POSITIVE_INFINITY){rank=0}return label.rank=rank}g.sources().forEach(dfs)}
+/*
+ * Returns the amount of slack for the given edge. The slack is defined as the
+ * difference between the length of the edge and its minimum length.
+ */function slack(g,e){return g.node(e.w).rank-g.node(e.v).rank-g.edge(e).minlen}},{"../util":27}],27:[function(require,module,exports){
+/* eslint "no-console": off */
+"use strict";let Graph=require("@dagrejs/graphlib").Graph;module.exports={addBorderNode:addBorderNode,addDummyNode:addDummyNode,applyWithChunking:applyWithChunking,asNonCompoundGraph:asNonCompoundGraph,buildLayerMatrix:buildLayerMatrix,intersectRect:intersectRect,mapValues:mapValues,maxRank:maxRank,normalizeRanks:normalizeRanks,notime:notime,partition:partition,pick:pick,predecessorWeights:predecessorWeights,range:range,removeEmptyRanks:removeEmptyRanks,simplify:simplify,successorWeights:successorWeights,time:time,uniqueId:uniqueId,zipObject:zipObject};
+/*
+ * Adds a dummy node to the graph and return v.
+ */function addDummyNode(g,type,attrs,name){var v=name;while(g.hasNode(v)){v=uniqueId(name)}attrs.dummy=type;g.setNode(v,attrs);return v}
+/*
+ * Returns a new graph with only simple edges. Handles aggregation of data
+ * associated with multi-edges.
+ */function simplify(g){let simplified=(new Graph).setGraph(g.graph());g.nodes().forEach(v=>simplified.setNode(v,g.node(v)));g.edges().forEach(e=>{let simpleLabel=simplified.edge(e.v,e.w)||{weight:0,minlen:1};let label=g.edge(e);simplified.setEdge(e.v,e.w,{weight:simpleLabel.weight+label.weight,minlen:Math.max(simpleLabel.minlen,label.minlen)})});return simplified}function asNonCompoundGraph(g){let simplified=new Graph({multigraph:g.isMultigraph()}).setGraph(g.graph());g.nodes().forEach(v=>{if(!g.children(v).length){simplified.setNode(v,g.node(v))}});g.edges().forEach(e=>{simplified.setEdge(e,g.edge(e))});return simplified}function successorWeights(g){let weightMap=g.nodes().map(v=>{let sucs={};g.outEdges(v).forEach(e=>{sucs[e.w]=(sucs[e.w]||0)+g.edge(e).weight});return sucs});return zipObject(g.nodes(),weightMap)}function predecessorWeights(g){let weightMap=g.nodes().map(v=>{let preds={};g.inEdges(v).forEach(e=>{preds[e.v]=(preds[e.v]||0)+g.edge(e).weight});return preds});return zipObject(g.nodes(),weightMap)}
+/*
+ * Finds where a line starting at point ({x, y}) would intersect a rectangle
+ * ({x, y, width, height}) if it were pointing at the rectangle's center.
+ */function intersectRect(rect,point){let x=rect.x;let y=rect.y;
+// Rectangle intersection algorithm from:
+// http://math.stackexchange.com/questions/108113/find-edge-between-two-boxes
+let dx=point.x-x;let dy=point.y-y;let w=rect.width/2;let h=rect.height/2;if(!dx&&!dy){throw new Error("Not possible to find intersection inside of the rectangle")}let sx,sy;if(Math.abs(dy)*w>Math.abs(dx)*h){
+// Intersection is top or bottom of rect.
+if(dy<0){h=-h}sx=h*dx/dy;sy=h}else{
+// Intersection is left or right of rect.
+if(dx<0){w=-w}sx=w;sy=w*dy/dx}return{x:x+sx,y:y+sy}}
+/*
+ * Given a DAG with each node assigned "rank" and "order" properties, this
+ * function will produce a matrix with the ids of each node.
+ */function buildLayerMatrix(g){let layering=range(maxRank(g)+1).map(()=>[]);g.nodes().forEach(v=>{let node=g.node(v);let rank=node.rank;if(rank!==undefined){layering[rank][node.order]=v}});return layering}
+/*
+ * Adjusts the ranks for all nodes in the graph such that all nodes v have
+ * rank(v) >= 0 and at least one node w has rank(w) = 0.
+ */function normalizeRanks(g){let nodeRanks=g.nodes().map(v=>{let rank=g.node(v).rank;if(rank===undefined){return Number.MAX_VALUE}return rank});let min=applyWithChunking(Math.min,nodeRanks);g.nodes().forEach(v=>{let node=g.node(v);if(Object.hasOwn(node,"rank")){node.rank-=min}})}function removeEmptyRanks(g){
+// Ranks may not start at 0, so we need to offset them
+let nodeRanks=g.nodes().map(v=>g.node(v).rank);let offset=applyWithChunking(Math.min,nodeRanks);let layers=[];g.nodes().forEach(v=>{let rank=g.node(v).rank-offset;if(!layers[rank]){layers[rank]=[]}layers[rank].push(v)});let delta=0;let nodeRankFactor=g.graph().nodeRankFactor;Array.from(layers).forEach((vs,i)=>{if(vs===undefined&&i%nodeRankFactor!==0){--delta}else if(vs!==undefined&&delta){vs.forEach(v=>g.node(v).rank+=delta)}})}function addBorderNode(g,prefix,rank,order){let node={width:0,height:0};if(arguments.length>=4){node.rank=rank;node.order=order}return addDummyNode(g,"border",node,prefix)}function splitToChunks(array,chunkSize=CHUNKING_THRESHOLD){const chunks=[];for(let i=0;i<array.length;i+=chunkSize){const chunk=array.slice(i,i+chunkSize);chunks.push(chunk)}return chunks}const CHUNKING_THRESHOLD=65535;function applyWithChunking(fn,argsArray){if(argsArray.length>CHUNKING_THRESHOLD){const chunks=splitToChunks(argsArray);return fn.apply(null,chunks.map(chunk=>fn.apply(null,chunk)))}else{return fn.apply(null,argsArray)}}function maxRank(g){const nodes=g.nodes();const nodeRanks=nodes.map(v=>{let rank=g.node(v).rank;if(rank===undefined){return Number.MIN_VALUE}return rank});return applyWithChunking(Math.max,nodeRanks)}
+/*
+ * Partition a collection into two groups: `lhs` and `rhs`. If the supplied
+ * function returns true for an entry it goes into `lhs`. Otherwise it goes
+ * into `rhs.
+ */function partition(collection,fn){let result={lhs:[],rhs:[]};collection.forEach(value=>{if(fn(value)){result.lhs.push(value)}else{result.rhs.push(value)}});return result}
+/*
+ * Returns a new function that wraps `fn` with a timer. The wrapper logs the
+ * time it takes to execute the function.
+ */function time(name,fn){let start=Date.now();try{return fn()}finally{console.log(name+" time: "+(Date.now()-start)+"ms")}}function notime(name,fn){return fn()}let idCounter=0;function uniqueId(prefix){var id=++idCounter;return prefix+(""+id)}function range(start,limit,step=1){if(limit==null){limit=start;start=0}let endCon=i=>i<limit;if(step<0){endCon=i=>limit<i}const range=[];for(let i=start;endCon(i);i+=step){range.push(i)}return range}function pick(source,keys){const dest={};for(const key of keys){if(source[key]!==undefined){dest[key]=source[key]}}return dest}function mapValues(obj,funcOrProp){let func=funcOrProp;if(typeof funcOrProp==="string"){func=val=>val[funcOrProp]}return Object.entries(obj).reduce((acc,[k,v])=>{acc[k]=func(v,k);return acc},{})}function zipObject(props,values){return props.reduce((acc,key,i)=>{acc[key]=values[i];return acc},{})}},{"@dagrejs/graphlib":29}],28:[function(require,module,exports){module.exports="1.1.5"},{}],29:[function(require,module,exports){
+/**
+ * Copyright (c) 2014, Chris Pettitt
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software without
+ * specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+var lib=require("./lib");module.exports={Graph:lib.Graph,json:require("./lib/json"),alg:require("./lib/alg"),version:lib.version}},{"./lib":45,"./lib/alg":36,"./lib/json":46}],30:[function(require,module,exports){module.exports=components;function components(g){var visited={};var cmpts=[];var cmpt;function dfs(v){if(Object.hasOwn(visited,v))return;visited[v]=true;cmpt.push(v);g.successors(v).forEach(dfs);g.predecessors(v).forEach(dfs)}g.nodes().forEach(function(v){cmpt=[];dfs(v);if(cmpt.length){cmpts.push(cmpt)}});return cmpts}},{}],31:[function(require,module,exports){module.exports=dfs;
+/*
+ * A helper that preforms a pre- or post-order traversal on the input graph
+ * and returns the nodes in the order they were visited. If the graph is
+ * undirected then this algorithm will navigate using neighbors. If the graph
+ * is directed then this algorithm will navigate using successors.
+ *
+ * If the order is not "post", it will be treated as "pre".
+ */function dfs(g,vs,order){if(!Array.isArray(vs)){vs=[vs]}var navigation=g.isDirected()?v=>g.successors(v):v=>g.neighbors(v);var orderFunc=order==="post"?postOrderDfs:preOrderDfs;var acc=[];var visited={};vs.forEach(v=>{if(!g.hasNode(v)){throw new Error("Graph does not have node: "+v)}orderFunc(v,navigation,visited,acc)});return acc}function postOrderDfs(v,navigation,visited,acc){var stack=[[v,false]];while(stack.length>0){var curr=stack.pop();if(curr[1]){acc.push(curr[0])}else{if(!Object.hasOwn(visited,curr[0])){visited[curr[0]]=true;stack.push([curr[0],true]);forEachRight(navigation(curr[0]),w=>stack.push([w,false]))}}}}function preOrderDfs(v,navigation,visited,acc){var stack=[v];while(stack.length>0){var curr=stack.pop();if(!Object.hasOwn(visited,curr)){visited[curr]=true;acc.push(curr);forEachRight(navigation(curr),w=>stack.push(w))}}}function forEachRight(array,iteratee){var length=array.length;while(length--){iteratee(array[length],length,array)}return array}},{}],32:[function(require,module,exports){var dijkstra=require("./dijkstra");module.exports=dijkstraAll;function dijkstraAll(g,weightFunc,edgeFunc){return g.nodes().reduce(function(acc,v){acc[v]=dijkstra(g,v,weightFunc,edgeFunc);return acc},{})}},{"./dijkstra":33}],33:[function(require,module,exports){var PriorityQueue=require("../data/priority-queue");module.exports=dijkstra;var DEFAULT_WEIGHT_FUNC=()=>1;function dijkstra(g,source,weightFn,edgeFn){return runDijkstra(g,String(source),weightFn||DEFAULT_WEIGHT_FUNC,edgeFn||function(v){return g.outEdges(v)})}function runDijkstra(g,source,weightFn,edgeFn){var results={};var pq=new PriorityQueue;var v,vEntry;var updateNeighbors=function(edge){var w=edge.v!==v?edge.v:edge.w;var wEntry=results[w];var weight=weightFn(edge);var distance=vEntry.distance+weight;if(weight<0){throw new Error("dijkstra does not allow negative edge weights. "+"Bad edge: "+edge+" Weight: "+weight)}if(distance<wEntry.distance){wEntry.distance=distance;wEntry.predecessor=v;pq.decrease(w,distance)}};g.nodes().forEach(function(v){var distance=v===source?0:Number.POSITIVE_INFINITY;results[v]={distance:distance};pq.add(v,distance)});while(pq.size()>0){v=pq.removeMin();vEntry=results[v];if(vEntry.distance===Number.POSITIVE_INFINITY){break}edgeFn(v).forEach(updateNeighbors)}return results}},{"../data/priority-queue":43}],34:[function(require,module,exports){var tarjan=require("./tarjan");module.exports=findCycles;function findCycles(g){return tarjan(g).filter(function(cmpt){return cmpt.length>1||cmpt.length===1&&g.hasEdge(cmpt[0],cmpt[0])})}},{"./tarjan":41}],35:[function(require,module,exports){module.exports=floydWarshall;var DEFAULT_WEIGHT_FUNC=()=>1;function floydWarshall(g,weightFn,edgeFn){return runFloydWarshall(g,weightFn||DEFAULT_WEIGHT_FUNC,edgeFn||function(v){return g.outEdges(v)})}function runFloydWarshall(g,weightFn,edgeFn){var results={};var nodes=g.nodes();nodes.forEach(function(v){results[v]={};results[v][v]={distance:0};nodes.forEach(function(w){if(v!==w){results[v][w]={distance:Number.POSITIVE_INFINITY}}});edgeFn(v).forEach(function(edge){var w=edge.v===v?edge.w:edge.v;var d=weightFn(edge);results[v][w]={distance:d,predecessor:v}})});nodes.forEach(function(k){var rowK=results[k];nodes.forEach(function(i){var rowI=results[i];nodes.forEach(function(j){var ik=rowI[k];var kj=rowK[j];var ij=rowI[j];var altDistance=ik.distance+kj.distance;if(altDistance<ij.distance){ij.distance=altDistance;ij.predecessor=kj.predecessor}})})});return results}},{}],36:[function(require,module,exports){module.exports={components:require("./components"),dijkstra:require("./dijkstra"),dijkstraAll:require("./dijkstra-all"),findCycles:require("./find-cycles"),floydWarshall:require("./floyd-warshall"),isAcyclic:require("./is-acyclic"),postorder:require("./postorder"),preorder:require("./preorder"),prim:require("./prim"),tarjan:require("./tarjan"),topsort:require("./topsort")}},{"./components":30,"./dijkstra":33,"./dijkstra-all":32,"./find-cycles":34,"./floyd-warshall":35,"./is-acyclic":37,"./postorder":38,"./preorder":39,"./prim":40,"./tarjan":41,"./topsort":42}],37:[function(require,module,exports){var topsort=require("./topsort");module.exports=isAcyclic;function isAcyclic(g){try{topsort(g)}catch(e){if(e instanceof topsort.CycleException){return false}throw e}return true}},{"./topsort":42}],38:[function(require,module,exports){var dfs=require("./dfs");module.exports=postorder;function postorder(g,vs){return dfs(g,vs,"post")}},{"./dfs":31}],39:[function(require,module,exports){var dfs=require("./dfs");module.exports=preorder;function preorder(g,vs){return dfs(g,vs,"pre")}},{"./dfs":31}],40:[function(require,module,exports){var Graph=require("../graph");var PriorityQueue=require("../data/priority-queue");module.exports=prim;function prim(g,weightFunc){var result=new Graph;var parents={};var pq=new PriorityQueue;var v;function updateNeighbors(edge){var w=edge.v===v?edge.w:edge.v;var pri=pq.priority(w);if(pri!==undefined){var edgeWeight=weightFunc(edge);if(edgeWeight<pri){parents[w]=v;pq.decrease(w,edgeWeight)}}}if(g.nodeCount()===0){return result}g.nodes().forEach(function(v){pq.add(v,Number.POSITIVE_INFINITY);result.setNode(v)});
+// Start from an arbitrary node
+pq.decrease(g.nodes()[0],0);var init=false;while(pq.size()>0){v=pq.removeMin();if(Object.hasOwn(parents,v)){result.setEdge(v,parents[v])}else if(init){throw new Error("Input graph is not connected: "+g)}else{init=true}g.nodeEdges(v).forEach(updateNeighbors)}return result}},{"../data/priority-queue":43,"../graph":44}],41:[function(require,module,exports){module.exports=tarjan;function tarjan(g){var index=0;var stack=[];var visited={};// node id -> { onStack, lowlink, index }
+var results=[];function dfs(v){var entry=visited[v]={onStack:true,lowlink:index,index:index++};stack.push(v);g.successors(v).forEach(function(w){if(!Object.hasOwn(visited,w)){dfs(w);entry.lowlink=Math.min(entry.lowlink,visited[w].lowlink)}else if(visited[w].onStack){entry.lowlink=Math.min(entry.lowlink,visited[w].index)}});if(entry.lowlink===entry.index){var cmpt=[];var w;do{w=stack.pop();visited[w].onStack=false;cmpt.push(w)}while(v!==w);results.push(cmpt)}}g.nodes().forEach(function(v){if(!Object.hasOwn(visited,v)){dfs(v)}});return results}},{}],42:[function(require,module,exports){function topsort(g){var visited={};var stack={};var results=[];function visit(node){if(Object.hasOwn(stack,node)){throw new CycleException}if(!Object.hasOwn(visited,node)){stack[node]=true;visited[node]=true;g.predecessors(node).forEach(visit);delete stack[node];results.push(node)}}g.sinks().forEach(visit);if(Object.keys(visited).length!==g.nodeCount()){throw new CycleException}return results}class CycleException extends Error{constructor(){super(...arguments)}}module.exports=topsort;topsort.CycleException=CycleException},{}],43:[function(require,module,exports){
+/**
+ * A min-priority queue data structure. This algorithm is derived from Cormen,
+ * et al., "Introduction to Algorithms". The basic idea of a min-priority
+ * queue is that you can efficiently (in O(1) time) get the smallest key in
+ * the queue. Adding and removing elements takes O(log n) time. A key can
+ * have its priority decreased in O(log n) time.
+ */
+class PriorityQueue{_arr=[];_keyIndices={};
+/**
+   * Returns the number of elements in the queue. Takes `O(1)` time.
+   */size(){return this._arr.length}
+/**
+   * Returns the keys that are in the queue. Takes `O(n)` time.
+   */keys(){return this._arr.map(function(x){return x.key})}
+/**
+   * Returns `true` if **key** is in the queue and `false` if not.
+   */has(key){return Object.hasOwn(this._keyIndices,key)}
+/**
+   * Returns the priority for **key**. If **key** is not present in the queue
+   * then this function returns `undefined`. Takes `O(1)` time.
+   *
+   * @param {Object} key
+   */priority(key){var index=this._keyIndices[key];if(index!==undefined){return this._arr[index].priority}}
+/**
+   * Returns the key for the minimum element in this queue. If the queue is
+   * empty this function throws an Error. Takes `O(1)` time.
+   */min(){if(this.size()===0){throw new Error("Queue underflow")}return this._arr[0].key}
+/**
+   * Inserts a new key into the priority queue. If the key already exists in
+   * the queue this function returns `false`; otherwise it will return `true`.
+   * Takes `O(n)` time.
+   *
+   * @param {Object} key the key to add
+   * @param {Number} priority the initial priority for the key
+   */add(key,priority){var keyIndices=this._keyIndices;key=String(key);if(!Object.hasOwn(keyIndices,key)){var arr=this._arr;var index=arr.length;keyIndices[key]=index;arr.push({key:key,priority:priority});this._decrease(index);return true}return false}
+/**
+   * Removes and returns the smallest key in the queue. Takes `O(log n)` time.
+   */removeMin(){this._swap(0,this._arr.length-1);var min=this._arr.pop();delete this._keyIndices[min.key];this._heapify(0);return min.key}
+/**
+   * Decreases the priority for **key** to **priority**. If the new priority is
+   * greater than the previous priority, this function will throw an Error.
+   *
+   * @param {Object} key the key for which to raise priority
+   * @param {Number} priority the new priority for the key
+   */decrease(key,priority){var index=this._keyIndices[key];if(priority>this._arr[index].priority){throw new Error("New priority is greater than current priority. "+"Key: "+key+" Old: "+this._arr[index].priority+" New: "+priority)}this._arr[index].priority=priority;this._decrease(index)}_heapify(i){var arr=this._arr;var l=2*i;var r=l+1;var largest=i;if(l<arr.length){largest=arr[l].priority<arr[largest].priority?l:largest;if(r<arr.length){largest=arr[r].priority<arr[largest].priority?r:largest}if(largest!==i){this._swap(i,largest);this._heapify(largest)}}}_decrease(index){var arr=this._arr;var priority=arr[index].priority;var parent;while(index!==0){parent=index>>1;if(arr[parent].priority<priority){break}this._swap(index,parent);index=parent}}_swap(i,j){var arr=this._arr;var keyIndices=this._keyIndices;var origArrI=arr[i];var origArrJ=arr[j];arr[i]=origArrJ;arr[j]=origArrI;keyIndices[origArrJ.key]=i;keyIndices[origArrI.key]=j}}module.exports=PriorityQueue},{}],44:[function(require,module,exports){"use strict";var DEFAULT_EDGE_NAME="\0";var GRAPH_NODE="\0";var EDGE_KEY_DELIM="";
+// Implementation notes:
+//
+//  * Node id query functions should return string ids for the nodes
+//  * Edge id query functions should return an "edgeObj", edge object, that is
+//    composed of enough information to uniquely identify an edge: {v, w, name}.
+//  * Internally we use an "edgeId", a stringified form of the edgeObj, to
+//    reference edges. This is because we need a performant way to look these
+//    edges up and, object properties, which have string keys, are the closest
+//    we're going to get to a performant hashtable in JavaScript.
+class Graph{_isDirected=true;_isMultigraph=false;_isCompound=false;
+// Label for the graph itself
+_label;
+// Defaults to be set when creating a new node
+_defaultNodeLabelFn=()=>undefined;
+// Defaults to be set when creating a new edge
+_defaultEdgeLabelFn=()=>undefined;
+// v -> label
+_nodes={};
+// v -> edgeObj
+_in={};
+// u -> v -> Number
+_preds={};
+// v -> edgeObj
+_out={};
+// v -> w -> Number
+_sucs={};
+// e -> edgeObj
+_edgeObjs={};
+// e -> label
+_edgeLabels={};
+/* Number of nodes in the graph. Should only be changed by the implementation. */_nodeCount=0;
+/* Number of edges in the graph. Should only be changed by the implementation. */_edgeCount=0;_parent;_children;constructor(opts){if(opts){this._isDirected=Object.hasOwn(opts,"directed")?opts.directed:true;this._isMultigraph=Object.hasOwn(opts,"multigraph")?opts.multigraph:false;this._isCompound=Object.hasOwn(opts,"compound")?opts.compound:false}if(this._isCompound){
+// v -> parent
+this._parent={};
+// v -> children
+this._children={};this._children[GRAPH_NODE]={}}}
+/* === Graph functions ========= */
+/**
+   * Whether graph was created with 'directed' flag set to true or not.
+   */isDirected(){return this._isDirected}
+/**
+   * Whether graph was created with 'multigraph' flag set to true or not.
+   */isMultigraph(){return this._isMultigraph}
+/**
+   * Whether graph was created with 'compound' flag set to true or not.
+   */isCompound(){return this._isCompound}
+/**
+   * Sets the label of the graph.
+   */setGraph(label){this._label=label;return this}
+/**
+   * Gets the graph label.
+   */graph(){return this._label}
+/* === Node functions ========== */
+/**
+   * Sets the default node label. If newDefault is a function, it will be
+   * invoked ach time when setting a label for a node. Otherwise, this label
+   * will be assigned as default label in case if no label was specified while
+   * setting a node.
+   * Complexity: O(1).
+   */setDefaultNodeLabel(newDefault){this._defaultNodeLabelFn=newDefault;if(typeof newDefault!=="function"){this._defaultNodeLabelFn=()=>newDefault}return this}
+/**
+   * Gets the number of nodes in the graph.
+   * Complexity: O(1).
+   */nodeCount(){return this._nodeCount}
+/**
+   * Gets all nodes of the graph. Note, the in case of compound graph subnodes are
+   * not included in list.
+   * Complexity: O(1).
+   */nodes(){return Object.keys(this._nodes)}
+/**
+   * Gets list of nodes without in-edges.
+   * Complexity: O(|V|).
+   */sources(){var self=this;return this.nodes().filter(v=>Object.keys(self._in[v]).length===0)}
+/**
+   * Gets list of nodes without out-edges.
+   * Complexity: O(|V|).
+   */sinks(){var self=this;return this.nodes().filter(v=>Object.keys(self._out[v]).length===0)}
+/**
+   * Invokes setNode method for each node in names list.
+   * Complexity: O(|names|).
+   */setNodes(vs,value){var args=arguments;var self=this;vs.forEach(function(v){if(args.length>1){self.setNode(v,value)}else{self.setNode(v)}});return this}
+/**
+   * Creates or updates the value for the node v in the graph. If label is supplied
+   * it is set as the value for the node. If label is not supplied and the node was
+   * created by this call then the default node label will be assigned.
+   * Complexity: O(1).
+   */setNode(v,value){if(Object.hasOwn(this._nodes,v)){if(arguments.length>1){this._nodes[v]=value}return this}this._nodes[v]=arguments.length>1?value:this._defaultNodeLabelFn(v);if(this._isCompound){this._parent[v]=GRAPH_NODE;this._children[v]={};this._children[GRAPH_NODE][v]=true}this._in[v]={};this._preds[v]={};this._out[v]={};this._sucs[v]={};++this._nodeCount;return this}
+/**
+   * Gets the label of node with specified name.
+   * Complexity: O(|V|).
+   */node(v){return this._nodes[v]}
+/**
+   * Detects whether graph has a node with specified name or not.
+   */hasNode(v){return Object.hasOwn(this._nodes,v)}
+/**
+   * Remove the node with the name from the graph or do nothing if the node is not in
+   * the graph. If the node was removed this function also removes any incident
+   * edges.
+   * Complexity: O(1).
+   */removeNode(v){var self=this;if(Object.hasOwn(this._nodes,v)){var removeEdge=e=>self.removeEdge(self._edgeObjs[e]);delete this._nodes[v];if(this._isCompound){this._removeFromParentsChildList(v);delete this._parent[v];this.children(v).forEach(function(child){self.setParent(child)});delete this._children[v]}Object.keys(this._in[v]).forEach(removeEdge);delete this._in[v];delete this._preds[v];Object.keys(this._out[v]).forEach(removeEdge);delete this._out[v];delete this._sucs[v];--this._nodeCount}return this}
+/**
+   * Sets node p as a parent for node v if it is defined, or removes the
+   * parent for v if p is undefined. Method throws an exception in case of
+   * invoking it in context of noncompound graph.
+   * Average-case complexity: O(1).
+   */setParent(v,parent){if(!this._isCompound){throw new Error("Cannot set parent in a non-compound graph")}if(parent===undefined){parent=GRAPH_NODE}else{
+// Coerce parent to string
+parent+="";for(var ancestor=parent;ancestor!==undefined;ancestor=this.parent(ancestor)){if(ancestor===v){throw new Error("Setting "+parent+" as parent of "+v+" would create a cycle")}}this.setNode(parent)}this.setNode(v);this._removeFromParentsChildList(v);this._parent[v]=parent;this._children[parent][v]=true;return this}_removeFromParentsChildList(v){delete this._children[this._parent[v]][v]}
+/**
+   * Gets parent node for node v.
+   * Complexity: O(1).
+   */parent(v){if(this._isCompound){var parent=this._parent[v];if(parent!==GRAPH_NODE){return parent}}}
+/**
+   * Gets list of direct children of node v.
+   * Complexity: O(1).
+   */children(v=GRAPH_NODE){if(this._isCompound){var children=this._children[v];if(children){return Object.keys(children)}}else if(v===GRAPH_NODE){return this.nodes()}else if(this.hasNode(v)){return[]}}
+/**
+   * Return all nodes that are predecessors of the specified node or undefined if node v is not in
+   * the graph. Behavior is undefined for undirected graphs - use neighbors instead.
+   * Complexity: O(|V|).
+   */predecessors(v){var predsV=this._preds[v];if(predsV){return Object.keys(predsV)}}
+/**
+   * Return all nodes that are successors of the specified node or undefined if node v is not in
+   * the graph. Behavior is undefined for undirected graphs - use neighbors instead.
+   * Complexity: O(|V|).
+   */successors(v){var sucsV=this._sucs[v];if(sucsV){return Object.keys(sucsV)}}
+/**
+   * Return all nodes that are predecessors or successors of the specified node or undefined if
+   * node v is not in the graph.
+   * Complexity: O(|V|).
+   */neighbors(v){var preds=this.predecessors(v);if(preds){const union=new Set(preds);for(var succ of this.successors(v)){union.add(succ)}return Array.from(union.values())}}isLeaf(v){var neighbors;if(this.isDirected()){neighbors=this.successors(v)}else{neighbors=this.neighbors(v)}return neighbors.length===0}
+/**
+   * Creates new graph with nodes filtered via filter. Edges incident to rejected node
+   * are also removed. In case of compound graph, if parent is rejected by filter,
+   * than all its children are rejected too.
+   * Average-case complexity: O(|E|+|V|).
+   */filterNodes(filter){var copy=new this.constructor({directed:this._isDirected,multigraph:this._isMultigraph,compound:this._isCompound});copy.setGraph(this.graph());var self=this;Object.entries(this._nodes).forEach(function([v,value]){if(filter(v)){copy.setNode(v,value)}});Object.values(this._edgeObjs).forEach(function(e){if(copy.hasNode(e.v)&&copy.hasNode(e.w)){copy.setEdge(e,self.edge(e))}});var parents={};function findParent(v){var parent=self.parent(v);if(parent===undefined||copy.hasNode(parent)){parents[v]=parent;return parent}else if(parent in parents){return parents[parent]}else{return findParent(parent)}}if(this._isCompound){copy.nodes().forEach(v=>copy.setParent(v,findParent(v)))}return copy}
+/* === Edge functions ========== */
+/**
+   * Sets the default edge label or factory function. This label will be
+   * assigned as default label in case if no label was specified while setting
+   * an edge or this function will be invoked each time when setting an edge
+   * with no label specified and returned value * will be used as a label for edge.
+   * Complexity: O(1).
+   */setDefaultEdgeLabel(newDefault){this._defaultEdgeLabelFn=newDefault;if(typeof newDefault!=="function"){this._defaultEdgeLabelFn=()=>newDefault}return this}
+/**
+   * Gets the number of edges in the graph.
+   * Complexity: O(1).
+   */edgeCount(){return this._edgeCount}
+/**
+   * Gets edges of the graph. In case of compound graph subgraphs are not considered.
+   * Complexity: O(|E|).
+   */edges(){return Object.values(this._edgeObjs)}
+/**
+   * Establish an edges path over the nodes in nodes list. If some edge is already
+   * exists, it will update its label, otherwise it will create an edge between pair
+   * of nodes with label provided or default label if no label provided.
+   * Complexity: O(|nodes|).
+   */setPath(vs,value){var self=this;var args=arguments;vs.reduce(function(v,w){if(args.length>1){self.setEdge(v,w,value)}else{self.setEdge(v,w)}return w});return this}
+/**
+   * Creates or updates the label for the edge (v, w) with the optionally supplied
+   * name. If label is supplied it is set as the value for the edge. If label is not
+   * supplied and the edge was created by this call then the default edge label will
+   * be assigned. The name parameter is only useful with multigraphs.
+   */setEdge(){var v,w,name,value;var valueSpecified=false;var arg0=arguments[0];if(typeof arg0==="object"&&arg0!==null&&"v"in arg0){v=arg0.v;w=arg0.w;name=arg0.name;if(arguments.length===2){value=arguments[1];valueSpecified=true}}else{v=arg0;w=arguments[1];name=arguments[3];if(arguments.length>2){value=arguments[2];valueSpecified=true}}v=""+v;w=""+w;if(name!==undefined){name=""+name}var e=edgeArgsToId(this._isDirected,v,w,name);if(Object.hasOwn(this._edgeLabels,e)){if(valueSpecified){this._edgeLabels[e]=value}return this}if(name!==undefined&&!this._isMultigraph){throw new Error("Cannot set a named edge when isMultigraph = false")}
+// It didn't exist, so we need to create it.
+// First ensure the nodes exist.
+this.setNode(v);this.setNode(w);this._edgeLabels[e]=valueSpecified?value:this._defaultEdgeLabelFn(v,w,name);var edgeObj=edgeArgsToObj(this._isDirected,v,w,name);
+// Ensure we add undirected edges in a consistent way.
+v=edgeObj.v;w=edgeObj.w;Object.freeze(edgeObj);this._edgeObjs[e]=edgeObj;incrementOrInitEntry(this._preds[w],v);incrementOrInitEntry(this._sucs[v],w);this._in[w][e]=edgeObj;this._out[v][e]=edgeObj;this._edgeCount++;return this}
+/**
+   * Gets the label for the specified edge.
+   * Complexity: O(1).
+   */edge(v,w,name){var e=arguments.length===1?edgeObjToId(this._isDirected,arguments[0]):edgeArgsToId(this._isDirected,v,w,name);return this._edgeLabels[e]}
+/**
+   * Gets the label for the specified edge and converts it to an object.
+   * Complexity: O(1)
+   */edgeAsObj(){const edge=this.edge(...arguments);if(typeof edge!=="object"){return{label:edge}}return edge}
+/**
+   * Detects whether the graph contains specified edge or not. No subgraphs are considered.
+   * Complexity: O(1).
+   */hasEdge(v,w,name){var e=arguments.length===1?edgeObjToId(this._isDirected,arguments[0]):edgeArgsToId(this._isDirected,v,w,name);return Object.hasOwn(this._edgeLabels,e)}
+/**
+   * Removes the specified edge from the graph. No subgraphs are considered.
+   * Complexity: O(1).
+   */removeEdge(v,w,name){var e=arguments.length===1?edgeObjToId(this._isDirected,arguments[0]):edgeArgsToId(this._isDirected,v,w,name);var edge=this._edgeObjs[e];if(edge){v=edge.v;w=edge.w;delete this._edgeLabels[e];delete this._edgeObjs[e];decrementOrRemoveEntry(this._preds[w],v);decrementOrRemoveEntry(this._sucs[v],w);delete this._in[w][e];delete this._out[v][e];this._edgeCount--}return this}
+/**
+   * Return all edges that point to the node v. Optionally filters those edges down to just those
+   * coming from node u. Behavior is undefined for undirected graphs - use nodeEdges instead.
+   * Complexity: O(|E|).
+   */inEdges(v,u){var inV=this._in[v];if(inV){var edges=Object.values(inV);if(!u){return edges}return edges.filter(edge=>edge.v===u)}}
+/**
+   * Return all edges that are pointed at by node v. Optionally filters those edges down to just
+   * those point to w. Behavior is undefined for undirected graphs - use nodeEdges instead.
+   * Complexity: O(|E|).
+   */outEdges(v,w){var outV=this._out[v];if(outV){var edges=Object.values(outV);if(!w){return edges}return edges.filter(edge=>edge.w===w)}}
+/**
+   * Returns all edges to or from node v regardless of direction. Optionally filters those edges
+   * down to just those between nodes v and w regardless of direction.
+   * Complexity: O(|E|).
+   */nodeEdges(v,w){var inEdges=this.inEdges(v,w);if(inEdges){return inEdges.concat(this.outEdges(v,w))}}}function incrementOrInitEntry(map,k){if(map[k]){map[k]++}else{map[k]=1}}function decrementOrRemoveEntry(map,k){if(!--map[k]){delete map[k]}}function edgeArgsToId(isDirected,v_,w_,name){var v=""+v_;var w=""+w_;if(!isDirected&&v>w){var tmp=v;v=w;w=tmp}return v+EDGE_KEY_DELIM+w+EDGE_KEY_DELIM+(name===undefined?DEFAULT_EDGE_NAME:name)}function edgeArgsToObj(isDirected,v_,w_,name){var v=""+v_;var w=""+w_;if(!isDirected&&v>w){var tmp=v;v=w;w=tmp}var edgeObj={v:v,w:w};if(name){edgeObj.name=name}return edgeObj}function edgeObjToId(isDirected,edgeObj){return edgeArgsToId(isDirected,edgeObj.v,edgeObj.w,edgeObj.name)}module.exports=Graph},{}],45:[function(require,module,exports){
+// Includes only the "core" of graphlib
+module.exports={Graph:require("./graph"),version:require("./version")}},{"./graph":44,"./version":47}],46:[function(require,module,exports){var Graph=require("./graph");module.exports={write:write,read:read};
+/**
+ * Creates a JSON representation of the graph that can be serialized to a string with
+ * JSON.stringify. The graph can later be restored using json.read.
+ */function write(g){var json={options:{directed:g.isDirected(),multigraph:g.isMultigraph(),compound:g.isCompound()},nodes:writeNodes(g),edges:writeEdges(g)};if(g.graph()!==undefined){json.value=structuredClone(g.graph())}return json}function writeNodes(g){return g.nodes().map(function(v){var nodeValue=g.node(v);var parent=g.parent(v);var node={v:v};if(nodeValue!==undefined){node.value=nodeValue}if(parent!==undefined){node.parent=parent}return node})}function writeEdges(g){return g.edges().map(function(e){var edgeValue=g.edge(e);var edge={v:e.v,w:e.w};if(e.name!==undefined){edge.name=e.name}if(edgeValue!==undefined){edge.value=edgeValue}return edge})}
+/**
+ * Takes JSON as input and returns the graph representation.
+ *
+ * @example
+ * var g2 = graphlib.json.read(JSON.parse(str));
+ * g2.nodes();
+ * // ['a', 'b']
+ * g2.edges()
+ * // [ { v: 'a', w: 'b' } ]
+ */function read(json){var g=new Graph(json.options).setGraph(json.value);json.nodes.forEach(function(entry){g.setNode(entry.v,entry.value);if(entry.parent){g.setParent(entry.v,entry.parent)}});json.edges.forEach(function(entry){g.setEdge({v:entry.v,w:entry.w,name:entry.name},entry.value)});return g}},{"./graph":44}],47:[function(require,module,exports){module.exports="2.2.4"},{}]},{},[1])(1)});
+</script>
+<script>
+'use strict';
+const specification={"diagrams": [{"id": "diagram-1", "title": "产品定位和 Echo 人格，是谁写出来的？", "type": "flowchart", "layout": {"direction": "TB", "rankSpacing": "normal", "edgeRouting": "orthogonal"}, "groups": [{"id": "s1g1", "label": "人工维护的定义", "nodeIds": ["s1n1", "s1n2", "s1n3", "s1n4"]}, {"id": "s1g2", "label": "加载与提示渲染", "nodeIds": ["s1n5", "s1n6", "s1n7", "s1n8", "s1n9"]}], "nodes": [{"id": "s1n1", "label": "产品定位默认值", "kind": "data", "group": "s1g1"}, {"id": "s1n2", "label": "人格版本选择", "kind": "process", "group": "s1g1"}, {"id": "s1n3", "label": "人格内容定义", "kind": "data", "group": "s1g1"}, {"id": "s1n4", "label": "口吻示例", "kind": "note", "group": "s1g1"}, {"id": "s1n5", "label": "加载应用配置", "kind": "service", "group": "s1g2"}, {"id": "s1n6", "label": "解析人格版本", "kind": "decision", "group": "s1g2"}, {"id": "s1n7", "label": "渲染产品与人格", "kind": "process", "group": "s1g2"}, {"id": "s1n8", "label": "加入基础规则", "kind": "process", "group": "s1g2"}, {"id": "s1n9", "label": "交给上下文构建", "kind": "service", "group": "s1g2"}], "edges": [{"id": "s1e1", "from": "s1n1", "to": "s1n5", "label": "默认配置", "kind": "data"}, {"id": "s1e2", "from": "s1n2", "to": "s1n5", "label": "版本参数", "kind": "data"}, {"id": "s1e3", "from": "s1n3", "to": "s1n6", "label": "候选对象", "kind": "data"}, {"id": "s1e4", "from": "s1n3", "to": "s1n4", "label": "示例部分", "kind": "dependency"}, {"id": "s1e5", "from": "s1n5", "to": "s1n6", "label": "指定版本", "kind": "flow"}, {"id": "s1e6", "from": "s1n5", "to": "s1n7", "label": "产品文案", "kind": "data"}, {"id": "s1e7", "from": "s1n6", "to": "s1n7", "label": "选中人格", "kind": "data"}, {"id": "s1e8", "from": "s1n7", "to": "s1n8", "label": "", "kind": "flow"}, {"id": "s1e9", "from": "s1n8", "to": "s1n9", "label": "", "kind": "flow"}], "notes": ["配置与人格两条来源分支汇合到渲染步骤；示例说明放在侧边。", "点击节点查看真实项目路径、定位行与测试定义。"]}, {"id": "diagram-2", "title": "用户偏好与关系状态，怎样产生和保存？", "type": "flowchart", "layout": {"direction": "TB", "rankSpacing": "normal", "edgeRouting": "orthogonal"}, "groups": [{"id": "s2g1", "label": "显式用户偏好", "nodeIds": ["s2n1", "s2n2", "s2n3", "s2n4", "s2n5", "s2n6"]}, {"id": "s2g2", "label": "计算出的关系上下文", "nodeIds": ["s2n7", "s2n8", "s2n9", "s2n10", "s2n11", "s2n12"]}], "nodes": [{"id": "s2n1", "label": "用户提交偏好", "kind": "start", "group": "s2g1"}, {"id": "s2n2", "label": "接口长度校验", "kind": "decision", "group": "s2g1"}, {"id": "s2n3", "label": "领域字段校验", "kind": "decision", "group": "s2g1"}, {"id": "s2n4", "label": "保存用户偏好", "kind": "data", "group": "s2g1"}, {"id": "s2n5", "label": "读取或返回默认", "kind": "process", "group": "s2g1"}, {"id": "s2n6", "label": "带入当前上下文", "kind": "service", "group": "s2g1"}, {"id": "s2n7", "label": "真实对话已保存", "kind": "start", "group": "s2g2"}, {"id": "s2n8", "label": "检测结构化信号", "kind": "process", "group": "s2g2"}, {"id": "s2n9", "label": "计算进度与阶段", "kind": "process", "group": "s2g2"}, {"id": "s2n10", "label": "保存状态与事件", "kind": "data", "group": "s2g2"}, {"id": "s2n11", "label": "下轮读取关系", "kind": "process", "group": "s2g2"}, {"id": "s2n12", "label": "形成表达上限", "kind": "process", "group": "s2g2"}], "edges": [{"id": "s2e1", "from": "s2n1", "to": "s2n2", "label": "", "kind": "flow"}, {"id": "s2e2", "from": "s2n2", "to": "s2n3", "label": "结构通过", "kind": "flow"}, {"id": "s2e3", "from": "s2n3", "to": "s2n4", "label": "业务通过", "kind": "flow"}, {"id": "s2e4", "from": "s2n4", "to": "s2n5", "label": "后续读取", "kind": "data"}, {"id": "s2e5", "from": "s2n5", "to": "s2n6", "label": "偏好层", "kind": "data"}, {"id": "s2e6", "from": "s2n7", "to": "s2n8", "label": "", "kind": "flow"}, {"id": "s2e7", "from": "s2n8", "to": "s2n9", "label": "", "kind": "flow"}, {"id": "s2e8", "from": "s2n9", "to": "s2n10", "label": "", "kind": "data"}, {"id": "s2e9", "from": "s2n10", "to": "s2n11", "label": "后续读取", "kind": "data"}, {"id": "s2e10", "from": "s2n11", "to": "s2n12", "label": "", "kind": "flow"}, {"id": "s2e11", "from": "s2n12", "to": "s2n6", "label": "关系层", "kind": "data"}], "notes": ["用户偏好与关系状态两条链并排，最后汇合到当前上下文。", "为避免密集错误分支，校验失败在节点说明中解释。"]}, {"id": "diagram-3", "title": "长期记忆和摘要，是怎样生成的？", "type": "flowchart", "layout": {"direction": "TB", "rankSpacing": "normal", "edgeRouting": "orthogonal"}, "groups": [{"id": "s3g1", "label": "长期记忆生命周期", "nodeIds": ["s3n1", "s3n2", "s3n3", "s3n4", "s3n5", "s3n6", "s3n7"]}, {"id": "s3g2", "label": "会话摘要生命周期", "nodeIds": ["s3n8", "s3n9", "s3n10", "s3n11", "s3n12"]}], "nodes": [{"id": "s3n1", "label": "对话回复已保存", "kind": "start", "group": "s3g1"}, {"id": "s3n2", "label": "记忆抽取门禁", "kind": "decision", "group": "s3g1"}, {"id": "s3n3", "label": "生成抽取任务", "kind": "data", "group": "s3g1"}, {"id": "s3n4", "label": "模型提出记忆", "kind": "service", "group": "s3g1"}, {"id": "s3n5", "label": "解析与业务检查", "kind": "decision", "group": "s3g1"}, {"id": "s3n6", "label": "保存记忆与向量", "kind": "data", "group": "s3g1"}, {"id": "s3n7", "label": "下轮相关性召回", "kind": "process", "group": "s3g1"}, {"id": "s3n8", "label": "检查摘要触发条件", "kind": "decision", "group": "s3g2"}, {"id": "s3n9", "label": "组成摘要输入", "kind": "process", "group": "s3g2"}, {"id": "s3n10", "label": "模型生成新摘要", "kind": "service", "group": "s3g2"}, {"id": "s3n11", "label": "保存摘要与边界", "kind": "data", "group": "s3g2"}, {"id": "s3n12", "label": "下轮摘要加原文", "kind": "process", "group": "s3g2"}], "edges": [{"id": "s3e1", "from": "s3n1", "to": "s3n2", "label": "记忆支路", "kind": "flow"}, {"id": "s3e2", "from": "s3n2", "to": "s3n3", "label": "需要抽取", "kind": "flow"}, {"id": "s3e3", "from": "s3n3", "to": "s3n4", "label": "执行任务", "kind": "flow"}, {"id": "s3e4", "from": "s3n4", "to": "s3n5", "label": "生成结果", "kind": "data"}, {"id": "s3e5", "from": "s3n5", "to": "s3n6", "label": "允许操作", "kind": "flow"}, {"id": "s3e6", "from": "s3n6", "to": "s3n7", "label": "未来请求", "kind": "data"}, {"id": "s3e7", "from": "s3n1", "to": "s3n8", "label": "摘要支路", "kind": "flow"}, {"id": "s3e8", "from": "s3n8", "to": "s3n9", "label": "达到条件", "kind": "flow"}, {"id": "s3e9", "from": "s3n9", "to": "s3n10", "label": "", "kind": "data"}, {"id": "s3e10", "from": "s3n10", "to": "s3n11", "label": "非空结果", "kind": "data"}, {"id": "s3e11", "from": "s3n11", "to": "s3n12", "label": "未来请求", "kind": "data"}], "notes": ["记忆与摘要两条生命周期并排，不将摘要流程接入记忆链。", "门禁未通过时跳过对应生成；为减少分支交叉，跳过路径仅在节点说明中展示。"]}, {"id": "diagram-4", "title": "这些文件，怎样连成一次模型请求？", "type": "flowchart", "layout": {"direction": "TB", "rankSpacing": "normal", "edgeRouting": "orthogonal"}, "groups": [{"id": "s4g1", "label": "模块读取与渲染", "nodeIds": ["s4n1", "s4n2", "s4n3", "s4n4", "s4n5", "s4n6"]}, {"id": "s4g2", "label": "模型请求与迭代", "nodeIds": ["s4n7", "s4n8", "s4n9", "s4n10", "s4n11"]}], "nodes": [{"id": "s4n1", "label": "后台生成回复", "kind": "start", "group": "s4g1"}, {"id": "s4n2", "label": "读取各模块材料", "kind": "process", "group": "s4g1"}, {"id": "s4n3", "label": "计算当前时间", "kind": "process", "group": "s4g1"}, {"id": "s4n4", "label": "渲染基础提示层", "kind": "process", "group": "s4g1"}, {"id": "s4n5", "label": "加本轮规则与历史", "kind": "process", "group": "s4g1"}, {"id": "s4n6", "label": "追加当前用户输入", "kind": "data", "group": "s4g1"}, {"id": "s4n7", "label": "Agent 前置约束", "kind": "process", "group": "s4g2"}, {"id": "s4n8", "label": "注册筛选工具", "kind": "process", "group": "s4g2"}, {"id": "s4n9", "label": "请求当前模型", "kind": "service", "group": "s4g2"}, {"id": "s4n10", "label": "实际工具结果回填", "kind": "data", "group": "s4g2"}, {"id": "s4n11", "label": "准备最终交付", "kind": "process", "group": "s4g2"}], "edges": [{"id": "s4e1", "from": "s4n1", "to": "s4n2", "label": "常规路径", "kind": "flow"}, {"id": "s4e2", "from": "s4n2", "to": "s4n3", "label": "", "kind": "flow"}, {"id": "s4e3", "from": "s4n3", "to": "s4n4", "label": "", "kind": "flow"}, {"id": "s4e4", "from": "s4n4", "to": "s4n5", "label": "", "kind": "flow"}, {"id": "s4e5", "from": "s4n5", "to": "s4n6", "label": "", "kind": "flow"}, {"id": "s4e6", "from": "s4n6", "to": "s4n7", "label": "messages", "kind": "data"}, {"id": "s4e7", "from": "s4n7", "to": "s4n9", "label": "消息列表", "kind": "data"}, {"id": "s4e8", "from": "s4n8", "to": "s4n9", "label": "tools", "kind": "data"}, {"id": "s4e9", "from": "s4n9", "to": "s4n10", "label": "调用工具后", "kind": "data"}, {"id": "s4e10", "from": "s4n10", "to": "s4n9", "label": "继续同轮", "kind": "data"}, {"id": "s4e11", "from": "s4n9", "to": "s4n11", "label": "最终回复", "kind": "flow"}], "notes": ["从读取到模型请求纵向排列；工具定义在模型侧边汇入。", "模型与工具结果回路使用外围线，不与最终交付分支交叉。"]}, {"id": "diagram-5", "title": "新加的规则，在哪里定义和校验？", "type": "flowchart", "layout": {"direction": "TB", "rankSpacing": "normal", "edgeRouting": "orthogonal"}, "groups": [{"id": "s5g1", "label": "模型生成之前", "nodeIds": ["s5n1", "s5n2", "s5n3"]}, {"id": "s5g2", "label": "工具执行与输出之后", "nodeIds": ["s5n4", "s5n5", "s5n6", "s5n7", "s5n8", "s5n9", "s5n10", "s5n11"]}], "nodes": [{"id": "s5n1", "label": "规则定义", "kind": "start", "group": "s5g1"}, {"id": "s5n2", "label": "输入与背景处理", "kind": "process", "group": "s5g1"}, {"id": "s5n3", "label": "模型生成内容", "kind": "decision", "group": "s5g1"}, {"id": "s5n4", "label": "工具执行门禁", "kind": "decision", "group": "s5g2"}, {"id": "s5n5", "label": "业务处理或拒绝", "kind": "service", "group": "s5g2"}, {"id": "s5n6", "label": "成功声明校验", "kind": "process", "group": "s5g2"}, {"id": "s5n7", "label": "表达规则检测", "kind": "decision", "group": "s5g2"}, {"id": "s5n8", "label": "确定性兜底", "kind": "process", "group": "s5g2"}, {"id": "s5n9", "label": "交付格式校验", "kind": "decision", "group": "s5g2"}, {"id": "s5n10", "label": "保存前再次检查", "kind": "data", "group": "s5g2"}, {"id": "s5n11", "label": "测试记录规则预期", "kind": "note", "group": "s5g2"}], "edges": [{"id": "s5e1", "from": "s5n1", "to": "s5n2", "label": "进入请求前", "kind": "flow"}, {"id": "s5e2", "from": "s5n2", "to": "s5n3", "label": "提示材料", "kind": "data"}, {"id": "s5e3", "from": "s5n3", "to": "s5n4", "label": "申请工具", "kind": "flow"}, {"id": "s5e4", "from": "s5n4", "to": "s5n5", "label": "允许或拒绝", "kind": "flow"}, {"id": "s5e5", "from": "s5n5", "to": "s5n6", "label": "实际结果", "kind": "data"}, {"id": "s5e6", "from": "s5n6", "to": "s5n3", "label": "结果与修正", "kind": "data"}, {"id": "s5e7", "from": "s5n3", "to": "s5n7", "label": "最终文字", "kind": "flow"}, {"id": "s5e8", "from": "s5n7", "to": "s5n8", "label": "命中违规", "kind": "flow"}, {"id": "s5e9", "from": "s5n7", "to": "s5n9", "label": "检查通过", "kind": "flow"}, {"id": "s5e10", "from": "s5n8", "to": "s5n9", "label": "修正后", "kind": "flow"}, {"id": "s5e11", "from": "s5n9", "to": "s5n10", "label": "通过", "kind": "flow"}, {"id": "s5e12", "from": "s5n1", "to": "s5n11", "label": "对应测试", "kind": "dependency"}], "notes": ["工具执行支路与最终文字支路并排；结果回填放外侧。", "测试作为说明支线，不放入运行时请求主链；不为每个失败情况增加交叉线。"]}]};
+const copy=[{"subtitle": "这两项是代码中的产品配置，不是每次聊天由模型临时生成。", "points": ["产品定位和人格正文由开发者维护。", "版本参数决定读取哪份人格。", "人格示例是示范，不是真实聊天记录。", "规则文本与人格对象分开定义。"], "details": {"s1n1": "开发者在 Settings.system_prompt 写产品定位文案。它是配置字段，不是聊天时让模型生成的身份。配置加载可能覆盖默认值；本页不读取实际 .env 或秘密值。", "s1n2": "Settings.assistant_persona_version 选择人格版本；配置通过 Pydantic Settings 加载，并声明 .env。修改默认值与修改部署环境的有效值不是同一件事。", "s1n3": "ECHO_PERSONA_V2 是人工编写的 AssistantPersona 对象，含角色、性格、原则、自我披露边界与口吻示例。不是从用户历史中自动学习出来的人格。", "s1n4": "dialogue_examples 是人工构造的示范，帮助模型理解接话方式。Renderer 明确注明它们不是历史、不得写入用户记忆；这些要求本身仍是提示约束。", "s1n5": "get_settings 创建并缓存 Settings。它读取配置声明的来源；本页只展示定义和默认策略，不展示环境实际覆盖结果。", "s1n6": "get_configured_assistant_persona 根据版本表选对象；未知版本抛出错误。当前代码把旧 echo-persona-v1 映射到 V2，避免恢复旧身份。", "s1n7": "render_prompt_layers 写入产品定位，render_assistant_persona 将结构化人格变成模型能读的 system 文本。配置源与最终发出的文本是两个阶段。", "s1n8": "安全边界、自然对话、策略选择和模式指引主要定义在 prompt_renderer.py。它们与人格相邻但不是同一个配置对象。", "s1n9": "Context Builder 调用 get_assistant_persona 读取指定版本，再调用 render_prompt_layers；随后继续添加本轮时间、历史与输入。"}, "evidence": {"s1n1": ["settings:system_prompt: str"], "s1n2": ["settings:assistant_persona_version: str", "settings:model_config ="], "s1n3": ["assistant:ECHO_PERSONA_V2 =", "test_assistant_persona:test_echo_persona_v2_has_stable_behavior_contract"], "s1n4": ["assistant:dialogue_examples=", "renderer:def render_assistant_persona", "test_prompt_renderer:test_persona_examples_are_labeled_as_fiction_not_user_history"], "s1n5": ["settings:def get_settings"], "s1n6": ["assistant:def get_configured_assistant_persona", "assistant:_PERSONAS =", "test_assistant_persona:test_unknown_persona_version_is_rejected", "test_assistant_persona:test_existing_environment_pin_cannot_restore_the_old_identity"], "s1n7": ["renderer:def render_prompt_layers", "renderer:def render_assistant_persona"], "s1n8": ["renderer:BASELINE_SAFETY_POLICY =", "renderer:NATURAL_DIALOGUE_POLICY =", "renderer:RESPONSE_CALIBRATION_POLICY ="], "s1n9": ["context:assistant_persona = get_assistant_persona", "assistant_public:def get_assistant_persona"]}}, {"subtitle": "用户偏好来自显式设置；关系状态来自程序规则计算。", "points": ["偏好由用户提交，接口与领域分别校验。", "未设置时读取默认值，不需要模型生成。", "关系由规则计算后保存为业务状态。", "明确边界会影响本轮表达上限。"], "details": {"s2n1": "用户通过 Persona 接口提交称呼、回复风格、长度、支持方式等设置。它不是模型自由生成的系统提示词。", "s2n2": "请求 Schema 先限制字段类型、文本长度和列表长度。这个阶段能拒绝结构不合格的请求，但并不包办所有业务枚举校验。", "s2n3": "build_user_preferences 归一化空白，检查允许的枚举、长度与话题列表；首次设置还由管理服务要求填写称呼。拒绝非法值属于程序校验。", "s2n4": "PersonaManagementService 调用 PostgresPersonaRepository，把设置写入 user_personas。更新和恢复默认只管理显式偏好，不改长期记忆或聊天历史。", "s2n5": "get_persona 读取该用户记录；未设置时用 default_user_preferences 构造默认对象。Renderer 再把白名单值映射成中文表达偏好。", "s2n6": "两条支路最终汇合：用户偏好成为数据层；关系阶段与表达上限成为关系指引。它们仍受产品规则、安全边界和当前输入约束。", "s2n7": "聊天回复持久化之后，后处理会记录关系信号。先记录真实对话，再更新关系状态；不是模型随口说熟悉就直接升级。", "s2n8": "detect_relationship_signals 用规则识别用户边界、认可亲近、正向关系反馈和纠正。普通开心不一定就是关系信号，匹配规则也有覆盖边界。", "s2n9": "advance_relationship_state 结合活跃天数、轮数、共享记忆数等计算进度；resolve_relationship_stage 根据分数与天数门槛决定阶段，亲近阶段还要求显式信号。", "s2n10": "关系仓储把状态写入 relationship_states，把结构化信号写入 relationship_events。这是业务状态，不是模型自己形成的隐藏记忆。", "s2n11": "get_relationship_context 读取已保存状态，同时考虑本轮用户表达与偏好。用户本轮明确划边界时可立即收敛，不必等待保存后的阶段变化。", "s2n12": "关系层只向模型提供阶段、温度与亲近表达上限，不应暴露内部分数和门槛，也不表示已经知道用户心理。"}, "evidence": {"s2n1": ["pref_route:def persona_update", "pref_schema:class PersonaUpdateRequest"], "s2n2": ["pref_schema:class PersonaUpdateRequest"], "s2n3": ["pref_domain:def build_user_preferences", "pref_domain:def _normalize_choice", "pref_service:def update", "test_persona_feature:test_rejects_invalid_enum_and_oversized_fields"], "s2n4": ["pref_service:def update", "pref_repo:INSERT INTO user_personas"], "s2n5": ["pref_service:def get", "pref_domain:def default_user_preferences", "renderer:def render_persona"], "s2n6": ["context:persona = get_persona", "renderer:def render_relationship_guidance"], "s2n7": ["generate:async def _run_post_persistence"], "s2n8": ["relation_rules:def detect_relationship_signals", "test_relationship_feature:test_positive_share_is_warm_without_becoming_relationship_signal"], "s2n9": ["relation_rules:def advance_relationship_state", "relation_rules:def resolve_relationship_stage", "test_relationship_feature:test_message_volume_alone_cannot_bypass_active_day_gate"], "s2n10": ["relation_service:def record_turn", "relation_repo:INSERT INTO relationship_states", "relation_repo:INSERT INTO relationship_events"], "s2n11": ["relation_service:def get_context", "relation_rules:def build_relationship_context", "test_relationship_feature:test_explicit_boundary_immediately_restrains_affection_and_warmth"], "s2n12": ["renderer:def render_relationship_guidance", "test_prompt_renderer:test_assistant_persona_and_relationship_are_independent_layers"]}}, {"subtitle": "模型负责提出压缩或记忆内容；程序负责调度、部分校验和持久化。", "points": ["记忆提取与摘要压缩都涉及额外模型请求。", "记忆操作有类型、置信度等程序检查。", "摘要的事实与区块要求主要依靠 Prompt。", "保存后的材料在后续请求中读取。", "模型生成内容仍可能错误，需要保留原话。"], "details": {"s3n1": "生成回复后的后处理触发或调度记忆、摘要和关系更新。模型请求前读取的是已有材料，保存后才准备后续轮次的材料。", "s3n2": "should_extract_memory 判断是否有值得记忆的信号；还支持周期性批量回顾。不是每条闲聊都调用记忆模型。", "s3n3": "把用户输入、助手回复和可用来源消息编号写入持久任务，随后认领并执行。任务负责支持后续恢复，不把抽取直接等同于聊天回复。", "s3n4": "build_extraction_messages 提示模型输出 create、update、deactivate 或 ignore 等结构化操作，限定记忆类型并要求来源。模型输出还不能直接当作数据库操作。", "s3n5": "解析 JSON，检查记忆类型、非空内容与置信度；解析目标记录、处理重复。候选来源 ID 只有命中允许集合才用于替换来源，不能把这当成对每个事实的真实性证明。", "s3n6": "将记忆写入 user_memories，按操作更新或失效；为内容维护 memory_embeddings。向量失败作为增强能力失败处理，不等于整轮聊天失败。", "s3n7": "Context Builder 用当前消息检索相关记忆；默认 top_k=5，无向量等特定情况回退读取最多 8 条活跃记忆。召回内容再受局部预算约束。", "s3n8": "maybe_update_conversation_summary 查看未摘要消息数量。默认超过 24 条后尝试更新，并留最近 12 条原文；数字来自配置，可被环境覆盖。", "s3n9": "读取已有摘要与需要压缩的历史，保留消息编号和角色。摘要 Prompt 要求用户事实只来自 user 原话，助手内容仅帮助理解指代。", "s3n10": "摘要模型合并新旧内容，要求分出 USER_FACTS 和 DORMANT_TOPICS。来源编号、事实归属与区块格式主要通过 Prompt 要求。", "s3n11": "当前函数对模型结果做 strip 和非空检查后，保存摘要及覆盖的消息边界。此函数没有逐条验证来源事实或严格解析摘要区块，不能把 Prompt 要求视作全部已经程序验证。", "s3n12": "读取已保存摘要，叠加摘要边界之后的最近原文。摘要与记忆都属于可能出错的生成材料，应保留原始消息用于排查。"}, "evidence": {"s3n1": ["generate:async def _run_post_persistence"], "s3n2": ["memory_rules:def should_extract_memory", "memory_service:def schedule_memory_extraction", "test_memory_extractor:test_gate_skips_plain_chat", "test_memory_extractor:test_periodic_batch_review_bypasses_narrow_realtime_gate"], "s3n3": ["memory_service:def schedule_memory_extraction", "memory_repo:def create_job"], "s3n4": ["memory_rules:def build_extraction_messages", "memory_service:async def extract_and_store_memories", "test_memory_extractor:test_extraction_prompt_requires_source_message_provenance"], "s3n5": ["memory_rules:def parse_memory_extraction", "memory_service:async def _apply_extracted_memory"], "s3n6": ["memory_repo:def add_user_memory", "memory_repo:def upsert_memory_embedding_record", "memory_service:async def _safe_upsert_memory_embedding"], "s3n7": ["context:async def _load_long_term_memories", "renderer:def format_long_term_memories"], "s3n8": ["summary:async def maybe_update_conversation_summary", "settings:conversation_summary_trigger_messages: int"], "s3n9": ["summary:def _build_summary_messages", "summary:def _format_messages_for_summary"], "s3n10": ["summary:async def maybe_update_conversation_summary", "test_conversation_summary:test_summary_uses_provenance_prompt_and_dedicated_generation_budget"], "s3n11": ["summary:updated_summary =", "history:def update_conversation_summary"], "s3n12": ["context:summary_state =", "history:def get_history"]}}, {"subtitle": "公开入口读材料，Renderer 转文字，Agent 再补充执行与交付约束。", "points": ["容器负责接线，public 入口负责跨模块调用。", "Renderer 把材料转成分层消息文本。", "Agent 在基础提示层之前再补充规则。", "工具 schema 与 messages 是不同请求材料。", "执行结果会继续加入本轮模型上下文。"], "details": {"s4n1": "Worker 调用 GenerateChatReply.prepare；常规文字聊天进入上下文构建。若明确相对提醒直接创建成功，则有不经过模型的快捷分支。", "s4n2": "build_chat_context 通过各模块 public 入口读取人格、偏好、关系、记忆及会话数据。模块入口是调用边界，具体保存逻辑在各自仓储。", "s4n3": "从数据库取用户时区，用服务端当前时间和会话时间计算日期、相对表达与会话间隔。这些主要是代码计算，不依赖模型猜测。", "s4n4": "render_prompt_layers 将规则、人格、模式、关系、偏好、记忆、摘要按固定顺序转成 system 消息。背景数据有标记，但仍使用 system 承载。", "s4n5": "计算是否暂缓追问、是否重复问候，追加当前轮规则和时间，再追加近期 user/assistant 历史。当前批次之前的历史边界用于避免本轮内容重复加入。", "s4n6": "当前批次作为最后的 user 输入加入基础上下文。历史与本轮消息分开，不会因为历史里出现某个旧请求就自动把它当本轮任务。", "s4n7": "Agent._build_initial_messages 把工具事实、表情策略和最终交付要求放在基础上下文前面；因此 Renderer 的安全层在基础层中第一，不等于最终请求的第一条。", "s4n8": "agent/infrastructure/container.py 注册工具并读取执行上限。ToolRegistry 根据模式和允许列表输出工具描述与参数 schema，作为独立 tools 字段。", "s4n9": "同一轮消息列表配合工具定义提交给模型；模型给出自然回复或调用申请。人格、记忆和工具结果不会让模型自动访问未提供的数据库。", "s4n10": "工具执行后把 assistant 的调用消息与对应 tool 结果加回同一消息列表。回填结果包含状态、可供模型使用的结果和错误码。", "s4n11": "Agent 受步骤数、调用数和总时间限制。得到最终回复后，进入对话表达检查和交付检查，再持久化。"}, "evidence": {"s4n1": ["worker:async def run_once", "generate:async def prepare"], "s4n2": ["context:async def build_chat_context"], "s4n3": ["context:timezone_name =", "time:def build_temporal_context"], "s4n4": ["renderer:def render_prompt_layers", "test_prompt_renderer:test_layers_keep_safety_first_and_data_separated"], "s4n5": ["context:pause_followup_questions =", "renderer:def render_turn_focus_guidance", "context:messages.extend(history)"], "s4n6": ["context:messages.append(_turn_input_message"], "s4n7": ["agent:def _build_initial_messages", "agent:result = [instruction, *context_messages]"], "s4n8": ["agent_container:def get_chat_agent", "tools:def model_descriptions"], "s4n9": ["agent:response, llm_timeout_retries_remaining"], "s4n10": ["agent:def _assistant_tool_call_message", "agent:def _tool_result_message"], "s4n11": ["generate:style_violations =", "delivery:def validate_agent_delivery_segments"]}}, {"subtitle": "规则不在单一文件：需要沿着定义、执行位置、失败处理和测试一起查。", "points": ["定义、运行门禁、输出兜底、测试是不同环节。", "部分规则只有提示要求，没有完整程序校验。", "风格检测和事实核验不是同一种检查。", "测试存在不代表本次已执行或全部覆盖。", "下方规则对照表可按文件与函数搜索。"], "details": {"s5n1": "大部分说话方式定义在 prompt_renderer.py；人格内容在 default_persona.py；Agent 表情、工具与交付策略在 orchestrate_chat.py。执行限制还来自配置与工具规格。", "s5n2": "偏好先经请求和领域校验，Renderer 再做白名单映射、文本边界处理和局部预算截断。背景低权限主要是 Prompt 语义，当前并没有独立消息角色隔离。", "s5n3": "提示文本影响输出，但“不虚构”“不泄露”“不要主动恢复旧话题”等不能仅凭写入 Prompt 就保证遵守。下面只有部分情况配有程序门禁。", "s5n4": "ToolExecutor 检查工具存在、模式、重复原始参数、次数与参数模型，执行时限制超时；Agent 另检查本步允许工具与整轮预算。失败返回结构化原因。", "s5n5": "通过门禁才执行工具 handler；实际业务还需自己的有效性和归属检查。工具正常返回状态不替代业务幂等；跨轮防重仍需看具体动作实现。", "s5n6": "例如表情场景，Agent 检查是否确有成功发送结果和交付附件；无凭据声明触发有限修正或安全回复。这是特定能力规则，不是任意事实验证器。", "s5n7": "find_dialogue_style_violations 用规则检测舞台动作、虚构离线状态、多个问题、重复问候、部分无请求建议和依赖表达。匹配范围有限，会有漏检与误判。", "s5n8": "GenerateChatReply 发现风格违规后调用 apply_dialogue_fallback，对命中的情况清理或替换为确定性回复；这里不应仅依据注释推断会额外调用模型改写。", "s5n9": "validate_agent_delivery_segments 检查空段、重复段、段数及部分内部字段、标识或控制文本泄漏。失败会抛出交付异常；Agent 部分场景有有限格式重试。", "s5n10": "回复准备完成后与数据库持久化前都有交付段检查。重复检查用于挡住错误交付，但检查内容仍限于已有规则，不验证所有事实或所有提示泄漏。", "s5n11": "测试定义描述预期行为：有的只检查 Prompt 中存在某句话，有的使用假模型测试拒绝、修正与超时。定位到测试不等于本次已运行，也不等于真实模型始终遵守。"}, "evidence": {"s5n1": ["renderer:NATURAL_DIALOGUE_POLICY =", "assistant:ECHO_PERSONA_V2 =", "agent:FINAL_RETRY_INSTRUCTION ="], "s5n2": ["pref_domain:def build_user_preferences", "renderer:def _escape_untrusted_text", "renderer:def _truncate_to_token_budget"], "s5n3": ["renderer:BASELINE_SAFETY_POLICY ="], "s5n4": ["executor:async def execute", "agent:if call.tool_name not in step_tool_names:", "test_agent_feature:test_executor_rejects_duplicate_tool_call"], "s5n5": ["executor:definition.handler(context, arguments)", "tool_defs:def register_sticker_tools"], "s5n6": ["agent:def _has_successful_sticker_delivery", "test_agent_feature:test_unbacked_sticker_claim_is_rewritten_once_before_delivery"], "s5n7": ["style:def find_dialogue_style_violations", "generate:style_violations =", "test_dialogue_style:test_repeated_greeting_is_removed_by_deterministic_fallback"], "s5n8": ["style:def apply_dialogue_fallback", "generate:reply = apply_dialogue_fallback"], "s5n9": ["delivery:def validate_agent_delivery_segments", "delivery:def _validate_delivery_segment", "test_agent_feature:test_protocol_output_is_failed_without_leaking_protocol_fragment"], "s5n10": ["generate:validate_agent_delivery_segments(segments)", "async_repo:validate_agent_delivery_segments(text_segments)"], "s5n11": ["test_prompt_renderer:test_natural_dialogue_policy_rejects_stage_directions_and_fake_body", "test_agent_feature:test_agent_timeout_never_executes_side_effect_tool", "test_dialogue_style:test_text_affection_and_kaomoji_survive_without_fallback"]}}];
+const references={"settings:system_prompt: str": {"id": "settings:system_prompt: str", "file": "Echo-backend/shared/config/settings.py", "line": 941, "symbol": "system_prompt: str", "role": "产品文案定义", "isTest": false}, "settings:assistant_persona_version: str": {"id": "settings:assistant_persona_version: str", "file": "Echo-backend/shared/config/settings.py", "line": 80, "symbol": "assistant_persona_version: str", "role": "人格版本选择", "isTest": false}, "settings:model_config =": {"id": "settings:model_config =", "file": "Echo-backend/shared/config/settings.py", "line": 10, "symbol": "model_config =", "role": "配置加载", "isTest": false}, "assistant:ECHO_PERSONA_V2 =": {"id": "assistant:ECHO_PERSONA_V2 =", "file": "Echo-backend/features/assistant_persona/infrastructure/default_persona.py", "line": 6, "symbol": "ECHO_PERSONA_V2 =", "role": "实现", "isTest": false}, "test_assistant_persona:test_echo_persona_v2_has_stable_behavior_contract": {"id": "test_assistant_persona:test_echo_persona_v2_has_stable_behavior_contract", "file": "Echo-backend/tests/test_assistant_persona.py", "line": 14, "symbol": "test_echo_persona_v2_has_stable_behavior_contract", "role": "测试定义，未在本次运行", "isTest": true}, "assistant:dialogue_examples=": {"id": "assistant:dialogue_examples=", "file": "Echo-backend/features/assistant_persona/infrastructure/default_persona.py", "line": 38, "symbol": "dialogue_examples=", "role": "示例定义", "isTest": false}, "renderer:def render_assistant_persona": {"id": "renderer:def render_assistant_persona", "file": "Echo-backend/shared/prompting/renderer.py", "line": 209, "symbol": "def render_assistant_persona", "role": "实现", "isTest": false}, "test_prompt_renderer:test_persona_examples_are_labeled_as_fiction_not_user_history": {"id": "test_prompt_renderer:test_persona_examples_are_labeled_as_fiction_not_user_history", "file": "Echo-backend/tests/test_prompt_renderer.py", "line": 100, "symbol": "test_persona_examples_are_labeled_as_fiction_not_user_history", "role": "测试定义，未在本次运行", "isTest": true}, "settings:def get_settings": {"id": "settings:def get_settings", "file": "Echo-backend/shared/config/settings.py", "line": 949, "symbol": "def get_settings", "role": "配置入口", "isTest": false}, "assistant:def get_configured_assistant_persona": {"id": "assistant:def get_configured_assistant_persona", "file": "Echo-backend/features/assistant_persona/infrastructure/default_persona.py", "line": 53, "symbol": "def get_configured_assistant_persona", "role": "版本解析", "isTest": false}, "assistant:_PERSONAS =": {"id": "assistant:_PERSONAS =", "file": "Echo-backend/features/assistant_persona/infrastructure/default_persona.py", "line": 50, "symbol": "_PERSONAS =", "role": "版本映射", "isTest": false}, "test_assistant_persona:test_unknown_persona_version_is_rejected": {"id": "test_assistant_persona:test_unknown_persona_version_is_rejected", "file": "Echo-backend/tests/test_assistant_persona.py", "line": 31, "symbol": "test_unknown_persona_version_is_rejected", "role": "测试定义，未在本次运行", "isTest": true}, "test_assistant_persona:test_existing_environment_pin_cannot_restore_the_old_identity": {"id": "test_assistant_persona:test_existing_environment_pin_cannot_restore_the_old_identity", "file": "Echo-backend/tests/test_assistant_persona.py", "line": 25, "symbol": "test_existing_environment_pin_cannot_restore_the_old_identity", "role": "测试定义，未在本次运行", "isTest": true}, "renderer:def render_prompt_layers": {"id": "renderer:def render_prompt_layers", "file": "Echo-backend/shared/prompting/renderer.py", "line": 301, "symbol": "def render_prompt_layers", "role": "实现", "isTest": false}, "renderer:BASELINE_SAFETY_POLICY =": {"id": "renderer:BASELINE_SAFETY_POLICY =", "file": "Echo-backend/shared/prompting/renderer.py", "line": 12, "symbol": "BASELINE_SAFETY_POLICY =", "role": "实现", "isTest": false}, "renderer:NATURAL_DIALOGUE_POLICY =": {"id": "renderer:NATURAL_DIALOGUE_POLICY =", "file": "Echo-backend/shared/prompting/renderer.py", "line": 14, "symbol": "NATURAL_DIALOGUE_POLICY =", "role": "行为规则", "isTest": false}, "renderer:RESPONSE_CALIBRATION_POLICY =": {"id": "renderer:RESPONSE_CALIBRATION_POLICY =", "file": "Echo-backend/shared/prompting/renderer.py", "line": 16, "symbol": "RESPONSE_CALIBRATION_POLICY =", "role": "策略规则", "isTest": false}, "context:assistant_persona = get_assistant_persona": {"id": "context:assistant_persona = get_assistant_persona", "file": "Echo-backend/features/chat/infrastructure/context_builder.py", "line": 374, "symbol": "assistant_persona = get_assistant_persona", "role": "运行时读取", "isTest": false}, "assistant_public:def get_assistant_persona": {"id": "assistant_public:def get_assistant_persona", "file": "Echo-backend/features/assistant_persona/public.py", "line": 10, "symbol": "def get_assistant_persona", "role": "模块公开入口", "isTest": false}, "pref_route:def persona_update": {"id": "pref_route:def persona_update", "file": "Echo-backend/features/persona/interface/router.py", "line": 52, "symbol": "def persona_update", "role": "写入接口", "isTest": false}, "pref_schema:class PersonaUpdateRequest": {"id": "pref_schema:class PersonaUpdateRequest", "file": "Echo-backend/features/persona/interface/schemas.py", "line": 4, "symbol": "class PersonaUpdateRequest", "role": "实现", "isTest": false}, "pref_domain:def build_user_preferences": {"id": "pref_domain:def build_user_preferences", "file": "Echo-backend/features/persona/domain/entities.py", "line": 103, "symbol": "def build_user_preferences", "role": "实现", "isTest": false}, "pref_domain:def _normalize_choice": {"id": "pref_domain:def _normalize_choice", "file": "Echo-backend/features/persona/domain/entities.py", "line": 74, "symbol": "def _normalize_choice", "role": "枚举白名单", "isTest": false}, "pref_service:def update": {"id": "pref_service:def update", "file": "Echo-backend/features/persona/application/persona_management.py", "line": 22, "symbol": "def update", "role": "实现", "isTest": false}, "test_persona_feature:test_rejects_invalid_enum_and_oversized_fields": {"id": "test_persona_feature:test_rejects_invalid_enum_and_oversized_fields", "file": "Echo-backend/tests/test_persona_feature.py", "line": 74, "symbol": "test_rejects_invalid_enum_and_oversized_fields", "role": "测试定义，未在本次运行", "isTest": true}, "pref_repo:INSERT INTO user_personas": {"id": "pref_repo:INSERT INTO user_personas", "file": "Echo-backend/features/persona/infrastructure/postgres_repository.py", "line": 84, "symbol": "INSERT INTO user_personas", "role": "数据库持久化", "isTest": false}, "pref_service:def get": {"id": "pref_service:def get", "file": "Echo-backend/features/persona/application/persona_management.py", "line": 18, "symbol": "def get", "role": "读取与默认", "isTest": false}, "pref_domain:def default_user_preferences": {"id": "pref_domain:def default_user_preferences", "file": "Echo-backend/features/persona/domain/entities.py", "line": 160, "symbol": "def default_user_preferences", "role": "默认对象", "isTest": false}, "renderer:def render_persona": {"id": "renderer:def render_persona", "file": "Echo-backend/shared/prompting/renderer.py", "line": 171, "symbol": "def render_persona", "role": "渲染偏好", "isTest": false}, "context:persona = get_persona": {"id": "context:persona = get_persona", "file": "Echo-backend/features/chat/infrastructure/context_builder.py", "line": 369, "symbol": "persona = get_persona", "role": "读取偏好", "isTest": false}, "renderer:def render_relationship_guidance": {"id": "renderer:def render_relationship_guidance", "file": "Echo-backend/shared/prompting/renderer.py", "line": 237, "symbol": "def render_relationship_guidance", "role": "关系提示规则", "isTest": false}, "generate:async def _run_post_persistence": {"id": "generate:async def _run_post_persistence", "file": "Echo-backend/features/chat/application/generate_reply.py", "line": 184, "symbol": "async def _run_post_persistence", "role": "后处理起点", "isTest": false}, "relation_rules:def detect_relationship_signals": {"id": "relation_rules:def detect_relationship_signals", "file": "Echo-backend/features/relationship/domain/rules.py", "line": 38, "symbol": "def detect_relationship_signals", "role": "实现", "isTest": false}, "test_relationship_feature:test_positive_share_is_warm_without_becoming_relationship_signal": {"id": "test_relationship_feature:test_positive_share_is_warm_without_becoming_relationship_signal", "file": "Echo-backend/tests/test_relationship_feature.py", "line": 104, "symbol": "test_positive_share_is_warm_without_becoming_relationship_signal", "role": "测试定义，未在本次运行", "isTest": true}, "relation_rules:def advance_relationship_state": {"id": "relation_rules:def advance_relationship_state", "file": "Echo-backend/features/relationship/domain/rules.py", "line": 116, "symbol": "def advance_relationship_state", "role": "进度计算", "isTest": false}, "relation_rules:def resolve_relationship_stage": {"id": "relation_rules:def resolve_relationship_stage", "file": "Echo-backend/features/relationship/domain/rules.py", "line": 65, "symbol": "def resolve_relationship_stage", "role": "实现", "isTest": false}, "test_relationship_feature:test_message_volume_alone_cannot_bypass_active_day_gate": {"id": "test_relationship_feature:test_message_volume_alone_cannot_bypass_active_day_gate", "file": "Echo-backend/tests/test_relationship_feature.py", "line": 50, "symbol": "test_message_volume_alone_cannot_bypass_active_day_gate", "role": "测试定义，未在本次运行", "isTest": true}, "relation_service:def record_turn": {"id": "relation_service:def record_turn", "file": "Echo-backend/features/relationship/application/relationship_management.py", "line": 30, "symbol": "def record_turn", "role": "记录入口", "isTest": false}, "relation_repo:INSERT INTO relationship_states": {"id": "relation_repo:INSERT INTO relationship_states", "file": "Echo-backend/features/relationship/infrastructure/postgres_repository.py", "line": 122, "symbol": "INSERT INTO relationship_states", "role": "状态持久化", "isTest": false}, "relation_repo:INSERT INTO relationship_events": {"id": "relation_repo:INSERT INTO relationship_events", "file": "Echo-backend/features/relationship/infrastructure/postgres_repository.py", "line": 177, "symbol": "INSERT INTO relationship_events", "role": "信号持久化", "isTest": false}, "relation_service:def get_context": {"id": "relation_service:def get_context", "file": "Echo-backend/features/relationship/application/relationship_management.py", "line": 15, "symbol": "def get_context", "role": "读取上下文", "isTest": false}, "relation_rules:def build_relationship_context": {"id": "relation_rules:def build_relationship_context", "file": "Echo-backend/features/relationship/domain/rules.py", "line": 90, "symbol": "def build_relationship_context", "role": "实现", "isTest": false}, "test_relationship_feature:test_explicit_boundary_immediately_restrains_affection_and_warmth": {"id": "test_relationship_feature:test_explicit_boundary_immediately_restrains_affection_and_warmth", "file": "Echo-backend/tests/test_relationship_feature.py", "line": 87, "symbol": "test_explicit_boundary_immediately_restrains_affection_and_warmth", "role": "测试定义，未在本次运行", "isTest": true}, "test_prompt_renderer:test_assistant_persona_and_relationship_are_independent_layers": {"id": "test_prompt_renderer:test_assistant_persona_and_relationship_are_independent_layers", "file": "Echo-backend/tests/test_prompt_renderer.py", "line": 147, "symbol": "test_assistant_persona_and_relationship_are_independent_layers", "role": "测试定义，未在本次运行", "isTest": true}, "memory_rules:def should_extract_memory": {"id": "memory_rules:def should_extract_memory", "file": "Echo-backend/features/memory/domain/extraction_rules.py", "line": 93, "symbol": "def should_extract_memory", "role": "是否抽取", "isTest": false}, "memory_service:def schedule_memory_extraction": {"id": "memory_service:def schedule_memory_extraction", "file": "Echo-backend/features/memory/application/memory_extraction.py", "line": 231, "symbol": "def schedule_memory_extraction", "role": "创建任务", "isTest": false}, "test_memory_extractor:test_gate_skips_plain_chat": {"id": "test_memory_extractor:test_gate_skips_plain_chat", "file": "Echo-backend/tests/test_memory_extractor.py", "line": 18, "symbol": "test_gate_skips_plain_chat", "role": "测试定义，未在本次运行", "isTest": true}, "test_memory_extractor:test_periodic_batch_review_bypasses_narrow_realtime_gate": {"id": "test_memory_extractor:test_periodic_batch_review_bypasses_narrow_realtime_gate", "file": "Echo-backend/tests/test_memory_extractor.py", "line": 37, "symbol": "test_periodic_batch_review_bypasses_narrow_realtime_gate", "role": "测试定义，未在本次运行", "isTest": true}, "memory_repo:def create_job": {"id": "memory_repo:def create_job", "file": "Echo-backend/features/memory/infrastructure/postgres_repositories.py", "line": 349, "symbol": "def create_job", "role": "任务持久化", "isTest": false}, "memory_rules:def build_extraction_messages": {"id": "memory_rules:def build_extraction_messages", "file": "Echo-backend/features/memory/domain/extraction_rules.py", "line": 157, "symbol": "def build_extraction_messages", "role": "实现", "isTest": false}, "memory_service:async def extract_and_store_memories": {"id": "memory_service:async def extract_and_store_memories", "file": "Echo-backend/features/memory/application/memory_extraction.py", "line": 49, "symbol": "async def extract_and_store_memories", "role": "调用抽取模型", "isTest": false}, "test_memory_extractor:test_extraction_prompt_requires_source_message_provenance": {"id": "test_memory_extractor:test_extraction_prompt_requires_source_message_provenance", "file": "Echo-backend/tests/test_memory_extractor.py", "line": 43, "symbol": "test_extraction_prompt_requires_source_message_provenance", "role": "测试定义，未在本次运行", "isTest": true}, "memory_rules:def parse_memory_extraction": {"id": "memory_rules:def parse_memory_extraction", "file": "Echo-backend/features/memory/domain/extraction_rules.py", "line": 227, "symbol": "def parse_memory_extraction", "role": "解析", "isTest": false}, "memory_service:async def _apply_extracted_memory": {"id": "memory_service:async def _apply_extracted_memory", "file": "Echo-backend/features/memory/application/memory_extraction.py", "line": 105, "symbol": "async def _apply_extracted_memory", "role": "实现", "isTest": false}, "memory_repo:def add_user_memory": {"id": "memory_repo:def add_user_memory", "file": "Echo-backend/features/memory/infrastructure/postgres_repositories.py", "line": 79, "symbol": "def add_user_memory", "role": "记忆保存", "isTest": false}, "memory_repo:def upsert_memory_embedding_record": {"id": "memory_repo:def upsert_memory_embedding_record", "file": "Echo-backend/features/memory/infrastructure/postgres_repositories.py", "line": 239, "symbol": "def upsert_memory_embedding_record", "role": "向量索引", "isTest": false}, "memory_service:async def _safe_upsert_memory_embedding": {"id": "memory_service:async def _safe_upsert_memory_embedding", "file": "Echo-backend/features/memory/application/memory_extraction.py", "line": 209, "symbol": "async def _safe_upsert_memory_embedding", "role": "增强失败处理", "isTest": false}, "context:async def _load_long_term_memories": {"id": "context:async def _load_long_term_memories", "file": "Echo-backend/features/chat/infrastructure/context_builder.py", "line": 68, "symbol": "async def _load_long_term_memories", "role": "读取与回退", "isTest": false}, "renderer:def format_long_term_memories": {"id": "renderer:def format_long_term_memories", "file": "Echo-backend/shared/prompting/renderer.py", "line": 158, "symbol": "def format_long_term_memories", "role": "记忆转提示", "isTest": false}, "summary:async def maybe_update_conversation_summary": {"id": "summary:async def maybe_update_conversation_summary", "file": "Echo-backend/features/chat/infrastructure/conversation_summary.py", "line": 48, "symbol": "async def maybe_update_conversation_summary", "role": "实现", "isTest": false}, "settings:conversation_summary_trigger_messages: int": {"id": "settings:conversation_summary_trigger_messages: int", "file": "Echo-backend/shared/config/settings.py", "line": 115, "symbol": "conversation_summary_trigger_messages: int", "role": "触发阈值", "isTest": false}, "summary:def _build_summary_messages": {"id": "summary:def _build_summary_messages", "file": "Echo-backend/features/chat/infrastructure/conversation_summary.py", "line": 23, "symbol": "def _build_summary_messages", "role": "实现", "isTest": false}, "summary:def _format_messages_for_summary": {"id": "summary:def _format_messages_for_summary", "file": "Echo-backend/features/chat/infrastructure/conversation_summary.py", "line": 12, "symbol": "def _format_messages_for_summary", "role": "编号与角色", "isTest": false}, "test_conversation_summary:test_summary_uses_provenance_prompt_and_dedicated_generation_budget": {"id": "test_conversation_summary:test_summary_uses_provenance_prompt_and_dedicated_generation_budget", "file": "Echo-backend/tests/test_conversation_summary.py", "line": 26, "symbol": "test_summary_uses_provenance_prompt_and_dedicated_generation_budget", "role": "测试定义，未在本次运行", "isTest": true}, "summary:updated_summary =": {"id": "summary:updated_summary =", "file": "Echo-backend/features/chat/infrastructure/conversation_summary.py", "line": 76, "symbol": "updated_summary =", "role": "生成后检查", "isTest": false}, "history:def update_conversation_summary": {"id": "history:def update_conversation_summary", "file": "Echo-backend/features/chat/infrastructure/postgres_repositories.py", "line": 120, "symbol": "def update_conversation_summary", "role": "摘要持久化", "isTest": false}, "context:summary_state =": {"id": "context:summary_state =", "file": "Echo-backend/features/chat/infrastructure/context_builder.py", "line": 306, "symbol": "summary_state =", "role": "读取摘要", "isTest": false}, "history:def get_history": {"id": "history:def get_history", "file": "Echo-backend/features/chat/infrastructure/postgres_repositories.py", "line": 516, "symbol": "def get_history", "role": "最近原文", "isTest": false}, "worker:async def run_once": {"id": "worker:async def run_once", "file": "Echo-backend/features/chat/application/process_turns.py", "line": 33, "symbol": "async def run_once", "role": "后台入口", "isTest": false}, "generate:async def prepare": {"id": "generate:async def prepare", "file": "Echo-backend/features/chat/application/generate_reply.py", "line": 256, "symbol": "async def prepare", "role": "回复准备", "isTest": false}, "context:async def build_chat_context": {"id": "context:async def build_chat_context", "file": "Echo-backend/features/chat/infrastructure/context_builder.py", "line": 270, "symbol": "async def build_chat_context", "role": "组装入口", "isTest": false}, "context:timezone_name =": {"id": "context:timezone_name =", "file": "Echo-backend/features/chat/infrastructure/context_builder.py", "line": 283, "symbol": "timezone_name =", "role": "时区读取", "isTest": false}, "time:def build_temporal_context": {"id": "time:def build_temporal_context", "file": "Echo-backend/features/chat/domain/temporal_context.py", "line": 21, "symbol": "def build_temporal_context", "role": "计算时间上下文", "isTest": false}, "test_prompt_renderer:test_layers_keep_safety_first_and_data_separated": {"id": "test_prompt_renderer:test_layers_keep_safety_first_and_data_separated", "file": "Echo-backend/tests/test_prompt_renderer.py", "line": 47, "symbol": "test_layers_keep_safety_first_and_data_separated", "role": "测试定义，未在本次运行", "isTest": true}, "context:pause_followup_questions =": {"id": "context:pause_followup_questions =", "file": "Echo-backend/features/chat/infrastructure/context_builder.py", "line": 324, "symbol": "pause_followup_questions =", "role": "当前轮判断", "isTest": false}, "renderer:def render_turn_focus_guidance": {"id": "renderer:def render_turn_focus_guidance", "file": "Echo-backend/shared/prompting/renderer.py", "line": 272, "symbol": "def render_turn_focus_guidance", "role": "实现", "isTest": false}, "context:messages.extend(history)": {"id": "context:messages.extend(history)", "file": "Echo-backend/features/chat/infrastructure/context_builder.py", "line": 449, "symbol": "messages.extend(history)", "role": "追加历史", "isTest": false}, "context:messages.append(_turn_input_message": {"id": "context:messages.append(_turn_input_message", "file": "Echo-backend/features/chat/infrastructure/context_builder.py", "line": 450, "symbol": "messages.append(_turn_input_message", "role": "当前输入", "isTest": false}, "agent:def _build_initial_messages": {"id": "agent:def _build_initial_messages", "file": "Echo-backend/features/agent/application/orchestrate_chat.py", "line": 1027, "symbol": "def _build_initial_messages", "role": "实现", "isTest": false}, "agent:result = [instruction, *context_messages]": {"id": "agent:result = [instruction, *context_messages]", "file": "Echo-backend/features/agent/application/orchestrate_chat.py", "line": 1127, "symbol": "result = [instruction, *context_messages]", "role": "最终消息拼接", "isTest": false}, "agent_container:def get_chat_agent": {"id": "agent_container:def get_chat_agent", "file": "Echo-backend/features/agent/infrastructure/container.py", "line": 23, "symbol": "def get_chat_agent", "role": "依赖组装与注册", "isTest": false}, "tools:def model_descriptions": {"id": "tools:def model_descriptions", "file": "Echo-backend/features/agent/domain/tools.py", "line": 69, "symbol": "def model_descriptions", "role": "模式筛选", "isTest": false}, "agent:response, llm_timeout_retries_remaining": {"id": "agent:response, llm_timeout_retries_remaining", "file": "Echo-backend/features/agent/application/orchestrate_chat.py", "line": 196, "symbol": "response, llm_timeout_retries_remaining", "role": "模型调用入口", "isTest": false}, "agent:def _assistant_tool_call_message": {"id": "agent:def _assistant_tool_call_message", "file": "Echo-backend/features/agent/application/orchestrate_chat.py", "line": 1163, "symbol": "def _assistant_tool_call_message", "role": "模型调用消息", "isTest": false}, "agent:def _tool_result_message": {"id": "agent:def _tool_result_message", "file": "Echo-backend/features/agent/application/orchestrate_chat.py", "line": 1184, "symbol": "def _tool_result_message", "role": "工具结果消息", "isTest": false}, "generate:style_violations =": {"id": "generate:style_violations =", "file": "Echo-backend/features/chat/application/generate_reply.py", "line": 448, "symbol": "style_violations =", "role": "检测调用点", "isTest": false}, "delivery:def validate_agent_delivery_segments": {"id": "delivery:def validate_agent_delivery_segments", "file": "Echo-backend/features/agent/domain/delivery.py", "line": 57, "symbol": "def validate_agent_delivery_segments", "role": "实现", "isTest": false}, "agent:FINAL_RETRY_INSTRUCTION =": {"id": "agent:FINAL_RETRY_INSTRUCTION =", "file": "Echo-backend/features/agent/application/orchestrate_chat.py", "line": 41, "symbol": "FINAL_RETRY_INSTRUCTION =", "role": "Agent 收尾规则", "isTest": false}, "renderer:def _escape_untrusted_text": {"id": "renderer:def _escape_untrusted_text", "file": "Echo-backend/shared/prompting/renderer.py", "line": 115, "symbol": "def _escape_untrusted_text", "role": "实现", "isTest": false}, "renderer:def _truncate_to_token_budget": {"id": "renderer:def _truncate_to_token_budget", "file": "Echo-backend/shared/prompting/renderer.py", "line": 143, "symbol": "def _truncate_to_token_budget", "role": "局部预算", "isTest": false}, "executor:async def execute": {"id": "executor:async def execute", "file": "Echo-backend/features/agent/application/execute_tool.py", "line": 19, "symbol": "async def execute", "role": "实现", "isTest": false}, "agent:if call.tool_name not in step_tool_names:": {"id": "agent:if call.tool_name not in step_tool_names:", "file": "Echo-backend/features/agent/application/orchestrate_chat.py", "line": 314, "symbol": "if call.tool_name not in step_tool_names:", "role": "实现", "isTest": false}, "test_agent_feature:test_executor_rejects_duplicate_tool_call": {"id": "test_agent_feature:test_executor_rejects_duplicate_tool_call", "file": "Echo-backend/tests/test_agent_feature.py", "line": 1153, "symbol": "test_executor_rejects_duplicate_tool_call", "role": "测试定义，未在本次运行", "isTest": true}, "executor:definition.handler(context, arguments)": {"id": "executor:definition.handler(context, arguments)", "file": "Echo-backend/features/agent/application/execute_tool.py", "line": 95, "symbol": "definition.handler(context, arguments)", "role": "执行位置", "isTest": false}, "tool_defs:def register_sticker_tools": {"id": "tool_defs:def register_sticker_tools", "file": "Echo-backend/features/agent/infrastructure/tools/sticker_tools.py", "line": 56, "symbol": "def register_sticker_tools", "role": "工具规格与业务绑定", "isTest": false}, "agent:def _has_successful_sticker_delivery": {"id": "agent:def _has_successful_sticker_delivery", "file": "Echo-backend/features/agent/application/orchestrate_chat.py", "line": 994, "symbol": "def _has_successful_sticker_delivery", "role": "实现", "isTest": false}, "test_agent_feature:test_unbacked_sticker_claim_is_rewritten_once_before_delivery": {"id": "test_agent_feature:test_unbacked_sticker_claim_is_rewritten_once_before_delivery", "file": "Echo-backend/tests/test_agent_feature.py", "line": 814, "symbol": "test_unbacked_sticker_claim_is_rewritten_once_before_delivery", "role": "测试定义，未在本次运行", "isTest": true}, "style:def find_dialogue_style_violations": {"id": "style:def find_dialogue_style_violations", "file": "Echo-backend/features/chat/domain/dialogue_style.py", "line": 201, "symbol": "def find_dialogue_style_violations", "role": "实现", "isTest": false}, "test_dialogue_style:test_repeated_greeting_is_removed_by_deterministic_fallback": {"id": "test_dialogue_style:test_repeated_greeting_is_removed_by_deterministic_fallback", "file": "Echo-backend/tests/test_dialogue_style.py", "line": 35, "symbol": "test_repeated_greeting_is_removed_by_deterministic_fallback", "role": "测试定义，未在本次运行", "isTest": true}, "style:def apply_dialogue_fallback": {"id": "style:def apply_dialogue_fallback", "file": "Echo-backend/features/chat/domain/dialogue_style.py", "line": 271, "symbol": "def apply_dialogue_fallback", "role": "实现", "isTest": false}, "generate:reply = apply_dialogue_fallback": {"id": "generate:reply = apply_dialogue_fallback", "file": "Echo-backend/features/chat/application/generate_reply.py", "line": 460, "symbol": "reply = apply_dialogue_fallback", "role": "实际调用位置", "isTest": false}, "delivery:def _validate_delivery_segment": {"id": "delivery:def _validate_delivery_segment", "file": "Echo-backend/features/agent/domain/delivery.py", "line": 72, "symbol": "def _validate_delivery_segment", "role": "内部内容模式", "isTest": false}, "test_agent_feature:test_protocol_output_is_failed_without_leaking_protocol_fragment": {"id": "test_agent_feature:test_protocol_output_is_failed_without_leaking_protocol_fragment", "file": "Echo-backend/tests/test_agent_feature.py", "line": 1573, "symbol": "test_protocol_output_is_failed_without_leaking_protocol_fragment", "role": "测试定义，未在本次运行", "isTest": true}, "generate:validate_agent_delivery_segments(segments)": {"id": "generate:validate_agent_delivery_segments(segments)", "file": "Echo-backend/features/chat/application/generate_reply.py", "line": 475, "symbol": "validate_agent_delivery_segments(segments)", "role": "准备阶段", "isTest": false}, "async_repo:validate_agent_delivery_segments(text_segments)": {"id": "async_repo:validate_agent_delivery_segments(text_segments)", "file": "Echo-backend/features/chat/infrastructure/async_postgres_repository.py", "line": 315, "symbol": "validate_agent_delivery_segments(text_segments)", "role": "实现", "isTest": false}, "test_prompt_renderer:test_natural_dialogue_policy_rejects_stage_directions_and_fake_body": {"id": "test_prompt_renderer:test_natural_dialogue_policy_rejects_stage_directions_and_fake_body", "file": "Echo-backend/tests/test_prompt_renderer.py", "line": 84, "symbol": "test_natural_dialogue_policy_rejects_stage_directions_and_fake_body", "role": "测试定义，未在本次运行", "isTest": true}, "test_agent_feature:test_agent_timeout_never_executes_side_effect_tool": {"id": "test_agent_feature:test_agent_timeout_never_executes_side_effect_tool", "file": "Echo-backend/tests/test_agent_feature.py", "line": 1803, "symbol": "test_agent_timeout_never_executes_side_effect_tool", "role": "测试定义，未在本次运行", "isTest": true}, "test_dialogue_style:test_text_affection_and_kaomoji_survive_without_fallback": {"id": "test_dialogue_style:test_text_affection_and_kaomoji_survive_without_fallback", "file": "Echo-backend/tests/test_dialogue_style.py", "line": 167, "symbol": "test_text_affection_and_kaomoji_survive_without_fallback", "role": "测试定义，未在本次运行", "isTest": true}, "test_prompt_renderer:test_persona_injection_text_cannot_forge_renderer_boundary": {"id": "test_prompt_renderer:test_persona_injection_text_cannot_forge_renderer_boundary", "file": "Echo-backend/tests/test_prompt_renderer.py", "line": 158, "symbol": "test_persona_injection_text_cannot_forge_renderer_boundary", "role": "测试定义，未在本次运行", "isTest": true}, "style:def should_pause_followup_questions": {"id": "style:def should_pause_followup_questions", "file": "Echo-backend/features/chat/domain/dialogue_style.py", "line": 121, "symbol": "def should_pause_followup_questions", "role": "实现", "isTest": false}, "test_dialogue_style:test_question_cooldown_after_two_consecutive_assistant_questions": {"id": "test_dialogue_style:test_question_cooldown_after_two_consecutive_assistant_questions", "file": "Echo-backend/tests/test_dialogue_style.py", "line": 67, "symbol": "test_question_cooldown_after_two_consecutive_assistant_questions", "role": "测试定义，未在本次运行", "isTest": true}, "relation_rules:_PACE_THRESHOLDS =": {"id": "relation_rules:_PACE_THRESHOLDS =", "file": "Echo-backend/features/relationship/domain/rules.py", "line": 31, "symbol": "_PACE_THRESHOLDS =", "role": "实现", "isTest": false}, "tools:class ToolDefinition": {"id": "tools:class ToolDefinition", "file": "Echo-backend/features/agent/domain/tools.py", "line": 38, "symbol": "class ToolDefinition", "role": "实现", "isTest": false}, "settings:agent_max_steps: int": {"id": "settings:agent_max_steps: int", "file": "Echo-backend/shared/config/settings.py", "line": 749, "symbol": "agent_max_steps: int", "role": "实现", "isTest": false}, "test_agent_feature:test_call_mode_rejects_sticker_tool_even_if_model_hallucinates_it": {"id": "test_agent_feature:test_call_mode_rejects_sticker_tool_even_if_model_hallucinates_it", "file": "Echo-backend/tests/test_agent_feature.py", "line": 976, "symbol": "test_call_mode_rejects_sticker_tool_even_if_model_hallucinates_it", "role": "测试定义，未在本次运行", "isTest": true}, "delivery:_INTERNAL_CONTEXT_MARKER =": {"id": "delivery:_INTERNAL_CONTEXT_MARKER =", "file": "Echo-backend/features/agent/domain/delivery.py", "line": 13, "symbol": "_INTERNAL_CONTEXT_MARKER =", "role": "实现", "isTest": false}};
+const rules=[{"name": "人格身份与口吻", "definition": ["assistant:ECHO_PERSONA_V2 =", "renderer:def render_assistant_persona"], "runtime": ["renderer:def render_prompt_layers", "style:def find_dialogue_style_violations"], "tests": ["test_assistant_persona:test_echo_persona_v2_has_stable_behavior_contract"], "limit": "人格合同测试主要检查配置内容；风格检测只覆盖部分句式，不是全量语义验证。"}, {"name": "记忆与摘要只作背景", "definition": ["renderer:BASELINE_SAFETY_POLICY =", "renderer:def render_turn_focus_guidance"], "runtime": ["renderer:def _escape_untrusted_text", "renderer:def render_prompt_layers"], "tests": ["test_prompt_renderer:test_persona_injection_text_cannot_forge_renderer_boundary"], "limit": "背景仍用 system 角色。分隔与转义不等于独立权限隔离；旧话题限制主要依靠 Prompt。"}, {"name": "不要连续追问或重复问候", "definition": ["renderer:def render_turn_focus_guidance"], "runtime": ["style:def should_pause_followup_questions", "style:def find_dialogue_style_violations", "style:def apply_dialogue_fallback"], "tests": ["test_dialogue_style:test_question_cooldown_after_two_consecutive_assistant_questions", "test_dialogue_style:test_repeated_greeting_is_removed_by_deterministic_fallback"], "limit": "基于历史与文本模式判断，无法覆盖所有表达变体；应测试保留正常问句的情况。"}, {"name": "偏好字段必须有效", "definition": ["pref_schema:class PersonaUpdateRequest", "pref_domain:def build_user_preferences"], "runtime": ["pref_service:def update"], "tests": ["test_persona_feature:test_rejects_invalid_enum_and_oversized_fields"], "limit": "字段有效不表示自由文本中的每个事实都被核实；偏好不能修改工具授权。"}, {"name": "关系阶段与用户边界", "definition": ["relation_rules:_PACE_THRESHOLDS =", "relation_rules:def detect_relationship_signals"], "runtime": ["relation_rules:def resolve_relationship_stage", "relation_rules:def build_relationship_context"], "tests": ["test_relationship_feature:test_explicit_boundary_immediately_restrains_affection_and_warmth"], "limit": "关系状态是业务规则产物；依靠句式识别的本轮信号存在覆盖范围。"}, {"name": "工具参数、次数与模式", "definition": ["tools:class ToolDefinition", "settings:agent_max_steps: int"], "runtime": ["executor:async def execute", "agent:if call.tool_name not in step_tool_names:"], "tests": ["test_agent_feature:test_executor_rejects_duplicate_tool_call", "test_agent_feature:test_call_mode_rejects_sticker_tool_even_if_model_hallucinates_it"], "limit": "同轮原始参数去重不等于跨轮幂等；副作用动作仍需业务校验。"}, {"name": "不能无凭据说表情已发送", "definition": ["agent:def _build_initial_messages"], "runtime": ["agent:def _has_successful_sticker_delivery"], "tests": ["test_agent_feature:test_unbacked_sticker_claim_is_rewritten_once_before_delivery"], "limit": "这是表情能力的专项处理，不能推导成全部动作、全部事实都有验证器。"}, {"name": "不交付内部协议与时间标记", "definition": ["delivery:_INTERNAL_CONTEXT_MARKER ="], "runtime": ["delivery:def validate_agent_delivery_segments", "async_repo:validate_agent_delivery_segments(text_segments)"], "tests": ["test_agent_feature:test_protocol_output_is_failed_without_leaking_protocol_fragment"], "limit": "现有模式能挡住特定格式；不是通用敏感信息检测或事实审核。"}, {"name": "摘要事实带来源", "definition": ["summary:def _build_summary_messages"], "runtime": ["summary:async def maybe_update_conversation_summary"], "tests": ["test_conversation_summary:test_summary_uses_provenance_prompt_and_dedicated_generation_budget"], "limit": "调用链主要检查非空后保存；没有在此严格解析区块、逐条核验来源与事实。"}, {"name": "长期记忆操作有效", "definition": ["memory_rules:def build_extraction_messages"], "runtime": ["memory_service:async def _apply_extracted_memory"], "tests": ["test_memory_extractor:test_extraction_prompt_requires_source_message_provenance"], "limit": "检查类型、置信度和目标记录等不等于证明记忆内容真实；测试来源要求不等于全面事实验证。"}];
+const sectionCount=specification.diagrams.length;
+const NS='http://www.w3.org/2000/svg';
+const $=id=>document.getElementById(id);
+const kinds={start:'起点',process:'处理步骤',decision:'条件检查',data:'数据与结果',service:'执行服务',note:'说明'};
+let active=0;
+function element(name,attrs={},text){const el=document.createElementNS(NS,name);for(const [k,v] of Object.entries(attrs))el.setAttribute(k,String(v));if(text!==undefined)el.textContent=text;return el}
+function chooseNode(id){const d=specification.diagrams[active],n=d.nodes.find(n=>n.id===id);$('canvas').querySelectorAll('.node').forEach(el=>{const selected=el.dataset.id===id;el.classList.toggle('selected',selected);el.setAttribute('aria-pressed',String(selected))});$('detail-tag').textContent=kinds[n.kind]+' · '+d.groups.find(g=>g.id===n.group).label;$('detail-title').textContent=n.label;$('detail-copy').textContent=copy[active].details[id];renderEvidence(id)}
+function renderDiagram(d){
+ const g=new dagre.graphlib.Graph().setGraph({rankdir:d.layout.direction,ranksep:d.layout.rankSpacing==='compact'?34:d.layout.rankSpacing==='loose'?80:49,nodesep:29,edgesep:19,marginx:28,marginy:24}).setDefaultEdgeLabel(()=>({}));
+ d.nodes.forEach(n=>g.setNode(n.id,{label:n.label,width:n.kind==='decision'?158:150,height:n.kind==='decision'?74:48}));
+ d.edges.forEach(e=>g.setEdge(e.from,e.to,{label:e.label,width:e.label?e.label.length*12+12:0,height:e.label?18:0}));
+ dagre.layout(g);
+ const graph=g.graph(),svg=element('svg',{viewBox:`0 0 ${graph.width} ${graph.height}`,width:graph.width,height:graph.height,role:'group','aria-label':d.title});
+ const defs=element('defs'),marker=element('marker',{id:'arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'});marker.append(element('polygon',{points:'0,0 10,5 0,10',fill:'#94a69a'}));defs.append(marker);svg.append(defs);
+ for(const e of d.edges){const edge=g.edge(e.from,e.to),p=edge.points;let path=`M ${p[0].x} ${p[0].y}`;
+ // A generic orthogonal router: bends are derived entirely from Dagre points.
+ for(let i=1;i<p.length;i++){const a=p[i-1],b=p[i];if(a.x===b.x||a.y===b.y)path+=` L ${b.x} ${b.y}`;else{const mid=(a.y+b.y)/2;path+=` L ${a.x} ${mid} L ${b.x} ${mid} L ${b.x} ${b.y}`}}
+ svg.append(element('path',{d:path,class:'edge-line'+(e.kind==='optional'?' edge-optional':''),'marker-end':'url(#arrow)'}));
+ if(e.label)svg.append(element('text',{x:edge.x,y:edge.y+4,'text-anchor':'middle',class:'edge-label'},e.label));}
+ for(const n of d.nodes){const p=g.node(n.id),node=element('g',{class:'node '+n.kind,transform:`translate(${p.x},${p.y})`,tabindex:0,role:'button','aria-label':n.label+'，查看说明','aria-pressed':'false','data-id':n.id});
+ const w=p.width,h=p.height;let shape;
+ if(n.kind==='decision')shape=element('polygon',{points:`0,${-h/2} ${w/2},0 0,${h/2} ${-w/2},0`,class:'shape'});else shape=element('rect',{x:-w/2,y:-h/2,width:w,height:h,rx:n.kind==='start'?24:8,class:'shape'});
+ node.append(shape,element('text',{'text-anchor':'middle','dominant-baseline':'central'},n.label),element('title',{},copy[active].details[n.id]));node.addEventListener('click',()=>chooseNode(n.id));node.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();chooseNode(n.id)}});svg.append(node);}
+ $('canvas').replaceChildren(svg);return g;
+}
+function select(index,focus=false){active=index;const d=specification.diagrams[index],c=copy[index];document.querySelectorAll('.tab').forEach((el,i)=>{el.setAttribute('aria-selected',String(i===index));el.tabIndex=i===index?0:-1});$('panel').setAttribute('aria-labelledby','tab-'+index);$('chart-title').textContent=d.title;$('chart-subtitle').textContent=c.subtitle;$('points').replaceChildren(...c.points.map(text=>{const li=document.createElement('li');li.textContent=text;return li}));$('groups').replaceChildren(...d.groups.map(group=>{const el=document.createElement('span');el.textContent=group.label;return el}));$('relation').textContent=d.notes[0];$('graph-meta').textContent=`${d.nodes.length} 个节点 · ${d.edges.length} 条连线 · 点击节点阅读说明`;$('next').textContent=index===sectionCount-1?'回到产品与人格 ↺':'下一部分 →';renderDiagram(d);chooseNode(d.nodes[0].id);$('canvas').scrollTop=0;if(focus)$('tab-'+index).focus()}
+document.querySelectorAll('.tab').forEach((el,i)=>{el.addEventListener('click',()=>select(i));el.addEventListener('keydown',event=>{let next;if(event.key==='ArrowRight')next=(i+1)%sectionCount;if(event.key==='ArrowLeft')next=(i+sectionCount-1)%sectionCount;if(event.key==='Home')next=0;if(event.key==='End')next=sectionCount-1;if(next!==undefined){event.preventDefault();select(next,true)}})});
+$('next').addEventListener('click',()=>select((active+1)%sectionCount,true));
+$('download').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(specification,null,2)],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='echo-source-map-diagrams.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
+
+function refCard(id){const ref=references[id],box=document.createElement('div');box.setAttribute('class','source-item'+(ref.isTest?' test':''));const role=document.createElement('strong');role.textContent=ref.role;const file=document.createElement('code');file.textContent=ref.file+':'+ref.line;const symbol=document.createElement('code');symbol.setAttribute('class','symbol');symbol.textContent=ref.symbol;box.append(role,file,symbol);return box}
+function renderEvidence(id){$('node-evidence').replaceChildren(...copy[active].evidence[id].map(refCard))}
+function renderRules(query=''){const clean=query.trim().toLowerCase();const matches=rules.filter(rule=>{const refs=[...rule.definition,...rule.runtime,...rule.tests].map(id=>references[id]);return (rule.name+' '+rule.limit+' '+refs.map(ref=>ref.file+' '+ref.symbol).join(' ')).toLowerCase().includes(clean)});const rows=matches.map(rule=>{const row=document.createElement('tr'),name=document.createElement('td');name.textContent=rule.name;row.append(name);for(const group of ['definition','runtime','tests']){const cell=document.createElement('td');cell.append(...rule[group].map(refCard));row.append(cell)}const limit=document.createElement('td');limit.textContent=rule.limit;row.append(limit);return row});$('rule-rows').replaceChildren(...rows);$('rule-count').textContent=matches.length+' / '+rules.length+' 条规则 · 测试未运行';return matches.length}
+function renderReferences(query=''){const clean=query.trim().toLowerCase(),items=Object.values(references).filter(ref=>(ref.file+' '+ref.symbol+' '+ref.role).toLowerCase().includes(clean)).sort((a,b)=>a.file.localeCompare(b.file)||a.line-b.line);$('all-references').replaceChildren(...items.map(ref=>refCard(ref.id)));$('file-count').textContent=items.length+' 个源码定位 · 行号为构建时快照';return items.length}
+$('rule-search').addEventListener('input',event=>renderRules(event.target.value));
+$('file-search').addEventListener('input',event=>renderReferences(event.target.value));
+renderRules();renderReferences();
+
+try{select(0)}catch(error){$('error').style.display='block';$('error').textContent='图表未能加载：'+error.message;console.error(error)}
+</script>
+</body>
+</html>

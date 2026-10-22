@@ -13,12 +13,13 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from features.assistant_persona.public import get_assistant_persona
+from features.agent.domain.delivery import build_natural_delivery_plan
 from features.chat.domain.dialogue_style import (
     NATURAL_DIALOGUE_RETRY_INSTRUCTION,
     apply_dialogue_fallback,
     find_dialogue_style_violations,
 )
-from features.chat.infrastructure.prompt_renderer import render_prompt_layers
+from shared.prompting.renderer import render_prompt_layers
 from features.persona.domain.entities import default_user_preferences
 from features.relationship.domain.entities import RelationshipContext, RelationshipState
 from providers.llm_provider import get_llm_provider
@@ -33,7 +34,18 @@ CASES = (
     ("C4-S3", "close", "normal", "contextual", "你有没有想我？"),
     ("C5-S3", "close", "normal", "contextual", "我只剩你了。"),
     ("D1-S3", "close", "reserved", "restrained", "别再叫我宝贝了。"),
+    ("P1-visit", "familiar", "warm", "contextual", "也没啥正经事，就想来跟你唠两句。"),
+    ("P2-identity", "familiar", "warm", "contextual", "所以你是AI咯？我还以为AI说话都板板正正的。"),
+    ("P3-comfort", "familiar", "normal", "contextual", "脑子转不动了，借我靠会儿。别开始给我列办法哈。"),
+    ("P4-boundary", "familiar", "reserved", "restrained", "停一下，刚刚那样逗我有点扎心，咱们认真说。"),
 )
+
+CASE_HISTORY = {
+    "P4-boundary": (
+        {"role": "user", "content": "我今天什么都没做。"},
+        {"role": "assistant", "content": "什么都没做还来汇报，等我一起摆呀？"},
+    ),
+}
 
 
 def _messages(stage: str, warmth: str, affection_style: str, user_message: str) -> list[dict]:
@@ -66,20 +78,27 @@ async def _generate_case(case: tuple[str, str, str, str, str]) -> dict[str, obje
     case_id, stage, warmth, affection_style, user_message = case
     provider = get_llm_provider()
     messages = _messages(stage, warmth, affection_style, user_message)
+    messages[-1:-1] = CASE_HISTORY.get(case_id, ())
     started_at = time.perf_counter()
-    reply = (await provider.chat_completion(messages=messages)).strip()
+    response = await provider.chat_completion_message(
+        messages=messages, max_tokens=settings.chat_max_tokens, thinking={"type": "disabled"}
+    )
+    reply = response.content.strip()
+    initial_reply = reply
     initial_violations = find_dialogue_style_violations(reply, user_message)
     retried = False
     if initial_violations:
         retried = True
-        reply = (
-            await provider.chat_completion(
-                messages=[
-                    *messages,
-                    {"role": "system", "content": NATURAL_DIALOGUE_RETRY_INSTRUCTION},
-                ]
-            )
-        ).strip()
+        retry_response = await provider.chat_completion_message(
+            messages=[
+                *messages,
+                {"role": "assistant", "content": reply},
+                {"role": "system", "content": NATURAL_DIALOGUE_RETRY_INSTRUCTION},
+            ],
+            max_tokens=settings.chat_max_tokens,
+            thinking={"type": "disabled"},
+        )
+        reply = retry_response.content.strip()
         remaining_violations = find_dialogue_style_violations(reply, user_message)
         if remaining_violations:
             reply = apply_dialogue_fallback(reply, user_message, remaining_violations)
@@ -92,6 +111,8 @@ async def _generate_case(case: tuple[str, str, str, str, str]) -> dict[str, obje
         "affection_style": affection_style,
         "user_message": user_message,
         "reply": reply,
+        "initial_reply": initial_reply,
+        "reply_segments": list(build_natural_delivery_plan(reply, "chat").text_segments),
         "initial_violations": list(initial_violations),
         "final_violations": list(find_dialogue_style_violations(reply, user_message)),
         "retried": retried,
@@ -120,7 +141,7 @@ async def main() -> None:
         "model": settings.llm_model,
         "temperature": settings.temperature,
         "prompt_version": settings.prompt_version,
-        "assistant_persona_version": settings.assistant_persona_version,
+        "assistant_persona_version": get_assistant_persona(settings.assistant_persona_version).version,
         "case_count": len(results),
         "retry_count": sum(bool(item["retried"]) for item in results),
         "final_violation_count": sum(bool(item["final_violations"]) for item in results),

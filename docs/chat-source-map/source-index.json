@@ -1,0 +1,1078 @@
+{
+  "references": [
+    {
+      "id": "settings:system_prompt: str",
+      "file": "Echo-backend/shared/config/settings.py",
+      "line": 941,
+      "symbol": "system_prompt: str",
+      "role": "产品文案定义",
+      "isTest": false
+    },
+    {
+      "id": "settings:assistant_persona_version: str",
+      "file": "Echo-backend/shared/config/settings.py",
+      "line": 80,
+      "symbol": "assistant_persona_version: str",
+      "role": "人格版本选择",
+      "isTest": false
+    },
+    {
+      "id": "settings:model_config =",
+      "file": "Echo-backend/shared/config/settings.py",
+      "line": 10,
+      "symbol": "model_config =",
+      "role": "配置加载",
+      "isTest": false
+    },
+    {
+      "id": "assistant:ECHO_PERSONA_V2 =",
+      "file": "Echo-backend/features/assistant_persona/infrastructure/default_persona.py",
+      "line": 6,
+      "symbol": "ECHO_PERSONA_V2 =",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_assistant_persona:test_echo_persona_v2_has_stable_behavior_contract",
+      "file": "Echo-backend/tests/test_assistant_persona.py",
+      "line": 14,
+      "symbol": "test_echo_persona_v2_has_stable_behavior_contract",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "assistant:dialogue_examples=",
+      "file": "Echo-backend/features/assistant_persona/infrastructure/default_persona.py",
+      "line": 38,
+      "symbol": "dialogue_examples=",
+      "role": "示例定义",
+      "isTest": false
+    },
+    {
+      "id": "renderer:def render_assistant_persona",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 209,
+      "symbol": "def render_assistant_persona",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_prompt_renderer:test_persona_examples_are_labeled_as_fiction_not_user_history",
+      "file": "Echo-backend/tests/test_prompt_renderer.py",
+      "line": 100,
+      "symbol": "test_persona_examples_are_labeled_as_fiction_not_user_history",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "settings:def get_settings",
+      "file": "Echo-backend/shared/config/settings.py",
+      "line": 949,
+      "symbol": "def get_settings",
+      "role": "配置入口",
+      "isTest": false
+    },
+    {
+      "id": "assistant:def get_configured_assistant_persona",
+      "file": "Echo-backend/features/assistant_persona/infrastructure/default_persona.py",
+      "line": 53,
+      "symbol": "def get_configured_assistant_persona",
+      "role": "版本解析",
+      "isTest": false
+    },
+    {
+      "id": "assistant:_PERSONAS =",
+      "file": "Echo-backend/features/assistant_persona/infrastructure/default_persona.py",
+      "line": 50,
+      "symbol": "_PERSONAS =",
+      "role": "版本映射",
+      "isTest": false
+    },
+    {
+      "id": "test_assistant_persona:test_unknown_persona_version_is_rejected",
+      "file": "Echo-backend/tests/test_assistant_persona.py",
+      "line": 31,
+      "symbol": "test_unknown_persona_version_is_rejected",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "test_assistant_persona:test_existing_environment_pin_cannot_restore_the_old_identity",
+      "file": "Echo-backend/tests/test_assistant_persona.py",
+      "line": 25,
+      "symbol": "test_existing_environment_pin_cannot_restore_the_old_identity",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "renderer:def render_prompt_layers",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 301,
+      "symbol": "def render_prompt_layers",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "renderer:BASELINE_SAFETY_POLICY =",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 12,
+      "symbol": "BASELINE_SAFETY_POLICY =",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "renderer:NATURAL_DIALOGUE_POLICY =",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 14,
+      "symbol": "NATURAL_DIALOGUE_POLICY =",
+      "role": "行为规则",
+      "isTest": false
+    },
+    {
+      "id": "renderer:RESPONSE_CALIBRATION_POLICY =",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 16,
+      "symbol": "RESPONSE_CALIBRATION_POLICY =",
+      "role": "策略规则",
+      "isTest": false
+    },
+    {
+      "id": "context:assistant_persona = get_assistant_persona",
+      "file": "Echo-backend/features/chat/infrastructure/context_builder.py",
+      "line": 374,
+      "symbol": "assistant_persona = get_assistant_persona",
+      "role": "运行时读取",
+      "isTest": false
+    },
+    {
+      "id": "assistant_public:def get_assistant_persona",
+      "file": "Echo-backend/features/assistant_persona/public.py",
+      "line": 10,
+      "symbol": "def get_assistant_persona",
+      "role": "模块公开入口",
+      "isTest": false
+    },
+    {
+      "id": "pref_route:def persona_update",
+      "file": "Echo-backend/features/persona/interface/router.py",
+      "line": 52,
+      "symbol": "def persona_update",
+      "role": "写入接口",
+      "isTest": false
+    },
+    {
+      "id": "pref_schema:class PersonaUpdateRequest",
+      "file": "Echo-backend/features/persona/interface/schemas.py",
+      "line": 4,
+      "symbol": "class PersonaUpdateRequest",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "pref_domain:def build_user_preferences",
+      "file": "Echo-backend/features/persona/domain/entities.py",
+      "line": 103,
+      "symbol": "def build_user_preferences",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "pref_domain:def _normalize_choice",
+      "file": "Echo-backend/features/persona/domain/entities.py",
+      "line": 74,
+      "symbol": "def _normalize_choice",
+      "role": "枚举白名单",
+      "isTest": false
+    },
+    {
+      "id": "pref_service:def update",
+      "file": "Echo-backend/features/persona/application/persona_management.py",
+      "line": 22,
+      "symbol": "def update",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_persona_feature:test_rejects_invalid_enum_and_oversized_fields",
+      "file": "Echo-backend/tests/test_persona_feature.py",
+      "line": 74,
+      "symbol": "test_rejects_invalid_enum_and_oversized_fields",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "pref_repo:INSERT INTO user_personas",
+      "file": "Echo-backend/features/persona/infrastructure/postgres_repository.py",
+      "line": 84,
+      "symbol": "INSERT INTO user_personas",
+      "role": "数据库持久化",
+      "isTest": false
+    },
+    {
+      "id": "pref_service:def get",
+      "file": "Echo-backend/features/persona/application/persona_management.py",
+      "line": 18,
+      "symbol": "def get",
+      "role": "读取与默认",
+      "isTest": false
+    },
+    {
+      "id": "pref_domain:def default_user_preferences",
+      "file": "Echo-backend/features/persona/domain/entities.py",
+      "line": 160,
+      "symbol": "def default_user_preferences",
+      "role": "默认对象",
+      "isTest": false
+    },
+    {
+      "id": "renderer:def render_persona",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 171,
+      "symbol": "def render_persona",
+      "role": "渲染偏好",
+      "isTest": false
+    },
+    {
+      "id": "context:persona = get_persona",
+      "file": "Echo-backend/features/chat/infrastructure/context_builder.py",
+      "line": 369,
+      "symbol": "persona = get_persona",
+      "role": "读取偏好",
+      "isTest": false
+    },
+    {
+      "id": "renderer:def render_relationship_guidance",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 237,
+      "symbol": "def render_relationship_guidance",
+      "role": "关系提示规则",
+      "isTest": false
+    },
+    {
+      "id": "generate:async def _run_post_persistence",
+      "file": "Echo-backend/features/chat/application/generate_reply.py",
+      "line": 184,
+      "symbol": "async def _run_post_persistence",
+      "role": "后处理起点",
+      "isTest": false
+    },
+    {
+      "id": "relation_rules:def detect_relationship_signals",
+      "file": "Echo-backend/features/relationship/domain/rules.py",
+      "line": 38,
+      "symbol": "def detect_relationship_signals",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_relationship_feature:test_positive_share_is_warm_without_becoming_relationship_signal",
+      "file": "Echo-backend/tests/test_relationship_feature.py",
+      "line": 104,
+      "symbol": "test_positive_share_is_warm_without_becoming_relationship_signal",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "relation_rules:def advance_relationship_state",
+      "file": "Echo-backend/features/relationship/domain/rules.py",
+      "line": 116,
+      "symbol": "def advance_relationship_state",
+      "role": "进度计算",
+      "isTest": false
+    },
+    {
+      "id": "relation_rules:def resolve_relationship_stage",
+      "file": "Echo-backend/features/relationship/domain/rules.py",
+      "line": 65,
+      "symbol": "def resolve_relationship_stage",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_relationship_feature:test_message_volume_alone_cannot_bypass_active_day_gate",
+      "file": "Echo-backend/tests/test_relationship_feature.py",
+      "line": 50,
+      "symbol": "test_message_volume_alone_cannot_bypass_active_day_gate",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "relation_service:def record_turn",
+      "file": "Echo-backend/features/relationship/application/relationship_management.py",
+      "line": 30,
+      "symbol": "def record_turn",
+      "role": "记录入口",
+      "isTest": false
+    },
+    {
+      "id": "relation_repo:INSERT INTO relationship_states",
+      "file": "Echo-backend/features/relationship/infrastructure/postgres_repository.py",
+      "line": 122,
+      "symbol": "INSERT INTO relationship_states",
+      "role": "状态持久化",
+      "isTest": false
+    },
+    {
+      "id": "relation_repo:INSERT INTO relationship_events",
+      "file": "Echo-backend/features/relationship/infrastructure/postgres_repository.py",
+      "line": 177,
+      "symbol": "INSERT INTO relationship_events",
+      "role": "信号持久化",
+      "isTest": false
+    },
+    {
+      "id": "relation_service:def get_context",
+      "file": "Echo-backend/features/relationship/application/relationship_management.py",
+      "line": 15,
+      "symbol": "def get_context",
+      "role": "读取上下文",
+      "isTest": false
+    },
+    {
+      "id": "relation_rules:def build_relationship_context",
+      "file": "Echo-backend/features/relationship/domain/rules.py",
+      "line": 90,
+      "symbol": "def build_relationship_context",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_relationship_feature:test_explicit_boundary_immediately_restrains_affection_and_warmth",
+      "file": "Echo-backend/tests/test_relationship_feature.py",
+      "line": 87,
+      "symbol": "test_explicit_boundary_immediately_restrains_affection_and_warmth",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "test_prompt_renderer:test_assistant_persona_and_relationship_are_independent_layers",
+      "file": "Echo-backend/tests/test_prompt_renderer.py",
+      "line": 147,
+      "symbol": "test_assistant_persona_and_relationship_are_independent_layers",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "memory_rules:def should_extract_memory",
+      "file": "Echo-backend/features/memory/domain/extraction_rules.py",
+      "line": 93,
+      "symbol": "def should_extract_memory",
+      "role": "是否抽取",
+      "isTest": false
+    },
+    {
+      "id": "memory_service:def schedule_memory_extraction",
+      "file": "Echo-backend/features/memory/application/memory_extraction.py",
+      "line": 231,
+      "symbol": "def schedule_memory_extraction",
+      "role": "创建任务",
+      "isTest": false
+    },
+    {
+      "id": "test_memory_extractor:test_gate_skips_plain_chat",
+      "file": "Echo-backend/tests/test_memory_extractor.py",
+      "line": 18,
+      "symbol": "test_gate_skips_plain_chat",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "test_memory_extractor:test_periodic_batch_review_bypasses_narrow_realtime_gate",
+      "file": "Echo-backend/tests/test_memory_extractor.py",
+      "line": 37,
+      "symbol": "test_periodic_batch_review_bypasses_narrow_realtime_gate",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "memory_repo:def create_job",
+      "file": "Echo-backend/features/memory/infrastructure/postgres_repositories.py",
+      "line": 349,
+      "symbol": "def create_job",
+      "role": "任务持久化",
+      "isTest": false
+    },
+    {
+      "id": "memory_rules:def build_extraction_messages",
+      "file": "Echo-backend/features/memory/domain/extraction_rules.py",
+      "line": 157,
+      "symbol": "def build_extraction_messages",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "memory_service:async def extract_and_store_memories",
+      "file": "Echo-backend/features/memory/application/memory_extraction.py",
+      "line": 49,
+      "symbol": "async def extract_and_store_memories",
+      "role": "调用抽取模型",
+      "isTest": false
+    },
+    {
+      "id": "test_memory_extractor:test_extraction_prompt_requires_source_message_provenance",
+      "file": "Echo-backend/tests/test_memory_extractor.py",
+      "line": 43,
+      "symbol": "test_extraction_prompt_requires_source_message_provenance",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "memory_rules:def parse_memory_extraction",
+      "file": "Echo-backend/features/memory/domain/extraction_rules.py",
+      "line": 227,
+      "symbol": "def parse_memory_extraction",
+      "role": "解析",
+      "isTest": false
+    },
+    {
+      "id": "memory_service:async def _apply_extracted_memory",
+      "file": "Echo-backend/features/memory/application/memory_extraction.py",
+      "line": 105,
+      "symbol": "async def _apply_extracted_memory",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "memory_repo:def add_user_memory",
+      "file": "Echo-backend/features/memory/infrastructure/postgres_repositories.py",
+      "line": 79,
+      "symbol": "def add_user_memory",
+      "role": "记忆保存",
+      "isTest": false
+    },
+    {
+      "id": "memory_repo:def upsert_memory_embedding_record",
+      "file": "Echo-backend/features/memory/infrastructure/postgres_repositories.py",
+      "line": 239,
+      "symbol": "def upsert_memory_embedding_record",
+      "role": "向量索引",
+      "isTest": false
+    },
+    {
+      "id": "memory_service:async def _safe_upsert_memory_embedding",
+      "file": "Echo-backend/features/memory/application/memory_extraction.py",
+      "line": 209,
+      "symbol": "async def _safe_upsert_memory_embedding",
+      "role": "增强失败处理",
+      "isTest": false
+    },
+    {
+      "id": "context:async def _load_long_term_memories",
+      "file": "Echo-backend/features/chat/infrastructure/context_builder.py",
+      "line": 68,
+      "symbol": "async def _load_long_term_memories",
+      "role": "读取与回退",
+      "isTest": false
+    },
+    {
+      "id": "renderer:def format_long_term_memories",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 158,
+      "symbol": "def format_long_term_memories",
+      "role": "记忆转提示",
+      "isTest": false
+    },
+    {
+      "id": "summary:async def maybe_update_conversation_summary",
+      "file": "Echo-backend/features/chat/infrastructure/conversation_summary.py",
+      "line": 48,
+      "symbol": "async def maybe_update_conversation_summary",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "settings:conversation_summary_trigger_messages: int",
+      "file": "Echo-backend/shared/config/settings.py",
+      "line": 115,
+      "symbol": "conversation_summary_trigger_messages: int",
+      "role": "触发阈值",
+      "isTest": false
+    },
+    {
+      "id": "summary:def _build_summary_messages",
+      "file": "Echo-backend/features/chat/infrastructure/conversation_summary.py",
+      "line": 23,
+      "symbol": "def _build_summary_messages",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "summary:def _format_messages_for_summary",
+      "file": "Echo-backend/features/chat/infrastructure/conversation_summary.py",
+      "line": 12,
+      "symbol": "def _format_messages_for_summary",
+      "role": "编号与角色",
+      "isTest": false
+    },
+    {
+      "id": "test_conversation_summary:test_summary_uses_provenance_prompt_and_dedicated_generation_budget",
+      "file": "Echo-backend/tests/test_conversation_summary.py",
+      "line": 26,
+      "symbol": "test_summary_uses_provenance_prompt_and_dedicated_generation_budget",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "summary:updated_summary =",
+      "file": "Echo-backend/features/chat/infrastructure/conversation_summary.py",
+      "line": 76,
+      "symbol": "updated_summary =",
+      "role": "生成后检查",
+      "isTest": false
+    },
+    {
+      "id": "history:def update_conversation_summary",
+      "file": "Echo-backend/features/chat/infrastructure/postgres_repositories.py",
+      "line": 120,
+      "symbol": "def update_conversation_summary",
+      "role": "摘要持久化",
+      "isTest": false
+    },
+    {
+      "id": "context:summary_state =",
+      "file": "Echo-backend/features/chat/infrastructure/context_builder.py",
+      "line": 306,
+      "symbol": "summary_state =",
+      "role": "读取摘要",
+      "isTest": false
+    },
+    {
+      "id": "history:def get_history",
+      "file": "Echo-backend/features/chat/infrastructure/postgres_repositories.py",
+      "line": 516,
+      "symbol": "def get_history",
+      "role": "最近原文",
+      "isTest": false
+    },
+    {
+      "id": "worker:async def run_once",
+      "file": "Echo-backend/features/chat/application/process_turns.py",
+      "line": 33,
+      "symbol": "async def run_once",
+      "role": "后台入口",
+      "isTest": false
+    },
+    {
+      "id": "generate:async def prepare",
+      "file": "Echo-backend/features/chat/application/generate_reply.py",
+      "line": 256,
+      "symbol": "async def prepare",
+      "role": "回复准备",
+      "isTest": false
+    },
+    {
+      "id": "context:async def build_chat_context",
+      "file": "Echo-backend/features/chat/infrastructure/context_builder.py",
+      "line": 270,
+      "symbol": "async def build_chat_context",
+      "role": "组装入口",
+      "isTest": false
+    },
+    {
+      "id": "context:timezone_name =",
+      "file": "Echo-backend/features/chat/infrastructure/context_builder.py",
+      "line": 283,
+      "symbol": "timezone_name =",
+      "role": "时区读取",
+      "isTest": false
+    },
+    {
+      "id": "time:def build_temporal_context",
+      "file": "Echo-backend/features/chat/domain/temporal_context.py",
+      "line": 21,
+      "symbol": "def build_temporal_context",
+      "role": "计算时间上下文",
+      "isTest": false
+    },
+    {
+      "id": "test_prompt_renderer:test_layers_keep_safety_first_and_data_separated",
+      "file": "Echo-backend/tests/test_prompt_renderer.py",
+      "line": 47,
+      "symbol": "test_layers_keep_safety_first_and_data_separated",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "context:pause_followup_questions =",
+      "file": "Echo-backend/features/chat/infrastructure/context_builder.py",
+      "line": 324,
+      "symbol": "pause_followup_questions =",
+      "role": "当前轮判断",
+      "isTest": false
+    },
+    {
+      "id": "renderer:def render_turn_focus_guidance",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 272,
+      "symbol": "def render_turn_focus_guidance",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "context:messages.extend(history)",
+      "file": "Echo-backend/features/chat/infrastructure/context_builder.py",
+      "line": 449,
+      "symbol": "messages.extend(history)",
+      "role": "追加历史",
+      "isTest": false
+    },
+    {
+      "id": "context:messages.append(_turn_input_message",
+      "file": "Echo-backend/features/chat/infrastructure/context_builder.py",
+      "line": 450,
+      "symbol": "messages.append(_turn_input_message",
+      "role": "当前输入",
+      "isTest": false
+    },
+    {
+      "id": "agent:def _build_initial_messages",
+      "file": "Echo-backend/features/agent/application/orchestrate_chat.py",
+      "line": 1027,
+      "symbol": "def _build_initial_messages",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "agent:result = [instruction, *context_messages]",
+      "file": "Echo-backend/features/agent/application/orchestrate_chat.py",
+      "line": 1127,
+      "symbol": "result = [instruction, *context_messages]",
+      "role": "最终消息拼接",
+      "isTest": false
+    },
+    {
+      "id": "agent_container:def get_chat_agent",
+      "file": "Echo-backend/features/agent/infrastructure/container.py",
+      "line": 23,
+      "symbol": "def get_chat_agent",
+      "role": "依赖组装与注册",
+      "isTest": false
+    },
+    {
+      "id": "tools:def model_descriptions",
+      "file": "Echo-backend/features/agent/domain/tools.py",
+      "line": 69,
+      "symbol": "def model_descriptions",
+      "role": "模式筛选",
+      "isTest": false
+    },
+    {
+      "id": "agent:response, llm_timeout_retries_remaining",
+      "file": "Echo-backend/features/agent/application/orchestrate_chat.py",
+      "line": 196,
+      "symbol": "response, llm_timeout_retries_remaining",
+      "role": "模型调用入口",
+      "isTest": false
+    },
+    {
+      "id": "agent:def _assistant_tool_call_message",
+      "file": "Echo-backend/features/agent/application/orchestrate_chat.py",
+      "line": 1163,
+      "symbol": "def _assistant_tool_call_message",
+      "role": "模型调用消息",
+      "isTest": false
+    },
+    {
+      "id": "agent:def _tool_result_message",
+      "file": "Echo-backend/features/agent/application/orchestrate_chat.py",
+      "line": 1184,
+      "symbol": "def _tool_result_message",
+      "role": "工具结果消息",
+      "isTest": false
+    },
+    {
+      "id": "generate:style_violations =",
+      "file": "Echo-backend/features/chat/application/generate_reply.py",
+      "line": 448,
+      "symbol": "style_violations =",
+      "role": "检测调用点",
+      "isTest": false
+    },
+    {
+      "id": "delivery:def validate_agent_delivery_segments",
+      "file": "Echo-backend/features/agent/domain/delivery.py",
+      "line": 57,
+      "symbol": "def validate_agent_delivery_segments",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "agent:FINAL_RETRY_INSTRUCTION =",
+      "file": "Echo-backend/features/agent/application/orchestrate_chat.py",
+      "line": 41,
+      "symbol": "FINAL_RETRY_INSTRUCTION =",
+      "role": "Agent 收尾规则",
+      "isTest": false
+    },
+    {
+      "id": "renderer:def _escape_untrusted_text",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 115,
+      "symbol": "def _escape_untrusted_text",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "renderer:def _truncate_to_token_budget",
+      "file": "Echo-backend/shared/prompting/renderer.py",
+      "line": 143,
+      "symbol": "def _truncate_to_token_budget",
+      "role": "局部预算",
+      "isTest": false
+    },
+    {
+      "id": "executor:async def execute",
+      "file": "Echo-backend/features/agent/application/execute_tool.py",
+      "line": 19,
+      "symbol": "async def execute",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "agent:if call.tool_name not in step_tool_names:",
+      "file": "Echo-backend/features/agent/application/orchestrate_chat.py",
+      "line": 314,
+      "symbol": "if call.tool_name not in step_tool_names:",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_agent_feature:test_executor_rejects_duplicate_tool_call",
+      "file": "Echo-backend/tests/test_agent_feature.py",
+      "line": 1153,
+      "symbol": "test_executor_rejects_duplicate_tool_call",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "executor:definition.handler(context, arguments)",
+      "file": "Echo-backend/features/agent/application/execute_tool.py",
+      "line": 95,
+      "symbol": "definition.handler(context, arguments)",
+      "role": "执行位置",
+      "isTest": false
+    },
+    {
+      "id": "tool_defs:def register_sticker_tools",
+      "file": "Echo-backend/features/agent/infrastructure/tools/sticker_tools.py",
+      "line": 56,
+      "symbol": "def register_sticker_tools",
+      "role": "工具规格与业务绑定",
+      "isTest": false
+    },
+    {
+      "id": "agent:def _has_successful_sticker_delivery",
+      "file": "Echo-backend/features/agent/application/orchestrate_chat.py",
+      "line": 994,
+      "symbol": "def _has_successful_sticker_delivery",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_agent_feature:test_unbacked_sticker_claim_is_rewritten_once_before_delivery",
+      "file": "Echo-backend/tests/test_agent_feature.py",
+      "line": 814,
+      "symbol": "test_unbacked_sticker_claim_is_rewritten_once_before_delivery",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "style:def find_dialogue_style_violations",
+      "file": "Echo-backend/features/chat/domain/dialogue_style.py",
+      "line": 201,
+      "symbol": "def find_dialogue_style_violations",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_dialogue_style:test_repeated_greeting_is_removed_by_deterministic_fallback",
+      "file": "Echo-backend/tests/test_dialogue_style.py",
+      "line": 35,
+      "symbol": "test_repeated_greeting_is_removed_by_deterministic_fallback",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "style:def apply_dialogue_fallback",
+      "file": "Echo-backend/features/chat/domain/dialogue_style.py",
+      "line": 271,
+      "symbol": "def apply_dialogue_fallback",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "generate:reply = apply_dialogue_fallback",
+      "file": "Echo-backend/features/chat/application/generate_reply.py",
+      "line": 460,
+      "symbol": "reply = apply_dialogue_fallback",
+      "role": "实际调用位置",
+      "isTest": false
+    },
+    {
+      "id": "delivery:def _validate_delivery_segment",
+      "file": "Echo-backend/features/agent/domain/delivery.py",
+      "line": 72,
+      "symbol": "def _validate_delivery_segment",
+      "role": "内部内容模式",
+      "isTest": false
+    },
+    {
+      "id": "test_agent_feature:test_protocol_output_is_failed_without_leaking_protocol_fragment",
+      "file": "Echo-backend/tests/test_agent_feature.py",
+      "line": 1573,
+      "symbol": "test_protocol_output_is_failed_without_leaking_protocol_fragment",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "generate:validate_agent_delivery_segments(segments)",
+      "file": "Echo-backend/features/chat/application/generate_reply.py",
+      "line": 475,
+      "symbol": "validate_agent_delivery_segments(segments)",
+      "role": "准备阶段",
+      "isTest": false
+    },
+    {
+      "id": "async_repo:validate_agent_delivery_segments(text_segments)",
+      "file": "Echo-backend/features/chat/infrastructure/async_postgres_repository.py",
+      "line": 315,
+      "symbol": "validate_agent_delivery_segments(text_segments)",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_prompt_renderer:test_natural_dialogue_policy_rejects_stage_directions_and_fake_body",
+      "file": "Echo-backend/tests/test_prompt_renderer.py",
+      "line": 84,
+      "symbol": "test_natural_dialogue_policy_rejects_stage_directions_and_fake_body",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "test_agent_feature:test_agent_timeout_never_executes_side_effect_tool",
+      "file": "Echo-backend/tests/test_agent_feature.py",
+      "line": 1803,
+      "symbol": "test_agent_timeout_never_executes_side_effect_tool",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "test_dialogue_style:test_text_affection_and_kaomoji_survive_without_fallback",
+      "file": "Echo-backend/tests/test_dialogue_style.py",
+      "line": 167,
+      "symbol": "test_text_affection_and_kaomoji_survive_without_fallback",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "test_prompt_renderer:test_persona_injection_text_cannot_forge_renderer_boundary",
+      "file": "Echo-backend/tests/test_prompt_renderer.py",
+      "line": 158,
+      "symbol": "test_persona_injection_text_cannot_forge_renderer_boundary",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "style:def should_pause_followup_questions",
+      "file": "Echo-backend/features/chat/domain/dialogue_style.py",
+      "line": 121,
+      "symbol": "def should_pause_followup_questions",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_dialogue_style:test_question_cooldown_after_two_consecutive_assistant_questions",
+      "file": "Echo-backend/tests/test_dialogue_style.py",
+      "line": 67,
+      "symbol": "test_question_cooldown_after_two_consecutive_assistant_questions",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "relation_rules:_PACE_THRESHOLDS =",
+      "file": "Echo-backend/features/relationship/domain/rules.py",
+      "line": 31,
+      "symbol": "_PACE_THRESHOLDS =",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "tools:class ToolDefinition",
+      "file": "Echo-backend/features/agent/domain/tools.py",
+      "line": 38,
+      "symbol": "class ToolDefinition",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "settings:agent_max_steps: int",
+      "file": "Echo-backend/shared/config/settings.py",
+      "line": 749,
+      "symbol": "agent_max_steps: int",
+      "role": "实现",
+      "isTest": false
+    },
+    {
+      "id": "test_agent_feature:test_call_mode_rejects_sticker_tool_even_if_model_hallucinates_it",
+      "file": "Echo-backend/tests/test_agent_feature.py",
+      "line": 976,
+      "symbol": "test_call_mode_rejects_sticker_tool_even_if_model_hallucinates_it",
+      "role": "测试定义，未在本次运行",
+      "isTest": true
+    },
+    {
+      "id": "delivery:_INTERNAL_CONTEXT_MARKER =",
+      "file": "Echo-backend/features/agent/domain/delivery.py",
+      "line": 13,
+      "symbol": "_INTERNAL_CONTEXT_MARKER =",
+      "role": "实现",
+      "isTest": false
+    }
+  ],
+  "rules": [
+    {
+      "name": "人格身份与口吻",
+      "definition": [
+        "assistant:ECHO_PERSONA_V2 =",
+        "renderer:def render_assistant_persona"
+      ],
+      "runtime": [
+        "renderer:def render_prompt_layers",
+        "style:def find_dialogue_style_violations"
+      ],
+      "tests": [
+        "test_assistant_persona:test_echo_persona_v2_has_stable_behavior_contract"
+      ],
+      "limit": "人格合同测试主要检查配置内容；风格检测只覆盖部分句式，不是全量语义验证。"
+    },
+    {
+      "name": "记忆与摘要只作背景",
+      "definition": [
+        "renderer:BASELINE_SAFETY_POLICY =",
+        "renderer:def render_turn_focus_guidance"
+      ],
+      "runtime": [
+        "renderer:def _escape_untrusted_text",
+        "renderer:def render_prompt_layers"
+      ],
+      "tests": [
+        "test_prompt_renderer:test_persona_injection_text_cannot_forge_renderer_boundary"
+      ],
+      "limit": "背景仍用 system 角色。分隔与转义不等于独立权限隔离；旧话题限制主要依靠 Prompt。"
+    },
+    {
+      "name": "不要连续追问或重复问候",
+      "definition": [
+        "renderer:def render_turn_focus_guidance"
+      ],
+      "runtime": [
+        "style:def should_pause_followup_questions",
+        "style:def find_dialogue_style_violations",
+        "style:def apply_dialogue_fallback"
+      ],
+      "tests": [
+        "test_dialogue_style:test_question_cooldown_after_two_consecutive_assistant_questions",
+        "test_dialogue_style:test_repeated_greeting_is_removed_by_deterministic_fallback"
+      ],
+      "limit": "基于历史与文本模式判断，无法覆盖所有表达变体；应测试保留正常问句的情况。"
+    },
+    {
+      "name": "偏好字段必须有效",
+      "definition": [
+        "pref_schema:class PersonaUpdateRequest",
+        "pref_domain:def build_user_preferences"
+      ],
+      "runtime": [
+        "pref_service:def update"
+      ],
+      "tests": [
+        "test_persona_feature:test_rejects_invalid_enum_and_oversized_fields"
+      ],
+      "limit": "字段有效不表示自由文本中的每个事实都被核实；偏好不能修改工具授权。"
+    },
+    {
+      "name": "关系阶段与用户边界",
+      "definition": [
+        "relation_rules:_PACE_THRESHOLDS =",
+        "relation_rules:def detect_relationship_signals"
+      ],
+      "runtime": [
+        "relation_rules:def resolve_relationship_stage",
+        "relation_rules:def build_relationship_context"
+      ],
+      "tests": [
+        "test_relationship_feature:test_explicit_boundary_immediately_restrains_affection_and_warmth"
+      ],
+      "limit": "关系状态是业务规则产物；依靠句式识别的本轮信号存在覆盖范围。"
+    },
+    {
+      "name": "工具参数、次数与模式",
+      "definition": [
+        "tools:class ToolDefinition",
+        "settings:agent_max_steps: int"
+      ],
+      "runtime": [
+        "executor:async def execute",
+        "agent:if call.tool_name not in step_tool_names:"
+      ],
+      "tests": [
+        "test_agent_feature:test_executor_rejects_duplicate_tool_call",
+        "test_agent_feature:test_call_mode_rejects_sticker_tool_even_if_model_hallucinates_it"
+      ],
+      "limit": "同轮原始参数去重不等于跨轮幂等；副作用动作仍需业务校验。"
+    },
+    {
+      "name": "不能无凭据说表情已发送",
+      "definition": [
+        "agent:def _build_initial_messages"
+      ],
+      "runtime": [
+        "agent:def _has_successful_sticker_delivery"
+      ],
+      "tests": [
+        "test_agent_feature:test_unbacked_sticker_claim_is_rewritten_once_before_delivery"
+      ],
+      "limit": "这是表情能力的专项处理，不能推导成全部动作、全部事实都有验证器。"
+    },
+    {
+      "name": "不交付内部协议与时间标记",
+      "definition": [
+        "delivery:_INTERNAL_CONTEXT_MARKER ="
+      ],
+      "runtime": [
+        "delivery:def validate_agent_delivery_segments",
+        "async_repo:validate_agent_delivery_segments(text_segments)"
+      ],
+      "tests": [
+        "test_agent_feature:test_protocol_output_is_failed_without_leaking_protocol_fragment"
+      ],
+      "limit": "现有模式能挡住特定格式；不是通用敏感信息检测或事实审核。"
+    },
+    {
+      "name": "摘要事实带来源",
+      "definition": [
+        "summary:def _build_summary_messages"
+      ],
+      "runtime": [
+        "summary:async def maybe_update_conversation_summary"
+      ],
+      "tests": [
+        "test_conversation_summary:test_summary_uses_provenance_prompt_and_dedicated_generation_budget"
+      ],
+      "limit": "调用链主要检查非空后保存；没有在此严格解析区块、逐条核验来源与事实。"
+    },
+    {
+      "name": "长期记忆操作有效",
+      "definition": [
+        "memory_rules:def build_extraction_messages"
+      ],
+      "runtime": [
+        "memory_service:async def _apply_extracted_memory"
+      ],
+      "tests": [
+        "test_memory_extractor:test_extraction_prompt_requires_source_message_provenance"
+      ],
+      "limit": "检查类型、置信度和目标记录等不等于证明记忆内容真实；测试来源要求不等于全面事实验证。"
+    }
+  ]
+}

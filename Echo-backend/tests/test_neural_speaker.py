@@ -6,9 +6,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from fastapi import HTTPException
-from features.devices.infrastructure.neural_speaker import (
-    SpeakerUnavailable, centroid, extract, identify, similarity,
-)
+from features.devices.infrastructure.neural_speaker import extract
+from features.devices.domain.speaker_vectors import SpeakerUnavailable, centroid, identify, similarity
+from features.devices.infrastructure import speaker_people_repository as repository
+from features.devices.infrastructure.speaker_people_container import people_service
+from features.devices.application import speaker_people as use_cases
 from features.devices.interface import speaker_router as routes
 
 
@@ -52,9 +54,9 @@ class NeuralSpeakerTests(unittest.TestCase):
 
     def test_recognize_preserves_matched_person_without_owner_role(self):
         profile = self.profile([1, 0], name="person_a")
-        with patch.object(routes, "get_connection") as get_connection, \
-                patch.object(routes, "extract", return_value=([1, 0], "campp-zh:test")), \
-                patch.object(routes, "identify", return_value={
+        with patch.object(repository, "get_connection") as get_connection, \
+                patch.object(people_service, "extract", return_value=([1, 0], "campp-zh:test")), \
+                patch.object(use_cases, "identify", return_value={
                     "status": "matched",
                     "person_id": "person_a",
                     "display_name": "A",
@@ -62,7 +64,7 @@ class NeuralSpeakerTests(unittest.TestCase):
                 }):
             cursor = get_connection.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
             cursor.fetchall.return_value = [profile]
-            result = routes.recognize("device", b"audio")
+            result = people_service.recognize("device", b"audio")
         self.assertEqual(result["status"], "matched")
         self.assertEqual(result["speaker_profile_id"], "person_a")
         self.assertEqual(result["speaker_role"], "known")
@@ -74,16 +76,16 @@ class NeuralSpeakerTests(unittest.TestCase):
         self.assertEqual(similarity([1, 0], [1]), -1)
 
     def test_consent_required_before_profile_created(self):
-        with patch.object(routes, "owned"):
+        with patch.object(repository, "owned"):
             with self.assertRaises(HTTPException) as error:
                 routes.create_person("device", routes.PersonRequest(display_name="A", consent=False),
                                      routes.CurrentUser(user_id="owner"))
         self.assertEqual(error.exception.status_code, 422)
 
     def test_cross_account_access_is_denied(self):
-        with patch.object(routes, "get_user_device", return_value=None):
+        with patch.object(repository, "get_user_device", return_value=None):
             with self.assertRaises(HTTPException) as error:
-                routes.load_person("other", "device", "person")
+                routes.people("device", routes.CurrentUser(user_id="other"))
         self.assertEqual(error.exception.status_code, 404)
 
 

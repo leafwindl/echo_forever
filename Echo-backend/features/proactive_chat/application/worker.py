@@ -166,6 +166,7 @@ class ProcessProactiveChatJobs:
             presentation = self.timing_policy.build(
                 delivery_types=tuple(delivery_types or ["text"]),
                 agent_elapsed_ms=int((time.perf_counter() - started) * 1000),
+                text_segments=prepared.reply_segments,
             )
             messages = self.repository.persist_delivery(
                 job=job,

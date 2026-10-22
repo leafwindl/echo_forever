@@ -1,0 +1,775 @@
+{
+  "diagrams": [
+    {
+      "id": "diagram-1",
+      "title": "上下文从哪里来？",
+      "type": "flowchart",
+      "layout": {
+        "direction": "LR",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "c1g1",
+          "label": "材料来源",
+          "nodeIds": [
+            "c1n1",
+            "c1n2",
+            "c1n3",
+            "c1n4",
+            "c1n5",
+            "c1n6",
+            "c1n7"
+          ]
+        },
+        {
+          "id": "c1g2",
+          "label": "组装与请求",
+          "nodeIds": [
+            "c1n8",
+            "c1n9",
+            "c1n10",
+            "c1n11"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "c1n1",
+          "label": "产品与人格配置",
+          "kind": "data",
+          "group": "c1g1"
+        },
+        {
+          "id": "c1n2",
+          "label": "用户偏好记录",
+          "kind": "data",
+          "group": "c1g1"
+        },
+        {
+          "id": "c1n3",
+          "label": "历史与会话摘要",
+          "kind": "data",
+          "group": "c1g1"
+        },
+        {
+          "id": "c1n4",
+          "label": "长期记忆库",
+          "kind": "data",
+          "group": "c1g1"
+        },
+        {
+          "id": "c1n5",
+          "label": "关系模块",
+          "kind": "service",
+          "group": "c1g1"
+        },
+        {
+          "id": "c1n6",
+          "label": "服务端时间信息",
+          "kind": "data",
+          "group": "c1g1"
+        },
+        {
+          "id": "c1n7",
+          "label": "本轮消息批次",
+          "kind": "start",
+          "group": "c1g1"
+        },
+        {
+          "id": "c1n8",
+          "label": "组装上下文",
+          "kind": "process",
+          "group": "c1g2"
+        },
+        {
+          "id": "c1n9",
+          "label": "Agent 补充规则",
+          "kind": "process",
+          "group": "c1g2"
+        },
+        {
+          "id": "c1n10",
+          "label": "当前工具定义",
+          "kind": "data",
+          "group": "c1g2"
+        },
+        {
+          "id": "c1n11",
+          "label": "发送模型请求",
+          "kind": "service",
+          "group": "c1g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "c1e1",
+          "from": "c1n1",
+          "to": "c1n8",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c1e2",
+          "from": "c1n2",
+          "to": "c1n8",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c1e3",
+          "from": "c1n3",
+          "to": "c1n8",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c1e4",
+          "from": "c1n4",
+          "to": "c1n8",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c1e5",
+          "from": "c1n5",
+          "to": "c1n8",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c1e6",
+          "from": "c1n6",
+          "to": "c1n8",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c1e7",
+          "from": "c1n7",
+          "to": "c1n8",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c1e8",
+          "from": "c1n8",
+          "to": "c1n9",
+          "label": "messages",
+          "kind": "data"
+        },
+        {
+          "id": "c1e9",
+          "from": "c1n9",
+          "to": "c1n11",
+          "label": "消息列表",
+          "kind": "data"
+        },
+        {
+          "id": "c1e10",
+          "from": "c1n10",
+          "to": "c1n11",
+          "label": "tools",
+          "kind": "data"
+        }
+      ],
+      "notes": [
+        "材料来源纵向排列，汇入组装节点，再向右进入模型请求。",
+        "图 2 展开消息组装顺序；图 3 展开约束与执行；图 4 展开长度和召回。"
+      ]
+    },
+    {
+      "id": "diagram-2",
+      "title": "送进模型的材料，按什么顺序排？",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "c2g1",
+          "label": "固定规则与行为",
+          "nodeIds": [
+            "c2n1",
+            "c2n2",
+            "c2n3",
+            "c2n4",
+            "c2n5"
+          ]
+        },
+        {
+          "id": "c2g2",
+          "label": "背景数据",
+          "nodeIds": [
+            "c2n6",
+            "c2n7",
+            "c2n8"
+          ]
+        },
+        {
+          "id": "c2g3",
+          "label": "当前对话",
+          "nodeIds": [
+            "c2n9",
+            "c2n10",
+            "c2n11",
+            "c2n12"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "c2n1",
+          "label": "Agent 运行规则",
+          "kind": "process",
+          "group": "c2g1"
+        },
+        {
+          "id": "c2n2",
+          "label": "安全与产品定位",
+          "kind": "process",
+          "group": "c2g1"
+        },
+        {
+          "id": "c2n3",
+          "label": "Echo 稳定人格",
+          "kind": "process",
+          "group": "c2g1"
+        },
+        {
+          "id": "c2n4",
+          "label": "自然对话与策略",
+          "kind": "process",
+          "group": "c2g1"
+        },
+        {
+          "id": "c2n5",
+          "label": "模式与关系规则",
+          "kind": "process",
+          "group": "c2g1"
+        },
+        {
+          "id": "c2n6",
+          "label": "用户偏好背景",
+          "kind": "data",
+          "group": "c2g2"
+        },
+        {
+          "id": "c2n7",
+          "label": "相关长期记忆",
+          "kind": "data",
+          "group": "c2g2"
+        },
+        {
+          "id": "c2n8",
+          "label": "旧对话摘要",
+          "kind": "data",
+          "group": "c2g2"
+        },
+        {
+          "id": "c2n9",
+          "label": "本轮重点与时间",
+          "kind": "process",
+          "group": "c2g3"
+        },
+        {
+          "id": "c2n10",
+          "label": "近期历史原文",
+          "kind": "data",
+          "group": "c2g3"
+        },
+        {
+          "id": "c2n11",
+          "label": "当前用户输入",
+          "kind": "start",
+          "group": "c2g3"
+        },
+        {
+          "id": "c2n12",
+          "label": "模型判断下一步",
+          "kind": "service",
+          "group": "c2g3"
+        }
+      ],
+      "edges": [
+        {
+          "id": "c2e1",
+          "from": "c2n1",
+          "to": "c2n2",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e2",
+          "from": "c2n2",
+          "to": "c2n3",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e3",
+          "from": "c2n3",
+          "to": "c2n4",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e4",
+          "from": "c2n4",
+          "to": "c2n5",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e5",
+          "from": "c2n5",
+          "to": "c2n6",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e6",
+          "from": "c2n6",
+          "to": "c2n7",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e7",
+          "from": "c2n7",
+          "to": "c2n8",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e8",
+          "from": "c2n8",
+          "to": "c2n9",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e9",
+          "from": "c2n9",
+          "to": "c2n10",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e10",
+          "from": "c2n10",
+          "to": "c2n11",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c2e11",
+          "from": "c2n11",
+          "to": "c2n12",
+          "label": "",
+          "kind": "flow"
+        }
+      ],
+      "notes": [
+        "主流程自上而下，三类分组按顺序相接，禁止手工指定节点坐标。",
+        "图 1 解释来源，图 3 解释这些规则如何落实；工具定义通过独立字段提供。"
+      ]
+    },
+    {
+      "id": "diagram-3",
+      "title": "哪些靠 Prompt，哪些靠代码？",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "c3g1",
+          "label": "模型侧要求",
+          "nodeIds": [
+            "c3n1",
+            "c3n2",
+            "c3n3",
+            "c3n4",
+            "c3n5"
+          ]
+        },
+        {
+          "id": "c3g2",
+          "label": "代码执行与结果",
+          "nodeIds": [
+            "c3n6",
+            "c3n7",
+            "c3n8",
+            "c3n9",
+            "c3n10",
+            "c3n11"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "c3n1",
+          "label": "接收组装上下文",
+          "kind": "start",
+          "group": "c3g1"
+        },
+        {
+          "id": "c3n2",
+          "label": "提示词行为约束",
+          "kind": "process",
+          "group": "c3g1"
+        },
+        {
+          "id": "c3n3",
+          "label": "背景分隔与转义",
+          "kind": "process",
+          "group": "c3g1"
+        },
+        {
+          "id": "c3n4",
+          "label": "仍使用系统角色",
+          "kind": "note",
+          "group": "c3g1"
+        },
+        {
+          "id": "c3n5",
+          "label": "模型输出下一步",
+          "kind": "decision",
+          "group": "c3g1"
+        },
+        {
+          "id": "c3n6",
+          "label": "工具与次数门禁",
+          "kind": "decision",
+          "group": "c3g2"
+        },
+        {
+          "id": "c3n7",
+          "label": "参数与业务校验",
+          "kind": "decision",
+          "group": "c3g2"
+        },
+        {
+          "id": "c3n8",
+          "label": "限时执行动作",
+          "kind": "service",
+          "group": "c3g2"
+        },
+        {
+          "id": "c3n9",
+          "label": "拒绝执行并记录",
+          "kind": "data",
+          "group": "c3g2"
+        },
+        {
+          "id": "c3n10",
+          "label": "结果回填模型",
+          "kind": "data",
+          "group": "c3g2"
+        },
+        {
+          "id": "c3n11",
+          "label": "检查回复再交付",
+          "kind": "process",
+          "group": "c3g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "c3e1",
+          "from": "c3n1",
+          "to": "c3n2",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c3e2",
+          "from": "c3n2",
+          "to": "c3n3",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c3e3",
+          "from": "c3n3",
+          "to": "c3n4",
+          "label": "实现边界",
+          "kind": "dependency"
+        },
+        {
+          "id": "c3e4",
+          "from": "c3n3",
+          "to": "c3n5",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "c3e5",
+          "from": "c3n5",
+          "to": "c3n11",
+          "label": "直接回答",
+          "kind": "flow"
+        },
+        {
+          "id": "c3e6",
+          "from": "c3n5",
+          "to": "c3n6",
+          "label": "申请工具",
+          "kind": "flow"
+        },
+        {
+          "id": "c3e7",
+          "from": "c3n6",
+          "to": "c3n7",
+          "label": "允许",
+          "kind": "flow"
+        },
+        {
+          "id": "c3e8",
+          "from": "c3n6",
+          "to": "c3n9",
+          "label": "拒绝",
+          "kind": "flow"
+        },
+        {
+          "id": "c3e9",
+          "from": "c3n7",
+          "to": "c3n8",
+          "label": "通过",
+          "kind": "flow"
+        },
+        {
+          "id": "c3e10",
+          "from": "c3n7",
+          "to": "c3n9",
+          "label": "不通过",
+          "kind": "flow"
+        },
+        {
+          "id": "c3e11",
+          "from": "c3n8",
+          "to": "c3n10",
+          "label": "真实结果",
+          "kind": "data"
+        },
+        {
+          "id": "c3e12",
+          "from": "c3n9",
+          "to": "c3n10",
+          "label": "拒绝原因",
+          "kind": "data"
+        },
+        {
+          "id": "c3e13",
+          "from": "c3n10",
+          "to": "c3n5",
+          "label": "回填再判断",
+          "kind": "data"
+        }
+      ],
+      "notes": [
+        "说明节点放在背景分隔节点旁；工具拒绝支线放在主校验链侧边。",
+        "工具结果回填使用外围回边；避免与直接回复分支交叉。"
+      ]
+    },
+    {
+      "id": "diagram-4",
+      "title": "怎样控制长度，又不带错背景？",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "c4g1",
+          "label": "历史与记忆选择",
+          "nodeIds": [
+            "c4n1",
+            "c4n2",
+            "c4n3",
+            "c4n4",
+            "c4n5"
+          ]
+        },
+        {
+          "id": "c4g2",
+          "label": "局部预算",
+          "nodeIds": [
+            "c4n6",
+            "c4n7",
+            "c4n8",
+            "c4n9",
+            "c4n10"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "c4n1",
+          "label": "当前消息与会话",
+          "kind": "start",
+          "group": "c4g1"
+        },
+        {
+          "id": "c4n2",
+          "label": "读取会话摘要",
+          "kind": "data",
+          "group": "c4g1"
+        },
+        {
+          "id": "c4n3",
+          "label": "选择近期原文",
+          "kind": "process",
+          "group": "c4g1"
+        },
+        {
+          "id": "c4n4",
+          "label": "语义召回记忆",
+          "kind": "decision",
+          "group": "c4g1"
+        },
+        {
+          "id": "c4n5",
+          "label": "活跃记忆回退",
+          "kind": "data",
+          "group": "c4g1"
+        },
+        {
+          "id": "c4n6",
+          "label": "偏好预算四百",
+          "kind": "process",
+          "group": "c4g2"
+        },
+        {
+          "id": "c4n7",
+          "label": "记忆预算八百",
+          "kind": "process",
+          "group": "c4g2"
+        },
+        {
+          "id": "c4n8",
+          "label": "摘要预算八百",
+          "kind": "process",
+          "group": "c4g2"
+        },
+        {
+          "id": "c4n9",
+          "label": "合并为模型请求",
+          "kind": "service",
+          "group": "c4g2"
+        },
+        {
+          "id": "c4n10",
+          "label": "关注总量与衔接",
+          "kind": "note",
+          "group": "c4g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "c4e1",
+          "from": "c4n1",
+          "to": "c4n2",
+          "label": "历史支路",
+          "kind": "flow"
+        },
+        {
+          "id": "c4e2",
+          "from": "c4n2",
+          "to": "c4n3",
+          "label": "摘要之后",
+          "kind": "flow"
+        },
+        {
+          "id": "c4e3",
+          "from": "c4n1",
+          "to": "c4n4",
+          "label": "记忆支路",
+          "kind": "flow"
+        },
+        {
+          "id": "c4e4",
+          "from": "c4n4",
+          "to": "c4n5",
+          "label": "满足回退",
+          "kind": "flow"
+        },
+        {
+          "id": "c4e5",
+          "from": "c4n4",
+          "to": "c4n7",
+          "label": "相关或为空",
+          "kind": "data"
+        },
+        {
+          "id": "c4e6",
+          "from": "c4n5",
+          "to": "c4n7",
+          "label": "活跃记忆",
+          "kind": "data"
+        },
+        {
+          "id": "c4e7",
+          "from": "c4n1",
+          "to": "c4n6",
+          "label": "偏好支路",
+          "kind": "flow"
+        },
+        {
+          "id": "c4e8",
+          "from": "c4n2",
+          "to": "c4n8",
+          "label": "摘要正文",
+          "kind": "data"
+        },
+        {
+          "id": "c4e9",
+          "from": "c4n3",
+          "to": "c4n9",
+          "label": "近期原文",
+          "kind": "data"
+        },
+        {
+          "id": "c4e10",
+          "from": "c4n6",
+          "to": "c4n9",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c4e11",
+          "from": "c4n7",
+          "to": "c4n9",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c4e12",
+          "from": "c4n8",
+          "to": "c4n9",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "c4e13",
+          "from": "c4n9",
+          "to": "c4n10",
+          "label": "检查重点",
+          "kind": "dependency"
+        }
+      ],
+      "notes": [
+        "历史、记忆、偏好三条支路并排，再汇入模型请求。",
+        "400、800、800 是配置默认的局部估算预算；不是整轮请求的总上限。"
+      ]
+    }
+  ]
+}

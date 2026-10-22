@@ -268,7 +268,6 @@ class LetterOutputTests(unittest.TestCase):
             conversation_mode="daily_letter",
             sticker_intent="",
             allow_proactive_stickers=True,
-            proactive_sticker_due=True,
         )
 
         instruction = messages[0]["content"]

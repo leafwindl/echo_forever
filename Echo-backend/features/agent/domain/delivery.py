@@ -8,6 +8,8 @@ _NATURAL_DELIVERY_MODES = frozenset({"chat", "proactive"})
 _STICKER_PLACEMENTS = frozenset({"before_text", "after_text"})
 _NATURAL_MAX_TEXT_SEGMENTS = 6
 _NATURAL_SEGMENT_TARGET_CHARS = 180
+_STRUCTURED_BLOCK = re.compile(r"```|~~~|(?m:^\s*(?:[-*+]\s|\d+[.)、]\s|\||>\s))")
+_URL_OR_INLINE_CODE = re.compile(r"https?://\S+|`[^`]+`")
 _INTERNAL_CONTEXT_MARKER = re.compile(
     r"[\[\uff3b]\s*(?:\u6d88\u606f\u65f6\u95f4|\u4f1a\u8bdd\u65f6\u95f4\u8fb9\u754c)",
     flags=re.IGNORECASE,
@@ -126,13 +128,22 @@ def build_natural_delivery_plan(
     ):
         raise AgentDeliveryPlanError("Delivery leaked internal control context")
 
-    paragraphs = [part.strip() for part in re.split(r"\n+", clean) if part.strip()]
+    # Lists/code/table line breaks are formatting, not separate chat messages.
+    # Protect multiline quotations as well as the short symbolic kaomoji below.
+    preserve_layout = _STRUCTURED_BLOCK.search(clean) or re.search(
+        r'[“「『"][^”」』"]*\n', clean
+    )
+    paragraphs = (
+        [clean]
+        if preserve_layout
+        else [part.strip() for part in re.split(r"\n+", clean) if part.strip()]
+    )
     if not paragraphs:
         raise AgentDeliveryPlanError("Natural delivery output is empty")
 
     segments: list[str] = []
     for paragraph in paragraphs:
-        segments.extend(_split_long_paragraph(paragraph))
+        segments.extend([paragraph] if preserve_layout else _split_long_paragraph(paragraph))
     segments = _fit_segment_limit(segments)
     normalized = tuple(segment.strip() for segment in segments if segment.strip())
     validate_agent_delivery_segments(normalized)
@@ -140,13 +151,9 @@ def build_natural_delivery_plan(
 
 
 def _split_long_paragraph(paragraph: str) -> list[str]:
-    if len(paragraph) <= _NATURAL_SEGMENT_TARGET_CHARS:
+    if len(paragraph) <= _NATURAL_SEGMENT_TARGET_CHARS or _URL_OR_INLINE_CODE.search(paragraph):
         return [paragraph]
-    sentences = [
-        part.strip()
-        for part in re.split(r"(?<=[。！？!?])\s*", paragraph)
-        if part.strip()
-    ]
+    sentences = _complete_sentences(paragraph)
     if len(sentences) <= 1:
         return [paragraph]
     result: list[str] = []
@@ -160,6 +167,30 @@ def _split_long_paragraph(paragraph: str) -> list[str]:
             current = candidate
     if current:
         result.append(current)
+    return result
+
+
+def _complete_sentences(text: str) -> list[str]:
+    """Only use punctuation outside quotations/brackets as a fallback boundary."""
+    pairs = {"(": ")", "（": "）", "[": "]", "【": "】", "“": "”", "「": "」", "『": "』"}
+    closing: list[str] = []
+    result: list[str] = []
+    start = 0
+    for index, char in enumerate(text):
+        if closing and char == closing[-1]:
+            closing.pop()
+        elif char == '"':
+            if closing and closing[-1] == '"':
+                closing.pop()
+            else:
+                closing.append('"')
+        elif char in pairs:
+            closing.append(pairs[char])
+        elif char in "。！？!?；;" and not closing:
+            result.append(text[start : index + 1])
+            start = index + 1
+    if start < len(text):
+        result.append(text[start:])
     return result
 
 

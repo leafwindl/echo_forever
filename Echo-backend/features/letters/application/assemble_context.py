@@ -8,7 +8,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from features.assistant_persona.public import get_assistant_persona
-from features.chat.infrastructure.prompt_renderer import render_prompt_layers
+from shared.prompting.renderer import render_prompt_layers
 from features.letters.domain.repositories import LetterRepository
 from features.memory.public import list_memories, retrieve_relevant_memories
 from features.persona.public import get_persona

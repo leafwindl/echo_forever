@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.devices.application.speaker_calibration import SpeakerCalibration
-from features.devices.infrastructure.neural_speaker import SpeakerUnavailable
+from features.devices.domain.speaker_vectors import SpeakerUnavailable
 
 
 class SpeakerCalibrationTests(unittest.TestCase):

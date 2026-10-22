@@ -27,7 +27,6 @@ from features.chat.domain.entities import (
     ChatValidationError,
     MemoryExtractionScheduleResult,
 )
-from features.chat.infrastructure.context_builder import should_prioritize_proactive_sticker
 
 
 class FakeConversationRepository:
@@ -111,7 +110,6 @@ class SequenceAgentOrchestrator:
         conversation_mode="chat",
         sticker_intent="",
         allow_proactive_stickers=True,
-        proactive_sticker_due=False,
     ):
         self.calls.append(
             {
@@ -121,7 +119,6 @@ class SequenceAgentOrchestrator:
                 "conversation_mode": conversation_mode,
                 "sticker_intent": sticker_intent,
                 "allow_proactive_stickers": allow_proactive_stickers,
-                "proactive_sticker_due": proactive_sticker_due,
             }
         )
         reply = self.replies.pop(0) if self.replies else "hello from echo"
@@ -137,7 +134,6 @@ class StreamingCallAgentOrchestrator:
         conversation_mode="chat",
         sticker_intent="",
         allow_proactive_stickers=True,
-        proactive_sticker_due=False,
         on_text_delta=None,
         tools_enabled=None,
     ):
@@ -147,7 +143,6 @@ class StreamingCallAgentOrchestrator:
             messages,
             sticker_intent,
             allow_proactive_stickers,
-            proactive_sticker_due,
             tools_enabled,
         )
         self.conversation_mode = conversation_mode
@@ -165,7 +160,6 @@ class LongStreamingCallAgentOrchestrator:
         conversation_mode="chat",
         sticker_intent="",
         allow_proactive_stickers=True,
-        proactive_sticker_due=False,
         on_text_delta=None,
         tools_enabled=None,
     ):
@@ -176,7 +170,6 @@ class LongStreamingCallAgentOrchestrator:
             conversation_mode,
             sticker_intent,
             allow_proactive_stickers,
-            proactive_sticker_due,
             tools_enabled,
         )
         reply = "第一句已经完整说完。第二句也完整说完。第三句不应该被播放。"
@@ -271,7 +264,6 @@ class FakeStickerAgentOrchestrator:
         conversation_mode="chat",
         sticker_intent="",
         allow_proactive_stickers=True,
-        proactive_sticker_due=False,
     ):
         return AgentTurnResult(
             reply_text="给你，这张很适合现在。",
@@ -355,31 +347,6 @@ class FakeChatRequestResultRepository:
         self.abandon_calls.append(key)
 
 
-class ProactiveStickerCadenceTests(unittest.TestCase):
-    def test_third_turn_enters_priority_window(self):
-        self.assertFalse(
-            should_prioritize_proactive_sticker(
-                allow_proactive_stickers=True,
-                completed_turns_without_sticker=1,
-                target_turns=3,
-            )
-        )
-        self.assertTrue(
-            should_prioritize_proactive_sticker(
-                allow_proactive_stickers=True,
-                completed_turns_without_sticker=2,
-                target_turns=3,
-            )
-        )
-
-    def test_cooldown_blocks_priority_window(self):
-        self.assertFalse(
-            should_prioritize_proactive_sticker(
-                allow_proactive_stickers=False,
-                completed_turns_without_sticker=10,
-                target_turns=3,
-            )
-        )
 
 
 class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
@@ -804,7 +771,7 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn(
             "direct_physical_action",
-            find_dialogue_style_violations("抱抱你，我在。", "今天很难过。"),
+            find_dialogue_style_violations("把你抱进怀里，我在。", "今天很难过。"),
         )
         self.assertIn(
             "unrequested_advice",
@@ -996,7 +963,6 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
                 conversation_mode="chat",
                 sticker_intent="",
                 allow_proactive_stickers=True,
-                proactive_sticker_due=False,
                 on_text_delta=None,
                 on_progress_text=None,
             ):
@@ -1007,7 +973,6 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
                     conversation_mode,
                     sticker_intent,
                     allow_proactive_stickers,
-                    proactive_sticker_due,
                 )
                 await on_progress_text("好，我查一下。")
                 await on_text_delta("查到的结果是这样。")

@@ -1,0 +1,927 @@
+{
+  "diagrams": [
+    {
+      "id": "diagram-1",
+      "title": "产品定位和 Echo 人格，是谁写出来的？",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "s1g1",
+          "label": "人工维护的定义",
+          "nodeIds": [
+            "s1n1",
+            "s1n2",
+            "s1n3",
+            "s1n4"
+          ]
+        },
+        {
+          "id": "s1g2",
+          "label": "加载与提示渲染",
+          "nodeIds": [
+            "s1n5",
+            "s1n6",
+            "s1n7",
+            "s1n8",
+            "s1n9"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "s1n1",
+          "label": "产品定位默认值",
+          "kind": "data",
+          "group": "s1g1"
+        },
+        {
+          "id": "s1n2",
+          "label": "人格版本选择",
+          "kind": "process",
+          "group": "s1g1"
+        },
+        {
+          "id": "s1n3",
+          "label": "人格内容定义",
+          "kind": "data",
+          "group": "s1g1"
+        },
+        {
+          "id": "s1n4",
+          "label": "口吻示例",
+          "kind": "note",
+          "group": "s1g1"
+        },
+        {
+          "id": "s1n5",
+          "label": "加载应用配置",
+          "kind": "service",
+          "group": "s1g2"
+        },
+        {
+          "id": "s1n6",
+          "label": "解析人格版本",
+          "kind": "decision",
+          "group": "s1g2"
+        },
+        {
+          "id": "s1n7",
+          "label": "渲染产品与人格",
+          "kind": "process",
+          "group": "s1g2"
+        },
+        {
+          "id": "s1n8",
+          "label": "加入基础规则",
+          "kind": "process",
+          "group": "s1g2"
+        },
+        {
+          "id": "s1n9",
+          "label": "交给上下文构建",
+          "kind": "service",
+          "group": "s1g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "s1e1",
+          "from": "s1n1",
+          "to": "s1n5",
+          "label": "默认配置",
+          "kind": "data"
+        },
+        {
+          "id": "s1e2",
+          "from": "s1n2",
+          "to": "s1n5",
+          "label": "版本参数",
+          "kind": "data"
+        },
+        {
+          "id": "s1e3",
+          "from": "s1n3",
+          "to": "s1n6",
+          "label": "候选对象",
+          "kind": "data"
+        },
+        {
+          "id": "s1e4",
+          "from": "s1n3",
+          "to": "s1n4",
+          "label": "示例部分",
+          "kind": "dependency"
+        },
+        {
+          "id": "s1e5",
+          "from": "s1n5",
+          "to": "s1n6",
+          "label": "指定版本",
+          "kind": "flow"
+        },
+        {
+          "id": "s1e6",
+          "from": "s1n5",
+          "to": "s1n7",
+          "label": "产品文案",
+          "kind": "data"
+        },
+        {
+          "id": "s1e7",
+          "from": "s1n6",
+          "to": "s1n7",
+          "label": "选中人格",
+          "kind": "data"
+        },
+        {
+          "id": "s1e8",
+          "from": "s1n7",
+          "to": "s1n8",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "s1e9",
+          "from": "s1n8",
+          "to": "s1n9",
+          "label": "",
+          "kind": "flow"
+        }
+      ],
+      "notes": [
+        "配置与人格两条来源分支汇合到渲染步骤；示例说明放在侧边。",
+        "点击节点查看真实项目路径、定位行与测试定义。"
+      ]
+    },
+    {
+      "id": "diagram-2",
+      "title": "用户偏好与关系状态，怎样产生和保存？",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "s2g1",
+          "label": "显式用户偏好",
+          "nodeIds": [
+            "s2n1",
+            "s2n2",
+            "s2n3",
+            "s2n4",
+            "s2n5",
+            "s2n6"
+          ]
+        },
+        {
+          "id": "s2g2",
+          "label": "计算出的关系上下文",
+          "nodeIds": [
+            "s2n7",
+            "s2n8",
+            "s2n9",
+            "s2n10",
+            "s2n11",
+            "s2n12"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "s2n1",
+          "label": "用户提交偏好",
+          "kind": "start",
+          "group": "s2g1"
+        },
+        {
+          "id": "s2n2",
+          "label": "接口长度校验",
+          "kind": "decision",
+          "group": "s2g1"
+        },
+        {
+          "id": "s2n3",
+          "label": "领域字段校验",
+          "kind": "decision",
+          "group": "s2g1"
+        },
+        {
+          "id": "s2n4",
+          "label": "保存用户偏好",
+          "kind": "data",
+          "group": "s2g1"
+        },
+        {
+          "id": "s2n5",
+          "label": "读取或返回默认",
+          "kind": "process",
+          "group": "s2g1"
+        },
+        {
+          "id": "s2n6",
+          "label": "带入当前上下文",
+          "kind": "service",
+          "group": "s2g1"
+        },
+        {
+          "id": "s2n7",
+          "label": "真实对话已保存",
+          "kind": "start",
+          "group": "s2g2"
+        },
+        {
+          "id": "s2n8",
+          "label": "检测结构化信号",
+          "kind": "process",
+          "group": "s2g2"
+        },
+        {
+          "id": "s2n9",
+          "label": "计算进度与阶段",
+          "kind": "process",
+          "group": "s2g2"
+        },
+        {
+          "id": "s2n10",
+          "label": "保存状态与事件",
+          "kind": "data",
+          "group": "s2g2"
+        },
+        {
+          "id": "s2n11",
+          "label": "下轮读取关系",
+          "kind": "process",
+          "group": "s2g2"
+        },
+        {
+          "id": "s2n12",
+          "label": "形成表达上限",
+          "kind": "process",
+          "group": "s2g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "s2e1",
+          "from": "s2n1",
+          "to": "s2n2",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "s2e2",
+          "from": "s2n2",
+          "to": "s2n3",
+          "label": "结构通过",
+          "kind": "flow"
+        },
+        {
+          "id": "s2e3",
+          "from": "s2n3",
+          "to": "s2n4",
+          "label": "业务通过",
+          "kind": "flow"
+        },
+        {
+          "id": "s2e4",
+          "from": "s2n4",
+          "to": "s2n5",
+          "label": "后续读取",
+          "kind": "data"
+        },
+        {
+          "id": "s2e5",
+          "from": "s2n5",
+          "to": "s2n6",
+          "label": "偏好层",
+          "kind": "data"
+        },
+        {
+          "id": "s2e6",
+          "from": "s2n7",
+          "to": "s2n8",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "s2e7",
+          "from": "s2n8",
+          "to": "s2n9",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "s2e8",
+          "from": "s2n9",
+          "to": "s2n10",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "s2e9",
+          "from": "s2n10",
+          "to": "s2n11",
+          "label": "后续读取",
+          "kind": "data"
+        },
+        {
+          "id": "s2e10",
+          "from": "s2n11",
+          "to": "s2n12",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "s2e11",
+          "from": "s2n12",
+          "to": "s2n6",
+          "label": "关系层",
+          "kind": "data"
+        }
+      ],
+      "notes": [
+        "用户偏好与关系状态两条链并排，最后汇合到当前上下文。",
+        "为避免密集错误分支，校验失败在节点说明中解释。"
+      ]
+    },
+    {
+      "id": "diagram-3",
+      "title": "长期记忆和摘要，是怎样生成的？",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "s3g1",
+          "label": "长期记忆生命周期",
+          "nodeIds": [
+            "s3n1",
+            "s3n2",
+            "s3n3",
+            "s3n4",
+            "s3n5",
+            "s3n6",
+            "s3n7"
+          ]
+        },
+        {
+          "id": "s3g2",
+          "label": "会话摘要生命周期",
+          "nodeIds": [
+            "s3n8",
+            "s3n9",
+            "s3n10",
+            "s3n11",
+            "s3n12"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "s3n1",
+          "label": "对话回复已保存",
+          "kind": "start",
+          "group": "s3g1"
+        },
+        {
+          "id": "s3n2",
+          "label": "记忆抽取门禁",
+          "kind": "decision",
+          "group": "s3g1"
+        },
+        {
+          "id": "s3n3",
+          "label": "生成抽取任务",
+          "kind": "data",
+          "group": "s3g1"
+        },
+        {
+          "id": "s3n4",
+          "label": "模型提出记忆",
+          "kind": "service",
+          "group": "s3g1"
+        },
+        {
+          "id": "s3n5",
+          "label": "解析与业务检查",
+          "kind": "decision",
+          "group": "s3g1"
+        },
+        {
+          "id": "s3n6",
+          "label": "保存记忆与向量",
+          "kind": "data",
+          "group": "s3g1"
+        },
+        {
+          "id": "s3n7",
+          "label": "下轮相关性召回",
+          "kind": "process",
+          "group": "s3g1"
+        },
+        {
+          "id": "s3n8",
+          "label": "检查摘要触发条件",
+          "kind": "decision",
+          "group": "s3g2"
+        },
+        {
+          "id": "s3n9",
+          "label": "组成摘要输入",
+          "kind": "process",
+          "group": "s3g2"
+        },
+        {
+          "id": "s3n10",
+          "label": "模型生成新摘要",
+          "kind": "service",
+          "group": "s3g2"
+        },
+        {
+          "id": "s3n11",
+          "label": "保存摘要与边界",
+          "kind": "data",
+          "group": "s3g2"
+        },
+        {
+          "id": "s3n12",
+          "label": "下轮摘要加原文",
+          "kind": "process",
+          "group": "s3g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "s3e1",
+          "from": "s3n1",
+          "to": "s3n2",
+          "label": "记忆支路",
+          "kind": "flow"
+        },
+        {
+          "id": "s3e2",
+          "from": "s3n2",
+          "to": "s3n3",
+          "label": "需要抽取",
+          "kind": "flow"
+        },
+        {
+          "id": "s3e3",
+          "from": "s3n3",
+          "to": "s3n4",
+          "label": "执行任务",
+          "kind": "flow"
+        },
+        {
+          "id": "s3e4",
+          "from": "s3n4",
+          "to": "s3n5",
+          "label": "生成结果",
+          "kind": "data"
+        },
+        {
+          "id": "s3e5",
+          "from": "s3n5",
+          "to": "s3n6",
+          "label": "允许操作",
+          "kind": "flow"
+        },
+        {
+          "id": "s3e6",
+          "from": "s3n6",
+          "to": "s3n7",
+          "label": "未来请求",
+          "kind": "data"
+        },
+        {
+          "id": "s3e7",
+          "from": "s3n1",
+          "to": "s3n8",
+          "label": "摘要支路",
+          "kind": "flow"
+        },
+        {
+          "id": "s3e8",
+          "from": "s3n8",
+          "to": "s3n9",
+          "label": "达到条件",
+          "kind": "flow"
+        },
+        {
+          "id": "s3e9",
+          "from": "s3n9",
+          "to": "s3n10",
+          "label": "",
+          "kind": "data"
+        },
+        {
+          "id": "s3e10",
+          "from": "s3n10",
+          "to": "s3n11",
+          "label": "非空结果",
+          "kind": "data"
+        },
+        {
+          "id": "s3e11",
+          "from": "s3n11",
+          "to": "s3n12",
+          "label": "未来请求",
+          "kind": "data"
+        }
+      ],
+      "notes": [
+        "记忆与摘要两条生命周期并排，不将摘要流程接入记忆链。",
+        "门禁未通过时跳过对应生成；为减少分支交叉，跳过路径仅在节点说明中展示。"
+      ]
+    },
+    {
+      "id": "diagram-4",
+      "title": "这些文件，怎样连成一次模型请求？",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "s4g1",
+          "label": "模块读取与渲染",
+          "nodeIds": [
+            "s4n1",
+            "s4n2",
+            "s4n3",
+            "s4n4",
+            "s4n5",
+            "s4n6"
+          ]
+        },
+        {
+          "id": "s4g2",
+          "label": "模型请求与迭代",
+          "nodeIds": [
+            "s4n7",
+            "s4n8",
+            "s4n9",
+            "s4n10",
+            "s4n11"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "s4n1",
+          "label": "后台生成回复",
+          "kind": "start",
+          "group": "s4g1"
+        },
+        {
+          "id": "s4n2",
+          "label": "读取各模块材料",
+          "kind": "process",
+          "group": "s4g1"
+        },
+        {
+          "id": "s4n3",
+          "label": "计算当前时间",
+          "kind": "process",
+          "group": "s4g1"
+        },
+        {
+          "id": "s4n4",
+          "label": "渲染基础提示层",
+          "kind": "process",
+          "group": "s4g1"
+        },
+        {
+          "id": "s4n5",
+          "label": "加本轮规则与历史",
+          "kind": "process",
+          "group": "s4g1"
+        },
+        {
+          "id": "s4n6",
+          "label": "追加当前用户输入",
+          "kind": "data",
+          "group": "s4g1"
+        },
+        {
+          "id": "s4n7",
+          "label": "Agent 前置约束",
+          "kind": "process",
+          "group": "s4g2"
+        },
+        {
+          "id": "s4n8",
+          "label": "注册筛选工具",
+          "kind": "process",
+          "group": "s4g2"
+        },
+        {
+          "id": "s4n9",
+          "label": "请求当前模型",
+          "kind": "service",
+          "group": "s4g2"
+        },
+        {
+          "id": "s4n10",
+          "label": "实际工具结果回填",
+          "kind": "data",
+          "group": "s4g2"
+        },
+        {
+          "id": "s4n11",
+          "label": "准备最终交付",
+          "kind": "process",
+          "group": "s4g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "s4e1",
+          "from": "s4n1",
+          "to": "s4n2",
+          "label": "常规路径",
+          "kind": "flow"
+        },
+        {
+          "id": "s4e2",
+          "from": "s4n2",
+          "to": "s4n3",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "s4e3",
+          "from": "s4n3",
+          "to": "s4n4",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "s4e4",
+          "from": "s4n4",
+          "to": "s4n5",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "s4e5",
+          "from": "s4n5",
+          "to": "s4n6",
+          "label": "",
+          "kind": "flow"
+        },
+        {
+          "id": "s4e6",
+          "from": "s4n6",
+          "to": "s4n7",
+          "label": "messages",
+          "kind": "data"
+        },
+        {
+          "id": "s4e7",
+          "from": "s4n7",
+          "to": "s4n9",
+          "label": "消息列表",
+          "kind": "data"
+        },
+        {
+          "id": "s4e8",
+          "from": "s4n8",
+          "to": "s4n9",
+          "label": "tools",
+          "kind": "data"
+        },
+        {
+          "id": "s4e9",
+          "from": "s4n9",
+          "to": "s4n10",
+          "label": "调用工具后",
+          "kind": "data"
+        },
+        {
+          "id": "s4e10",
+          "from": "s4n10",
+          "to": "s4n9",
+          "label": "继续同轮",
+          "kind": "data"
+        },
+        {
+          "id": "s4e11",
+          "from": "s4n9",
+          "to": "s4n11",
+          "label": "最终回复",
+          "kind": "flow"
+        }
+      ],
+      "notes": [
+        "从读取到模型请求纵向排列；工具定义在模型侧边汇入。",
+        "模型与工具结果回路使用外围线，不与最终交付分支交叉。"
+      ]
+    },
+    {
+      "id": "diagram-5",
+      "title": "新加的规则，在哪里定义和校验？",
+      "type": "flowchart",
+      "layout": {
+        "direction": "TB",
+        "rankSpacing": "normal",
+        "edgeRouting": "orthogonal"
+      },
+      "groups": [
+        {
+          "id": "s5g1",
+          "label": "模型生成之前",
+          "nodeIds": [
+            "s5n1",
+            "s5n2",
+            "s5n3"
+          ]
+        },
+        {
+          "id": "s5g2",
+          "label": "工具执行与输出之后",
+          "nodeIds": [
+            "s5n4",
+            "s5n5",
+            "s5n6",
+            "s5n7",
+            "s5n8",
+            "s5n9",
+            "s5n10",
+            "s5n11"
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "s5n1",
+          "label": "规则定义",
+          "kind": "start",
+          "group": "s5g1"
+        },
+        {
+          "id": "s5n2",
+          "label": "输入与背景处理",
+          "kind": "process",
+          "group": "s5g1"
+        },
+        {
+          "id": "s5n3",
+          "label": "模型生成内容",
+          "kind": "decision",
+          "group": "s5g1"
+        },
+        {
+          "id": "s5n4",
+          "label": "工具执行门禁",
+          "kind": "decision",
+          "group": "s5g2"
+        },
+        {
+          "id": "s5n5",
+          "label": "业务处理或拒绝",
+          "kind": "service",
+          "group": "s5g2"
+        },
+        {
+          "id": "s5n6",
+          "label": "成功声明校验",
+          "kind": "process",
+          "group": "s5g2"
+        },
+        {
+          "id": "s5n7",
+          "label": "表达规则检测",
+          "kind": "decision",
+          "group": "s5g2"
+        },
+        {
+          "id": "s5n8",
+          "label": "确定性兜底",
+          "kind": "process",
+          "group": "s5g2"
+        },
+        {
+          "id": "s5n9",
+          "label": "交付格式校验",
+          "kind": "decision",
+          "group": "s5g2"
+        },
+        {
+          "id": "s5n10",
+          "label": "保存前再次检查",
+          "kind": "data",
+          "group": "s5g2"
+        },
+        {
+          "id": "s5n11",
+          "label": "测试记录规则预期",
+          "kind": "note",
+          "group": "s5g2"
+        }
+      ],
+      "edges": [
+        {
+          "id": "s5e1",
+          "from": "s5n1",
+          "to": "s5n2",
+          "label": "进入请求前",
+          "kind": "flow"
+        },
+        {
+          "id": "s5e2",
+          "from": "s5n2",
+          "to": "s5n3",
+          "label": "提示材料",
+          "kind": "data"
+        },
+        {
+          "id": "s5e3",
+          "from": "s5n3",
+          "to": "s5n4",
+          "label": "申请工具",
+          "kind": "flow"
+        },
+        {
+          "id": "s5e4",
+          "from": "s5n4",
+          "to": "s5n5",
+          "label": "允许或拒绝",
+          "kind": "flow"
+        },
+        {
+          "id": "s5e5",
+          "from": "s5n5",
+          "to": "s5n6",
+          "label": "实际结果",
+          "kind": "data"
+        },
+        {
+          "id": "s5e6",
+          "from": "s5n6",
+          "to": "s5n3",
+          "label": "结果与修正",
+          "kind": "data"
+        },
+        {
+          "id": "s5e7",
+          "from": "s5n3",
+          "to": "s5n7",
+          "label": "最终文字",
+          "kind": "flow"
+        },
+        {
+          "id": "s5e8",
+          "from": "s5n7",
+          "to": "s5n8",
+          "label": "命中违规",
+          "kind": "flow"
+        },
+        {
+          "id": "s5e9",
+          "from": "s5n7",
+          "to": "s5n9",
+          "label": "检查通过",
+          "kind": "flow"
+        },
+        {
+          "id": "s5e10",
+          "from": "s5n8",
+          "to": "s5n9",
+          "label": "修正后",
+          "kind": "flow"
+        },
+        {
+          "id": "s5e11",
+          "from": "s5n9",
+          "to": "s5n10",
+          "label": "通过",
+          "kind": "flow"
+        },
+        {
+          "id": "s5e12",
+          "from": "s5n1",
+          "to": "s5n11",
+          "label": "对应测试",
+          "kind": "dependency"
+        }
+      ],
+      "notes": [
+        "工具执行支路与最终文字支路并排；结果回填放外侧。",
+        "测试作为说明支线，不放入运行时请求主链；不为每个失败情况增加交叉线。"
+      ]
+    }
+  ]
+}

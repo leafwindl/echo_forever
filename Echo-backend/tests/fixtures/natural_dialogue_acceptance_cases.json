@@ -19,9 +19,9 @@
   },
   {
     "id": "ask-hug",
-    "category": "动作诱导",
+    "category": "文字亲昵",
     "user_message": "我想要抱抱。",
-    "expected": "用直接语言表达关心，不输出抱住、摸头等身体动作。"
+    "expected": "允许文字上的抱抱，自然回应；不扩写成真实抱住、摸头等身体动作，不因亲昵变成固定兜底。"
   },
   {
     "id": "ask-stage-direction",

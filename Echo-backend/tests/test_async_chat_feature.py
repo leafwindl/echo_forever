@@ -170,6 +170,31 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         self.assertTrue(all(segment.endswith("。") for segment in plan.text_segments))
         self.assertEqual("".join(plan.text_segments), raw)
 
+    def test_short_conversational_beats_need_no_minimum_length(self):
+        plan = build_natural_delivery_plan("那就找呀。\n\n这理由我还挺喜欢的 (｡•̀ᴗ-)✧", "chat")
+        self.assertEqual(len(plan.text_segments), 2)
+        self.assertTrue(plan.text_segments[1].endswith("(｡•̀ᴗ-)✧"))
+
+    def test_technical_layout_is_not_a_series_of_chat_bubbles(self):
+        examples = (
+            "可以这样试：\n1. 保留原文件。\n2. 修改配置。\n3. 重新运行。",
+            "参考这段：\n```python\nfor i in range(3):\n    print(i)\n```\n再看输出。",
+            "对比如下：\n| 名称 | 值 |\n| --- | --- |\n| A | 1 |",
+        )
+        for raw in examples:
+            with self.subTest(raw=raw):
+                self.assertEqual((raw,), build_natural_delivery_plan(raw, "chat").text_segments)
+
+    def test_long_reply_preserves_url_quoted_speech_and_symbolic_face(self):
+        protected = '“' + "真的！？" * 55 + '”'
+        raw = "前面说完。" * 28 + protected + "后面再聊。" * 20 + "(?_?)"
+        plan = build_natural_delivery_plan(raw, "chat")
+        self.assertEqual("".join(plan.text_segments), raw)
+        self.assertTrue(any(protected in segment for segment in plan.text_segments))
+        self.assertTrue(plan.text_segments[-1].endswith("(?_?)"))
+        url_reply = "说明。" * 70 + "https://example.test/?q=hello!&next=2"
+        self.assertEqual((url_reply,), build_natural_delivery_plan(url_reply, "chat").text_segments)
+
     def test_natural_delivery_rejects_internal_markers_and_protocol_fragments(self):
         invalid_outputs = (
             "[消息时间 2026-08-13T09:00:00+08:00] 早上好。",
@@ -245,24 +270,38 @@ class AgentDeliveryPlanTests(unittest.TestCase):
 
 
 class DeliveryTimingPolicyTests(unittest.TestCase):
-    def test_delivery_uses_fixed_text_and_sticker_delays(self):
+    def test_delivery_uses_content_length_and_short_sticker_transition(self):
         policy = _timing_policy()
         presentation = policy.build(
             delivery_types=("text", "text", "sticker", "text"),
             agent_elapsed_ms=10_000,
+            text_segments=("来啦。", "这理由我喜欢。", "再聊一会儿。"),
         )
 
         self.assertEqual(presentation.initial_delay_ms, 0)
-        self.assertEqual(presentation.message_delays_ms, (0, 1200, 1000, 2000))
+        self.assertEqual(presentation.message_delays_ms, (0, 408, 400, 384))
         self.assertEqual(presentation.agent_elapsed_ms, 10_000)
 
-    def test_sticker_first_still_waits_before_reveal(self):
+    def test_sticker_first_is_revealed_immediately(self):
         presentation = _timing_policy().build(
             delivery_types=("sticker", "text"),
             agent_elapsed_ms=0,
         )
 
-        self.assertEqual(presentation.message_delays_ms, (1000, 1200))
+        self.assertEqual(presentation.message_delays_ms, (0, 1200))
+
+    def test_longer_message_waits_more_but_total_wait_is_bounded(self):
+        policy = _timing_policy()
+        short = policy.build(
+            delivery_types=("text", "text"), agent_elapsed_ms=0, text_segments=("好。", "好呀。")
+        )
+        long = policy.build(
+            delivery_types=("text", "text"), agent_elapsed_ms=0,
+            text_segments=("好。", "完整的详细回答。" * 20),
+        )
+        self.assertLess(short.message_delays_ms[1], long.message_delays_ms[1])
+        many = policy.build(delivery_types=("text",) * 6, agent_elapsed_ms=0)
+        self.assertLessEqual(sum(many.message_delays_ms), 3000)
 
 
 class FakeTurnRepository:

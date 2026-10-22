@@ -11,16 +11,22 @@ from features.assistant_persona.public import (
 
 
 class AssistantPersonaTests(unittest.TestCase):
-    def test_echo_persona_v1_has_stable_behavior_contract(self):
-        persona = get_assistant_persona("echo-persona-v1")
+    def test_echo_persona_v2_has_stable_behavior_contract(self):
+        persona = get_assistant_persona("echo-persona-v2")
 
         self.assertEqual("Echo", persona.name)
-        self.assertIn("不同世界", persona.role)
-        self.assertIn("温柔但不溺爱", persona.traits[0])
+        self.assertIn("AI 陪伴伙伴", persona.role)
+        self.assertIn("傲娇甜软", persona.traits[0])
         self.assertTrue(any("简短不等于冷淡" in item for item in persona.conversation_principles))
-        self.assertTrue(any("温暖是初识" in item for item in persona.conversation_principles))
+        self.assertTrue(persona.dialogue_examples)
         self.assertTrue(any("共同进步" in item for item in persona.conversation_principles))
         self.assertTrue(any("人类生活史" in item for item in persona.forbidden_claims))
+
+    def test_existing_environment_pin_cannot_restore_the_old_identity(self):
+        self.assertEqual(
+            get_assistant_persona("echo-persona-v2"),
+            get_assistant_persona("echo-persona-v1"),
+        )
 
     def test_unknown_persona_version_is_rejected(self):
         with self.assertRaises(AssistantPersonaNotFoundError):

@@ -24,6 +24,17 @@ function load(name, imports = {}) {
 }
 
 const releases = load('model/AppRelease.ets');
+test('Harmony package and displayed version match the Android product version', () => {
+  const android = fs.readFileSync(path.resolve(__dirname, '../../app/pubspec.yaml'), 'utf8');
+  const version = android.match(/^version:\s*(\d+\.\d+\.\d+)\+\d+\s*$/m);
+  assert.ok(version, 'Android must declare a product version and build number');
+  const manifest = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../AppScope/app.json5'), 'utf8'));
+  assert.equal(manifest.app.versionName, version[1]);
+  const { AppConfig } = load('common/AppConfig.ets');
+  assert.equal(AppConfig.appVersion, version[1]);
+  assert.equal(AppConfig.versionCode, undefined, 'Updates must use the actual installed bundle versionCode');
+  assert.ok(manifest.app.versionCode >= 10107, 'Do not downgrade existing Harmony installations');
+});
 const installed = { bundleName: 'cn.echoaiforever.echo_app.dev', versionName: '1.1.7-dev', versionCode: 10107 };
 const release = {
   release_id: 'release', platform: 'harmonyos', channel: 'internal', package_name: installed.bundleName,

@@ -46,6 +46,8 @@ docker-compose.yml      PostgreSQL、后端和备份服务编排
 
 ## 架构边界
 
+后续开发与清理统一遵守 [`doc/Echo 后端架构与代码规范.md`](doc/Echo%20后端架构与代码规范.md)，根目录 `AGENTS.md` 是开发入口。共享提示渲染现位于 `Echo-backend/shared/prompting/`；六类提示资产的完整注册与按需选择尚未实现，不预建占位目录或接口。
+
 ```text
 Flutter UI
   -> feature data/repository

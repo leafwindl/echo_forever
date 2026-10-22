@@ -1,7 +1,6 @@
 export class AppConfig {
   static readonly baseUrl: string = 'https://api.echoaiforever.cn';
   static readonly appVersion: string = '1.1.7';
-  static readonly versionCode: number = 23;
   static readonly appPlatform: string = 'harmonyos';
   static readonly pushRegistrationPlatform: string = 'harmonyos';
   static readonly channel: string = 'internal';

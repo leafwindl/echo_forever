@@ -4,6 +4,8 @@ Echo Backend 是 Echo AI 陪伴应用的服务端，基于 FastAPI、PostgreSQL 
 
 ## 运行架构
 
+后续开发以 [`Echo 后端架构与代码规范`](../doc/Echo%20后端架构与代码规范.md) 和根 `AGENTS.md` 为准。跨业务提示渲染已移入 `shared/prompting/`，当前四份通用规则从 `prompts/rules/` 的 Markdown 实际加载；旧 chat Renderer 入口已删除。完整六类资产注册与按需选择尚未实现，不创建未来占位接口。
+
 ```text
 Nginx / HTTPS
   -> FastAPI interface

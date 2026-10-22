@@ -13,6 +13,10 @@ from fastapi.testclient import TestClient
 from db.postgres_connection import get_connection, transaction
 from features.devices.interface import speaker_router as routes
 from features.devices.interface import router as device_routes
+from features.devices.infrastructure import speaker_people_repository as repository
+from features.devices.infrastructure.speaker_people_container import people_service
+from features.devices.domain.speaker_people import SpeakerPeopleError
+from features.devices.domain.speaker_vectors import SpeakerUnavailable
 from features.devices.infrastructure.device_management import rotate_device_credential
 from shared.interface.dependencies import CurrentUser, get_current_user
 
@@ -50,7 +54,7 @@ class SpeakerLabTests(unittest.TestCase):
         return response.json()["person_id"]
 
     def sample(self, person, index, vector=None):
-        with patch.object(routes, "extract", return_value=(vector or [1., 0.], "campp-zh:test")):
+        with patch.object(people_service, "extract", return_value=(vector or [1., 0.], "campp-zh:test")):
             return self.client.post(f"{self.base}/{person}/samples",
                                     files={"audio": ("test.pcm", bytes([index]) * 96000)})
 
@@ -85,20 +89,20 @@ class SpeakerLabTests(unittest.TestCase):
 
     def test_owner_change_during_inference_prevents_save(self):
         person = self.create()
-        row = routes.load_person(self.owner, self.device, person)
+        row = repository.load_person(self.owner, self.device, person)
         with transaction() as conn:
             conn.execute("UPDATE devices SET owner_user_id=%s WHERE device_id=%s",
                          ("another-owner", self.device))
-        with self.assertRaises(routes.HTTPException) as error:
-            routes.save_sample(self.owner, self.device, person, [1., 0.],
+        with self.assertRaises(SpeakerPeopleError) as error:
+            repository.save_sample(self.owner, self.device, person, [1., 0.],
                                "campp-zh:test", row["updated_at"], "hash")
-        self.assertEqual(error.exception.status_code, 404)
+        self.assertEqual(error.exception.code, "not_found")
 
     def test_explicit_consent_and_service_failure(self):
         response = self.client.post(self.base, json={"display_name": "叶子", "consent": False})
         self.assertEqual(response.status_code, 422)
         person = self.create()
-        with patch.object(routes, "extract", side_effect=routes.SpeakerUnavailable("unavailable")):
+        with patch.object(people_service, "extract", side_effect=SpeakerUnavailable("unavailable")):
             response = self.client.post(f"{self.base}/{person}/samples",
                                        files={"audio": ("test.pcm", b"\0" * 96000)})
         self.assertEqual(response.status_code, 503)
@@ -113,22 +117,22 @@ class SpeakerLabTests(unittest.TestCase):
             self.assertEqual(self.client.post(path, json={"consent": False}).status_code, 422)
             started = self.client.post(path, json={"consent": True})
         self.assertEqual(started.status_code, 200, started.text)
-        session = routes.hardware_calibration
-        with patch.object(routes, "extract", return_value=([0., 1.], "campp-zh:test")):
+        session = people_service.calibration
+        with patch.object(people_service, "extract", return_value=([0., 1.], "campp-zh:test")):
             for index in range(5, 8):
-                self.assertIn("已保存", session.consume(self.owner, self.device, bytes([index]), routes.extract))
+                self.assertIn("已保存", session.consume(self.owner, self.device, bytes([index]), people_service.extract))
             self.assertIn("未通过", session.consume(
                 self.owner, self.device, b"bad", lambda _: ([1., 0.], "campp-zh:test"),
             ))
-            self.assertIn("独立验证", session.consume(self.owner, self.device, b"verify", routes.extract))
+            self.assertIn("独立验证", session.consume(self.owner, self.device, b"verify", people_service.extract))
             self.assertTrue(self.client.get(self.base).json()["items"][0]["hardware_calibrated"])
-            self.assertEqual(routes.recognize(self.device, b"voice")["speaker_role"], "known")
+            self.assertEqual(people_service.recognize(self.device, b"voice")["speaker_role"], "known")
         self.assertEqual(self.client.delete(path).status_code, 204)
         self.assertFalse(self.client.get(self.base).json()["items"][0]["hardware_calibrated"])
-        with patch.object(routes, "extract", return_value=([0., 1.], "campp-zh:test")):
-            self.assertEqual(routes.recognize(self.device, b"voice")["speaker_role"], "unknown")
-        with patch.object(routes, "extract", return_value=([1., 0.], "campp-zh:test")):
-            self.assertEqual(routes.recognize(self.device, b"voice")["speaker_role"], "known")
+        with patch.object(people_service, "extract", return_value=([0., 1.], "campp-zh:test")):
+            self.assertEqual(people_service.recognize(self.device, b"voice")["speaker_role"], "unknown")
+        with patch.object(people_service, "extract", return_value=([1., 0.], "campp-zh:test")):
+            self.assertEqual(people_service.recognize(self.device, b"voice")["speaker_role"], "known")
         with patch.dict(device_routes._active_device_sessions, {self.device: object()}):
             self.assertEqual(self.client.post(path, json={"consent": True}).status_code, 200)
         session.cancel(self.owner, self.device)
@@ -151,7 +155,7 @@ class SpeakerLabTests(unittest.TestCase):
             self.assertEqual(self.client.post(
                 f"{self.base}/{second}/calibration", json={"consent": True},
             ).status_code, 200)
-        session = routes.hardware_calibration
+        session = people_service.calibration
         for index in range(5, 8):
             session.consume(self.owner, self.device, bytes([index]),
                             lambda _: ([1., 0.], "campp-zh:test"))

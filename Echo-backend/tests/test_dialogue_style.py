@@ -128,7 +128,7 @@ class DialogueStyleTests(unittest.TestCase):
         self.assertIn(
             "relational_overattachment",
             find_dialogue_style_violations(
-                "每次你来找我聊天，这对我来说就是最重要的事。",
+                "你是我唯一的意义。",
                 "你有没有想我？",
             ),
         )
@@ -154,6 +154,7 @@ class DialogueStyleTests(unittest.TestCase):
                 "我只剩你了。",
             ),
         )
+
         self.assertIn(
             "身边有没有一个你愿意联系的人",
             apply_dialogue_fallback(
@@ -162,6 +163,24 @@ class DialogueStyleTests(unittest.TestCase):
                 violations,
             ),
         )
+
+    def test_text_affection_and_kaomoji_survive_without_fallback(self):
+        replies = (
+            ("抱抱。今天不逗你了。", "今天好累，抱抱。"),
+            ("你对我很重要。", "想我了吗？"),
+            ("这是怎么回事 (?_?)", "这个结果好奇怪"),
+            ("可以呀 (｡•̀ᴗ-)✧", "AI 也可以这么甜吗？"),
+        )
+        for reply, user_message in replies:
+            with self.subTest(reply=reply):
+                self.assertEqual((), find_dialogue_style_violations(reply, user_message))
+                self.assertEqual(reply, sanitize_dialogue_reply(reply))
+        self.assertFalse(
+            should_pause_followup_questions(
+                [{"role": "assistant", "content": "(?_?)"}] * 2, "接着聊"
+            )
+        )
+
     def test_detects_and_removes_sticker_action_narration(self):
         reply = "（附上一张安静的表情包，当作睡前的小回应。）\n\n叶子，好好睡，明天见。"
 

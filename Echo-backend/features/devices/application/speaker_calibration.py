@@ -6,7 +6,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
-from features.devices.infrastructure.neural_speaker import (
+from features.devices.domain.speaker_vectors import (
     SpeakerUnavailable, centroid, similarity,
 )
 

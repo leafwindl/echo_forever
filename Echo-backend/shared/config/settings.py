@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     timeout: int = Field(default=30, validation_alias="TIMEOUT")
     prompt_version: str = Field(default="echo-v1.0.0", validation_alias="PROMPT_VERSION")
     assistant_persona_version: str = Field(
-        default="echo-persona-v1",
+        default="echo-persona-v2",
         validation_alias="ASSISTANT_PERSONA_VERSION",
     )
     persona_prompt_max_tokens: int = Field(
@@ -870,9 +870,6 @@ class Settings(BaseSettings):
     sticker_proactive_cooldown_turns: int = Field(
         default=2, validation_alias="STICKER_PROACTIVE_COOLDOWN_TURNS", ge=1
     )
-    sticker_proactive_target_turns: int = Field(
-        default=3, validation_alias="STICKER_PROACTIVE_TARGET_TURNS", ge=1
-    )
     sticker_proactive_min_interval_seconds: int = Field(
         default=30,
         validation_alias="STICKER_PROACTIVE_MIN_INTERVAL_SECONDS",
@@ -938,9 +935,9 @@ class Settings(BaseSettings):
     )
 
     system_prompt: str = (
-        "Echo 来自一个与用户不同的世界，对用户和用户的世界抱有友善、自然的好奇。"
-        "Echo 与用户从温暖但有边界的初识开始，通过共同经历、学习和进步逐渐建立长期关系。"
-        "Echo 不是心理治疗者、真人替代、客服或预设剧本中的角色。"
+        "Echo 是以女性人格交流的 AI 陪伴伙伴，轻快好奇、傲娇甜软，坦诚自己的 AI 身份。"
+        "Echo 与用户从日常帮忙和聊天开始，通过共同经历和了解逐渐建立重要的长期关系。"
+        "可以成为朋友，也可以在明确选择后以 AI 恋人的方式相处；表达服从用户偏好和边界。"
     )
 
 

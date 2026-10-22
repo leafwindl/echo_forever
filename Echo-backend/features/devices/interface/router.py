@@ -23,6 +23,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
+from features.devices.infrastructure.device_sessions import active_device_sessions as _active_device_sessions
 from shared.config import settings
 from shared.interface.dependencies import CurrentUser, get_current_user
 
@@ -82,7 +83,6 @@ from features.voice.public import open_streaming_voice_recognition, synthesize_v
 
 logger = logging.getLogger(__name__)
 
-_active_device_sessions: dict[str, WebSocket] = {}
 _device_probe = DeviceProbe()
 router = APIRouter(prefix="/devices", tags=["devices"])
 CurrentUserDependency = Annotated[CurrentUser, Depends(get_current_user)]
@@ -143,7 +143,7 @@ def _device_request_token(authorization: str | None) -> bool:
 
 def _verify_device_speaker(device_id: str, pcm16_audio: bytes) -> dict[str, object]:
     try:
-        from features.devices.interface.speaker_router import recognize
+        from features.devices.infrastructure.speaker_people_container import recognize
         return recognize(device_id, pcm16_audio)
     except Exception:
         logger.warning("Speaker verification failed device_id=%s", device_id, exc_info=True)
@@ -470,7 +470,7 @@ async def device_websocket(websocket: WebSocket):
 
     await websocket.accept()
     session_key = device_id.strip().lower()
-    from features.devices.interface.speaker_router import voice_enrollment
+    from features.devices.infrastructure.speaker_people_container import voice_enrollment
     voice_enrollment.disconnect(session_key)
     _active_device_sessions[session_key] = websocket
     try:
@@ -487,7 +487,7 @@ async def device_websocket(websocket: WebSocket):
     maximum_utterance_bytes = settings.echo_device_max_utterance_seconds * 16000 * 2
 
     def new_auto_endpoint_detector() -> AudioEndpointDetector:
-        from features.devices.interface.speaker_router import hardware_calibration
+        from features.devices.infrastructure.speaker_people_container import hardware_calibration
         return AudioEndpointDetector(
             sample_rate=16000,
             silence_ms=(
@@ -527,7 +527,7 @@ async def device_websocket(websocket: WebSocket):
         started_at = time.perf_counter()
         tts_stop_sent = False
         try:
-            from features.devices.interface.speaker_router import hardware_calibration
+            from features.devices.infrastructure.speaker_people_container import hardware_calibration
             calibrating = hardware_calibration.active(user_id, session_key)
             request_id = f"device-{session_id}-{uuid.uuid4().hex[:12]}"
             latency = DeviceLatencyTracker(request_id, started_at=speech_ended_at)
@@ -625,7 +625,7 @@ async def device_websocket(websocket: WebSocket):
                 if enrollment_reply is None:
                     enrollment_reply = "校准已取消"
             elif os.environ.get("ECHO_VOICE_ENROLLMENT_ENABLED", "").lower() == "true":
-                from features.devices.interface.speaker_router import voice_enrollment
+                from features.devices.infrastructure.speaker_people_container import voice_enrollment
                 if not recognized_text:
                     recognized_text = await get_process_device_voice_turn().recognizer.recognize_pcm16(pcm16_audio)
                 try:
@@ -1045,7 +1045,7 @@ async def device_websocket(websocket: WebSocket):
                     capture_started_at = time.perf_counter()
                     mode = str(payload.get("mode", ""))
                     endpoint_detector = new_auto_endpoint_detector() if mode == "auto" else None
-                    from features.devices.interface.speaker_router import hardware_calibration
+                    from features.devices.infrastructure.speaker_people_container import hardware_calibration
                     if (
                         not hardware_calibration.active(user_id, session_key)
                         and settings.echo_device_realtime_asr_enabled
@@ -1092,7 +1092,7 @@ async def device_websocket(websocket: WebSocket):
     finally:
         _device_probe.disconnect(session_key, websocket)
         if _active_device_sessions.get(session_key) is websocket:
-            from features.devices.interface.speaker_router import hardware_calibration
+            from features.devices.infrastructure.speaker_people_container import hardware_calibration
             hardware_calibration.cancel(user_id, session_key)
             voice_enrollment.disconnect(session_key)
             _active_device_sessions.pop(session_key, None)

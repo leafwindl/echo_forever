@@ -1,458 +1,168 @@
 # Echo 后端架构与代码规范
 
-## 0. 使用原则
+更新日期：2026-10-22。
 
-本文是 Echo 后端长期准入标准。后续新增功能、重构、修 bug、补测试，都必须先对照本文。
+本文是后续后端开发、重构、修复、清理和评审的统一准入标准。历史设计与本文冲突时，以本文和用户当前明确要求为准。架构变化必须同步规范、开发入口和检查。“必须／禁止”是合并要求，“建议”是默认做法。必须区分已运行的实现与批准的设计。
 
-关键词：
+## 1. 只保留正在发挥作用的结构
 
-- 必须：不满足不能合并。
-- 禁止：发现后必须整改。
-- 建议：默认采用，除非有明确理由。
+- 按实际业务组织模块，高内聚、低耦合；目录数量不是质量指标。
+- 新增文件、接口、抽象、配置和提示资产必须有当前消费者或可执行的运维用途。
+- 禁止未来占位 feature、空路由、未实现处理器、空注册和未接入供应商分支。
+- Protocol 只服务实际依赖倒置，必须有生产实现和消费方。异常类、类型声明、测试 fake 中的 `pass` 或 `...` 不代表无用。
+- 不为四层目录凑文件；也不能为减少文件把 SQL 或业务流程塞进路由。
+- 删除代码同步清理无效参数、注册、专用测试与旧入口，保留仍在使用的发布、评测、运维工具。
+- 判断未使用必须检查路由、后台任务、公开 API、脚本、客户端与测试；没有独立 HTTP 路由不等于无用。
+- 禁止删除失败测试、弱化权限、吞异常或伪造成功来获得通过。
+- 历史决策文档可归档保留，但不得继续指导旧运行入口。
 
-目标：
+## 2. 当前目录与职责
 
-- 分层清晰，高内聚、低耦合。
-- 按业务能力组织模块，而不是按技术类型堆目录。
-- Domain 模型优先，不被数据库表结构牵着走。
-- 模块、前后端、外部系统之间用明确契约协作。
-- 为未来扩展留接口，不留坑。
-- 用自动化工具和测试把规范变成门禁。
+| 位置 | 职责 |
+| --- | --- |
+| `Echo-backend/features/` | 正在使用的业务能力 |
+| `Echo-backend/shared/` | 跨业务基础设施及不依赖 feature 的机制 |
+| `Echo-backend/shared/prompting/` | 已接入聊天、来信与评测的提示渲染和输入契约 |
+| `Echo-backend/providers/` | 实际使用的模型、Embedding、语音、图片、搜索适配 |
+| `Echo-backend/db/` | PostgreSQL 连接与 schema 初始化 |
+| `main.py`、各 feature container | 生命周期、路由、任务和依赖装配 |
+| `Echo-backend/tests/` | 后端测试，真实数据库测试必须显式隔离 |
+| `scripts/` | 正在使用的架构、发布、评测和设备工具 |
 
-## 1. 架构标准
+不恢复全局 `api/`、`services/`、`repositories/`、`schemas/`、`llm_client.py` 等已删除兼容入口。不预建无消费者的 `bootstrap/` 或插件目录。
 
-### 1.1 分层与依赖方向
+| Feature | 主要职责 |
+| --- | --- |
+| `auth` | 验证码、身份、令牌与会话 |
+| `assistant_persona` | 助手固定人格与版本 |
+| `persona` | 用户显式偏好和首次引导数据，不是助手人格 |
+| `relationship` | 关系信号、阶段与表达上限 |
+| `chat` | 消息、批次、历史、交付及对话用例 |
+| `agent` | 受限模型回路、工具执行、轨迹和交付处理 |
+| `memory` | 长期记忆管理、抽取、索引与召回 |
+| `proactive_chat` | 主动策略、提醒任务与到期处理 |
+| `letters` | 来信证据、生成、配图、发布和阅读状态 |
+| `stickers` | 表情资产、搜索、生成、发送和冷却 |
+| `voice` | ASR、TTS、语音资源与清理 |
+| `devices` | 配对、连接、设备语音、声纹录入与校准 |
+| `firmware_releases` | 设备固件版本数据与查询 |
+| `study_focus` | 专注记录、完成反馈与专注证据 |
+| `push` | 推送目标、通知 Outbox、发送与重试 |
+| `releases` | 手机应用版本、发布和下载 |
+| `system` | 健康检查与版本信息 |
 
-推荐分层：
+旧后端 `admin`、`character_animation`、全局仓储目录，以及 Flutter 旧首页和空通话目录不属于有效模块，不得作为未来接口恢复。
 
-```text
-Interface -> Application -> Domain
-Infrastructure -> Domain 接口
-Bootstrap 负责装配所有实现
+## 3. 分层和依赖方向
+
+| 层 | 职责 | 禁止 |
+| --- | --- | --- |
+| Interface | 鉴权、请求／响应、传输和错误码映射，调用用例 | SQL、事务、业务策略、模型请求 |
+| Application | 编排用例、确定事务语义、调用纯规则与注入端口 | 导入具体仓储、供应商 SDK、HTTP 框架或读取环境 |
+| Domain | 实体、值对象、纯规则、错误、实际端口 | 依赖 Application、Infrastructure、框架、DB、HTTP 或环境 |
+| Infrastructure | 仓储、供应商、资源读写与原子持久化 | 依赖 Interface，抛 HTTPException |
+| 装配层 | 配置、构造实现、注册和依赖注入 | 业务判断与伪造结果 |
+
+- Interface 可引用装配工厂获得用例，不因此直接操作仓储。
+- 用例决定事务语义；仓储执行事务、行锁及并发约束。组合写入使用确有需要的事务端口，不创建闲置框架。
+- 同 feature 内也遵守分层，不让 Application 导入 Infrastructure。
+- 跨 feature 仅使用稳定公开 API、实际注入端口或事件合同，不导入对方仓储、container、路由等内部实现。
+- Agent 工具进入业务用例，不直接绑定其他 feature 的 PostgreSQL 仓储。
+- 不新增 feature 依赖环，函数内延迟 import 不是长期解决方案。
+- `shared/prompting` 不导入 `features.*`、业务 DB、具体 provider 或框架；业务模块准备材料，渲染器只消费合同。
+- 公共机制归 shared，数据归属和业务执行归 feature，不把整个跨业务流程搬进 shared。
+
+## 4. Prompt 六类材料
+
+六类是内容模型，不是六个消息权限等级，不规定机械拼接顺序，也不要求每轮全部出现。
+
+| 类别 | 内容 | 要求 |
+| --- | --- | --- |
+| 身份角色 | 稳定身份、核心人格、交流倾向 | 一份内容源，不在产品、人格和任务中重复展开 |
+| 规则约束 | 安全、隐私、真实性、用户边界、应用场景要求 | 区分常驻与按需，不代替程序门禁 |
+| 上下文注入 | 偏好、关系、历史、摘要、记忆、时间与证据 | 按请求选择，保留来源，数据不冒充指令 |
+| 工具描述 | 当前能力、用途与参数 | schema 来自实际参数模型，不维护第二份定义 |
+| 示例 | 风格或任务的输入／输出样例 | 标为示范，按场景和预算选择，不冒充历史 |
+| 输出格式 | 气泡、口述、来信 JSON 等交付合同 | 严格结构由代码检查，不承载全部业务逻辑 |
+
+### 4.1 资产与机制
+
+- 当前共享实现是 `shared/prompting/renderer.py` 与 `contracts.py`，已接入聊天、来信和评测；四份规则 Markdown 已由真实渲染器从 `prompts/rules/` 加载。不保留旧 chat 路径的转发门面。
+- 正文外置时使用 Markdown，示例可用 JSON，严格输出使用真实 schema。工具参数不复制成第二份 MD 或 JSON。
+- 批准的统一资产位置是后端 `prompts/`，按六类分类，`profiles/` 管理实际任务组合。资产必须与真实加载器、消费者在同一变更接入，不预建空目录或占位文件。
+- 迁移同时替换加载位置并删除旧内容源；仅移动文件不能宣称省 token。
+- 用户上下文由所属业务读取，在边界转成约定输入，不写入仓库资产。
+
+### 4.2 管理与选择
+
+- 运行资产登记标识、版本、类别、适用任务／渠道、触发条件、必选／可选、优先级、预算及关联评测。
+- 任务配置引用资产标识，不复制正文；没有运行消费者的资产不作为生产备用库存。
+- 应用要求属于场景规则，真实用户任务保持用户输入，输出要求属于交付合同。
+- 稳定身份和必要安全边界不因普通检索未命中丢失；特殊场景按需加入，Few-shot 允许选不到。
+- 优先复用现有模式、偏好和业务状态。新增模型分类调用必须证明收益，不能为省提示反而增加多次模型请求。
+- 同时控制各类材料与整份请求预算，区分字符估算、精确 tokenizer、API usage 和账单。
+- 依靠真实消息协议和数据隔离表达权限，不凭“最高优先级”“低权限”标签声称已隔离。
+
+### 4.3 约束与验证
+
+- 普通风格是软约束，必要澄清、完整回答和当前需求不能被问句数量或固定话术破坏。
+- 授权、参数、归属、次数、超时、并发和幂等由代码落实，Prompt 只保留理解所需的执行合同。
+- 定义表示能力，结果表示事实；成功声明需要真实凭据，同轮去重不等于跨轮幂等。
+- 格式检查、表达检测、来源标记和通用事实核验必须区分，不夸大正则检查保障范围。
+- 摘要和记忆可能出错，保留原话及来源，区分提示要求与实际程序验证。
+
+## 5. 契约、数据、配置
+
+- 边界使用明确 DTO、schema、领域对象或说明清楚的结构化数据，不让无约束 dict 跨多个模块流动。
+- API 有明确输入输出；用户来自服务端验证身份；关键写入考虑幂等，分页明确游标。
+- 领域错误在传输层映射为 HTTP，Domain/Application/供应商适配不抛 HTTPException。
+- 数据按用户与资源归属隔离，声纹称呼识别不授予账号、记忆或工具权限。
+- schema、索引和约束变更说明原因、兼容策略与验证；禁止启动时破坏性迁移。
+- 关键任务持久化状态、重试、认领／租约、错误和结果；字段名依实际业务，不为形式复制任务表。
+- `asyncio.create_task` 可执行持久化任务或辅助工作，不能成为关键任务唯一记录。
+- 配置集中在 `shared/config`，新增时更新 `.env.example` 和运行说明；不留闲置开关或未接入供应商选项。
+- 日志使用适用请求、任务、耗时与错误标识，不泄露密钥、令牌、原始音频与私人正文。
+
+## 6. 代码与可执行检查
+
+- Python 用业务命名、显式依赖和可测试纯规则，注释解释原因。
+- Flutter 使用 Dart/Flutter 格式化、分析和测试，不套用 TypeScript 的 ESLint、tsc 或 Husky 作为已接入门禁。
+- `pyproject.toml` 中的 Black/Ruff 配置不等于 CI 已运行。新增格式化、类型、覆盖率或 CI 必须真实接入，不能只有文档要求。
+- 至少运行架构检查与变更相关后端测试；影响客户端时执行相应检查。
+
+```powershell
+python -B scripts/check_architecture.py
+python -m pytest Echo-backend/tests -q
+python -m ruff check <本次修改的Python文件>
 ```
 
-职责：
+Flutter 在 `app/` 下执行：
 
-- Interface：HTTP API、request/response schema、OpenAPI、错误码映射。
-- Application：用例编排、事务边界、调用 Domain 服务和接口。
-- Domain：Entity、Value Object、Domain Service、Repository/Provider Protocol。
-- Infrastructure：数据库实现、外部 provider、文件存储、任务执行器。
-- Bootstrap：创建 app、读取配置、装配具体实现。
-
-必须遵守：
-
-- Application 只依赖 Domain 抽象，不依赖具体数据库、SDK、HTTP 框架。
-- Domain 不依赖 FastAPI、Pydantic、SQLite、httpx、第三方 SDK、环境变量。
-- Infrastructure 可以实现 Domain 接口，但不能被 Domain 反向依赖。
-- Interface 不能写业务规则和 SQL。
-
-禁止依赖：
-
-```text
-domain -> application
-domain -> infrastructure
-application -> interface
-application -> concrete infrastructure
-infrastructure -> interface
+```powershell
+flutter analyze
+flutter test
 ```
 
-### 1.2 按 Feature 组织模块
-
-新增大功能必须优先按业务模块组织：
-
-```text
-features/
-  chat/
-    domain/
-    application/
-    interface/
-    infrastructure/
-    public.py
-  memory/
-    domain/
-    application/
-    interface/
-    infrastructure/
-    public.py
-shared/
-bootstrap/
-```
-
-规则：
-
-- `chat`、`memory`、`voice` 这类业务模块优先于 `utils`、`components`、`services` 这类技术目录。
-- feature 对外只暴露 `public.py` 或 `__init__.py` 声明的稳定 API。
-- 禁止跨 feature import 对方内部实现。
-- 跨模块协作必须通过 Application API、Domain 接口、事件契约或 OpenAPI。
-
-当前仓库中的 `api/`、`repositories/` 等旧技术型入口已收口删除；新增业务不应恢复这类跨业务全局目录。`providers/` 暂作为第三方模型与语音能力的基础设施注册入口保留。
-
-### 1.3 Domain 模型优先
-
-设计顺序：
-
-1. 定义核心 Entity、Value Object、Domain Service。
-2. 定义 Repository/Provider Protocol。
-3. 定义 Application 用例和 DTO。
-4. 定义 Infrastructure 实现。
-5. 定义 Interface 路由和 schema。
-
-Domain 对象必须是 Plain Object：
-
-- 不依赖框架。
-- 不依赖数据库。
-- 不直接读取配置。
-- 不直接调用外部服务。
-
-典型模型：
-
-- Entity：`User`、`Conversation`、`ChatMessage`、`Memory`。
-- Value Object：`UserId`、`ConversationId`、`MemoryImportance`、`EmbeddingVector`。
-- Domain Service：记忆合并规则、摘要边界判断、消息状态流转。
-
-### 1.4 依赖倒置
-
-高层模块不依赖低层模块，二者都依赖抽象。
-
-必须：
-
-- Domain 定义 `UserRepository`、`MemoryRepository`、`LLMProvider` 等 Protocol。
-- Infrastructure 实现 `UserRepositoryPostgreSQL`、`UserRepositoryMySQL` 等具体类。
-- Application 通过构造函数接收接口实现。
-- 具体实现只在 Bootstrap/Container 中装配。
-
-禁止：
-
-- Application 直接 new 数据库 repository。
-- 业务逻辑直接调用 `localStorage`、SQLite、httpx、第三方 SDK。
-- 在核心流程中不断追加供应商 `if/else`。
-
-### 1.5 配置与代码分离
-
-必须外置：
-
-- API 地址、数据库连接、模型名称、超时时间、重试次数。
-- API key、secret、feature flag、静态资源域名。
-- 第三方服务 endpoint、provider 选择、任务开关。
-
-规则：
-
-- 配置集中在 settings/config 模块。
-- 新增配置必须更新 `.env.example` 和文档。
-- Domain 和 Application 禁止直接调用 `os.getenv()`。
-- Infrastructure 优先通过构造函数接收配置值。
-- 禁止把环境相关值硬编码在业务逻辑中。
-
-### 1.6 插件与钩子
-
-可能扩展的点必须定义标准接口：
-
-- LLM、Embedding、ASR、TTS provider。
-- 文件存储。
-- 通知渠道。
-- 支付方式。
-- 内容安全审核。
-- 任务执行器。
-- 记忆抽取策略。
-
-插件接口必须包含：
-
-- 插件名称。
-- 输入/输出契约。
-- 错误类型。
-- 配置 schema。
-- 默认实现或 fake 实现。
-- 注册方式。
-
-新增插件时，只实现接口并注册；禁止修改核心流程来堆分支。
-
-### 1.7 契约优先
-
-必须先改契约，再改实现。
-
-后端内部契约：
-
-- Domain Protocol。
-- Application input/output DTO。
-- Provider Protocol。
-- Domain Event。
-
-前后端契约：
-
-- FastAPI OpenAPI。
-- Pydantic request/response schema。
-- 必要时从 OpenAPI 生成 TypeScript 类型。
-
-API 规范：
-
-- 关键 API 必须有稳定 response schema。
-- 错误响应应统一包含 `code`、`message`、`request_id`。
-- 分页接口统一使用 `limit`、`cursor` 或明确说明偏移策略。
-- 关键写接口必须考虑幂等键。
-- 破坏性变更必须版本化或提供迁移期。
-
-禁止跨模块传随意 dict；边界处必须转换为 DTO、schema 或 Domain 对象。
-
-### 1.8 事务与数据迁移
-
-事务规则：
-
-- Application 用例决定事务边界。
-- Domain 不 commit、不 rollback。
-- Interface 不直接开事务。
-- Repository 可接受外部 transaction/unit of work。
-
-数据迁移规则：
-
-- 禁止 destructive migration 自动在启动时执行。
-- schema 变更必须向后兼容或提供迁移脚本。
-- 迁移必须可重复执行。
-- 重要迁移必须有回滚或修复方案。
-- 新索引、新约束、新字段必须说明业务原因。
-- Repository 测试必须覆盖新增 schema 行为。
-
-### 1.9 后台任务
-
-关键后台任务必须可追踪、可恢复。
-
-任务必须包含：
-
-- `job_id`
-- `job_type`
-- `status`
-- `payload`
-- `attempts`
-- `max_attempts`
-- `error`
-- `started_at`
-- `finished_at`
-
-状态至少包括：
-
-```text
-pending -> running -> completed
-pending -> running -> retry -> failed
-```
-
-服务启动时必须处理遗留 `running` 任务。禁止只依赖内存 `asyncio.create_task` 承载关键任务。
-
-### 1.10 可观测性
-
-必须记录结构化日志字段：
-
-- `request_id`
-- `user_id`
-- `conversation_id`
-- `job_id`
-- `provider`
-- `duration_ms`
-- `error_code`
-
-关键路径必须能观测：
-
-- 登录成功率和失败原因。
-- LLM/Embedding/ASR/TTS 调用耗时和失败率。
-- 后台任务 pending/running/failed 数量。
-- 数据库错误和慢查询。
-- 关键 API 延迟。
-
-禁止在日志中输出 API key、secret、完整 openid、敏感用户内容。
-
-### 1.11 安全与隐私
-
-必须：
-
-- 所有用户数据按 `user_id` 隔离。
-- API key/secret 只通过环境变量或密钥服务注入。
-- 日志脱敏。
-- 删除记忆、清空记忆等操作必须校验用户身份。
-- 高风险接口考虑限流。
-- 用户数据删除能力必须可设计、可验证。
-
-禁止：
-
-- 将 secret 写入代码或文档示例真实值。
-- 在日志中打印完整用户隐私内容。
-- 后端信任客户端传来的任意用户身份而不校验。
-
-## 2. 代码规范
-
-### 2.1 自动化工具
-
-后端：
-
-- Formatter：Black
-- Linter：Ruff
-- Type Check：mypy 或 pyright
-- Test：pytest 或 unittest
-
-前端：
-
-- Formatter：Prettier
-- Linter：ESLint
-- Type Check：`tsc --noEmit`
-
-提交前：
-
-- 使用 Husky + lint-staged。
-- 自动格式化、lint、类型检查、运行相关测试。
-
-建议后端配置：
-
-```toml
-[tool.black]
-line-length = 100
-target-version = ["py311"]
-
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM", "C4", "ARG"]
-ignore = []
-```
-
-### 2.2 命名
-
-命名即文档。
-
-推荐：
-
-- `memory_extraction_job_id`
-- `conversation_summary_boundary_message_id`
-- `active_user_memories`
-
-避免：
-
-- `data`
-- `temp`
-- `obj`
-- `handle`
-- `res`
-- `foo`
-
-函数名必须表达业务动作，例如 `schedule_memory_extraction()`、`claim_background_job()`。
-
-### 2.3 注释
-
-注释写 Why，不写 What。
-
-推荐：
-
-```python
-# 记忆抽取失败不影响当前回复，因为它只是体验增强能力。
-```
-
-避免：
-
-```python
-# 调用函数
-# 设置变量
-```
-
-### 2.4 错误处理
-
-规则：
-
-- Domain 抛领域异常。
-- Application 转换业务异常。
-- Interface 映射 HTTP status code。
-- Infrastructure 捕获 SDK/DB 异常并转换为可理解错误。
-
-禁止在 Domain/Application/Provider 中直接抛 `HTTPException`。
-
-### 2.5 测试
-
-必须覆盖：
-
-- Domain 纯逻辑测试。
-- Application 用例测试，使用 fake repository/provider。
-- Infrastructure repository 测试，使用临时数据库。
-- Interface 路由测试，覆盖关键 API。
-- 插件 registry 测试。
-- 关键路径集成测试：登录、聊天发送、记忆抽取调度、语音回复。
-
-覆盖率目标：
-
-```text
-Domain: >= 90%
-Application: >= 80%
-核心模块整体: >= 80%
-```
-
-没有测试的重构不能合并。
-
-## 3. 工程强制门禁
-
-代码合并前必须通过：
-
-- 格式化检查。
-- Ruff/ESLint。
-- 类型检查。
-- 单元测试。
-- 关键集成测试。
-- 覆盖率阈值。
-- 架构依赖检查。
-
-架构依赖检查至少禁止：
-
-- Domain import FastAPI、Pydantic、sqlite3、httpx、providers。
-- Application import Interface 或具体 Infrastructure 实现。
-- Infrastructure import Interface。
-- Feature 之间 import 对方内部实现。
-
-建议新增脚本：
-
-```text
-scripts/check_architecture.py
-```
-
-CI 和 pre-commit 必须调用该脚本。
-
-## 4. 当前项目迁移策略
-
-当前 Echo 后端仍处于过渡结构。迁移原则：
-
-### 新代码
-
-必须尽量按 feature-first + clean architecture 编写。
-
-### 旧代码
-
-分批迁移：
-
-1. 补契约和测试。
-2. 抽 Domain 模型。
-3. 抽 Application 用例。
-4. 替换 Infrastructure 实现。
-5. 收缩兼容门面。
-
-### 兼容门面
-
-以下门面可暂时存在，但不得继续扩大：
-
-- `services.memory`
-- `llm_client`
-- `services.embedding_client`
-- `services.minimax_tts`
-
-新增业务不得依赖这些门面作为长期边界。
-
-## 5. 提交前检查清单
-
-每次改代码前后都检查：
-
-- 是否违反分层依赖。
-- 是否按 Feature 组织。
-- 是否把业务逻辑写进 Interface。
-- 是否让 Domain 依赖框架、数据库或 SDK。
-- 是否定义或更新契约。
-- 是否通过接口预留扩展，而不是只写 TODO。
-- 是否把环境相关值放到配置。
-- 是否避免在核心流程中堆 `if/else`。
-- 是否补了必要测试。
-- 核心模块覆盖率是否达标。
-- 是否有可观测字段。
-- 是否满足安全与隐私要求。
-- 是否跑过格式化、lint、类型检查、测试、架构检查。
+- 仓储测试用隔离测试库；声纹实验测试须 `ECHO_LAB_DB_TEST=1` 并通过实验库保护，不为消除 skip 操作生产数据库。
+- 如实列出运行、通过、失败、跳过和未验证项目，未启动真实模型、DB、设备不能声称相应集成验收。
+- Prompt 评测复用真实选择、渲染、后处理；额外改写不能冒充线上行为。
+- 不以“某句长文存在”替代人格行为评测；保留安全、结构、真实性和回归检查。
+- 验证正常行为不被误伤，包括任务澄清、用户边界、合法亲昵、重试和多轮上下文。
+- 架构脚本检查旧入口、分层禁止依赖、Interface 直连 DB、共享提示反向业务依赖与占位路由。跨 feature 内部访问和依赖环仍须评审，脚本未覆盖不代表合规。
+
+## 7. 存量边界与工作纪律
+
+- `chat`、`agent`、`proactive_chat` 仍有历史跨内部依赖和 feature 依赖环。不得扩大，触及相应协作时用真实端口与装配消除，不加兼容门面或空接口。
+- 正文和示例尚未全部外置，六类资产完整注册与按需选择尚未实现。不得声称设计已落地，或为展示目录添加不读取的 MD。
+- 部分 API 错误格式和旧数据字典未统一，修改时明确合同和消费者，不能偷偷破坏兼容。
+- 保留用户未提交工作；删除前核对调用证据，不重置或顺带删除无关修改。
+- Windows 删除前核对绝对路径在授权目录内，确认内容可删除，不拼接跨 shell 递归删除命令。
+
+## 8. 每次开发的顺序
+
+1. 阅读本文、根 `AGENTS.md` 和相关入口，明确实际需求。
+2. 找到调用方、归属、合同与测试，避免重复实现和闲置接口。
+3. 在消费者接入的同一变更实现代码、资产和配置，删除失效实现与参数。
+4. 检查分层、跨 feature 边界、共享方向和新增依赖环。
+5. 运行适用检查，生成内容另验证实际组装结果。
+6. 同步规范和当前文档，如实报告边界，不用历史记录代替本次结果。

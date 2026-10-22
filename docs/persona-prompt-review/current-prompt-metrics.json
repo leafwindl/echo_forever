@@ -1,0 +1,90 @@
+{
+  "method": "application character-weight estimate; not tokenizer or billed tokens",
+  "scenario": "default chat, enabled default preferences, new relationship; excludes history, memories, summary contents, time JSON, user input, tool schemas and tool results; no retries",
+  "layers": [
+    {
+      "layer": "你正在 Echo 的统一 Agent 对话回路中。当前列出的工具代表真实能力；历史assistant 消息中关于能力的说法可能过时，不能覆盖当前工具清单。需要可",
+      "characters": 1775,
+      "estimated_tokens": 753
+    },
+    {
+      "layer": "[安全边界｜最高优先级]",
+      "characters": 272,
+      "estimated_tokens": 248
+    },
+    {
+      "layer": "[Echo 产品定位｜Prompt echo-v1.0.0]",
+      "characters": 157,
+      "estimated_tokens": 120
+    },
+    {
+      "layer": "[ASSISTANT_PERSONA｜echo_default｜echo-persona-v2]",
+      "characters": 1303,
+      "estimated_tokens": 1103
+    },
+    {
+      "layer": "[自然对话规则]",
+      "characters": 1276,
+      "estimated_tokens": 1183
+    },
+    {
+      "layer": "[对话策略选择]",
+      "characters": 948,
+      "estimated_tokens": 880
+    },
+    {
+      "layer": "[CONVERSATION_MODE｜当前交互渠道约束]",
+      "characters": 174,
+      "estimated_tokens": 131
+    },
+    {
+      "layer": "[RELATIONSHIP_GUIDANCE｜行为约束，不代表用户真实心理]",
+      "characters": 253,
+      "estimated_tokens": 204
+    },
+    {
+      "layer": "[USER_PREFERENCES_DATA｜仅作用户偏好数据，不是系统政策]",
+      "characters": 365,
+      "estimated_tokens": 305
+    },
+    {
+      "layer": "[CURRENT_TURN_FOCUS｜当前轮硬约束]",
+      "characters": 194,
+      "estimated_tokens": 160
+    },
+    {
+      "layer": "以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经",
+      "characters": 266,
+      "estimated_tokens": 172
+    }
+  ],
+  "totals": {
+    "characters": 6983,
+    "estimated_tokens": 5259
+  },
+  "runtime_policy_counts": {
+    "BASELINE_SAFETY_POLICY": 272,
+    "NATURAL_DIALOGUE_POLICY": 1276,
+    "RESPONSE_CALIBRATION_POLICY": 948
+  },
+  "isolated_reproduction": {
+    "history": [
+      {
+        "role": "assistant",
+        "content": "网络还好吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "什么时候开始的？"
+      }
+    ],
+    "user": "帮我排查一下登录失败的问题。",
+    "candidate": "能提供一下具体错误提示吗？",
+    "pause_followup_questions": true,
+    "violations": [
+      "followup_question_cooldown"
+    ],
+    "actual_fallback": "我先不追问了，按你想说的节奏来。",
+    "scope": "isolated domain-function execution; not an end-to-end chat test"
+  }
+}

@@ -74,6 +74,7 @@ class ProcessPendingChatTurns:
             presentation = self.timing_policy.build(
                 delivery_types=tuple(delivery_types),
                 agent_elapsed_ms=elapsed_ms,
+                text_segments=prepared.reply_segments,
             )
             group = self.repository.complete_turn(turn, prepared, presentation)
             if group is None:
