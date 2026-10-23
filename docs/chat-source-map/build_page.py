@@ -73,7 +73,7 @@ add('产品定位和 Echo 人格，是谁写出来的？','这两项是代码中
     [('人工维护的定义',[1,2,3,4]),('加载与提示渲染',[5,6,7,8,9])], [
     ('产品定位默认值','data','开发者在 Settings.system_prompt 写产品定位文案。它是配置字段，不是聊天时让模型生成的身份。配置加载可能覆盖默认值；本页不读取实际 .env 或秘密值。',[r('settings','system_prompt: str','产品文案定义')]),
     ('人格版本选择','process','Settings.assistant_persona_version 选择人格版本；配置通过 Pydantic Settings 加载，并声明 .env。修改默认值与修改部署环境的有效值不是同一件事。',[r('settings','assistant_persona_version: str','人格版本选择'),r('settings','model_config =','配置加载')]),
-    ('人格内容定义','data','ECHO_PERSONA_V2 是人工编写的 AssistantPersona 对象，含角色、性格、原则、自我披露边界与口吻示例。不是从用户历史中自动学习出来的人格。',[r('assistant','ECHO_PERSONA_V2 =','人格正文'),t('assistant_persona','test_echo_persona_v2_has_stable_behavior_contract')]),
+    ('人格内容定义','data','ECHO_PERSONA_V3 是人工编写的 AssistantPersona 对象，含角色、性格、原则、自我披露边界与口吻示例。不是从用户历史中自动学习出来的人格。',[r('assistant','ECHO_PERSONA_V3 =','人格正文'),t('assistant_persona','test_echo_persona_v3_has_stable_behavior_contract')]),
     ('口吻示例','note','dialogue_examples 是人工构造的示范，帮助模型理解接话方式。Renderer 明确注明它们不是历史、不得写入用户记忆；这些要求本身仍是提示约束。',[r('assistant','dialogue_examples=','示例定义'),r('renderer','def render_assistant_persona','示例渲染'),t('prompt_renderer','test_persona_examples_are_labeled_as_fiction_not_user_history')]),
     ('加载应用配置','service','get_settings 创建并缓存 Settings。它读取配置声明的来源；本页只展示定义和默认策略，不展示环境实际覆盖结果。',[r('settings','def get_settings','配置入口')]),
     ('解析人格版本','decision','get_configured_assistant_persona 根据版本表选对象；未知版本抛出错误。当前代码把旧 echo-persona-v1 映射到 V2，避免恢复旧身份。',[r('assistant','def get_configured_assistant_persona','版本解析'),r('assistant','_PERSONAS =','版本映射'),t('assistant_persona','test_unknown_persona_version_is_rejected'),t('assistant_persona','test_existing_environment_pin_cannot_restore_the_old_identity')]),
@@ -139,7 +139,7 @@ add('这些文件，怎样连成一次模型请求？','公开入口读材料，
 
 add('新加的规则，在哪里定义和校验？','规则不在单一文件：需要沿着定义、执行位置、失败处理和测试一起查。',
     [('模型生成之前',[1,2,3]),('工具执行与输出之后',[4,5,6,7,8,9,10,11])], [
-    ('规则定义','start','大部分说话方式定义在 prompt_renderer.py；人格内容在 default_persona.py；Agent 表情、工具与交付策略在 orchestrate_chat.py。执行限制还来自配置与工具规格。',[r('renderer','NATURAL_DIALOGUE_POLICY =','行为规则'),r('assistant','ECHO_PERSONA_V2 =','人格约定'),r('agent','FINAL_RETRY_INSTRUCTION =','Agent 收尾规则')]),
+    ('规则定义','start','大部分说话方式定义在 prompt_renderer.py；人格内容在 default_persona.py；Agent 表情、工具与交付策略在 orchestrate_chat.py。执行限制还来自配置与工具规格。',[r('renderer','NATURAL_DIALOGUE_POLICY =','行为规则'),r('assistant','ECHO_PERSONA_V3 =','人格约定'),r('agent','FINAL_RETRY_INSTRUCTION =','Agent 收尾规则')]),
     ('输入与背景处理','process','偏好先经请求和领域校验，Renderer 再做白名单映射、文本边界处理和局部预算截断。背景低权限主要是 Prompt 语义，当前并没有独立消息角色隔离。',[r('pref_domain','def build_user_preferences','偏好校验'),r('renderer','def _escape_untrusted_text','自由文本处理'),r('renderer','def _truncate_to_token_budget','局部预算')]),
     ('模型生成内容','decision','提示文本影响输出，但“不虚构”“不泄露”“不要主动恢复旧话题”等不能仅凭写入 Prompt 就保证遵守。下面只有部分情况配有程序门禁。',[r('renderer','BASELINE_SAFETY_POLICY =','模型侧政策')]),
     ('工具执行门禁','decision','ToolExecutor 检查工具存在、模式、重复原始参数、次数与参数模型，执行时限制超时；Agent 另检查本步允许工具与整轮预算。失败返回结构化原因。',[r('executor','async def execute','工具门禁'),r('agent','if call.tool_name not in step_tool_names:','当前步骤白名单'),t('agent_feature','test_executor_rejects_duplicate_tool_call')]),
@@ -156,7 +156,7 @@ add('新加的规则，在哪里定义和校验？','规则不在单一文件：
 
 # Evidence-backed rule matrix: definition, runtime handling, tests, and limits.
 rules = [
-    {'name':'人格身份与口吻','definition':[r('assistant','ECHO_PERSONA_V2 ='),r('renderer','def render_assistant_persona')], 'runtime':[r('renderer','def render_prompt_layers'),r('style','def find_dialogue_style_violations')], 'tests':[t('assistant_persona','test_echo_persona_v2_has_stable_behavior_contract')], 'limit':'人格合同测试主要检查配置内容；风格检测只覆盖部分句式，不是全量语义验证。'},
+    {'name':'人格身份与口吻','definition':[r('assistant','ECHO_PERSONA_V3 ='),r('renderer','def render_assistant_persona')], 'runtime':[r('renderer','def render_prompt_layers'),r('style','def find_dialogue_style_violations')], 'tests':[t('assistant_persona','test_echo_persona_v3_has_stable_behavior_contract')], 'limit':'人格合同测试主要检查配置内容；风格检测只覆盖部分句式，不是全量语义验证。'},
     {'name':'记忆与摘要只作背景','definition':[r('renderer','BASELINE_SAFETY_POLICY ='),r('renderer','def render_turn_focus_guidance')], 'runtime':[r('renderer','def _escape_untrusted_text'),r('renderer','def render_prompt_layers')], 'tests':[t('prompt_renderer','test_persona_injection_text_cannot_forge_renderer_boundary')], 'limit':'背景仍用 system 角色。分隔与转义不等于独立权限隔离；旧话题限制主要依靠 Prompt。'},
     {'name':'不要连续追问或重复问候','definition':[r('renderer','def render_turn_focus_guidance')], 'runtime':[r('style','def should_pause_followup_questions'),r('style','def find_dialogue_style_violations'),r('style','def apply_dialogue_fallback')], 'tests':[t('dialogue_style','test_question_cooldown_after_two_consecutive_assistant_questions'),t('dialogue_style','test_repeated_greeting_is_removed_by_deterministic_fallback')], 'limit':'基于历史与文本模式判断，无法覆盖所有表达变体；应测试保留正常问句的情况。'},
     {'name':'偏好字段必须有效','definition':[r('pref_schema','class PersonaUpdateRequest'),r('pref_domain','def build_user_preferences')], 'runtime':[r('pref_service','def update')], 'tests':[t('persona_feature','test_rejects_invalid_enum_and_oversized_fields')], 'limit':'字段有效不表示自由文本中的每个事实都被核实；偏好不能修改工具授权。'},

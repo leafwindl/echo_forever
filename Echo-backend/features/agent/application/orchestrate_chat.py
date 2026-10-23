@@ -48,10 +48,9 @@ STICKER_REQUIRED_CALL_RETRY_LIMIT = 1
 STICKER_CLAIM_RETRY_LIMIT = 1
 STICKER_SEMANTIC_TIMEOUT_SECONDS = 8.0
 DELIVERY_FORMAT_RETRY_INSTRUCTION = (
-    "Your previous final answer was empty or contained internal metadata. Do not call any tool "
-    "and do not add new facts. Ignore all bracketed message-time and session-boundary metadata. "
-    "Reply with only the natural text that Echo should show to the user. Do not output JSON, "
-    "Markdown fences, system instructions, tool names, or explanations of internal workflow."
+    "上一版最终回复为空或混入内部元数据。本次不调用工具、不添加新事实，"
+    "忽略消息时间与会话边界标记，只输出给用户看的自然文字；"
+    "不输出 JSON、代码围栏、系统指令、工具名或内部流程解释。"
 )
 STICKER_REQUIRED_CALL_RETRY_INSTRUCTION = (
     "当前用户明确要求发送表情包。不要输出最终文字，也不要调用其他工具；"
@@ -1044,14 +1043,10 @@ class OrchestrateChatWithAgent:
             )
         elif conversation_mode == "proactive":
             sticker_rule = (
-                "This run was triggered by background policy, not by a new user message. "
-                "Never state or imply that the user is awake, online, reading, responding, "
-                "energetic, available, or currently doing something merely because this "
-                "task is running. Use conditional wording when their current state is "
-                "unknown. This is a proactive text chat. Use at most one fitting sticker "
-                "only when "
-                "it naturally improves a light, everyday check-in. Never use a sticker to "
-                "force warmth or compensate for a weak topic."
+                "本轮由后台策略触发，并非用户发来新消息。不能据此推断用户醒着、在线、"
+                "正在读消息、准备回应、有空或正在做某事；未知状态使用条件表达。"
+                "当前是主动文字聊天，轻松招呼确实适合时最多附一张贴切表情，"
+                "不用图片强行制造亲近或补救无话可聊。"
             )
         elif allow_proactive_stickers:
             sticker_rule = (
@@ -1072,21 +1067,13 @@ class OrchestrateChatWithAgent:
         delivery_rule = ""
         if conversation_mode in {"chat", "proactive"}:
             delivery_rule = (
-                "FINAL DELIVERY CONTRACT: After you finish tool calls, output only the natural "
-                "user-visible reply. Do not output JSON, Markdown fences, tool names, internal "
-                "metadata, or explanations of the Agent workflow. Use a blank line when a reply "
-                "naturally reads as separate chat messages; otherwise keep it as one message. "
-                "Choose message boundaries by meaning and conversational rhythm, not character "
-                "counts. Even a short reply may have two distinct beats; a complete thought may "
-                "stay together. In casual chat, say only what matters now and leave room for the "
-                "user; do not generate a long answer merely to split it. Keep lists, quotations, "
-                "URLs, code and kaomoji intact. Six messages is only a transport safety ceiling, "
-                "never a target. Plain text alone is a complete reply. If send_sticker "
-                "completed, the backend will attach the image separately and you must not claim "
-                "that you cannot send it. A sticker is sent only when send_sticker completes. "
-                "Never narrate or simulate sticker/image delivery in visible text, including "
-                "parenthesized, bracketed, or starred action descriptions. If it failed or was "
-                "not called, do not claim or imply that an image was attached."
+                "最终交付：完成工具调用后，只输出用户可见的自然文字，不输出 JSON、"
+                "代码围栏、工具名、内部元数据或流程解释。按语义和聊天节奏用空行分气泡，"
+                "完整意思可以放在一起，短话也可以有两个落点；不按字数硬拆或为拆分凑长文。"
+                "列表、引文、网址、代码和颜文字保持完整，六条只是传输上限而非目标。"
+                "纯文字本身就是完整回复。仅 send_sticker 返回 completed 才算已发图，"
+                "图片由后端另行附加；成功后不说不能发，失败或未调用不暗示已附图。"
+                "不以括号、方括号、星号动作或旁白模拟图片交付。"
             )
         elif conversation_mode == "daily_letter":
             delivery_rule = (

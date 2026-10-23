@@ -286,8 +286,8 @@ class AgentDomainTests(unittest.TestCase):
         )
 
         instruction = messages[0]["content"]
-        self.assertIn("not by a new user message", instruction)
-        self.assertIn("awake, online, reading", instruction)
+        self.assertIn("并非用户发来新消息", instruction)
+        self.assertIn("不能据此推断用户醒着、在线、正在读消息", instruction)
 
 
 class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
@@ -1615,7 +1615,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(model.calls[0]["structured_output"])
         self.assertFalse(model.calls[1]["structured_output"])
         self.assertEqual(model.calls[1]["tools"], ())
-        self.assertIn("natural", model.calls[0]["messages"][0]["content"])
+        self.assertIn("只输出用户可见的自然文字", model.calls[0]["messages"][0]["content"])
         self.assertEqual(repository.finishes[0][2], None)
 
     async def test_metadata_prefixed_reply_is_recovered_without_another_model_call(self):
@@ -1705,6 +1705,22 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any("[消息时间" in content for content in contents))
         self.assertFalse(any("[会话时间边界" in content for content in contents))
         self.assertIn("早上好。", contents)
+
+    async def test_kaomoji_and_emotional_beats_survive_agent_delivery(self):
+        first = "这句夸得我有点得意了 (￣▽￣)"
+        second = "你眼光还挺好。"
+        model = SequenceAgentModel([AgentModelResponse(text=first + "\n\n" + second)])
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a", message="你刚刚那句好可爱。",
+            messages=[{"role": "user", "content": "你刚刚那句好可爱。"}],
+        )
+
+        self.assertEqual(result.reply_segments, (first, second))
+        self.assertIn("(￣▽￣)", result.reply_text)
+        self.assertEqual(len(model.calls), 1)
+        self.assertEqual(repository.finishes[0][2], None)
 
     async def test_natural_reply_does_not_require_json_or_retry(self):
         natural_output = "那就再眯一会儿。"

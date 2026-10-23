@@ -20,7 +20,7 @@ scope = {'Path': Path, '__file__': str(BACKEND / 'shared/prompting/renderer.py')
 body = [node for node in renderer.body if not isinstance(node, (ast.Import, ast.ImportFrom))]
 exec(compile(ast.Module(body=body, type_ignores=[]), '<isolated-renderer>', 'exec'), scope)
 persona_tree = tree('features/assistant_persona/infrastructure/default_persona.py')
-persona_node = next(node for node in persona_tree.body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'ECHO_PERSONA_V2' for t in node.targets))
+persona_node = next(node for node in persona_tree.body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'ECHO_PERSONA_V3' for t in node.targets))
 persona = eval(compile(ast.Expression(persona_node.value), '<persona-literal>', 'eval'), {'AssistantPersona': SimpleNamespace})
 settings = next(node for node in tree('shared/config/settings.py').body if isinstance(node, ast.ClassDef) and node.name == 'Settings')
 identity = ast.literal_eval(next(node.value for node in settings.body if isinstance(node, ast.AnnAssign) and node.target.id == 'system_prompt'))

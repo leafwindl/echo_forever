@@ -70,15 +70,15 @@ source("rules", "四份常驻／渠道规则", "人工维护 · Markdown", "规�
             ("baseline-safety.md", "安全正文"), ("natural-dialogue.md", "自然对话正文"),
             ("response-calibration.md", "策略校准正文"), ("call-dialogue.md", "通话正文")]]])
 source("identity", "助手身份与人格", "人工维护 · 结构化对象", "Echo 的固定人设由开发者写好，不是每次聊天临时生成。",
-       ["default_persona.py 定义 ECHO_PERSONA_V2：角色、特质、交流原则、允许披露与禁止声称。", "assistant_persona_version 指定版本，get_assistant_persona() 经公开入口取回对象。", "render_assistant_persona() 转成一条 system 文本，连同该对象里的所有 dialogue_examples 一起加入。"],
-       "正常组装会读取已配置人格；未知版本报错。旧 echo-persona-v1 配置当前也映射到 V2。",
+       ["default_persona.py 定义 ECHO_PERSONA_V3：角色、特质、交流原则、允许披露与禁止声称。", "assistant_persona_version 指定版本，get_assistant_persona() 经公开入口取回对象。", "render_assistant_persona() 转成一条 system 文本，连同该对象里的所有 dialogue_examples 一起加入。"],
+       "正常组装会读取已配置人格；未知版本报错。旧 echo-persona-v1/v2 配置当前也映射到 V3。",
        "对象有结构合同与版本解析；人格措辞本身主要是提示约束。当前没有按任务检索人格片段。",
        "改 default_persona.py 的内容源；渲染机制在 shared/prompting/renderer.py。当前人设正文尚未外置为 MD。",
-       [r("identity", "ECHO_PERSONA_V2 =", "人设正文"), r("identity", "_PERSONAS =", "版本映射"),
+       [r("identity", "ECHO_PERSONA_V3 =", "人设正文"), r("identity", "_PERSONAS =", "版本映射"),
         r("features/assistant_persona/public.py", "def get_assistant_persona", "业务公开入口"),
         r("renderer", "def render_assistant_persona", "人格转成消息")])
 source("examples", "人格中的 Few-shot", "人工维护 · 虚构示范", "当前示例嵌在人格消息里，没有独立检索、挑选或预算模块。",
-       ["开发者在 ECHO_PERSONA_V2.dialogue_examples 写输入／回复对。", "render_assistant_persona() 逐对渲染，标注为虚构口吻示例。", "整组示例随人格一同进入 system，不是额外追加的真实 user／assistant 历史。"],
+       ["开发者在 ECHO_PERSONA_V3.dialogue_examples 写输入／回复对。", "render_assistant_persona() 逐对渲染，标注为虚构口吻示例。", "整组示例随人格一同进入 system，不是额外追加的真实 user／assistant 历史。"],
        "人格存在时随之加入全部示例；不是必须放在请求末尾的一个独立层。",
        "通过提示标明不是用户事实、不要写入记忆；不是数据库历史隔离的自动证明。",
        "当前改 default_persona.py 的 dialogue_examples；规范批准按需管理，但完整资产注册／选择尚未实现。",
@@ -303,7 +303,7 @@ for d in diagrams:
     assert {n for g in d["groups"] for n in g["nodeIds"]} == node_ids
 
 persona_ast = ast.parse((BACKEND / P["identity"]).read_text(encoding="utf-8"))
-persona_call = next(n.value for n in persona_ast.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "ECHO_PERSONA_V2" for t in n.targets))
+persona_call = next(n.value for n in persona_ast.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "ECHO_PERSONA_V3" for t in n.targets))
 examples = ast.literal_eval(next(k.value for k in persona_call.keywords if k.arg == "dialogue_examples"))
 data = {"snapshot": "2026-10-23", "scope": "普通文字聊天；源码快照，不是实时请求追踪", "sources": sources,
         "references": refs, "layers": layers, "diagrams": diagrams, "diagramCopy": diagram_copy,

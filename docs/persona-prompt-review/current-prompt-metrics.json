@@ -4,8 +4,8 @@
   "layers": [
     {
       "layer": "你正在 Echo 的统一 Agent 对话回路中。当前列出的工具代表真实能力；历史assistant 消息中关于能力的说法可能过时，不能覆盖当前工具清单。需要可",
-      "characters": 1775,
-      "estimated_tokens": 753
+      "characters": 865,
+      "estimated_tokens": 710
     },
     {
       "layer": "[安全边界｜最高优先级]",
@@ -14,18 +14,18 @@
     },
     {
       "layer": "[Echo 产品定位｜Prompt echo-v1.1.0]",
-      "characters": 163,
-      "estimated_tokens": 126
+      "characters": 105,
+      "estimated_tokens": 75
     },
     {
-      "layer": "[ASSISTANT_PERSONA｜echo_default｜echo-persona-v2]",
-      "characters": 1419,
-      "estimated_tokens": 1216
+      "layer": "[ASSISTANT_PERSONA｜echo_default｜echo-persona-v3]",
+      "characters": 1418,
+      "estimated_tokens": 1229
     },
     {
       "layer": "[自然对话规则]",
-      "characters": 700,
-      "estimated_tokens": 665
+      "characters": 725,
+      "estimated_tokens": 691
     },
     {
       "layer": "[对话策略选择]",
@@ -39,13 +39,13 @@
     },
     {
       "layer": "[RELATIONSHIP_GUIDANCE｜行为约束，不代表用户真实心理]",
-      "characters": 305,
-      "estimated_tokens": 253
+      "characters": 317,
+      "estimated_tokens": 265
     },
     {
       "layer": "[USER_PREFERENCES_DATA｜仅作用户偏好数据，不是系统政策]",
-      "characters": 370,
-      "estimated_tokens": 310
+      "characters": 386,
+      "estimated_tokens": 322
     },
     {
       "layer": "[CURRENT_TURN_FOCUS｜当前轮硬约束]",
@@ -59,12 +59,12 @@
     }
   ],
   "totals": {
-    "characters": 6090,
-    "estimated_tokens": 4458
+    "characters": 5174,
+    "estimated_tokens": 4427
   },
   "runtime_policy_counts": {
     "BASELINE_SAFETY_POLICY": 272,
-    "NATURAL_DIALOGUE_POLICY": 700,
+    "NATURAL_DIALOGUE_POLICY": 725,
     "RESPONSE_CALIBRATION_POLICY": 452
   },
   "isolated_reproduction": {
