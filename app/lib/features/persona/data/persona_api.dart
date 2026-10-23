@@ -41,6 +41,16 @@ class PersonaApi {
     );
     return RelationshipStateDto.fromJson(response.data!);
   }
+
+  Future<RelationshipStateDto> updateRelationshipMode(
+    RelationshipMode mode,
+  ) async {
+    final response = await _client.put<Map<String, dynamic>>(
+      relationshipPath,
+      data: <String, dynamic>{'relationship_mode': mode.apiValue},
+    );
+    return RelationshipStateDto.fromJson(response.data!);
+  }
 }
 
 class UserPersonaJson {
@@ -71,6 +81,7 @@ class UserPersonaJson {
 
 class RelationshipStateDto {
   const RelationshipStateDto({
+    this.relationshipMode = RelationshipMode.friend,
     required this.stage,
     required this.stageLabel,
     required this.interactionTurns,
@@ -82,17 +93,19 @@ class RelationshipStateDto {
   });
 
   const RelationshipStateDto.initial()
-    : stage = 'new',
+    : relationshipMode = RelationshipMode.friend,
+      stage = 'new',
       stageLabel = '初识',
       interactionTurns = 0,
       activeDays = 0,
       affectionPermission = 'unknown',
-      schemaVersion = 1,
+      schemaVersion = 2,
       createdAt = null,
       updatedAt = null;
 
   factory RelationshipStateDto.fromJson(Map<String, dynamic> json) {
     return RelationshipStateDto(
+      relationshipMode: RelationshipMode.fromJson(json['relationship_mode']),
       stage: json['stage'] as String? ?? 'new',
       stageLabel: json['stage_label'] as String? ?? '',
       interactionTurns: json['interaction_turns'] as int? ?? 0,
@@ -104,6 +117,7 @@ class RelationshipStateDto {
     );
   }
 
+  final RelationshipMode relationshipMode;
   final String stage;
   final String stageLabel;
   final int interactionTurns;
@@ -112,4 +126,12 @@ class RelationshipStateDto {
   final int schemaVersion;
   final String? createdAt;
   final String? updatedAt;
+
+  String get displayStageLabel => switch (stage) {
+    'new' => '初识',
+    'familiar' => '熟悉',
+    'trusted' => '信赖',
+    'close' => '亲近',
+    _ => '正在了解',
+  };
 }

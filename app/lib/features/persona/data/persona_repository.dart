@@ -7,6 +7,7 @@ abstract interface class PersonaRepository {
   Future<UserPersona> updatePersona(PersonaUpdate update);
   Future<RelationshipStateDto> getRelationship();
   Future<RelationshipStateDto> resetRelationship();
+  Future<RelationshipStateDto> updateRelationshipMode(RelationshipMode mode);
 }
 
 class PersonaRepositoryImpl implements PersonaRepository {
@@ -29,4 +30,8 @@ class PersonaRepositoryImpl implements PersonaRepository {
 
   @override
   Future<RelationshipStateDto> resetRelationship() => _api.resetRelationship();
+
+  @override
+  Future<RelationshipStateDto> updateRelationshipMode(RelationshipMode mode) =>
+      _api.updateRelationshipMode(mode);
 }

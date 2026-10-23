@@ -164,6 +164,27 @@ class PersonaController extends AsyncNotifier<PersonaState> {
     }
   }
 
+  Future<RelationshipStateDto?> updateRelationshipMode(
+    RelationshipMode mode,
+  ) async {
+    final current = _currentState();
+    if (current == null || current.isBusy) return null;
+    state = AsyncData(current.copyWith(isSaving: true, clearError: true));
+    try {
+      final relationship = await ref
+          .read(personaRepositoryProvider)
+          .updateRelationshipMode(mode);
+      ref.invalidate(relationshipStateProvider);
+      return relationship;
+    } on Object catch (error) {
+      state = AsyncData(current.copyWith(error: _asAppException(error)));
+      return null;
+    } finally {
+      final latest = _currentState();
+      if (latest != null) state = AsyncData(latest.copyWith(isSaving: false));
+    }
+  }
+
   Future<RelationshipStateDto?> resetRelationship() async {
     final current = _currentState();
     if (current == null || current.isBusy) {

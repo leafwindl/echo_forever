@@ -284,6 +284,13 @@ export class EchoRepository {
     return this.toRelationship(value);
   }
 
+  async updateRelationshipMode(mode: string): Promise<RelationshipState> {
+    const body: Record<string, Object> = {};
+    body.relationship_mode = mode;
+    const value = await this.api.put<Record<string, Object>>('/relationship/me', body);
+    return this.toRelationship(value);
+  }
+
   async resetRelationship(): Promise<RelationshipState> {
     const value = await this.api.post<Record<string, Object>>('/relationship/me/reset');
     return this.toRelationship(value);
@@ -471,6 +478,7 @@ export class EchoRepository {
 
   private toRelationship(value: Record<string, Object>): RelationshipState {
     return {
+      relationshipMode: this.asString(value.relationship_mode) || 'friend',
       stage: this.asString(value.stage),
       stageLabel: this.asString(value.stage_label),
       interactionTurns: this.asNumber(value.interaction_turns),

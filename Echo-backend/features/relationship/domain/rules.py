@@ -19,8 +19,9 @@ _AFFECTION_WELCOME_PATTERN = re.compile(
     r"|(?:我喜欢你|我想你|有你真好|我们是(?:好朋友|很好的朋友)|你真的很懂我)"
 )
 _POSITIVE_RELATION_PATTERN = re.compile(
-    r"(?:谢谢你陪我|谢谢你听我说|你真好|你很懂我|跟你聊天.{0,8}(?:开心|舒服|轻松)|还好有你)"
+    r"(?:谢谢你陪我|谢谢你听我说|你真好|你很懂我|(?:跟|和|与)你聊天.{0,8}(?:开心|舒服|轻松)|还好有你)"
 )
+_NEGATED_POSITIVE_PATTERN = re.compile(r"(?:不|没|并非|谈不上).{0,3}(?:开心|舒服|轻松)")
 _CORRECTION_PATTERN = re.compile(
     r"(?:你没懂|你理解错|不是这个意思|别重复我的话|太冷漠|像机器人|人机味|别给建议)"
 )
@@ -46,7 +47,10 @@ def detect_relationship_signals(user_message: str) -> tuple[RelationshipSignal, 
     elif _AFFECTION_WELCOME_PATTERN.search(clean_message):
         signals.append(RelationshipSignal("affection_welcomed", weight=5))
 
-    if _POSITIVE_RELATION_PATTERN.search(clean_message):
+    if any(
+        not _NEGATED_POSITIVE_PATTERN.search(match.group())
+        for match in _POSITIVE_RELATION_PATTERN.finditer(clean_message)
+    ):
         signals.append(RelationshipSignal("positive_relation", weight=3))
     if _CORRECTION_PATTERN.search(clean_message):
         signals.append(RelationshipSignal("interaction_correction"))
@@ -80,7 +84,7 @@ def resolve_relationship_stage(state: RelationshipState, relationship_pace: str)
 def infer_interaction_warmth(user_message: str) -> str:
     signals = detect_relationship_signals(user_message)
     signal_types = {signal.event_type for signal in signals}
-    if "affection_boundary" in signal_types or "interaction_correction" in signal_types:
+    if "affection_boundary" in signal_types:
         return "reserved"
     if _WARM_TURN_PATTERN.search(user_message):
         return "warm"

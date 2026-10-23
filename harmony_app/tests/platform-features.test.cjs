@@ -77,6 +77,7 @@ test('download URL accepts signed HTTPS links, rejects plaintext or invalid auth
 
 const config = load('common/AppConfig.ets');
 const models = load('model/ApiModels.ets');
+const relationshipLabels = load('model/Relationship.ets');
 function repository(api) {
   const { EchoRepository } = load('data/EchoRepository.ets', {
     '../common/ApiClient': {}, '../common/AppConfig': config, '../model/ApiModels': models,
@@ -84,6 +85,29 @@ function repository(api) {
   });
   return new EchoRepository(api);
 }
+
+test('relationship mode persists independently of familiarity and raw permission is not a UI label', async () => {
+  let submitted;
+  const saved = await repository({put: async (path, body) => {
+    submitted = { path, body };
+    return {relationship_mode:'ai_partner',stage:'new',stage_label:'初识',interaction_turns:8,active_days:1,affection_permission:'unknown'};
+  }}).updateRelationshipMode('ai_partner');
+  assert.deepEqual(submitted,{path:'/relationship/me',body:{relationship_mode:'ai_partner'}});
+  assert.equal(saved.relationshipMode,'ai_partner');
+  assert.equal(saved.stage,'new');
+  assert.equal(relationshipLabels.relationshipModeLabel(saved.relationshipMode),'AI 恋人');
+  assert.equal(relationshipLabels.relationshipStageLabel(saved.stage),'初识');
+  assert.equal(relationshipLabels.relationshipStageLabel('future-stage'),'正在了解');
+  const index=fs.readFileSync(path.join(ets,'pages/Index.ets'),'utf8');
+  const summary=index.slice(index.indexOf('private personaSummary()'),index.indexOf('private personaConfirmDialog()'));
+  assert(!summary.includes('affectionPermission'));
+});
+
+test('legacy relationship responses default to friend and failed updates propagate', async () => {
+  const legacy=await repository({get:async()=>({stage:'new'})}).getRelationship();
+  assert.equal(legacy.relationshipMode,'friend');
+  await assert.rejects(repository({put:async()=>{throw new Error('offline');}}).updateRelationshipMode('ai_partner'),/offline/);
+});
 
 test('hardware probe requires acknowledged=true as Android does', async () => {
   await assert.rejects(repository({ post: async () => ({ acknowledged: false }) }).connectDevice('device'),

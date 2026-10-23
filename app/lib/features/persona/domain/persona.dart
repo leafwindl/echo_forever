@@ -1,4 +1,17 @@
 const maxPreferredNameLength = 40;
+
+enum RelationshipMode {
+  friend('friend', '朋友'),
+  aiPartner('ai_partner', 'AI 恋人');
+
+  const RelationshipMode(this.apiValue, this.label);
+  final String apiValue;
+  final String label;
+
+  static RelationshipMode fromJson(Object? value) =>
+      values.firstWhere((mode) => mode.apiValue == value, orElse: () => friend);
+}
+
 const maxAboutUserLength = 300;
 const maxAvoidTopics = 5;
 const maxAvoidTopicLength = 40;

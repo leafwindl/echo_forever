@@ -37,7 +37,7 @@ assert.equal(data.sources.length,16);
 assert.equal(ids.get('source-list').children.length,16);
 assert.equal(ids.get('example-list').children.length,data.examples.length);
 assert.equal(ids.get('budget-bars').children.length,11);
-assert(ids.get('budget-total').textContent.includes('5,259'));
+assert(ids.get('budget-total').textContent.includes(data.metrics.totals.estimated_tokens.toLocaleString('en-US')));
 assert.equal(evaluate("renderSourceFilter('没有这种材料-888')"),0);
 assert(evaluate("renderSourceFilter('summary_message_id')")>0);
 assert(evaluate("renderSourceFilter('default_persona.py')")>0);

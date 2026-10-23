@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
 
-RELATIONSHIP_SCHEMA_VERSION = 1
+RELATIONSHIP_SCHEMA_VERSION = 2
 RELATIONSHIP_STAGES = ("new", "familiar", "trusted", "close")
+RELATIONSHIP_MODES = ("friend", "ai_partner")
 AFFECTION_PERMISSIONS = ("unknown", "restrained", "welcomed")
 INTERACTION_WARMTH_LEVELS = ("reserved", "normal", "warm")
 
@@ -28,6 +29,7 @@ class RelationshipSignal:
 class RelationshipState:
     user_id: str
     stage: str = "new"
+    relationship_mode: str = "friend"
     score: int = 0
     interaction_turns: int = 0
     active_days: int = 0

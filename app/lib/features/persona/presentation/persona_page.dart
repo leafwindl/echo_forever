@@ -1,5 +1,6 @@
 import 'package:echo_app/core/routing/route_names.dart';
 import 'package:echo_app/features/persona/data/persona_api.dart';
+import 'package:echo_app/features/persona/domain/persona.dart';
 import 'package:echo_app/features/persona/presentation/persona_controller.dart';
 import 'package:echo_app/features/persona/presentation/persona_editor_fields.dart';
 import 'package:echo_app/features/persona/presentation/persona_form_model.dart';
@@ -102,6 +103,8 @@ class _PersonaPageState extends ConsumerState<PersonaPage> {
                   const SizedBox(height: 20),
                   _RelationshipSummary(
                     relationshipState: relationshipState,
+                    isSaving: current?.isSaving ?? false,
+                    onModeChanged: _updateRelationshipMode,
                     onRetry: () => ref.invalidate(relationshipStateProvider),
                   ),
                   if (errorText != null) ...<Widget>[
@@ -241,10 +244,30 @@ class _PersonaPageState extends ConsumerState<PersonaPage> {
     ).showSnackBar(const SnackBar(content: Text('已恢复默认设置')));
   }
 
+  Future<void> _updateRelationshipMode(RelationshipMode mode) async {
+    final result = await ref
+        .read(personaControllerProvider.notifier)
+        .updateRelationshipMode(mode);
+    if (!mounted) return;
+    final detail = ref
+        .read(personaControllerProvider)
+        .asData
+        ?.value
+        .error
+        ?.detail;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result == null ? detail ?? '相处方式保存失败，请重试' : '已切换为${mode.label}',
+        ),
+      ),
+    );
+  }
+
   Future<void> _resetRelationship() async {
     final confirmed = await _confirmDanger(
       title: '重置关系进度',
-      content: 'Echo 会把关系状态重新回到初识阶段，个性化设置和长期记忆不会被删除。',
+      content: '熟悉进度会回到初识阶段。你选择的朋友或 AI 恋人关系、个性化设置和长期记忆会保留。',
       actionLabel: '重置关系',
     );
     if (!confirmed || !mounted) {
@@ -293,10 +316,14 @@ class _RelationshipSummary extends StatelessWidget {
   const _RelationshipSummary({
     required this.relationshipState,
     required this.onRetry,
+    required this.isSaving,
+    required this.onModeChanged,
   });
 
   final AsyncValue<RelationshipStateDto> relationshipState;
   final VoidCallback onRetry;
+  final bool isSaving;
+  final ValueChanged<RelationshipMode> onModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -309,22 +336,44 @@ class _RelationshipSummary extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Text('关系进度', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                '和 Echo 的关系',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              const Text('相处方式由你选择，熟悉程度随交流积累。选择后立即生效。'),
+              const SizedBox(height: 12),
+              SegmentedButton<RelationshipMode>(
+                segments: RelationshipMode.values
+                    .map(
+                      (mode) =>
+                          ButtonSegment(value: mode, label: Text(mode.label)),
+                    )
+                    .toList(growable: false),
+                selected: <RelationshipMode>{relationship.relationshipMode},
+                onSelectionChanged: isSaving
+                    ? null
+                    : (selected) {
+                        final mode = selected.single;
+                        if (mode != relationship.relationshipMode) {
+                          onModeChanged(mode);
+                        }
+                      },
+              ),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: <Widget>[
-                  _InfoChip(label: '阶段', value: relationship.stageLabel),
+                  _InfoChip(
+                    label: '熟悉程度',
+                    value: relationship.displayStageLabel,
+                  ),
                   _InfoChip(
                     label: '互动',
                     value: '${relationship.interactionTurns} 次',
                   ),
                   _InfoChip(label: '活跃', value: '${relationship.activeDays} 天'),
-                  _InfoChip(
-                    label: '亲近',
-                    value: relationship.affectionPermission,
-                  ),
                 ],
               ),
             ],

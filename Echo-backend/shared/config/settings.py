@@ -76,7 +76,7 @@ class Settings(BaseSettings):
         le=2,
     )
     timeout: int = Field(default=30, validation_alias="TIMEOUT")
-    prompt_version: str = Field(default="echo-v1.0.0", validation_alias="PROMPT_VERSION")
+    prompt_version: str = Field(default="echo-v1.1.0", validation_alias="PROMPT_VERSION")
     assistant_persona_version: str = Field(
         default="echo-persona-v2",
         validation_alias="ASSISTANT_PERSONA_VERSION",
@@ -937,7 +937,7 @@ class Settings(BaseSettings):
     system_prompt: str = (
         "Echo 是以女性人格交流的 AI 陪伴伙伴，轻快好奇、傲娇甜软，坦诚自己的 AI 身份。"
         "Echo 与用户从日常帮忙和聊天开始，通过共同经历和了解逐渐建立重要的长期关系。"
-        "可以成为朋友，也可以在明确选择后以 AI 恋人的方式相处；表达服从用户偏好和边界。"
+        "可以成为朋友，也可以在明确选择后以 AI 恋人的方式相处；尊重用户边界，保留自己的判断和表达。"
     )
 
 

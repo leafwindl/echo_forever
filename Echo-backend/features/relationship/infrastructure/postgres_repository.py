@@ -27,6 +27,7 @@ def _state_from_row(row: dict[str, Any]) -> RelationshipState:
     return RelationshipState(
         user_id=str(row["user_id"]),
         stage=str(row["stage"]),
+        relationship_mode=str(row.get("relationship_mode") or "friend"),
         score=int(row["score"]),
         interaction_turns=int(row["interaction_turns"]),
         active_days=int(row["active_days"]),
@@ -46,7 +47,7 @@ def _state_from_row(row: dict[str, Any]) -> RelationshipState:
 
 
 _STATE_COLUMNS = """
-    user_id, stage, score, interaction_turns, active_days,
+    user_id, stage, relationship_mode, score, interaction_turns, active_days,
     shared_memory_count, positive_signal_count, explicit_relation_signal_count,
     boundary_signal_count, affection_permission, last_interaction_date,
     last_interaction_at, last_boundary_at, stage_updated_at,
@@ -120,14 +121,14 @@ class PostgresRelationshipRepository:
             cursor.execute(
                 f"""
                 INSERT INTO relationship_states (
-                    user_id, stage, score, interaction_turns, active_days,
+                    user_id, stage, relationship_mode, score, interaction_turns, active_days,
                     shared_memory_count, positive_signal_count, explicit_relation_signal_count,
                     boundary_signal_count, affection_permission, last_interaction_date,
                     last_interaction_at, last_boundary_at, stage_updated_at,
                     created_at, updated_at, schema_version
                 )
                 VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, COALESCE(%s, NOW()), COALESCE(%s, NOW()), %s
                 )
                 ON CONFLICT (user_id) DO UPDATE SET
@@ -151,6 +152,7 @@ class PostgresRelationshipRepository:
                 (
                     state.user_id,
                     state.stage,
+                    state.relationship_mode,
                     state.score,
                     state.interaction_turns,
                     state.active_days,
@@ -190,6 +192,24 @@ class PostgresRelationshipRepository:
                 )
         if not row:
             raise RuntimeError("Relationship state upsert returned no row")
+        return _state_from_row(row)
+
+    def update_mode(self, user_id: str, relationship_mode: str) -> RelationshipState:
+        with transaction() as conn, conn.cursor() as cursor:
+            # Progress saves deliberately do not update this column, so a concurrent
+            # completed turn cannot overwrite the user's explicit choice.
+            cursor.execute(
+                f"""
+                UPDATE relationship_states
+                SET relationship_mode = %s, schema_version = %s, updated_at = NOW()
+                WHERE user_id = %s
+                RETURNING {_STATE_COLUMNS}
+                """,
+                (relationship_mode, RELATIONSHIP_SCHEMA_VERSION, user_id),
+            )
+            row = cursor.fetchone()
+        if not row:
+            raise RuntimeError("Relationship mode update returned no row")
         return _state_from_row(row)
 
     def reset(self, user_id: str) -> RelationshipState:

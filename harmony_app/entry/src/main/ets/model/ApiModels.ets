@@ -47,6 +47,7 @@ export interface PersonaProfile {
 }
 
 export interface RelationshipState {
+  relationshipMode: string;
   stage: string;
   stageLabel: string;
   interactionTurns: number;

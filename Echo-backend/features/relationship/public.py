@@ -49,7 +49,12 @@ def reset_relationship_state(user_id: str) -> RelationshipState:
     return get_relationship_management_service().reset(user_id)
 
 
+def update_relationship_mode(user_id: str, relationship_mode: str) -> RelationshipState:
+    return get_relationship_management_service().update_mode(user_id, relationship_mode)
+
+
 __all__ = [
+    "update_relationship_mode",
     "RelationshipContext",
     "RelationshipManagementService",
     "RelationshipState",

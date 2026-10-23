@@ -301,6 +301,8 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         """
         CREATE TABLE IF NOT EXISTS relationship_states (
             user_id TEXT PRIMARY KEY,
+            relationship_mode TEXT NOT NULL DEFAULT 'friend'
+                CHECK (relationship_mode IN ('friend', 'ai_partner')),
             stage VARCHAR(32) NOT NULL DEFAULT 'new',
             score INTEGER NOT NULL DEFAULT 0 CHECK (score BETWEEN 0 AND 100),
             interaction_turns INTEGER NOT NULL DEFAULT 0 CHECK (interaction_turns >= 0),
@@ -314,7 +316,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             last_interaction_at TIMESTAMPTZ,
             last_boundary_at TIMESTAMPTZ,
             stage_updated_at TIMESTAMPTZ,
-            schema_version INTEGER NOT NULL DEFAULT 1,
+            schema_version INTEGER NOT NULL DEFAULT 2,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
@@ -900,6 +902,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         """,
         "CREATE INDEX IF NOT EXISTS idx_user_memories_source_message_id ON user_memories(source_message_id)",
         "CREATE INDEX IF NOT EXISTS idx_user_personas_updated_at ON user_personas(updated_at DESC)",
+        "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS relationship_mode "
+        "TEXT NOT NULL DEFAULT 'friend' CHECK (relationship_mode IN ('friend', 'ai_partner'))",
+        "ALTER TABLE relationship_states ALTER COLUMN schema_version SET DEFAULT 2",
+        "UPDATE relationship_states SET schema_version = 2 WHERE schema_version < 2",
         "CREATE INDEX IF NOT EXISTS idx_relationship_states_stage ON relationship_states(stage)",
         "CREATE INDEX IF NOT EXISTS idx_relationship_states_updated_at ON relationship_states(updated_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_relationship_events_user_created ON relationship_events(user_id, created_at DESC)",

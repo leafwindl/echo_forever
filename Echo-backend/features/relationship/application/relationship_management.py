@@ -1,6 +1,12 @@
 from datetime import datetime, timezone
 
-from features.relationship.domain.entities import RelationshipContext, RelationshipState
+from features.relationship.domain.entities import (
+    RELATIONSHIP_MODES,
+    RelationshipContext,
+    RelationshipState,
+    RelationshipValidationError,
+    default_relationship_state,
+)
 from features.relationship.domain.repositories import RelationshipRepository
 from features.relationship.domain.rules import (
     advance_relationship_state,
@@ -56,4 +62,12 @@ class RelationshipManagementService:
 
     def reset(self, user_id: str) -> RelationshipState:
         return self.repository.reset(user_id.strip())
+
+    def update_mode(self, user_id: str, relationship_mode: str) -> RelationshipState:
+        clean_user_id = default_relationship_state(user_id).user_id
+        mode = relationship_mode.strip().lower()
+        if mode not in RELATIONSHIP_MODES:
+            raise RelationshipValidationError("Invalid relationship_mode")
+        self.repository.get_or_create(clean_user_id)
+        return self.repository.update_mode(clean_user_id, mode)
 

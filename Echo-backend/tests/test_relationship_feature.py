@@ -1,5 +1,6 @@
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -10,6 +11,7 @@ from features.relationship.application.relationship_management import (
 from features.relationship.domain.entities import (
     RelationshipSignal,
     RelationshipState,
+    RelationshipValidationError,
     default_relationship_state,
 )
 from features.relationship.domain.rules import (
@@ -42,7 +44,14 @@ class InMemoryRelationshipRepository:
         return state
 
     def reset(self, user_id):
-        self.state = default_relationship_state(user_id)
+        self.state = replace(
+            default_relationship_state(user_id), relationship_mode=self.state.relationship_mode
+        )
+        return self.state
+
+    def update_mode(self, user_id, relationship_mode):
+        assert user_id == self.state.user_id
+        self.state = replace(self.state, relationship_mode=relationship_mode)
         return self.state
 
 
@@ -105,6 +114,19 @@ class RelationshipRuleTests(unittest.TestCase):
         self.assertEqual("warm", infer_interaction_warmth("今天打球赢了，挺开心的"))
         self.assertEqual((), detect_relationship_signals("今天打球赢了，挺开心的"))
 
+    def test_positive_feedback_supports_common_chat_phrasings_without_inventing_permission(self):
+        for message in ("和你聊天很开心", "跟你聊天挺舒服", "与你聊天很轻松"):
+            with self.subTest(message=message):
+                signals = {s.event_type for s in detect_relationship_signals(message)}
+                self.assertIn("positive_relation", signals)
+                self.assertNotIn("affection_welcomed", signals)
+        self.assertNotIn(
+            "positive_relation", {s.event_type for s in detect_relationship_signals("和你聊天不开心")}
+        )
+
+    def test_request_for_less_robotic_style_does_not_restrain_affection(self):
+        self.assertEqual("normal", infer_interaction_warmth("你有点人机味，能自然点吗"))
+
     def test_advance_records_active_day_and_explicit_permission(self):
         progress = advance_relationship_state(
             default_relationship_state("user-a"),
@@ -148,6 +170,21 @@ class RelationshipManagementTests(unittest.TestCase):
         self.assertEqual("user-a", reset.user_id)
         self.assertEqual("new", reset.stage)
         self.assertEqual(0, reset.score)
+
+    def test_explicit_mode_does_not_fabricate_progress_and_reset_keeps_the_choice(self):
+        changed = self.service.update_mode("user-a", "ai_partner")
+        self.assertEqual("ai_partner", changed.relationship_mode)
+        self.assertEqual("new", changed.stage)
+        self.assertEqual(0, changed.interaction_turns)
+        context = self.service.get_context("user-a", "你好", "natural", "contextual")
+        self.assertEqual("ai_partner", context.state.relationship_mode)
+        self.assertEqual("ai_partner", self.service.reset("user-a").relationship_mode)
+        self.assertEqual("friend", self.service.update_mode("user-a", "friend").relationship_mode)
+
+    def test_invalid_mode_never_reaches_persistence(self):
+        with self.assertRaises(RelationshipValidationError):
+            self.service.update_mode("user-a", "pretend_human")
+        self.assertEqual("friend", self.repository.state.relationship_mode)
 
 
 if __name__ == "__main__":

@@ -13,24 +13,24 @@
       "estimated_tokens": 248
     },
     {
-      "layer": "[Echo 产品定位｜Prompt echo-v1.0.0]",
-      "characters": 157,
-      "estimated_tokens": 120
+      "layer": "[Echo 产品定位｜Prompt echo-v1.1.0]",
+      "characters": 163,
+      "estimated_tokens": 126
     },
     {
       "layer": "[ASSISTANT_PERSONA｜echo_default｜echo-persona-v2]",
-      "characters": 1303,
-      "estimated_tokens": 1103
+      "characters": 1423,
+      "estimated_tokens": 1223
     },
     {
       "layer": "[自然对话规则]",
-      "characters": 1276,
-      "estimated_tokens": 1183
+      "characters": 700,
+      "estimated_tokens": 665
     },
     {
       "layer": "[对话策略选择]",
-      "characters": 948,
-      "estimated_tokens": 880
+      "characters": 452,
+      "estimated_tokens": 424
     },
     {
       "layer": "[CONVERSATION_MODE｜当前交互渠道约束]",
@@ -39,13 +39,13 @@
     },
     {
       "layer": "[RELATIONSHIP_GUIDANCE｜行为约束，不代表用户真实心理]",
-      "characters": 253,
-      "estimated_tokens": 204
+      "characters": 305,
+      "estimated_tokens": 253
     },
     {
       "layer": "[USER_PREFERENCES_DATA｜仅作用户偏好数据，不是系统政策]",
-      "characters": 365,
-      "estimated_tokens": 305
+      "characters": 370,
+      "estimated_tokens": 310
     },
     {
       "layer": "[CURRENT_TURN_FOCUS｜当前轮硬约束]",
@@ -59,13 +59,13 @@
     }
   ],
   "totals": {
-    "characters": 6983,
-    "estimated_tokens": 5259
+    "characters": 6094,
+    "estimated_tokens": 4465
   },
   "runtime_policy_counts": {
     "BASELINE_SAFETY_POLICY": 272,
-    "NATURAL_DIALOGUE_POLICY": 1276,
-    "RESPONSE_CALIBRATION_POLICY": 948
+    "NATURAL_DIALOGUE_POLICY": 700,
+    "RESPONSE_CALIBRATION_POLICY": 452
   },
   "isolated_reproduction": {
     "history": [

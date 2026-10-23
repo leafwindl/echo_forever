@@ -94,10 +94,10 @@ source("preferences", "用户显式偏好", "用户填写 · 数据库", "person
         r("features/persona/application/persona_management.py", "def update(", "写入用例"),
         r("features/persona/infrastructure/postgres_repository.py", "INSERT INTO user_personas", "持久化位置"),
         r("renderer", "def render_persona", "偏好转成文字")])
-source("relationship", "关系状态与本轮温度", "规则计算 · 数据库", "关系不是模型自称熟悉就升级；它是有持久状态的业务规则。",
-       ["已保存对话经 record_turn() 检测边界、正向反馈等信号，推进状态并记录事件。", "仓储维护 relationship_states 与 relationship_events。", "本轮 get_relationship_context() 读取状态，结合当前用户原话、关系节奏及亲昵偏好计算表达上限。"],
+source("relationship", "相处方式与熟悉进度", "用户选择 · 规则计算 · 数据库", "朋友或 AI 恋人由用户选择；熟悉进度独立积累，不由模型自行宣布。",
+       ["已保存对话经 record_turn() 检测边界、正向反馈等信号，推进状态并记录事件。", "PUT /relationship/me 保存选择到 relationship_states.relationship_mode；重置进度保留类型。", "本轮 get_relationship_context() 读取状态，结合当前用户原话、关系节奏及亲昵偏好计算表达上限。"],
        "常规会注入关系 guidance；读取失败或私密数据隔离场景回退到 new／normal／contextual，不省略该 guidance。",
-       "阶段、进度、表达上限由规则计算；本轮明确边界能立即影响表达。不是对用户真实心理的测量。",
+       "类型仅接受 friend／ai_partner，并按已鉴权用户保存；阶段与信号由规则计算，本轮边界立即影响表达。不是对真实心理的测量。",
        "阶段和信号规则在 relationship/domain/rules.py；模型看到的措辞在 render_relationship_guidance()。",
        [r("features/relationship/application/relationship_management.py", "def get_context", "读取当前关系上下文"),
         r("features/relationship/application/relationship_management.py", "def record_turn", "保存后推进"),
@@ -305,7 +305,7 @@ for d in diagrams:
 persona_ast = ast.parse((BACKEND / P["identity"]).read_text(encoding="utf-8"))
 persona_call = next(n.value for n in persona_ast.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "ECHO_PERSONA_V2" for t in n.targets))
 examples = ast.literal_eval(next(k.value for k in persona_call.keywords if k.arg == "dialogue_examples"))
-data = {"snapshot": "2026-10-22", "scope": "普通文字聊天；源码快照，不是实时请求追踪", "sources": sources,
+data = {"snapshot": "2026-10-23", "scope": "普通文字聊天；源码快照，不是实时请求追踪", "sources": sources,
         "references": refs, "layers": layers, "diagrams": diagrams, "diagramCopy": diagram_copy,
         "examples": examples, "metrics": json.loads((HERE.parent / "persona-prompt-review/current-prompt-metrics.json").read_text(encoding="utf-8"))}
 engine = (HERE.parent / "chat-flow-page/vendor/dagre.min.js").read_text(encoding="utf-8")

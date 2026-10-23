@@ -27,6 +27,8 @@ class FakePersonaRepository implements PersonaRepository {
   int resetPersonaCalls = 0;
   int getRelationshipCalls = 0;
   int resetRelationshipCalls = 0;
+  RelationshipMode? updatedRelationshipMode;
+  Object? updateRelationshipModeError;
   final List<PersonaUpdate> updates = <PersonaUpdate>[];
 
   @override
@@ -40,6 +42,24 @@ class FakePersonaRepository implements PersonaRepository {
   Future<RelationshipStateDto> getRelationship() async {
     getRelationshipCalls += 1;
     if (getRelationshipError != null) throw getRelationshipError!;
+    return relationship;
+  }
+
+  @override
+  Future<RelationshipStateDto> updateRelationshipMode(
+    RelationshipMode mode,
+  ) async {
+    if (updateRelationshipModeError != null) throw updateRelationshipModeError!;
+    updatedRelationshipMode = mode;
+    relationship = RelationshipStateDto(
+      relationshipMode: mode,
+      stage: relationship.stage,
+      stageLabel: relationship.stageLabel,
+      interactionTurns: relationship.interactionTurns,
+      activeDays: relationship.activeDays,
+      affectionPermission: relationship.affectionPermission,
+      schemaVersion: relationship.schemaVersion,
+    );
     return relationship;
   }
 

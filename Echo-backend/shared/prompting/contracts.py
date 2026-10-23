@@ -30,6 +30,7 @@ class UserPreferences(Protocol):
 
 class RelationshipState(Protocol):
     stage: str
+    relationship_mode: str
 
 
 class RelationshipContext(Protocol):

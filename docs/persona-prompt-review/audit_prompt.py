@@ -25,7 +25,7 @@ persona = eval(compile(ast.Expression(persona_node.value), '<persona-literal>', 
 settings = next(node for node in tree('shared/config/settings.py').body if isinstance(node, ast.ClassDef) and node.name == 'Settings')
 identity = ast.literal_eval(next(node.value for node in settings.body if isinstance(node, ast.AnnAssign) and node.target.id == 'system_prompt'))
 prefs = SimpleNamespace(enabled=True, preferred_name=None, reply_style='natural', reply_length='balanced', support_mode='balanced', proactivity='balanced', relationship_pace='natural', affection_style='contextual', avoid_topics=(), about_user=None)
-messages = scope['render_prompt_layers'](product_identity=identity, persona=prefs, long_term_memories=[], conversation_summary='', prompt_version='echo-v1.0.0', persona_maximum_tokens=400, memory_maximum_tokens=800, summary_maximum_tokens=800, assistant_persona=persona, relationship=None, conversation_mode='chat')
+messages = scope['render_prompt_layers'](product_identity=identity, persona=prefs, long_term_memories=[], conversation_summary='', prompt_version='echo-v1.1.0', persona_maximum_tokens=400, memory_maximum_tokens=800, summary_maximum_tokens=800, assistant_persona=persona, relationship=None, conversation_mode='chat')
 messages.append({'role':'system','content':scope['render_turn_focus_guidance'](False, False)})
 context_tree = tree('features/chat/infrastructure/context_builder.py')
 temporal = next(node for node in ast.walk(context_tree) if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id=='temporal_guidance' for t in node.targets))

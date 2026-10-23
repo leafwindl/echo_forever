@@ -26,6 +26,7 @@ import { HarmonyPush } from '../platform/HarmonyPush';
 import { NotificationsPage } from './NotificationsPage';
 import { DevicesPage } from './DevicesPage';
 import { UpdatePanel } from './UpdatePanel';
+import { relationshipModeLabel, relationshipStageLabel } from '../model/Relationship';
 
 interface HarmonyFocusSession {
   sessionId: string;
@@ -94,6 +95,10 @@ const PERSONA_RELATIONSHIP_PACES: PersonaChoice[] = [
   { value: 'slow', label: '慢慢来' },
   { value: 'natural', label: '自然' },
   { value: 'open', label: '开放' }
+];
+const RELATIONSHIP_MODES: PersonaChoice[] = [
+  { value: 'friend', label: '朋友' },
+  { value: 'ai_partner', label: 'AI 恋人' }
 ];
 const PERSONA_AFFECTION_STYLES: PersonaChoice[] = [
   { value: 'restrained', label: '克制' },
@@ -191,6 +196,7 @@ struct Index {
     onboardingCompleted: false
   };
   @State private relationshipState: RelationshipState | undefined = undefined;
+  @State private relationshipModeSaving: boolean = false;
   @State private personaError: string = '';
   @State private personaSaving: boolean = false;
   @State private personaCustomTopic: string = '';
@@ -1024,6 +1030,22 @@ struct Index {
       this.statusText = this.personaError;
     } finally {
       this.personaSaving = false;
+    }
+  }
+
+  private async updateRelationshipMode(mode: string): Promise<void> {
+    if (!this.repository || this.relationshipModeSaving ||
+      this.relationshipState?.relationshipMode === mode) return;
+    this.relationshipModeSaving = true;
+    this.personaError = '';
+    try {
+      this.relationshipState = await this.repository.updateRelationshipMode(mode);
+      this.toast(`已切换为${relationshipModeLabel(mode)}`);
+    } catch (error) {
+      this.personaError = `相处方式保存失败：${this.describeError(error)}`;
+      this.toast(this.personaError);
+    } finally {
+      this.relationshipModeSaving = false;
     }
   }
 
@@ -3185,32 +3207,37 @@ struct Index {
   @Builder
   private personaSummary(): void {
     Column({ space: 12 }) {
-      Text('关系进度')
+      Text('和 Echo 的关系')
         .fontSize(17)
         .fontWeight(FontWeight.Medium)
         .fontColor('#262331')
         .width('100%')
+      Text('相处方式由你选择，熟悉程度随交流积累。选择后立即生效。')
+        .fontSize(13).lineHeight(19).fontColor('#6F6A78').width('100%')
       if (this.relationshipState === undefined) {
         if (this.loading) {
           LoadingProgress().width(24).height(24).color('#6750A4')
         } else {
           Row({ space: 8 }) {
-            Text('关系进度加载失败')
-              .fontSize(14)
-              .fontColor('#BA1A1A')
-              .layoutWeight(1)
-            Button('重试')
-              .fontSize(13)
-              .backgroundColor(Color.Transparent)
-              .fontColor('#6750A4')
+            Text('关系进度加载失败').fontSize(14).fontColor('#BA1A1A').layoutWeight(1)
+            Button('重试').fontSize(13).backgroundColor(Color.Transparent).fontColor('#6750A4')
               .onClick(() => void this.loadPageData())
           }.width('100%')
         }
       } else {
         Row({ space: 8 }) {
+          ForEach(RELATIONSHIP_MODES, (choice: PersonaChoice) => {
+            this.personaOption(choice, this.relationshipState?.relationshipMode || 'friend',
+              () => void this.updateRelationshipMode(choice.value))
+          }, (choice: PersonaChoice) => choice.value)
+          if (this.relationshipModeSaving) {
+            LoadingProgress().width(20).height(20).color('#6750A4')
+          }
+        }.width('100%').enabled(!this.relationshipModeSaving)
+        Row({ space: 8 }) {
           Column({ space: 4 }) {
-            Text('阶段').fontSize(12).fontColor('#6F6A78')
-            Text(this.relationshipState.stageLabel || this.relationshipState.stage || '初识')
+            Text('熟悉程度').fontSize(12).fontColor('#6F6A78')
+            Text(relationshipStageLabel(this.relationshipState.stage))
               .fontSize(15).fontColor('#262331').maxLines(1)
           }.layoutWeight(1).padding(12).backgroundColor('#FFFFFF').borderRadius(10)
           Column({ space: 4 }) {
@@ -3218,25 +3245,15 @@ struct Index {
             Text(`${this.relationshipState.interactionTurns} 次`)
               .fontSize(15).fontColor('#262331')
           }.layoutWeight(1).padding(12).backgroundColor('#FFFFFF').borderRadius(10)
-        }.width('100%')
-        Row({ space: 8 }) {
           Column({ space: 4 }) {
             Text('活跃').fontSize(12).fontColor('#6F6A78')
             Text(`${this.relationshipState.activeDays} 天`)
               .fontSize(15).fontColor('#262331')
           }.layoutWeight(1).padding(12).backgroundColor('#FFFFFF').borderRadius(10)
-          Column({ space: 4 }) {
-            Text('亲近').fontSize(12).fontColor('#6F6A78')
-            Text(this.relationshipState.affectionPermission || '按语境')
-              .fontSize(15).fontColor('#262331').maxLines(1)
-          }.layoutWeight(1).padding(12).backgroundColor('#FFFFFF').borderRadius(10)
         }.width('100%')
       }
     }
-    .width('100%')
-    .padding(16)
-    .backgroundColor('#F0EDF5')
-    .borderRadius(16)
+    .width('100%').padding(16).backgroundColor('#F0EDF5').borderRadius(16)
   }
 
   @Builder
@@ -3254,7 +3271,7 @@ struct Index {
           .fontColor('#262331')
         Text(this.personaConfirmAction === 'persona'
           ? '只会重置个性化偏好，不会删除长期记忆或聊天记录。'
-          : 'Echo 会回到初识阶段，个性化设置和长期记忆不会被删除。')
+          : '熟悉进度会回到初识阶段。你选择的朋友或 AI 恋人关系、个性化设置和长期记忆会保留。')
           .fontSize(15)
           .lineHeight(22)
           .fontColor('#49454F')
