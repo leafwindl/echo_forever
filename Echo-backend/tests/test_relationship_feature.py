@@ -127,6 +127,10 @@ class RelationshipRuleTests(unittest.TestCase):
     def test_request_for_less_robotic_style_does_not_restrain_affection(self):
         self.assertEqual("normal", infer_interaction_warmth("你有点人机味，能自然点吗"))
 
+    def test_negated_happiness_does_not_trigger_warm_turn(self):
+        self.assertEqual("normal", infer_interaction_warmth("和你聊天不开心"))
+        self.assertEqual("warm", infer_interaction_warmth("开始不开心，后来终于搞定了"))
+
     def test_advance_records_active_day_and_explicit_permission(self):
         progress = advance_relationship_state(
             default_relationship_state("user-a"),

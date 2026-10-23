@@ -86,7 +86,11 @@ def infer_interaction_warmth(user_message: str) -> str:
     signal_types = {signal.event_type for signal in signals}
     if "affection_boundary" in signal_types:
         return "reserved"
-    if _WARM_TURN_PATTERN.search(user_message):
+    negated_spans = [match.span() for match in _NEGATED_POSITIVE_PATTERN.finditer(user_message)]
+    if any(
+        not any(start <= match.start() < end for start, end in negated_spans)
+        for match in _WARM_TURN_PATTERN.finditer(user_message)
+    ):
         return "warm"
     return "normal"
 

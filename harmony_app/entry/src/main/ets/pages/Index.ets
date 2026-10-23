@@ -1034,7 +1034,7 @@ struct Index {
   }
 
   private async updateRelationshipMode(mode: string): Promise<void> {
-    if (!this.repository || this.relationshipModeSaving ||
+    if (!this.repository || this.relationshipModeSaving || this.personaSaving ||
       this.relationshipState?.relationshipMode === mode) return;
     this.relationshipModeSaving = true;
     this.personaError = '';
@@ -1050,7 +1050,7 @@ struct Index {
   }
 
   private async resetRelationshipProgress(): Promise<void> {
-    if (!this.repository || this.personaSaving) return;
+    if (!this.repository || this.personaSaving || this.relationshipModeSaving) return;
     this.personaConfirmAction = '';
     this.personaSaving = true;
     this.personaError = '';
@@ -3233,7 +3233,7 @@ struct Index {
           if (this.relationshipModeSaving) {
             LoadingProgress().width(20).height(20).color('#6750A4')
           }
-        }.width('100%').enabled(!this.relationshipModeSaving)
+        }.width('100%').enabled(!this.relationshipModeSaving && !this.personaSaving)
         Row({ space: 8 }) {
           Column({ space: 4 }) {
             Text('熟悉程度').fontSize(12).fontColor('#6F6A78')
@@ -3500,7 +3500,7 @@ struct Index {
                 .height(44)
                 .backgroundColor('#F0EDF5')
                 .fontColor('#49454F')
-                .enabled(!this.personaSaving)
+                .enabled(!this.personaSaving && !this.relationshipModeSaving)
                 .onClick(() => this.personaConfirmAction = 'relationship')
             }.width('100%')
 
