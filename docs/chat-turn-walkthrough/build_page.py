@@ -65,7 +65,6 @@ def source_prompts():
     # This is the current optional-sticker branch, not a historical policy snapshot.
     result = agent_scope["_build_initial_messages"](
         messages=messages, conversation_mode="chat", sticker_intent="",
-        allow_proactive_stickers=True,
     )
     return result, scope["estimate_prompt_tokens"]
 
@@ -107,7 +106,7 @@ def build(snapshot, output):
     ref("renderer", B + "shared/prompting/renderer.py", "def render_prompt_layers(", "材料转成 role/content 列表")
     ref("product", B + "shared/config/settings.py", "system_prompt: str", "产品定位默认值与部署覆盖")
     ref("settings", B + "shared/config/settings.py", "class Settings", "读取环境配置和 .env")
-    ref("persona", B + "features/assistant_persona/infrastructure/default_persona.py", "ECHO_PERSONA_V3 =", "固定人设及其口吻示例")
+    ref("persona", B + "features/assistant_persona/infrastructure/default_persona.py", "ECHO_PERSONA_V3 =", "固定人设；当前无闲聊示例")
     ref("ruleLoad", B + "shared/prompting/renderer.py", "def _load_rule", "导入时读取 Markdown 规则")
     for key, file in [("safety", "baseline-safety.md"), ("natural", "natural-dialogue.md"), ("calibration", "response-calibration.md")]:
         ref(key, B + "prompts/rules/" + file, "[", "规则正文：" + file)
@@ -132,7 +131,7 @@ def build(snapshot, output):
                     refs=references, status=status)
 
     materials = [
-        material("fixed", "产品、人设、示例与规则", "源码、MD 与部署配置", "Settings 取配置；人格公开入口取固定对象；Renderer 读取规则文件并渲染。", "告诉模型 Echo 是谁、如何表达。人格示例是虚构示范，不是真实历史。", ["product", "persona", "ruleLoad", "renderer"], "source"),
+        material("fixed", "产品、人设与规则", "源码、MD 与部署配置", "Settings 取配置；人格公开入口取固定对象；Renderer 读取规则文件并渲染。", "告诉模型 Echo 是谁、如何表达。当前普通聊天不附带固定 Few-shot。", ["product", "persona", "ruleLoad", "renderer"], "source"),
         material("preferences", "你的个性化设置", "user_personas 表", "get_persona(user_id) 读取；启用时映射风格、长度、称呼等白名单字段。", "偏好用于调整表达；它和 Echo 自己的人格不是同一份数据。", ["context", "prefs"]),
         material("relationship", "关系类型与熟悉进度", "relationship_states 表＋本轮信号", "get_relationship_context() 合并关系类型、阶段、边界与当前表达信号。", "朋友／AI 恋人与初识／熟悉等进度是不同维度。此处不拿今天的值冒充当时值。", ["context", "relationship"]),
         material("memory", "相关长期记忆", "user_memories、memory_embeddings 表", "用当前输入做相关性召回；无向量时可按重要性回退；非空才注入。", "只取可用背景，不是把整个数据库塞给模型。旧轮次实际召回内容未保存。", ["context", "renderer"]),
@@ -147,7 +146,7 @@ def build(snapshot, output):
         ("agent", "执行与交付要求", "prefix", "规则＋输出", "当前源码：普通聊天、允许主动表情的分支"),
         ("safety", "安全规则", "safety", "规则", "当前规则 MD 原文"),
         ("product", "Echo 产品定位", "product", "身份", "源码默认值；当时部署覆盖值未记录"),
-        ("persona", "人格＋口吻示例", "persona", "身份＋示例", "当前人格对象渲染全文；并非当时版本快照"),
+        ("persona", "人格，无闲聊示例", "persona", "身份", "当前人格对象渲染全文；并非当时版本快照"),
         ("natural", "自然对话规则", "natural", "规则", "当前规则 MD 原文"),
         ("calibration", "回应策略", "calibration", "规则", "当前规则 MD 原文"),
         ("mode", "文字聊天指引", "renderer", "规则", "当前 chat 模式的实际渲染正文"),
@@ -212,7 +211,7 @@ def build(snapshot, output):
         dict(id="assembly", title="排成消息列表", short="拼接", place="Echo 服务端 / Renderer + Context Builder", headline="‘拼接’主要是在排列表，不是把所有内容糊成一个字符串。",
              body="共享 Renderer 先产出一组 system 消息；Context Builder 再追加本轮指引、时间、历史和本轮 user 消息。Agent 最后在列表最前面补执行和交付说明。这里直接看最终列表从头到尾如何放入。",
              change="结果：messages = [system 材料…, 历史 user/assistant…, 本轮 user]。",
-             conclusion="六类内容不等于六个 role。Few-shot 当前嵌在人格 system 消息中。", refs=["renderer", "context", "prefix"],
+             conclusion="六类内容不等于六个 role。普通闲聊当前不注入 Few-shot。", refs=["renderer", "context", "prefix"],
              checks=["历史保留 user / assistant 角色；本轮任务在末尾。", "记忆、摘要虽然装在 system 消息里，仍被文字边界标注为背景数据。", "这些文字标注不是程序级权限隔离，也不能保证模型永不受误导。"], packet="messages"),
         dict(id="model", title="附上工具说明书", short="模型请求", place="Echo 服务端 → 模型 Provider", headline="消息列表旁边，再放一份模型可选的工具说明书。",
              body="模型适配器接收 messages、tools 与生成参数。tools 来自注册表和参数模型，按渠道及白名单筛选；不是把工具源码贴进用户消息里。本轮实际没有工具调用。",

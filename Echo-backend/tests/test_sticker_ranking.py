@@ -1,6 +1,6 @@
 import sys
 import unittest
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -39,34 +39,27 @@ class StickerRankingTests(unittest.TestCase):
         self.now = datetime(2026, 8, 7, 13, 0, tzinfo=UTC)
         self.rows = [_row("stk_high", 300), _row("stk_mid", 200), _row("stk_low", 100)]
 
-    def _rank(self, *, recent_ids=None, last_used=None):
+    def _rank(self):
         return rank_sticker_rows(
             self.rows,
             terms=("开心",),
-            purpose="proactive",
-            recent_ids=set(recent_ids or ()),
-            last_used=dict(last_used or {}),
-            now=self.now,
-            cooldown=timedelta(minutes=5),
         )
 
     def test_priority_orders_semantically_equivalent_candidates(self):
-        self.assertEqual([row["sticker_id"] for row in self._rank()], [
-            "stk_high",
-            "stk_mid",
-            "stk_low",
-        ])
-
-    def test_recent_turn_and_time_cooldowns_select_next_candidate(self):
-        ranked = self._rank(
-            recent_ids={"stk_high"},
-            last_used={"stk_mid": self.now - timedelta(minutes=2)},
+        self.assertEqual(
+            [row["sticker_id"] for row in self._rank()],
+            [
+                "stk_high",
+                "stk_mid",
+                "stk_low",
+            ],
         )
-        self.assertEqual(ranked[0]["sticker_id"], "stk_low")
 
-    def test_all_candidates_cooling_falls_back_to_highest_priority(self):
-        ranked = self._rank(recent_ids={"stk_high", "stk_mid", "stk_low"})
-        self.assertEqual(ranked[0]["sticker_id"], "stk_high")
+    def test_repeated_search_keeps_the_best_match_available(self):
+        first = self._rank()
+        second = self._rank()
+        self.assertEqual(first, second)
+        self.assertEqual(second[0]["sticker_id"], "stk_high")
 
     def test_official_sticker_gets_small_bonus_on_semantic_tie(self):
         self.rows = [
@@ -97,11 +90,6 @@ class StickerRankingTests(unittest.TestCase):
         ranked = rank_sticker_rows(
             self.rows,
             terms=("辛苦了加油",),
-            purpose="proactive",
-            recent_ids=set(),
-            last_used={},
-            now=self.now,
-            cooldown=timedelta(minutes=5),
         )
 
         self.assertEqual(ranked[0]["sticker_id"], "stk_encourage")

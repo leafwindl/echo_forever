@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta
-from enum import StrEnum
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -20,22 +18,6 @@ class ProactivePlannerError(RuntimeError):
     def __init__(self, code: str):
         super().__init__(code)
         self.code = code
-
-
-class StickerSemanticAnalysisError(ValueError):
-    """The model did not return a valid sticker semantic decision."""
-
-
-class StickerToolPolicy(StrEnum):
-    REQUIRED = "required"
-    OPTIONAL = "optional"
-    FORBIDDEN = "forbidden"
-
-
-@dataclass(frozen=True)
-class StickerRequestDecision:
-    policy: StickerToolPolicy
-    intent: str = ""
 
 
 class Clock(Protocol):
@@ -66,16 +48,6 @@ class AgentConversationModel(Protocol):
         tool_choice: str | dict[str, Any] = "auto",
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     ) -> AgentModelResponse: ...
-
-
-class StickerSemanticAnalyzer(Protocol):
-    async def assess_request(
-        self,
-        message: str,
-        messages: list[dict],
-    ) -> StickerRequestDecision: ...
-
-    async def claims_sticker_delivery(self, reply_text: str) -> bool: ...
 
 
 class ProactiveDecisionPlanner(Protocol):

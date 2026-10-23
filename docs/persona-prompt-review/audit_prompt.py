@@ -36,7 +36,7 @@ agent_method = next(node for node in agent_class.body if isinstance(node,ast.Fun
 agent_method.decorator_list=[]
 agent_scope={}
 exec(compile(ast.Module(body=[agent_method],type_ignores=[]),'<isolated-agent-rules>','exec'),agent_scope)
-messages=agent_scope['_build_initial_messages'](messages=messages,conversation_mode='chat',sticker_intent='',allow_proactive_stickers=True)
+messages=agent_scope['_build_initial_messages'](messages=messages,conversation_mode='chat',sticker_intent='')
 estimate=scope['estimate_prompt_tokens']
 rows=[{'layer':m['content'].splitlines()[0][:80], 'characters':len(m['content']), 'estimated_tokens':estimate(m['content'])} for m in messages]
 result={'method':'application character-weight estimate; not tokenizer or billed tokens', 'scenario':'default chat, enabled default preferences, new relationship; excludes history, memories, summary contents, time JSON, user input, tool schemas and tool results; no retries', 'layers':rows, 'totals':{'characters':sum(r['characters'] for r in rows),'estimated_tokens':sum(r['estimated_tokens'] for r in rows)}, 'runtime_policy_counts':{key:len(scope[key]) for key in ['BASELINE_SAFETY_POLICY','NATURAL_DIALOGUE_POLICY','RESPONSE_CALIBRATION_POLICY']}}

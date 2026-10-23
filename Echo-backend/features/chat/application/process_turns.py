@@ -60,15 +60,15 @@ class ProcessPendingChatTurns:
                 history_before_message_id=turn.input_first_message_id,
             )
             elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-            sticker_available = any(
-                part.type == "sticker" and part.sticker_id for part in prepared.content_parts
+            sticker_count = sum(
+                part.type == "sticker" and bool(part.sticker_id) for part in prepared.content_parts
             )
             delivery_types: list[str] = []
-            if sticker_available and prepared.sticker_placement == "before_text":
-                delivery_types.append("sticker")
+            if sticker_count and prepared.sticker_placement == "before_text":
+                delivery_types.extend("sticker" for _ in range(sticker_count))
             delivery_types.extend("text" for _ in prepared.reply_segments)
-            if sticker_available and prepared.sticker_placement != "before_text":
-                delivery_types.append("sticker")
+            if sticker_count and prepared.sticker_placement != "before_text":
+                delivery_types.extend("sticker" for _ in range(sticker_count))
             if not delivery_types:
                 delivery_types.append("text")
             presentation = self.timing_policy.build(

@@ -109,7 +109,6 @@ class SequenceAgentOrchestrator:
         messages,
         conversation_mode="chat",
         sticker_intent="",
-        allow_proactive_stickers=True,
     ):
         self.calls.append(
             {
@@ -118,7 +117,6 @@ class SequenceAgentOrchestrator:
                 "messages": messages,
                 "conversation_mode": conversation_mode,
                 "sticker_intent": sticker_intent,
-                "allow_proactive_stickers": allow_proactive_stickers,
             }
         )
         reply = self.replies.pop(0) if self.replies else "hello from echo"
@@ -133,7 +131,6 @@ class StreamingCallAgentOrchestrator:
         messages,
         conversation_mode="chat",
         sticker_intent="",
-        allow_proactive_stickers=True,
         on_text_delta=None,
         tools_enabled=None,
     ):
@@ -142,7 +139,6 @@ class StreamingCallAgentOrchestrator:
             message,
             messages,
             sticker_intent,
-            allow_proactive_stickers,
             tools_enabled,
         )
         self.conversation_mode = conversation_mode
@@ -159,7 +155,6 @@ class LongStreamingCallAgentOrchestrator:
         messages,
         conversation_mode="chat",
         sticker_intent="",
-        allow_proactive_stickers=True,
         on_text_delta=None,
         tools_enabled=None,
     ):
@@ -169,7 +164,6 @@ class LongStreamingCallAgentOrchestrator:
             messages,
             conversation_mode,
             sticker_intent,
-            allow_proactive_stickers,
             tools_enabled,
         )
         reply = "第一句已经完整说完。第二句也完整说完。第三句不应该被播放。"
@@ -263,7 +257,6 @@ class FakeStickerAgentOrchestrator:
         messages,
         conversation_mode="chat",
         sticker_intent="",
-        allow_proactive_stickers=True,
     ):
         return AgentTurnResult(
             reply_text="给你，这张很适合现在。",
@@ -962,7 +955,6 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
                 messages,
                 conversation_mode="chat",
                 sticker_intent="",
-                allow_proactive_stickers=True,
                 on_text_delta=None,
                 on_progress_text=None,
             ):
@@ -972,7 +964,6 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
                     messages,
                     conversation_mode,
                     sticker_intent,
-                    allow_proactive_stickers,
                 )
                 await on_progress_text("好，我查一下。")
                 await on_text_delta("查到的结果是这样。")

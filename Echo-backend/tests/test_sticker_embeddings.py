@@ -161,13 +161,11 @@ class StickerEmbeddingTests(unittest.IsolatedAsyncioTestCase):
                 "user_b",
                 "想让熬夜的朋友早点休息",
                 3,
-                conversation_id="conv_b",
-                purpose="proactive",
             )
 
         self.assertEqual([item.sticker_id for item in result], ["stk_user_b"])
         self.assertEqual(repository.vector_requests[0][0], "user_b")
-        self.assertEqual(repository.vector_requests[0][5]["conversation_id"], "conv_b")
+        self.assertNotIn("conversation_id", repository.vector_requests[0][5])
 
 
 if __name__ == "__main__":

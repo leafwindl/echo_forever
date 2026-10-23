@@ -22,14 +22,11 @@ from features.agent.domain.entities import (
 )
 from features.agent.domain.services import (
     AgentModelTimeoutError,
-    StickerRequestDecision,
-    StickerToolPolicy,
     resolve_local_time,
 )
 from features.agent.domain.tools import ToolExecutionContext, ToolRegistry
 from features.agent.infrastructure.container import get_chat_agent
 from features.agent.infrastructure.model import ProviderAgentConversationModel
-from features.agent.infrastructure.sticker_semantics import ProviderStickerSemanticAnalyzer
 from features.agent.infrastructure.tools import (
     register_schedule_tools,
     register_sticker_tools,
@@ -71,29 +68,6 @@ class SequenceAgentModel:
         if isinstance(response, Exception):
             raise response
         return response
-
-
-class FakeStickerSemanticAnalyzer:
-    def __init__(self, *, decision=None, claims=()):
-        self.decision = decision or StickerRequestDecision(StickerToolPolicy.OPTIONAL)
-        self.claims = list(claims)
-        self.request_calls = []
-        self.claim_calls = []
-
-    async def assess_request(self, message, messages):
-        self.request_calls.append((message, list(messages)))
-        if isinstance(self.decision, Exception):
-            raise self.decision
-        return self.decision
-
-    async def claims_sticker_delivery(self, reply_text):
-        self.claim_calls.append(reply_text)
-        if not self.claims:
-            return False
-        result = self.claims.pop(0)
-        if isinstance(result, Exception):
-            raise result
-        return result
 
 
 class FakeAgentRunRepository:
@@ -175,7 +149,6 @@ def _build_orchestrator(
     max_steps=6,
     max_tool_calls=4,
     run_timeout_seconds=45,
-    sticker_semantic_analyzer=None,
 ):
     repository = FakeAgentRunRepository()
     registry = ToolRegistry()
@@ -191,7 +164,6 @@ def _build_orchestrator(
             max_steps=max_steps,
             max_tool_calls=max_tool_calls,
             run_timeout_seconds=run_timeout_seconds,
-            sticker_semantic_analyzer=sticker_semantic_analyzer,
         ),
         repository,
         registry,
@@ -255,9 +227,7 @@ class AgentDomainTests(unittest.TestCase):
         self.assertEqual(route.maximum_tool_calls, 2)
 
     def test_tool_registry_filters_call_tools_by_route(self):
-        _, _, registry = _build_orchestrator(
-            SequenceAgentModel([AgentModelResponse(text="你好")])
-        )
+        _, _, registry = _build_orchestrator(SequenceAgentModel([AgentModelResponse(text="你好")]))
 
         descriptions = registry.model_descriptions("call", ("search_web",))
 
@@ -268,26 +238,23 @@ class AgentDomainTests(unittest.TestCase):
             messages=[{"role": "user", "content": "今天心情不错"}],
             conversation_mode="chat",
             sticker_intent="",
-            allow_proactive_stickers=True,
         )
 
         instruction = messages[0]["content"]
         self.assertNotIn("主动表情包优先窗口", instruction)
-        self.assertIn("没有轮数配额", instruction)
-        self.assertIn("官方和用户私人表情包都可以参与选择", instruction)
-
+        self.assertIn("按语境自由使用", instruction)
+        self.assertIn("send_sticker 可发送表情包", instruction)
 
     def test_proactive_mode_forbids_assuming_current_user_activity(self):
         messages = OrchestrateChatWithAgent._build_initial_messages(
             messages=[{"role": "system", "content": "internal proactive trigger"}],
             conversation_mode="proactive",
             sticker_intent="",
-            allow_proactive_stickers=True,
         )
 
         instruction = messages[0]["content"]
         self.assertIn("并非用户发来新消息", instruction)
-        self.assertIn("不能据此推断用户醒着、在线、正在读消息", instruction)
+        self.assertIn("用户是否醒着、在线、有空未知", instruction)
 
 
 class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
@@ -422,8 +389,7 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
                             "finish_reason": "stop",
                             "message": {
                                 "content": (
-                                    '{"text_segments":["你好"],'
-                                    '"sticker_placement":"after_text"}'
+                                    '{"text_segments":["你好"],"sticker_placement":"after_text"}'
                                 )
                             },
                         }
@@ -560,73 +526,6 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
             )
 
 
-class StickerSemanticAnalyzerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_request_analysis_uses_forced_function_call_and_validates_arguments(self):
-        model = SequenceAgentModel(
-            [
-                AgentModelResponse(
-                    tool_calls=(
-                        AgentToolCall(
-                            call_id="invalid",
-                            tool_name="classify_sticker_request",
-                            arguments={"policy": "required", "intent": "", "extra": True},
-                        ),
-                    )
-                ),
-                AgentModelResponse(
-                    tool_calls=(
-                        AgentToolCall(
-                            call_id="valid",
-                            tool_name="classify_sticker_request",
-                            arguments={"policy": "required", "intent": "晚安休息"},
-                        ),
-                    )
-                ),
-            ]
-        )
-        analyzer = ProviderStickerSemanticAnalyzer(model)
-
-        decision = await analyzer.assess_request(
-            "那给我来一张吧",
-            [
-                {"role": "user", "content": "我准备睡觉了"},
-                {"role": "assistant", "content": "要不要一张晚安表情包？"},
-            ],
-        )
-
-        self.assertEqual(decision.policy, StickerToolPolicy.REQUIRED)
-        self.assertEqual(decision.intent, "晚安休息")
-        self.assertEqual(len(model.calls), 2)
-        self.assertEqual(
-            model.calls[0]["tool_choice"],
-            {
-                "type": "function",
-                "function": {"name": "classify_sticker_request"},
-            },
-        )
-
-    async def test_delivery_claim_analysis_uses_boolean_function_result(self):
-        model = SequenceAgentModel(
-            [
-                AgentModelResponse(
-                    tool_calls=(
-                        AgentToolCall(
-                            call_id="claim",
-                            tool_name="classify_sticker_delivery_claim",
-                            arguments={"claims_delivery": True},
-                        ),
-                    )
-                )
-            ]
-        )
-
-        claimed = await ProviderStickerSemanticAnalyzer(model).claims_sticker_delivery(
-            "这张给你，今晚好好休息。"
-        )
-
-        self.assertTrue(claimed)
-
-
 class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
     def test_completed_schedule_side_effect_has_deterministic_confirmation(self):
         created = AgentToolResult(
@@ -677,9 +576,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.finishes[0], ("run_test", 1, "llm_output_truncated"))
 
     async def test_normal_chat_and_tools_share_one_agent_runtime(self):
-        model = SequenceAgentModel(
-            [AgentModelResponse(text=_delivery("今天听起来心情不错。"))]
-        )
+        model = SequenceAgentModel([AgentModelResponse(text=_delivery("今天听起来心情不错。"))])
         orchestrator, repository, _ = _build_orchestrator(model)
 
         result = await orchestrator.execute(
@@ -695,7 +592,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.tool_calls, [])
         self.assertEqual(repository.finishes[0][2], None)
 
-    async def test_required_sticker_request_forces_high_level_send_and_finishes(self):
+    async def test_model_can_choose_sticker_send_and_finish_in_same_runtime(self):
         sticker = _sticker()
         model = SequenceAgentModel(
             [
@@ -706,7 +603,6 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                             tool_name="send_sticker",
                             arguments={
                                 "intent": "开心有感染力",
-                                "purpose": "explicit_request",
                                 "placement": "before_text",
                             },
                         ),
@@ -726,17 +622,10 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
             sends.append((user_id, sticker_id))
             return sticker
 
-        semantic_analyzer = FakeStickerSemanticAnalyzer(
-            decision=StickerRequestDecision(
-                StickerToolPolicy.REQUIRED,
-                "开心有感染力",
-            )
-        )
         orchestrator, repository, _ = _build_orchestrator(
             model,
             search=search,
             send=send,
-            sticker_semantic_analyzer=semantic_analyzer,
         )
 
         result = await orchestrator.execute(
@@ -756,60 +645,27 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([call["status"] for call in repository.tool_calls], ["completed"])
         self.assertEqual(
             model.calls[0]["tool_choice"],
-            {"type": "function", "function": {"name": "send_sticker"}},
+            "auto",
         )
         final_messages = model.calls[-1]["messages"]
         self.assertEqual(final_messages[-1]["role"], "tool")
         self.assertIn("attached_to_current_reply", final_messages[-1]["content"])
-        self.assertIn("关于能力的说法可能过时", model.calls[0]["messages"][0]["content"])
+        self.assertIn("按当前工具清单使用能力", model.calls[0]["messages"][0]["content"])
 
-    async def test_required_sticker_request_retries_when_model_omits_tool_call(self):
-        sticker = _sticker()
-        model = SequenceAgentModel(
-            [
-                AgentModelResponse(text="我直接说就好。"),
-                AgentModelResponse(
-                    tool_calls=(
-                        AgentToolCall(
-                            call_id="call_send",
-                            tool_name="send_sticker",
-                            arguments={
-                                "intent": "晚安休息",
-                                "purpose": "proactive",
-                            },
-                        ),
-                    )
-                ),
-                AgentModelResponse(text="晚安，早点休息。"),
-            ]
-        )
-        analyzer = FakeStickerSemanticAnalyzer(
-            decision=StickerRequestDecision(
-                StickerToolPolicy.REQUIRED,
-                "晚安休息",
-            )
-        )
-        orchestrator, repository, _ = _build_orchestrator(
-            model,
-            search=lambda _user_id, _query, _limit: [sticker],
-            send=lambda _user_id, _sticker_id: sticker,
-            sticker_semantic_analyzer=analyzer,
-        )
+    async def test_no_tool_call_is_forced_or_synthesized_when_model_chooses_text(self):
+        model = SequenceAgentModel([AgentModelResponse(text="想要什么样的表情？")])
+        orchestrator, repository, _ = _build_orchestrator(model)
 
         result = await orchestrator.execute(
             user_id="user_a",
-            message="给我来个晚安表情包",
-            messages=[{"role": "user", "content": "给我来个晚安表情包"}],
+            message="给我来个表情包",
+            messages=[{"role": "user", "content": "给我来个表情包"}],
         )
 
-        self.assertEqual(result.status, AgentRunStatus.COMPLETED)
-        self.assertEqual(result.content_parts[0].sticker_id, sticker.sticker_id)
-        self.assertEqual(repository.tool_calls[0]["arguments"]["purpose"], "explicit_request")
-        self.assertEqual(len(model.calls), 3)
-        self.assertIn(
-            "只调用 send_sticker",
-            model.calls[1]["messages"][-1]["content"],
-        )
+        self.assertEqual(result.reply_text, "想要什么样的表情？")
+        self.assertEqual(len(model.calls), 1)
+        self.assertEqual(model.calls[0]["tool_choice"], "auto")
+        self.assertEqual(repository.tool_calls, [])
 
     async def test_unbacked_sticker_claim_is_rewritten_once_before_delivery(self):
         model = SequenceAgentModel(
@@ -818,11 +674,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                 AgentModelResponse(text="今晚就慢一点，我陪你安静一会儿。"),
             ]
         )
-        analyzer = FakeStickerSemanticAnalyzer(claims=(True, False))
-        orchestrator, repository, _ = _build_orchestrator(
-            model,
-            sticker_semantic_analyzer=analyzer,
-        )
+        orchestrator, repository, _ = _build_orchestrator(model)
 
         result = await orchestrator.execute(
             user_id="user_a",
@@ -844,11 +696,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                 AgentModelResponse(text="再附上一张给你。"),
             ]
         )
-        analyzer = FakeStickerSemanticAnalyzer(claims=(True, True))
-        orchestrator, _, _ = _build_orchestrator(
-            model,
-            sticker_semantic_analyzer=analyzer,
-        )
+        orchestrator, _, _ = _build_orchestrator(model)
 
         result = await orchestrator.execute(
             user_id="user_a",
@@ -870,7 +718,6 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                             tool_name="send_sticker",
                             arguments={
                                 "intent": "困惑",
-                                "purpose": "explicit_request",
                             },
                         ),
                     )
@@ -890,88 +737,53 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.content_parts, ())
         self.assertEqual(repository.tool_calls[0]["status"], "no_result")
 
-    async def test_send_no_result_does_not_consume_tool_call_limit(self):
+    async def test_no_result_attempts_share_the_technical_execution_budget(self):
         registry = ToolRegistry()
-        register_sticker_tools(
-            registry,
-            search=lambda _user_id, _query, _limit: [],
-        )
+        register_sticker_tools(registry, search=lambda *_: [])
         executor = ToolExecutor(registry)
         prior_results = []
-
-        for index in range(3):
+        for index in range(5):
             result = await executor.execute(
-                ToolExecutionContext(
-                    user_id="user_a",
-                    prior_results=tuple(prior_results),
-                ),
+                ToolExecutionContext(user_id="user_a", prior_results=tuple(prior_results)),
                 AgentToolCall(
                     call_id=f"send_{index}",
                     tool_name="send_sticker",
-                    arguments={
-                        "intent": f"intent_{index}",
-                        "purpose": "proactive",
-                    },
+                    arguments={"intent": f"intent_{index}"},
                 ),
             )
             prior_results.append(result)
+        self.assertEqual([r.status for r in prior_results[:4]], [AgentToolStatus.NO_RESULT] * 4)
+        self.assertEqual(prior_results[-1].error_code, "tool_call_limit")
 
-        self.assertEqual(
-            [result.status for result in prior_results],
-            [AgentToolStatus.NO_RESULT] * 3,
-        )
-        self.assertNotIn(
-            "tool_call_limit",
-            [result.error_code for result in prior_results],
-        )
+    async def test_no_match_does_not_send_an_unrelated_image(self):
+        searches, sends = [], []
 
-    async def test_explicit_send_falls_back_to_any_available_sticker(self):
-        sticker = _sticker()
-        searches = []
-        sends = []
-
-        def search(user_id, query, limit):
-            searches.append((user_id, query, limit))
-            return [sticker] if not query else []
-
-        def send(user_id, sticker_id):
-            sends.append((user_id, sticker_id))
-            return sticker
+        def search(_user_id, query, _limit):
+            searches.append(query)
+            return [] if query else [_sticker()]
 
         model = SequenceAgentModel(
             [
                 AgentModelResponse(
                     tool_calls=(
                         AgentToolCall(
-                            call_id="call_send",
-                            tool_name="send_sticker",
-                            arguments={
-                                "intent": "困惑",
-                                "purpose": "explicit_request",
-                            },
+                            call_id="send", tool_name="send_sticker", arguments={"intent": "困惑"}
                         ),
                     )
                 ),
-                AgentModelResponse(text=_delivery("没找到完全对应的，这张先陪你。")),
+                AgentModelResponse(text="没找到合适的，我先用文字说。"),
             ]
         )
         orchestrator, repository, _ = _build_orchestrator(
-            model,
-            search=search,
-            send=send,
+            model, search=search, send=lambda *args: sends.append(args)
         )
-
         result = await orchestrator.execute(
-            user_id="user_a",
-            message="随便发一张表情包",
-            messages=[{"role": "user", "content": "随便发一张表情包"}],
+            user_id="user_a", message="发个困惑的表情包", messages=[]
         )
-
-        self.assertEqual(result.status, AgentRunStatus.COMPLETED)
-        self.assertEqual(result.content_parts[0].sticker_id, sticker.sticker_id)
-        self.assertEqual(searches, [("user_a", "困惑", 3), ("user_a", "", 3)])
-        self.assertTrue(repository.tool_calls[0]["output"]["fallback_used"])
-        self.assertEqual(sends, [("user_a", sticker.sticker_id)])
+        self.assertEqual(result.content_parts, ())
+        self.assertEqual(searches, ["困惑"])
+        self.assertEqual(sends, [])
+        self.assertEqual(repository.tool_calls[0]["status"], "no_result")
 
     async def test_call_mode_rejects_sticker_tool_even_if_model_hallucinates_it(self):
         sent = []
@@ -984,7 +796,6 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                             tool_name="send_sticker",
                             arguments={
                                 "intent": "开心",
-                                "purpose": "explicit_request",
                             },
                         ),
                     )
@@ -1009,32 +820,34 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sent, [])
         self.assertEqual(repository.tool_calls[0]["error_code"], "tool_not_allowed_in_mode")
 
-    async def test_proactive_sticker_is_blocked_during_cooldown(self):
+    async def test_model_can_send_stickers_on_consecutive_chat_turns(self):
+        sticker = _sticker()
         model = SequenceAgentModel(
             [
-                AgentModelResponse(
-                    tool_calls=(
-                        AgentToolCall(
-                            call_id="call_send",
-                            tool_name="send_sticker",
-                            arguments={"intent": "开心", "purpose": "proactive"},
-                        ),
-                    )
-                ),
-                AgentModelResponse(text=_delivery("这次先陪你聊，不刷图。")),
+                response
+                for _ in range(2)
+                for response in (
+                    AgentModelResponse(
+                        tool_calls=(
+                            AgentToolCall(
+                                call_id="send",
+                                tool_name="send_sticker",
+                                arguments={"intent": "开心"},
+                            ),
+                        )
+                    ),
+                    AgentModelResponse(text="嘿嘿。"),
+                )
             ]
         )
-        orchestrator, repository, _ = _build_orchestrator(model)
-
-        result = await orchestrator.execute(
-            user_id="user_a",
-            message="今天还不错",
-            messages=[{"role": "user", "content": "今天还不错"}],
-            allow_proactive_stickers=False,
+        orchestrator, repository, _ = _build_orchestrator(
+            model, search=lambda *_: [sticker], send=lambda *_: sticker
         )
-
-        self.assertEqual(result.content_parts, ())
-        self.assertEqual(repository.tool_calls[0]["error_code"], "proactive_sticker_cooldown")
+        first = await orchestrator.execute(user_id="user_a", message="今天不错", messages=[])
+        second = await orchestrator.execute(user_id="user_a", message="再开心一下", messages=[])
+        self.assertEqual(first.content_parts[0].sticker_id, sticker.sticker_id)
+        self.assertEqual(second.content_parts[0].sticker_id, sticker.sticker_id)
+        self.assertEqual([r["status"] for r in repository.tool_calls], ["completed"] * 2)
 
     async def test_send_tool_only_sends_top_ranked_search_result(self):
         allowed = _sticker("stk_allowed")
@@ -1054,7 +867,6 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                 tool_name="send_sticker",
                 arguments={
                     "intent": "开心",
-                    "purpose": "explicit_request",
                 },
             ),
         )
@@ -1083,7 +895,6 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                 tool_name="send_sticker",
                 arguments={
                     "intent": "开心",
-                    "purpose": "explicit_request",
                 },
             ),
         )
@@ -1097,7 +908,6 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                 tool_name="send_sticker",
                 arguments={
                     "intent": "鼓励",
-                    "purpose": "explicit_request",
                 },
             ),
         )
@@ -1106,49 +916,34 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(retried_send.status, AgentToolStatus.COMPLETED)
         self.assertEqual(sent, [sticker.sticker_id, sticker.sticker_id])
 
-    async def test_send_sticker_allows_only_one_success_per_turn(self):
-        first_sticker = _sticker("stk_first")
-        second_sticker = _sticker("stk_second")
-        sent = []
-        registry = ToolRegistry()
-        register_sticker_tools(
-            registry,
-            search=lambda _user_id, _query, _limit: [first_sticker, second_sticker],
-            send=lambda _user_id, sticker_id: (
-                sent.append(sticker_id)
-                or (first_sticker if sticker_id == first_sticker.sticker_id else second_sticker)
-            ),
+    async def test_two_distinct_stickers_are_collected_in_one_reply(self):
+        stickers = {
+            intent: _sticker(sticker_id)
+            for intent, sticker_id in (("开心", "stk_first"), ("庆祝", "stk_second"))
+        }
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    tool_calls=tuple(
+                        AgentToolCall(
+                            call_id=f"send_{i}",
+                            tool_name="send_sticker",
+                            arguments={"intent": intent},
+                        )
+                        for i, intent in enumerate(stickers)
+                    )
+                ),
+                AgentModelResponse(text="一起庆祝！"),
+            ]
         )
-        executor = ToolExecutor(registry)
-        first_send = await executor.execute(
-            ToolExecutionContext(user_id="user_a"),
-            AgentToolCall(
-                call_id="send_first",
-                tool_name="send_sticker",
-                arguments={
-                    "intent": "开心",
-                    "purpose": "explicit_request",
-                },
-            ),
+        orchestrator, repository, _ = _build_orchestrator(
+            model,
+            search=lambda _u, intent, _n: [stickers[intent]],
+            send=lambda _u, sid: next(s for s in stickers.values() if s.sticker_id == sid),
         )
-        second_send = await executor.execute(
-            ToolExecutionContext(
-                user_id="user_a",
-                prior_results=(first_send,),
-            ),
-            AgentToolCall(
-                call_id="send_second",
-                tool_name="send_sticker",
-                arguments={
-                    "intent": "庆祝",
-                    "purpose": "explicit_request",
-                },
-            ),
-        )
-
-        self.assertEqual(first_send.status, AgentToolStatus.COMPLETED)
-        self.assertEqual(second_send.error_code, "tool_success_limit")
-        self.assertEqual(sent, [first_sticker.sticker_id])
+        result = await orchestrator.execute(user_id="user_a", message="今天真棒", messages=[])
+        self.assertEqual([p.sticker_id for p in result.content_parts], ["stk_first", "stk_second"])
+        self.assertEqual([r["status"] for r in repository.tool_calls], ["completed"] * 2)
 
     async def test_executor_rejects_duplicate_tool_call(self):
         sticker = _sticker()
@@ -1170,7 +965,6 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
             tool_name="send_sticker",
             arguments={
                 "intent": "开心",
-                "purpose": "explicit_request",
             },
         )
         first = await executor.execute(ToolExecutionContext(user_id="user_a"), call)
@@ -1615,7 +1409,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(model.calls[0]["structured_output"])
         self.assertFalse(model.calls[1]["structured_output"])
         self.assertEqual(model.calls[1]["tools"], ())
-        self.assertIn("只输出用户可见的自然文字", model.calls[0]["messages"][0]["content"])
+        self.assertIn("直接输出自然文字", model.calls[0]["messages"][0]["content"])
         self.assertEqual(repository.finishes[0][2], None)
 
     async def test_metadata_prefixed_reply_is_recovered_without_another_model_call(self):
@@ -1633,15 +1427,11 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "[会话时间边界] 上一段消息结束于昨晚，本段开始于今早。"
-                    ),
+                    "content": ("[会话时间边界] 上一段消息结束于昨晚，本段开始于今早。"),
                 },
                 {
                     "role": "assistant",
-                    "content": (
-                        "[消息时间 2026-08-13T09:00:00+08:00 周四 上午]\n早上好。"
-                    ),
+                    "content": ("[消息时间 2026-08-13T09:00:00+08:00 周四 上午]\n早上好。"),
                 },
                 {"role": "user", "content": "我还想再睡一会儿"},
             ],
@@ -1654,8 +1444,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_proactive_metadata_prefixed_control_text_is_never_recovered(self):
         leaked_output = (
-            "[消息时间 2026-08-13T09:12:35+08:00 周四 上午]\n"
-            "（本条消息为系统生成，无实际文本内容）"
+            "[消息时间 2026-08-13T09:12:35+08:00 周四 上午]\n（本条消息为系统生成，无实际文本内容）"
         )
         model = SequenceAgentModel(
             [
@@ -1713,7 +1502,8 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         orchestrator, repository, _ = _build_orchestrator(model)
 
         result = await orchestrator.execute(
-            user_id="user_a", message="你刚刚那句好可爱。",
+            user_id="user_a",
+            message="你刚刚那句好可爱。",
             messages=[{"role": "user", "content": "你刚刚那句好可爱。"}],
         )
 
@@ -1733,15 +1523,11 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "[会话时间边界] 上一段消息结束于昨晚，本段开始于今早。"
-                    ),
+                    "content": ("[会话时间边界] 上一段消息结束于昨晚，本段开始于今早。"),
                 },
                 {
                     "role": "assistant",
-                    "content": (
-                        "[消息时间 2026-08-13T09:00:00+08:00 周四 上午]\n早上好。"
-                    ),
+                    "content": ("[消息时间 2026-08-13T09:00:00+08:00 周四 上午]\n早上好。"),
                 },
                 {"role": "user", "content": "我还想再睡一会儿"},
             ],

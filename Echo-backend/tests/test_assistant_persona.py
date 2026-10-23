@@ -20,7 +20,7 @@ class AssistantPersonaTests(unittest.TestCase):
         self.assertIn("AI 陪伴伙伴", persona.role)
         self.assertIn("傲娇甜软", persona.traits[0])
         self.assertTrue(any("简短不等于冷淡" in item for item in persona.conversation_principles))
-        self.assertTrue(persona.dialogue_examples)
+        self.assertEqual(persona.dialogue_examples, ())
         self.assertTrue(any("共同进步" in item for item in persona.conversation_principles))
         self.assertTrue(any("人类生活史" in item for item in persona.forbidden_claims))
 

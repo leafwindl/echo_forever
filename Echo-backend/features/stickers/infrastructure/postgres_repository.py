@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from db.postgres_connection import get_connection, transaction
-from shared.config import settings
 
 from features.auth.public import ensure_user_identity
 from features.stickers.domain.entities import Sticker
@@ -63,17 +62,11 @@ def rank_sticker_rows(
     rows: list,
     *,
     terms: tuple[str, ...],
-    purpose: str,
-    recent_ids: set[str],
-    last_used: dict[str, datetime],
-    now: datetime,
-    cooldown: timedelta,
 ) -> list:
-    del purpose
     terms_lower = tuple(term.lower() for term in terms)
     normalized_query = " ".join(terms_lower)
 
-    def score(row) -> tuple[int, int, int, datetime]:
+    def score(row) -> tuple[int, int, datetime]:
         raw_tags = row["semantic_tags"] or []
         if isinstance(raw_tags, str):
             raw_tags = json.loads(raw_tags)
@@ -96,23 +89,14 @@ def rank_sticker_rows(
         if description and description in normalized_query:
             semantic_score += 60
         owner_score = 10 if row["owner_type"] == "echo" else 0
-        sticker_id = str(row["sticker_id"])
-        last_used_at = last_used.get(sticker_id)
-        within_time_cooldown = bool(
-            last_used_at is not None and now - last_used_at < cooldown
-        )
-        cooling_penalty = -1 if sticker_id in recent_ids or within_time_cooldown else 0
         created_at = row["created_at"] or datetime.min.replace(tzinfo=UTC)
         return (
-            cooling_penalty,
             semantic_score + owner_score,
             int(row.get("priority") or 100),
             created_at,
         )
 
-    ordered = sorted(rows, key=score, reverse=True)
-    eligible = [row for row in ordered if score(row)[0] == 0]
-    return eligible or ordered
+    return sorted(rows, key=score, reverse=True)
 
 
 class PostgresStickerRepository:
@@ -168,8 +152,6 @@ class PostgresStickerRepository:
         query: str = "",
         limit: int = 100,
         *,
-        conversation_id: str | None = None,
-        purpose: str = "explicit_request",
         include_echo: bool = True,
         include_user: bool = True,
     ) -> list[Sticker]:
@@ -207,21 +189,10 @@ class PostgresStickerRepository:
                 for row in cursor.fetchall()
                 if sticker_row_visible_to_user(row, user_id)
             ]
-            recent_ids, last_used = self._recent_usage(
-                conn,
-                user_id=user_id,
-                conversation_id=conversation_id,
-                recent_turns=settings.sticker_reuse_cooldown_turns,
-            )
 
         selected = rank_sticker_rows(
             rows,
             terms=tuple(terms),
-            purpose=purpose,
-            recent_ids=recent_ids,
-            last_used=last_used,
-            now=datetime.now(UTC),
-            cooldown=timedelta(minutes=settings.sticker_reuse_cooldown_minutes),
         )
         return [_sticker(row) for row in selected[:limit]]
 
@@ -233,8 +204,6 @@ class PostgresStickerRepository:
         embedding_model: str,
         limit: int,
         *,
-        conversation_id: str | None = None,
-        purpose: str = "explicit_request",
         score_threshold: float = 0.25,
         maximum_score_gap: float = 0.04,
     ) -> list[Sticker]:
@@ -273,12 +242,6 @@ class PostgresStickerRepository:
                 if sticker_row_visible_to_user(row, user_id)
             ]
             rows = filter_semantically_close_rows(rows, maximum_score_gap)
-            recent_ids, last_used = self._recent_usage(
-                conn,
-                user_id=user_id,
-                conversation_id=conversation_id,
-                recent_turns=settings.sticker_reuse_cooldown_turns,
-            )
 
         terms = tuple(
             term
@@ -288,11 +251,6 @@ class PostgresStickerRepository:
         selected = rank_sticker_rows(
             rows,
             terms=terms or (query.strip(),),
-            purpose=purpose,
-            recent_ids=recent_ids,
-            last_used=last_used,
-            now=datetime.now(UTC),
-            cooldown=timedelta(minutes=settings.sticker_reuse_cooldown_minutes),
         )
         return [_sticker(row) for row in selected[:limit]]
 
@@ -349,60 +307,6 @@ class PostgresStickerRepository:
                     _vector_literal(embedding),
                 ),
             )
-
-    @staticmethod
-    def _recent_usage(
-        conn,
-        *,
-        user_id: str,
-        conversation_id: str | None,
-        recent_turns: int,
-    ) -> tuple[set[str], dict[str, datetime]]:
-        clauses = [
-            "message.user_id = %s",
-            "message.role = 'assistant'",
-            "attachment.attachment_type = 'sticker'",
-        ]
-        params: list[object] = [user_id]
-        if conversation_id:
-            clauses.append("message.conversation_id = %s")
-            params.append(conversation_id)
-        with conn.cursor() as cursor:
-            cursor.execute(
-                f"""
-                SELECT message.message_id, message.reply_group_id,
-                       attachment.resource_id, message.created_at
-                FROM chat_messages message
-                JOIN chat_message_attachments attachment
-                  ON attachment.message_id = message.message_id
-                WHERE {' AND '.join(clauses)}
-                ORDER BY message.created_at DESC
-                LIMIT 100
-                """,
-                params,
-            )
-            rows = cursor.fetchall()
-
-        recent_ids: set[str] = set()
-        last_used: dict[str, datetime] = {}
-        seen_groups: list[str] = []
-        for row in rows:
-            sticker_id = str(row["resource_id"] or "")
-            if not sticker_id:
-                continue
-            created_at = row["created_at"]
-            if created_at is not None and created_at.tzinfo is None:
-                created_at = created_at.replace(tzinfo=UTC)
-            if created_at is not None and (
-                sticker_id not in last_used or created_at > last_used[sticker_id]
-            ):
-                last_used[sticker_id] = created_at
-            group = str(row["reply_group_id"] or f"message:{row['message_id']}")
-            if group not in seen_groups and len(seen_groups) < recent_turns:
-                seen_groups.append(group)
-            if group in seen_groups:
-                recent_ids.add(sticker_id)
-        return recent_ids, last_used
 
     def get(self, user_id: str, sticker_id: str) -> Sticker | None:
         with get_connection() as conn, conn.cursor() as cursor:

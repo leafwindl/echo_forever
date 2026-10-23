@@ -10,7 +10,6 @@ from features.agent.domain.tools import ToolRegistry
 from features.agent.infrastructure.model import ProviderAgentConversationModel
 from features.agent.infrastructure.postgres_repository import PostgresAgentRunRepository
 from features.agent.infrastructure.proactive_planner import ProviderProactiveDecisionPlanner
-from features.agent.infrastructure.sticker_semantics import ProviderStickerSemanticAnalyzer
 from features.agent.infrastructure.tools import (
     register_schedule_tools,
     register_sticker_tools,
@@ -30,14 +29,9 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
         max_tokens=settings.chat_max_tokens,
         disable_thinking=True,
     )
-    semantic_model = ProviderAgentConversationModel(
-        max_tokens=160,
-        disable_thinking=True,
-    )
     return OrchestrateChatWithAgent(
         repository=PostgresAgentRunRepository(),
         model=chat_model,
-        sticker_semantic_analyzer=ProviderStickerSemanticAnalyzer(semantic_model),
         registry=registry,
         executor=ToolExecutor(registry),
         max_steps=settings.agent_max_steps,

@@ -315,13 +315,13 @@ class PostgresAsyncChatRepository:
             validate_agent_delivery_segments(text_segments)
             sticker_parts = tuple(
                 part for part in reply.content_parts if part.type == "sticker" and part.sticker_id
-            )[:1]
+            )
             deliveries: list[tuple[str, str, tuple[ContentPart, ...]]] = []
             if sticker_parts and reply.sticker_placement == "before_text":
-                deliveries.append(("sticker", "", sticker_parts))
+                deliveries.extend(("sticker", "", (part,)) for part in sticker_parts)
             deliveries.extend(("text", segment, ()) for segment in text_segments)
             if sticker_parts and reply.sticker_placement != "before_text":
-                deliveries.append(("sticker", "", sticker_parts))
+                deliveries.extend(("sticker", "", (part,)) for part in sticker_parts)
             if not deliveries:
                 deliveries.append(("text", "刚才这次回复没有完成，再和我说一次好吗？", ()))
 

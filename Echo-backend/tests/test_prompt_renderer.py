@@ -5,6 +5,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.assistant_persona.public import get_assistant_persona
+from features.persona.domain.entities import PersonaUpdate, build_user_preferences
+from features.relationship.domain.entities import RelationshipContext, RelationshipState
 from shared.prompting.renderer import (
     BASELINE_SAFETY_POLICY,
     NATURAL_DIALOGUE_POLICY,
@@ -17,8 +19,6 @@ from shared.prompting.renderer import (
     render_relationship_guidance,
     render_turn_focus_guidance,
 )
-from features.persona.domain.entities import PersonaUpdate, build_user_preferences
-from features.relationship.domain.entities import RelationshipContext, RelationshipState
 
 
 class PromptRendererTests(unittest.TestCase):
@@ -98,9 +98,19 @@ class PromptRendererTests(unittest.TestCase):
         self.assertIn("可以承认用户和这段关系很重要", NATURAL_DIALOGUE_POLICY)
 
     def test_persona_examples_are_labeled_as_fiction_not_user_history(self):
-        rendered = render_assistant_persona(self.assistant_persona)
+        from dataclasses import replace
+
+        example_persona = replace(
+            self.assistant_persona, dialogue_examples=(("测试输入", "测试回复"),)
+        )
+        rendered = render_assistant_persona(example_persona)
         self.assertIn("虚构示范，不是真实聊天历史，不得写入用户记忆", rendered)
         self.assertIn("不逐字复用", rendered)
+
+    def test_default_chat_persona_does_not_inject_few_shot(self):
+        rendered = render_assistant_persona(self.assistant_persona)
+        self.assertNotIn("虚构示范", rendered)
+        self.assertEqual(self.assistant_persona.dialogue_examples, ())
 
     def test_persona_usage_is_rendered_as_optional_and_contextual(self):
         rendered = render_persona(self.persona, 400)

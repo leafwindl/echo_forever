@@ -1,5 +1,6 @@
 import unittest
 from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 from features.agent.domain.delivery import (
     AgentDeliveryPlanError,
@@ -22,6 +23,7 @@ from features.chat.domain.entities import (
     ChatValidationError,
     PreparedChatReply,
 )
+from features.chat.infrastructure import async_postgres_repository
 
 
 def _message(message_id: int, role: str, content: str) -> ChatHistoryMessage:
@@ -186,7 +188,7 @@ class AgentDeliveryPlanTests(unittest.TestCase):
                 self.assertEqual((raw,), build_natural_delivery_plan(raw, "chat").text_segments)
 
     def test_long_reply_preserves_url_quoted_speech_and_symbolic_face(self):
-        protected = '“' + "真的！？" * 55 + '”'
+        protected = "“" + "真的！？" * 55 + "”"
         raw = "前面说完。" * 28 + protected + "后面再聊。" * 20 + "(?_?)"
         plan = build_natural_delivery_plan(raw, "chat")
         self.assertEqual("".join(plan.text_segments), raw)
@@ -232,8 +234,8 @@ class AgentDeliveryPlanTests(unittest.TestCase):
 
     def test_chat_rejects_json_and_markdown_instead_of_parsing_them(self):
         invalid_outputs = (
-            '{}',
-            '[]',
+            "{}",
+            "[]",
             '["one", "two"]',
             '{"text_segments":["one"],"sticker_placement":"after_text"}',
             '```json\n{"text_segments":["one"]}\n```',
@@ -296,7 +298,8 @@ class DeliveryTimingPolicyTests(unittest.TestCase):
             delivery_types=("text", "text"), agent_elapsed_ms=0, text_segments=("好。", "好呀。")
         )
         long = policy.build(
-            delivery_types=("text", "text"), agent_elapsed_ms=0,
+            delivery_types=("text", "text"),
+            agent_elapsed_ms=0,
             text_segments=("好。", "完整的详细回答。" * 20),
         )
         self.assertLess(short.message_delays_ms[1], long.message_delays_ms[1])
@@ -423,6 +426,31 @@ class ProcessPendingChatTurnsTests(unittest.IsolatedAsyncioTestCase):
         )
         return worker, repository, generator, guard, broker
 
+    async def test_multiple_stickers_receive_separate_delivery_timings(self):
+        for placement in ("before_text", "after_text"):
+            with self.subTest(placement=placement):
+                worker, repository, generator, _, _ = self._build()
+                generator.prepared = PreparedChatReply(
+                    reply="好耶",
+                    reply_segments=("好耶",),
+                    sticker_placement=placement,
+                    content_parts=tuple(
+                        ContentPart(type="sticker", sticker_id=sid)
+                        for sid in ("stk_one", "stk_two")
+                    ),
+                )
+                await worker.run_once()
+                presentation = repository.completed[0][2]
+                types = (
+                    ("sticker", "sticker", "text")
+                    if placement == "before_text"
+                    else ("text", "sticker", "sticker")
+                )
+                expected = _timing_policy().build(
+                    delivery_types=types, agent_elapsed_ms=0, text_segments=("好耶",)
+                )
+                self.assertEqual(presentation.message_delays_ms, expected.message_delays_ms)
+
     async def test_completes_one_turn_and_publishes_one_delivery_group(self):
         worker, repository, generator, guard, broker = self._build()
 
@@ -462,6 +490,64 @@ class ProcessPendingChatTurnsTests(unittest.IsolatedAsyncioTestCase):
             [event.event for _, event in broker.events],
             ["chat.typing.started", "chat.turn.failed", "chat.typing.stopped"],
         )
+
+
+class ChatStickerPersistenceTests(unittest.TestCase):
+    def test_every_sticker_is_saved_in_its_own_message(self):
+        for placement in ("before_text", "after_text"):
+            with self.subTest(placement=placement):
+                cursor = MagicMock()
+                cursor.__enter__.return_value = cursor
+                cursor.fetchone.side_effect = [
+                    {"status": "running"},
+                    *[{"created_at": datetime.now(UTC)} for _ in range(3)],
+                ]
+                cursor.rowcount = 1
+                conn = MagicMock()
+                conn.cursor.return_value = cursor
+                parts = tuple(
+                    ContentPart(type="sticker", sticker_id=sid) for sid in ("stk_one", "stk_two")
+                )
+                reply = PreparedChatReply(
+                    reply="好耶",
+                    reply_segments=("好耶",),
+                    content_parts=parts,
+                    sticker_placement=placement,
+                )
+                types = (
+                    ("sticker", "sticker", "text")
+                    if placement == "before_text"
+                    else ("text", "sticker", "sticker")
+                )
+                presentation = _timing_policy().build(
+                    delivery_types=types, agent_elapsed_ms=0, text_segments=reply.reply_segments
+                )
+                repo = async_postgres_repository.postgres_repositories
+                with (
+                    patch.object(async_postgres_repository, "transaction") as tx,
+                    patch.object(
+                        repo,
+                        "_add_message_record",
+                        side_effect=[(10, "msg10"), (11, "msg11"), (12, "msg12")],
+                    ) as save,
+                    patch.object(repo, "_add_message_attachments") as attach,
+                    patch.object(repo, "_add_source_attachments"),
+                ):
+                    tx.return_value.__enter__.return_value = conn
+                    group = async_postgres_repository.PostgresAsyncChatRepository().complete_turn(
+                        _turn_fixture(), reply, presentation
+                    )
+                self.assertEqual([m.message_type for m in group.messages], list(types))
+                self.assertEqual(
+                    [p.sticker_id for m in group.messages for p in m.content_parts],
+                    ["stk_one", "stk_two"],
+                )
+                self.assertEqual(save.call_count, 3)
+                self.assertEqual(
+                    [c.args[3] for c in attach.call_args_list if c.args[3]],
+                    [(parts[0],), (parts[1],)],
+                )
+                self.assertEqual(len(group.presentation.message_delays_ms), 3)
 
 
 if __name__ == "__main__":

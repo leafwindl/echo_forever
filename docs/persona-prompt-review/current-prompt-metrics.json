@@ -3,9 +3,9 @@
   "scenario": "default chat, enabled default preferences, new relationship; excludes history, memories, summary contents, time JSON, user input, tool schemas and tool results; no retries",
   "layers": [
     {
-      "layer": "你正在 Echo 的统一 Agent 对话回路中。当前列出的工具代表真实能力；历史assistant 消息中关于能力的说法可能过时，不能覆盖当前工具清单。需要可",
-      "characters": 865,
-      "estimated_tokens": 710
+      "layer": "按当前工具清单使用能力，以实际返回结果为执行依据。自然回复，不暴露内部流程。直接输出自然文字，用空行分气泡，保持列表、代码和颜文字完整。send_sticker",
+      "characters": 118,
+      "estimated_tokens": 109
     },
     {
       "layer": "[安全边界｜最高优先级]",
@@ -19,8 +19,8 @@
     },
     {
       "layer": "[ASSISTANT_PERSONA｜echo_default｜echo-persona-v3]",
-      "characters": 1418,
-      "estimated_tokens": 1229
+      "characters": 842,
+      "estimated_tokens": 730
     },
     {
       "layer": "[自然对话规则]",
@@ -59,8 +59,8 @@
     }
   ],
   "totals": {
-    "characters": 5174,
-    "estimated_tokens": 4427
+    "characters": 3851,
+    "estimated_tokens": 3327
   },
   "runtime_policy_counts": {
     "BASELINE_SAFETY_POLICY": 272,

@@ -267,12 +267,11 @@ class LetterOutputTests(unittest.TestCase):
             messages=[],
             conversation_mode="daily_letter",
             sticker_intent="",
-            allow_proactive_stickers=True,
         )
 
         instruction = messages[0]["content"]
         self.assertIn("当前无可用工具", instruction)
-        self.assertIn("不得搜索、选择或发送聊天表情包", instruction)
+        self.assertIn("来信图片通过 image_brief 交给来信业务处理", instruction)
         self.assertNotIn("send_sticker 返回 completed", instruction)
 
 

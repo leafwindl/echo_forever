@@ -70,18 +70,18 @@ source("rules", "四份常驻／渠道规则", "人工维护 · Markdown", "规�
             ("baseline-safety.md", "安全正文"), ("natural-dialogue.md", "自然对话正文"),
             ("response-calibration.md", "策略校准正文"), ("call-dialogue.md", "通话正文")]]])
 source("identity", "助手身份与人格", "人工维护 · 结构化对象", "Echo 的固定人设由开发者写好，不是每次聊天临时生成。",
-       ["default_persona.py 定义 ECHO_PERSONA_V3：角色、特质、交流原则、允许披露与禁止声称。", "assistant_persona_version 指定版本，get_assistant_persona() 经公开入口取回对象。", "render_assistant_persona() 转成一条 system 文本，连同该对象里的所有 dialogue_examples 一起加入。"],
+       ["default_persona.py 定义 ECHO_PERSONA_V3：角色、特质、交流原则、允许披露与禁止声称。", "assistant_persona_version 指定版本，get_assistant_persona() 经公开入口取回对象。", "render_assistant_persona() 转成一条 system 文本，当前普通聊天的人格不包含 Few-shot。"],
        "正常组装会读取已配置人格；未知版本报错。旧 echo-persona-v1/v2 配置当前也映射到 V3。",
        "对象有结构合同与版本解析；人格措辞本身主要是提示约束。当前没有按任务检索人格片段。",
        "改 default_persona.py 的内容源；渲染机制在 shared/prompting/renderer.py。当前人设正文尚未外置为 MD。",
        [r("identity", "ECHO_PERSONA_V3 =", "人设正文"), r("identity", "_PERSONAS =", "版本映射"),
         r("features/assistant_persona/public.py", "def get_assistant_persona", "业务公开入口"),
         r("renderer", "def render_assistant_persona", "人格转成消息")])
-source("examples", "人格中的 Few-shot", "人工维护 · 虚构示范", "当前示例嵌在人格消息里，没有独立检索、挑选或预算模块。",
-       ["开发者在 ECHO_PERSONA_V3.dialogue_examples 写输入／回复对。", "render_assistant_persona() 逐对渲染，标注为虚构口吻示例。", "整组示例随人格一同进入 system，不是额外追加的真实 user／assistant 历史。"],
-       "人格存在时随之加入全部示例；不是必须放在请求末尾的一个独立层。",
-       "通过提示标明不是用户事实、不要写入记忆；不是数据库历史隔离的自动证明。",
-       "当前改 default_persona.py 的 dialogue_examples；规范批准按需管理，但完整资产注册／选择尚未实现。",
+source("examples", "普通聊天不注入示例", "当前为空", "已移除固定闲聊 Few-shot，保留角色与当前语境。",
+       ["默认人格的 dialogue_examples 为空。", "render_assistant_persona() 因此跳过示例段落。", "回复由角色、当前任务和真实上下文生成。"],
+       "当前普通聊天不注入示例；六类内容不要求每轮六类齐全。",
+       "可选示例渲染仍标明虚构数据；默认人格无示例。",
+       "保持普通闲聊无固定示例；尚无独立示例选择引擎。",
        [r("identity", "dialogue_examples=", "示例内容"), r("renderer", "def render_assistant_persona", "示例所在消息")])
 source("preferences", "用户显式偏好", "用户填写 · 数据库", "persona feature 管的是用户偏好，与助手人格属于不同材料。",
        ["用户提交称呼、回复风格、长度、支持方式等设置，接口和领域规则先校验。", "PersonaManagementService.update() 通过仓储写入 user_personas。", "get_persona(user_id) 读取；没设置时生成默认偏好。render_persona() 映射为中文 guidance 并处理自由文本。"],
@@ -209,7 +209,7 @@ layer("agent", "Agent 执行与交付要求", "规则＋输出", "system", "Agen
 layer("sticker", "当前附件的可信语义", "上下文", "system", "Agent 插入", "本轮有可信表情语义时插在 Agent 首条之后，不表示用户要求发送另一张。", "input", "[虚构附件示例] 当前用户消息附带的表情语义：打招呼。", "sticker")
 layer("safety", "基础安全边界", "规则", "system", "共享 Renderer", "渲染器内部的第一层；最终位置在 Agent 前缀之后。", "rules", (BACKEND / "prompts/rules/baseline-safety.md").read_text(encoding="utf-8"))
 layer("product", "产品定位与提示版本", "身份", "system", "共享 Renderer", "使用 Settings 的产品正文，加上 prompt_version 标记；部署覆盖值可能不同。", "config", "[内容摘要，非运行时原文] Echo 产品定位 + prompt_version。")
-layer("persona", "助手人格，内含整组示例", "身份＋示例", "system", "共享 Renderer", "将人工结构化人格渲染为 system；Few-shot 就在本条内部，不独立排在末尾。", "identity", "[内容摘要，非原文] 固定角色、特质、原则、自我披露边界，以及全部 dialogue_examples。")
+layer("persona", "助手人格，无闲聊示例", "身份", "system", "共享 Renderer", "将人工结构化人格渲染为 system；默认不注入 Few-shot。", "identity", "[内容摘要，非原文] 固定角色、特质、原则与自我披露边界。")
 layer("natural", "自然对话规则", "规则", "system", "共享 Renderer", "普通文字聊天加入；通话改用 call-dialogue，不同时堆入这两份文字聊天政策。", "rules", (BACKEND / "prompts/rules/natural-dialogue.md").read_text(encoding="utf-8"))
 layer("calibration", "回应策略校准", "规则", "system", "共享 Renderer", "帮助模型区分分享、求助、边界等表达；仍属于提示，而非工具授权程序。", "rules", (BACKEND / "prompts/rules/response-calibration.md").read_text(encoding="utf-8"))
 layer("mode", "当前交互渠道指引", "规则", "system", "共享 Renderer", "conversation_mode=chat 决定文字聊天风格；call、proactive、daily_letter 采用不同内容。", "format", "[内容摘要，非原文] 当前是文字聊天；按即时通讯表达，按问题复杂度组织内容。")

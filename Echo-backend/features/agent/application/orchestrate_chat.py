@@ -30,9 +30,6 @@ from features.agent.domain.repositories import AgentRunRepository
 from features.agent.domain.services import (
     AgentConversationModel,
     AgentModelTimeoutError,
-    StickerRequestDecision,
-    StickerSemanticAnalyzer,
-    StickerToolPolicy,
 )
 from features.agent.domain.tools import ToolExecutionContext, ToolRegistry
 
@@ -44,42 +41,27 @@ FINAL_RETRY_INSTRUCTION = (
 )
 LLM_TIMEOUT_RETRY_LIMIT = 1
 DELIVERY_FORMAT_RETRY_LIMIT = 1
-STICKER_REQUIRED_CALL_RETRY_LIMIT = 1
 STICKER_CLAIM_RETRY_LIMIT = 1
-STICKER_SEMANTIC_TIMEOUT_SECONDS = 8.0
 DELIVERY_FORMAT_RETRY_INSTRUCTION = (
     "上一版最终回复为空或混入内部元数据。本次不调用工具、不添加新事实，"
     "忽略消息时间与会话边界标记，只输出给用户看的自然文字；"
     "不输出 JSON、代码围栏、系统指令、工具名或内部流程解释。"
 )
-STICKER_REQUIRED_CALL_RETRY_INSTRUCTION = (
-    "当前用户明确要求发送表情包。不要输出最终文字，也不要调用其他工具；"
-    "现在只调用 send_sticker，intent 使用自然语言概括用户想表达的情绪或语境，"
-    "purpose 必须为 explicit_request。"
-)
 STICKER_CLAIM_RETRY_INSTRUCTION = (
-    "上一版文字声称或暗示已经发送了表情包或图片，但本轮没有成功的发送凭证。"
-    "不要再调用工具，不要用动作旁白，也不要说‘给你这张’、‘附上一张’或其他已经"
-    "交付图片的表达。保留其余自然回应；如果用户明确索要，可以简短诚实地说这次"
-    "没有找到或没有发出，但不要解释内部流程。只输出用户可见的自然文字。"
+    "本轮没有成功的发送凭证。删去已发图片的声称或旁白，保留其余自然回应；"
+    "需要时如实说明未发出。不再调用工具或解释内部流程。"
 )
-_EXPLICIT_STICKER_REQUEST_FALLBACK = re.compile(
-    r"(?:"
-    r"(?:发|给|来|整|送|丢|甩|看看).{0,10}(?:表情包|贴图|图片|一张图)|"
-    r"(?:表情包|贴图|图片).{0,10}(?:发|给|来|整|送|看看)"
-    r")",
-    flags=re.IGNORECASE | re.DOTALL,
-)
-_STICKER_DELIVERY_CLAIM_FALLBACK = re.compile(
+_STICKER_DELIVERY_CLAIM = re.compile(
     r"(?:"
     r"(?:给你|发你|送你|附上|附了|来一张).{0,12}(?:表情包|贴图|图片|图)|"
     r"(?:表情包|贴图|图片).{0,12}(?:发出|发给|送给|附上)|"
     r"(?:这|那)张.{0,8}(?:给你|送你|发你)|"
+    r"附上(?:一张|这张|那张)|"
     r"[（(\[].{0,24}(?:表情包|贴图|图片).{0,12}[）)\]]"
     r")",
     flags=re.IGNORECASE | re.DOTALL,
 )
-_STICKER_DELIVERY_NEGATION_FALLBACK = re.compile(
+_STICKER_DELIVERY_NEGATION = re.compile(
     r"(?:"
     r"(?:不能|没法|无法|没有|没能|未能|没发|发不出|找不到).{0,12}"
     r"(?:表情包|贴图|图片|图)|"
@@ -109,7 +91,6 @@ class OrchestrateChatWithAgent:
         max_steps: int,
         max_tool_calls: int,
         run_timeout_seconds: int,
-        sticker_semantic_analyzer: StickerSemanticAnalyzer | None = None,
     ):
         self.repository = repository
         self.model = model
@@ -118,7 +99,6 @@ class OrchestrateChatWithAgent:
         self.max_steps = max_steps
         self.max_tool_calls = max_tool_calls
         self.run_timeout_seconds = run_timeout_seconds
-        self.sticker_semantic_analyzer = sticker_semantic_analyzer
 
     async def execute(
         self,
@@ -128,7 +108,6 @@ class OrchestrateChatWithAgent:
         conversation_id: str | None = None,
         conversation_mode: str = "chat",
         sticker_intent: str = "",
-        allow_proactive_stickers: bool = True,
         tools_enabled: bool = True,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
@@ -141,7 +120,6 @@ class OrchestrateChatWithAgent:
             messages=messages,
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
-            allow_proactive_stickers=allow_proactive_stickers,
             call_route_instruction=call_route_instruction,
         )
         tool_results: list[AgentToolResult] = []
@@ -153,7 +131,6 @@ class OrchestrateChatWithAgent:
         progress_reported = False
         llm_timeout_retries_remaining = LLM_TIMEOUT_RETRY_LIMIT
         delivery_format_retries_remaining = DELIVERY_FORMAT_RETRY_LIMIT
-        required_call_retries_remaining = STICKER_REQUIRED_CALL_RETRY_LIMIT
         sticker_claim_retries_remaining = STICKER_CLAIM_RETRY_LIMIT
         final_error: str | None = None
         deadline = asyncio.get_running_loop().time() + self.run_timeout_seconds
@@ -167,36 +144,17 @@ class OrchestrateChatWithAgent:
             if tool_call_limit is None
             else min(self.max_tool_calls, max(tool_call_limit, 0))
         )
-        sticker_decision = StickerRequestDecision(StickerToolPolicy.OPTIONAL)
-        required_sticker_call_pending = False
-
         try:
-            sticker_decision = await self._resolve_sticker_policy(
-                message=message,
-                messages=messages,
-                conversation_mode=conversation_mode,
-                tools=tools,
-                deadline=deadline,
-                run_id=run_id,
-            )
-            required_sticker_call_pending = (
-                sticker_decision.policy == StickerToolPolicy.REQUIRED
-            )
             while model_steps < self.max_steps:
                 model_steps += 1
                 step_tool_names = {
                     str(item.get("function", {}).get("name") or "") for item in tools
                 }
-                tool_choice = (
-                    self._forced_tool_choice("send_sticker")
-                    if required_sticker_call_pending and tools
-                    else "auto"
-                )
                 response, llm_timeout_retries_remaining = await self._complete_model(
                     messages=agent_messages,
                     tools=tools,
                     structured_output=conversation_mode == "daily_letter",
-                    tool_choice=tool_choice,
+                    tool_choice="auto",
                     deadline=deadline,
                     run_id=run_id,
                     timeout_retries_remaining=llm_timeout_retries_remaining,
@@ -239,55 +197,6 @@ class OrchestrateChatWithAgent:
                     break
 
                 normalized_calls = self._normalize_calls(response.tool_calls)
-                if required_sticker_call_pending:
-                    required_calls = tuple(
-                        call for call in normalized_calls if call.tool_name == "send_sticker"
-                    )
-                    if not required_calls:
-                        if (
-                            required_call_retries_remaining > 0
-                            and model_steps < self.max_steps
-                        ):
-                            required_call_retries_remaining -= 1
-                            agent_messages.append(
-                                {
-                                    "role": "system",
-                                    "content": STICKER_REQUIRED_CALL_RETRY_INSTRUCTION,
-                                }
-                            )
-                            logger.warning(
-                                "Unified Agent required sticker call retry requested "
-                                "run_id=%s retries_remaining=%s returned_tool_calls=%s",
-                                run_id,
-                                required_call_retries_remaining,
-                                [call.tool_name for call in normalized_calls],
-                            )
-                            continue
-                        required_calls = (
-                            AgentToolCall(
-                                call_id=f"required_sticker_{uuid.uuid4().hex}",
-                                tool_name="send_sticker",
-                                arguments={
-                                    "intent": sticker_decision.intent or message[:300],
-                                    "purpose": "explicit_request",
-                                    "placement": "after_text",
-                                },
-                            ),
-                        )
-                        logger.warning(
-                            "Unified Agent required sticker call synthesized after invalid "
-                            "function response run_id=%s",
-                            run_id,
-                        )
-                    normalized_calls = (
-                        self._normalize_required_sticker_call(
-                            required_calls[0],
-                            sticker_decision,
-                            message,
-                        ),
-                    )
-                    required_sticker_call_pending = False
-
                 if normalized_calls:
                     agent_messages.append(
                         self._assistant_tool_call_message(response.text, normalized_calls)
@@ -342,19 +251,13 @@ class OrchestrateChatWithAgent:
                                         conversation_id=conversation_id,
                                         conversation_mode=conversation_mode,
                                         trigger_message=message,
-                                        allow_proactive_stickers=allow_proactive_stickers,
                                         prior_results=tuple(tool_results),
                                     ),
                                     call,
                                 ),
                                 timeout=self._remaining_timeout(deadline),
                             )
-                            if not (
-                                definition is not None
-                                and not definition.specification.count_no_result_toward_call_limit
-                                and tool_result.status == AgentToolStatus.NO_RESULT
-                            ):
-                                tool_call_count += 1
+                            tool_call_count += 1
 
                         tool_results.append(tool_result)
                         self._record_tool_result(run_id, call, tool_result)
@@ -497,11 +400,7 @@ class OrchestrateChatWithAgent:
                         tool_results,
                         content_parts,
                     )
-                    and await self._claims_sticker_delivery(
-                        delivery_plan.reply_text,
-                        deadline=deadline,
-                        run_id=run_id,
-                    )
+                    and self._claims_sticker_delivery(delivery_plan.reply_text)
                 ):
                     if (
                         sticker_claim_retries_remaining > 0
@@ -518,7 +417,6 @@ class OrchestrateChatWithAgent:
                             }
                         )
                         tools = ()
-                        required_sticker_call_pending = False
                         logger.warning(
                             "Unified Agent unbacked sticker delivery claim retry requested "
                             "run_id=%s retries_remaining=%s",
@@ -529,9 +427,6 @@ class OrchestrateChatWithAgent:
                     delivery_plan = build_natural_delivery_plan(
                         self._deterministic_no_sticker_reply(
                             tool_results,
-                            explicit_request=(
-                                sticker_decision.policy == StickerToolPolicy.REQUIRED
-                            ),
                         ),
                         conversation_mode,
                         sticker_placement=sticker_placement,
@@ -604,18 +499,11 @@ class OrchestrateChatWithAgent:
                             tool_results,
                             content_parts,
                         )
-                        and await self._claims_sticker_delivery(
-                            delivery_plan.reply_text,
-                            deadline=deadline,
-                            run_id=run_id,
-                        )
+                        and self._claims_sticker_delivery(delivery_plan.reply_text)
                     ):
                         delivery_plan = build_natural_delivery_plan(
                             self._deterministic_no_sticker_reply(
                                 tool_results,
-                                explicit_request=(
-                                    sticker_decision.policy == StickerToolPolicy.REQUIRED
-                                ),
                             ),
                             conversation_mode,
                             sticker_placement=sticker_placement,
@@ -879,115 +767,11 @@ class OrchestrateChatWithAgent:
                     ) from exc
                 raise
 
-    async def _resolve_sticker_policy(
-        self,
-        *,
-        message: str,
-        messages: list[dict],
-        conversation_mode: str,
-        tools: tuple[dict, ...],
-        deadline: float,
-        run_id: str,
-    ) -> StickerRequestDecision:
-        tool_names = {
-            str(item.get("function", {}).get("name") or "") for item in tools
-        }
-        if conversation_mode in {"call", "daily_letter"} or "send_sticker" not in tool_names:
-            return StickerRequestDecision(StickerToolPolicy.FORBIDDEN)
-        if conversation_mode == "proactive":
-            return StickerRequestDecision(StickerToolPolicy.OPTIONAL)
-        if self.sticker_semantic_analyzer is None:
-            return StickerRequestDecision(StickerToolPolicy.OPTIONAL)
-        try:
-            decision = await asyncio.wait_for(
-                self.sticker_semantic_analyzer.assess_request(message, messages),
-                timeout=min(
-                    self._remaining_timeout(deadline),
-                    STICKER_SEMANTIC_TIMEOUT_SECONDS,
-                ),
-            )
-            if decision.policy not in {
-                StickerToolPolicy.REQUIRED,
-                StickerToolPolicy.OPTIONAL,
-            }:
-                raise ValueError("Sticker request analyzer returned an invalid policy")
-            return decision
-        except Exception as exc:
-            fallback_required = bool(
-                _EXPLICIT_STICKER_REQUEST_FALLBACK.search(message)
-            )
-            logger.warning(
-                "Sticker request semantic analysis failed run_id=%s fallback_required=%s "
-                "error_type=%s",
-                run_id,
-                fallback_required,
-                type(exc).__name__,
-            )
-            return StickerRequestDecision(
-                StickerToolPolicy.REQUIRED
-                if fallback_required
-                else StickerToolPolicy.OPTIONAL,
-                message.strip()[:300] if fallback_required else "",
-            )
-
-    async def _claims_sticker_delivery(
-        self,
-        reply_text: str,
-        *,
-        deadline: float,
-        run_id: str,
-    ) -> bool:
-        if self.sticker_semantic_analyzer is not None:
-            try:
-                return await asyncio.wait_for(
-                    self.sticker_semantic_analyzer.claims_sticker_delivery(reply_text),
-                    timeout=min(
-                        self._remaining_timeout(deadline),
-                        STICKER_SEMANTIC_TIMEOUT_SECONDS,
-                    ),
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Sticker delivery claim semantic analysis failed run_id=%s "
-                    "error_type=%s",
-                    run_id,
-                    type(exc).__name__,
-                )
-        if _STICKER_DELIVERY_NEGATION_FALLBACK.search(reply_text):
+    @staticmethod
+    def _claims_sticker_delivery(reply_text: str) -> bool:
+        if _STICKER_DELIVERY_NEGATION.search(reply_text):
             return False
-        return bool(_STICKER_DELIVERY_CLAIM_FALLBACK.search(reply_text))
-
-    @staticmethod
-    def _forced_tool_choice(tool_name: str) -> dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {"name": tool_name},
-        }
-
-    @staticmethod
-    def _normalize_required_sticker_call(
-        call: AgentToolCall,
-        decision: StickerRequestDecision,
-        message: str,
-    ) -> AgentToolCall:
-        requested_placement = str(call.arguments.get("placement") or "").strip()
-        return AgentToolCall(
-            call_id=call.call_id,
-            tool_name="send_sticker",
-            arguments={
-                "intent": (
-                    str(call.arguments.get("intent") or "").strip()
-                    or decision.intent
-                    or message.strip()
-                )[:300],
-                "purpose": "explicit_request",
-                "placement": (
-                    requested_placement
-                    if requested_placement in {"before_text", "after_text"}
-                    else "after_text"
-                ),
-            },
-        )
+        return bool(_STICKER_DELIVERY_CLAIM.search(reply_text))
 
     @staticmethod
     def _has_successful_sticker_delivery(
@@ -1010,15 +794,13 @@ class OrchestrateChatWithAgent:
     @staticmethod
     def _deterministic_no_sticker_reply(
         results: list[AgentToolResult],
-        *,
-        explicit_request: bool,
     ) -> str:
         sticker_results = [
             result for result in results if result.tool_name == "send_sticker"
         ]
         if any(result.status == AgentToolStatus.NO_RESULT for result in sticker_results):
             return "这次没找到合适的表情包，我先不乱发。"
-        if sticker_results or explicit_request:
+        if sticker_results:
             return "这次表情包没有发出去，我们先继续聊。"
         return "我在，继续和你说。"
 
@@ -1027,53 +809,24 @@ class OrchestrateChatWithAgent:
         messages: list[dict],
         conversation_mode: str,
         sticker_intent: str,
-        allow_proactive_stickers: bool,
         call_route_instruction: str = "",
     ) -> list[dict]:
-        # Accepted for old callers; elapsed turns do not dictate expression.
         if conversation_mode == "call":
-            sticker_rule = (
-                "当前是语音通话模式。不得检索、选择或发送表情包，即使用户明确要求也不"
-                "执行图片发送；自然说明通话里先继续说话即可。"
-            )
+            sticker_rule = "当前为语音通话，不发送图片。"
         elif conversation_mode == "daily_letter":
-            sticker_rule = (
-                "当前是每日来信模式，不得搜索、选择或发送聊天表情包，也不得创建定时任务、"
-                "主动聊天或外部搜索。图片只通过结构化 image_brief 交给来信业务处理。"
-            )
+            sticker_rule = "来信图片通过 image_brief 交给来信业务处理。"
         elif conversation_mode == "proactive":
             sticker_rule = (
-                "本轮由后台策略触发，并非用户发来新消息。不能据此推断用户醒着、在线、"
-                "正在读消息、准备回应、有空或正在做某事；未知状态使用条件表达。"
-                "当前是主动文字聊天，轻松招呼确实适合时最多附一张贴切表情，"
-                "不用图片强行制造亲近或补救无话可聊。"
-            )
-        elif allow_proactive_stickers:
-            sticker_rule = (
-                "聊天模式可以使用表情包。用户明确要求时调用 send_sticker，purpose 使用 "
-                "explicit_request。是否主动发图取决于本轮想表达的情绪和对话气氛，没有轮数配额。"
-                "可用文字、颜文字或一张贴切的表情包表达；不必叠加，也不必每轮装饰。"
-                "官方和用户私人表情包都可以参与选择。想轻轻得意、害羞、庆祝或安慰时，"
-                "确实适合才调用 send_sticker，purpose 使用 proactive。intent 描述 Echo 想传达的"
-                "态度、对象和语境，不是简单复制用户的情绪词；用户难过不等于要发哭脸。"
-                "严肃、安全、医疗、冲突或明显悲伤时优先认真文字回应，不主动发图。"
-                "没有贴切候选就正常聊天，不能为了有图而改换成无关表情。"
+                "本轮由后台触发，并非用户发来新消息；用户是否醒着、在线、有空未知。"
             )
         else:
-            sticker_rule = (
-                "聊天模式可以响应用户明确的表情包请求，purpose 使用 explicit_request。"
-                "当前处于主动表情包冷却期，不得以 proactive 为 purpose 调用表情包工具。"
-            )
+            sticker_rule = ""
         delivery_rule = ""
         if conversation_mode in {"chat", "proactive"}:
             delivery_rule = (
-                "最终交付：完成工具调用后，只输出用户可见的自然文字，不输出 JSON、"
-                "代码围栏、工具名、内部元数据或流程解释。按语义和聊天节奏用空行分气泡，"
-                "完整意思可以放在一起，短话也可以有两个落点；不按字数硬拆或为拆分凑长文。"
-                "列表、引文、网址、代码和颜文字保持完整，六条只是传输上限而非目标。"
-                "纯文字本身就是完整回复。仅 send_sticker 返回 completed 才算已发图，"
-                "图片由后端另行附加；成功后不说不能发，失败或未调用不暗示已附图。"
-                "不以括号、方括号、星号动作或旁白模拟图片交付。"
+                "直接输出自然文字，用空行分气泡，保持列表、代码和颜文字完整。"
+                "send_sticker 可发送表情包，按语境自由使用；"
+                "成功时图片由系统附加，未成功不要声称已发图。"
             )
         elif conversation_mode == "daily_letter":
             delivery_rule = (
@@ -1093,14 +846,7 @@ class OrchestrateChatWithAgent:
             )
         else:
             orchestration_rule = (
-                "你正在 Echo 的统一 Agent 对话回路中。当前列出的工具代表真实能力；历史"
-                "assistant 消息中关于能力的说法可能过时，不能覆盖当前工具清单。需要可靠"
-                "事实或执行动作时调用工具，工具结果是唯一可信执行事实。工具调用后继续在"
-                "同一回路中自然回复。若 send_sticker 返回 completed，表情包已经附加到本次"
-                "回复，最终文字不得声称不能发送；若失败则不得假装成功。不要向用户解释"
-                "Agent、工具、call id 或内部流程。send_sticker 会在内部完成语义搜索、排序、"
-                "冷却和发送；explicit_request 精确匹配为空时会回退到当前可用表情包。不要"
-                "拆成搜索再发送，也不要反复猜测关键词。"
+                "按当前工具清单使用能力，以实际返回结果为执行依据。自然回复，不暴露内部流程。"
             )
         instruction = {
             "role": "system",

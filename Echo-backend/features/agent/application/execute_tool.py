@@ -66,10 +66,6 @@ class ToolExecutor:
             )
         previous_call_count = sum(
             result.tool_name == call.tool_name
-            and (
-                definition.specification.count_no_result_toward_call_limit
-                or result.status != AgentToolStatus.NO_RESULT
-            )
             for result in context.prior_results
         )
         if previous_call_count >= definition.specification.max_calls_per_turn:

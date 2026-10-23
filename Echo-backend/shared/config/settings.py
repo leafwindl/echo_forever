@@ -867,20 +867,6 @@ class Settings(BaseSettings):
         ge=1024,
         le=20 * 1024 * 1024,
     )
-    sticker_proactive_cooldown_turns: int = Field(
-        default=2, validation_alias="STICKER_PROACTIVE_COOLDOWN_TURNS", ge=1
-    )
-    sticker_proactive_min_interval_seconds: int = Field(
-        default=30,
-        validation_alias="STICKER_PROACTIVE_MIN_INTERVAL_SECONDS",
-        ge=1,
-    )
-    sticker_reuse_cooldown_turns: int = Field(
-        default=5, validation_alias="STICKER_REUSE_COOLDOWN_TURNS", ge=1
-    )
-    sticker_reuse_cooldown_minutes: int = Field(
-        default=5, validation_alias="STICKER_REUSE_COOLDOWN_MINUTES", ge=1
-    )
     sticker_vector_search_enabled: bool = Field(
         default=True,
         validation_alias="STICKER_VECTOR_SEARCH_ENABLED",

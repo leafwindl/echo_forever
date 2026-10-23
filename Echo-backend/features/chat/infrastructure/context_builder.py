@@ -4,19 +4,19 @@ import re
 from datetime import UTC, datetime
 
 from shared.config import settings
-
-from features.assistant_persona.public import get_assistant_persona
-from features.chat.domain.entities import ChatContext
-from features.chat.domain.dialogue_style import (
-    should_pause_followup_questions,
-    should_suppress_repeated_greeting,
-)
-from features.chat.domain.temporal_context import build_temporal_context, format_gap_seconds
-from features.chat.infrastructure import postgres_repositories
 from shared.prompting.renderer import (
     render_prompt_layers,
     render_turn_focus_guidance,
 )
+
+from features.assistant_persona.public import get_assistant_persona
+from features.chat.domain.dialogue_style import (
+    should_pause_followup_questions,
+    should_suppress_repeated_greeting,
+)
+from features.chat.domain.entities import ChatContext
+from features.chat.domain.temporal_context import build_temporal_context, format_gap_seconds
+from features.chat.infrastructure import postgres_repositories
 from features.memory.public import (
     list_memories,
     list_memory_embedding_records,
@@ -322,16 +322,6 @@ async def build_chat_context(
     if is_call:
         history = _build_call_history(history)
     pause_followup_questions = should_pause_followup_questions(history, user_message)
-    allow_proactive_stickers = (
-        conversation_mode in {"chat", "proactive"}
-        and not postgres_repositories.has_recent_assistant_sticker(
-            user_id,
-            conversation_id,
-            assistant_turns=settings.sticker_proactive_cooldown_turns,
-            minimum_interval_seconds=settings.sticker_proactive_min_interval_seconds,
-        )
-    )
-    # Cooldown is an upper bound on interruptions, never a minimum sending cadence.
     conversation_timing = (
         None
         if unknown_speaker or not memory_enabled
@@ -500,7 +490,6 @@ async def build_chat_context(
         memory_retrieval_mode=memory_retrieval_mode,
         pause_followup_questions=pause_followup_questions,
         suppress_repeated_greeting=suppress_repeated_greeting,
-        allow_proactive_stickers=allow_proactive_stickers,
         temporal_context=temporal_context,
         proactive_writer_messages=proactive_writer_messages,
         proactive_safe_facts=proactive_safe_facts,

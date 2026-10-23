@@ -190,7 +190,6 @@ async def _generate_case(case):
         max_steps=production.max_steps,
         max_tool_calls=production.max_tool_calls,
         run_timeout_seconds=production.run_timeout_seconds,
-        sticker_semantic_analyzer=production.sticker_semantic_analyzer,
     )
     use_case = GenerateChatReply(
         conversation_repository=None,
@@ -254,7 +253,7 @@ async def main():
             {
                 "type": "summary",
                 "pipeline": (
-                    "shared renderer -> production Agent/model/classifiers -> "
+                    "shared renderer -> production Agent/model -> "
                     "GenerateChatReply.prepare"
                 ),
                 "isolation": (

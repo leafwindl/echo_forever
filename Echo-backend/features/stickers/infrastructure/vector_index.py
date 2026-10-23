@@ -79,9 +79,6 @@ async def search_sticker_embeddings(
     user_id: str,
     query: str,
     limit: int,
-    *,
-    conversation_id: str | None = None,
-    purpose: str = "explicit_request",
 ) -> list[Sticker]:
     repository = PostgresStickerRepository()
     clean_query = query.strip()
@@ -94,8 +91,6 @@ async def search_sticker_embeddings(
             user_id,
             clean_query,
             limit,
-            conversation_id=conversation_id,
-            purpose=purpose,
         )
 
     try:
@@ -109,8 +104,6 @@ async def search_sticker_embeddings(
             query_embedding,
             settings.embedding_model,
             settings.sticker_vector_top_k,
-            conversation_id=conversation_id,
-            purpose=purpose,
             score_threshold=settings.sticker_vector_score_threshold,
             maximum_score_gap=settings.sticker_vector_max_score_gap,
         )
@@ -128,6 +121,4 @@ async def search_sticker_embeddings(
         user_id,
         clean_query,
         limit,
-        conversation_id=conversation_id,
-        purpose=purpose,
     )

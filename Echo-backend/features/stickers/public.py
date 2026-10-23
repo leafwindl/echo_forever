@@ -12,16 +12,11 @@ async def search_stickers(
     user_id: str,
     intent: str,
     limit: int = 3,
-    *,
-    conversation_id: str | None = None,
-    purpose: str = "explicit_request",
 ):
     return await search_sticker_embeddings(
         user_id,
         intent,
         limit,
-        conversation_id=conversation_id,
-        purpose=purpose,
     )
 
 

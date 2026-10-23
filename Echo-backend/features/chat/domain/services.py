@@ -27,7 +27,6 @@ class ChatAgentOrchestrator(Protocol):
         conversation_id: str | None = None,
         conversation_mode: str = "chat",
         sticker_intent: str = "",
-        allow_proactive_stickers: bool = True,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         tools_enabled: bool | None = None,
