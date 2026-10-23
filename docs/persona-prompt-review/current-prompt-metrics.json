@@ -19,8 +19,8 @@
     },
     {
       "layer": "[ASSISTANT_PERSONA｜echo_default｜echo-persona-v2]",
-      "characters": 1423,
-      "estimated_tokens": 1223
+      "characters": 1419,
+      "estimated_tokens": 1216
     },
     {
       "layer": "[自然对话规则]",
@@ -59,8 +59,8 @@
     }
   ],
   "totals": {
-    "characters": 6094,
-    "estimated_tokens": 4465
+    "characters": 6090,
+    "estimated_tokens": 4458
   },
   "runtime_policy_counts": {
     "BASELINE_SAFETY_POLICY": 272,
