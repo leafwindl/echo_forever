@@ -9,3 +9,4 @@
 - 当前尚无完整六类资产注册和按需选择引擎，不得声称已具备，也不预建空目录。
 - 修改后运行 `python -B scripts/check_architecture.py` 和相关后端测试；影响客户端时执行适用的 Flutter/Harmony 检查。DB、模型、设备验收和 skip 如实报告。
 - 不删除失败测试、弱化权限或新增空壳掩盖问题；不得扩大 feature 依赖环。
+- 手机开发更新默认走 USB：鸿蒙使用 `harmony_app/scripts/install-usb.ps1` 同签名覆盖安装并核对版本；Android 使用对应 adb 覆盖流程。不自动卸载、清数据或改签名来绕过覆盖失败。
