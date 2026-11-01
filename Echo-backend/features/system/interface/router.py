@@ -1,12 +1,18 @@
-from fastapi import APIRouter, status
+from dataclasses import asdict
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from shared.config import settings
+from shared.interface.dependencies import CurrentUser, get_current_user
 
 from features.persona.public import PERSONA_SCHEMA_VERSION
 from features.relationship.public import RELATIONSHIP_SCHEMA_VERSION
+from features.system.application.reset_companionship import ResetCompanionship
 from features.system.public import is_database_ready
 
 router = APIRouter(tags=["health"])
+CurrentUserDependency = Annotated[CurrentUser, Depends(get_current_user)]
 
 
 @router.get("/")
@@ -24,6 +30,12 @@ def readiness_check():
             content={"status": "not_ready", "database": "unavailable"},
         )
     return {"status": "ready", "database": "ok"}
+
+
+@router.post("/account/reset")
+def reset_companionship(current_user: CurrentUserDependency):
+    result = ResetCompanionship().execute(current_user.user_id)
+    return asdict(result)
 
 
 @router.get("/version")

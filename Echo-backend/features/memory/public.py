@@ -43,6 +43,15 @@ def clear_memories(user_id: str) -> MemoryClearResult:
     return service.clear_memories(user_id=user_id)
 
 
+def cancel_pending_memory_extraction_jobs(user_id: str) -> int:
+    """取消该用户尚未完成的记忆抽取任务，避免重置后旧任务回写。"""
+    from features.memory.infrastructure.postgres_repositories import (
+        cancel_user_extraction_jobs,
+    )
+
+    return cancel_user_extraction_jobs(user_id)
+
+
 async def backfill_memory_embeddings(user_id: str, limit: int = 100) -> MemoryBackfillResult:
     """稳定的模块入口：让已有记忆补齐向量并参与检索。"""
     service = get_memory_management_service()
@@ -91,6 +100,7 @@ __all__ = [
     "MemoryOperationError",
     "MemoryValidationError",
     "backfill_memory_embeddings",
+    "cancel_pending_memory_extraction_jobs",
     "clear_memories",
     "delete_memory",
     "list_memories",

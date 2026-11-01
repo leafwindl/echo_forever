@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import random
 import uuid
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from db.postgres_connection import get_connection, transaction
 
+from features.agent.domain.delivery import build_delivery_items
 from features.agent.domain.entities import ContentPart
 from features.auth.public import ensure_user_identity
 from features.chat.infrastructure import postgres_repositories
@@ -16,12 +18,28 @@ from features.proactive_chat.domain.entities import (
     ProactiveChatPreferences,
 )
 
-# The quota window starts at the first delivery and rolls forward; it is not a calendar-day quota.
-_LEVEL_LIMITS = {
-    "conservative": (timedelta(hours=24), 4, timedelta(days=7)),
-    "balanced": (timedelta(hours=6), 4, timedelta(days=1)),
-    "active": (timedelta(hours=2), 6, timedelta(days=1)),
+_SLOT_SECONDS = 30 * 60
+_MAX_ACCUMULATED_SECONDS = 7 * 24 * 60 * 60
+_SLOT_PROBABILITIES = {
+    1: 0.10,
+    2: 0.15,
+    3: 0.20,
+    4: 0.30,
+    5: 0.40,
+    6: 0.50,
 }
+
+
+def _slot_probability(slot: int, consecutive_unanswered: int) -> float:
+    if slot <= 0 or consecutive_unanswered >= 2:
+        return 0.0
+    if slot <= 6:
+        probability = _SLOT_PROBABILITIES[slot]
+    else:
+        probability = min(0.90, 0.50 + 0.05 * (slot - 6))
+    if consecutive_unanswered == 1:
+        probability /= 4
+    return probability
 
 
 def _timezone(value: str) -> str:
@@ -49,14 +67,18 @@ def _preference(row) -> ProactiveChatPreferences:
         enabled=bool(row["enabled"]),
         allow_echo_scheduling=bool(row["allow_echo_scheduling"]),
         allow_spontaneous_chat=bool(row["allow_spontaneous_chat"]),
-        proactivity_level=str(row["proactivity_level"]),
         timezone=str(row["timezone"]),
         quiet_start=row["quiet_start"],
         quiet_end=row["quiet_end"],
         explicit_reminder_quiet_policy=str(row["explicit_reminder_quiet_policy"]),
         notification_preview=bool(row["notification_preview"]),
-        proactive_count=int(row["proactive_count"]),
-        window_started_at=row["window_started_at"],
+        cycle_started_at=row["cycle_started_at"],
+        allowed_contact_seconds=int(row["allowed_contact_seconds"]),
+        last_accounted_at=row["last_accounted_at"],
+        last_evaluated_slot=int(row["last_evaluated_slot"]),
+        last_slot_result=str(row["last_slot_result"]) if row["last_slot_result"] else None,
+        paused_until=row["paused_until"],
+        pause_indefinite=bool(row["pause_indefinite"]),
         last_proactive_at=row["last_proactive_at"],
         consecutive_unanswered=int(row["consecutive_unanswered"]),
     )
@@ -113,16 +135,12 @@ class PostgresProactiveChatRepository:
         enabled: bool,
         allow_echo_scheduling: bool,
         allow_spontaneous_chat: bool,
-        proactivity_level: str,
         timezone: str,
         quiet_start: time,
         quiet_end: time,
         explicit_reminder_quiet_policy: str,
         notification_preview: bool,
     ) -> ProactiveChatPreferences:
-        level = proactivity_level.strip().lower()
-        if level not in _LEVEL_LIMITS:
-            raise ValueError("proactivity_level must be conservative, balanced, or active")
         policy = explicit_reminder_quiet_policy.strip().lower()
         if policy not in {"honor", "defer"}:
             raise ValueError("explicit_reminder_quiet_policy must be honor or defer")
@@ -134,15 +152,14 @@ class PostgresProactiveChatRepository:
                     """
                     INSERT INTO proactive_chat_preferences (
                         user_id, enabled, allow_echo_scheduling,
-                        allow_spontaneous_chat, proactivity_level, timezone,
+                        allow_spontaneous_chat, timezone,
                         quiet_start, quiet_end, explicit_reminder_quiet_policy,
                         notification_preview
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (user_id) DO UPDATE SET
                         enabled = EXCLUDED.enabled,
                         allow_echo_scheduling = EXCLUDED.allow_echo_scheduling,
                         allow_spontaneous_chat = EXCLUDED.allow_spontaneous_chat,
-                        proactivity_level = EXCLUDED.proactivity_level,
                         timezone = EXCLUDED.timezone,
                         quiet_start = EXCLUDED.quiet_start,
                         quiet_end = EXCLUDED.quiet_end,
@@ -156,7 +173,6 @@ class PostgresProactiveChatRepository:
                         enabled,
                         allow_echo_scheduling,
                         allow_spontaneous_chat,
-                        level,
                         timezone,
                         quiet_start,
                         quiet_end,
@@ -166,6 +182,69 @@ class PostgresProactiveChatRepository:
                 )
                 row = cursor.fetchone()
         return _preference(row)
+
+    def pause_spontaneous(
+        self,
+        user_id: str,
+        *,
+        until: datetime | None,
+        indefinite: bool,
+    ) -> ProactiveChatPreferences:
+        if not indefinite and until is None:
+            raise ValueError("paused_until is required unless pause_indefinite")
+        self.get_preferences(user_id)
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE proactive_chat_preferences
+                SET paused_until = %s, pause_indefinite = %s,
+                    last_accounted_at = %s, updated_at = NOW()
+                WHERE user_id = %s
+                RETURNING *
+                """,
+                (until, indefinite, datetime.now(UTC), user_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            preference = self.get_preferences(user_id)
+            return preference
+        return _preference(row)
+
+    def resume_spontaneous(self, user_id: str) -> ProactiveChatPreferences:
+        self.get_preferences(user_id)
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE proactive_chat_preferences
+                SET paused_until = NULL, pause_indefinite = FALSE,
+                    cycle_started_at = %s, allowed_contact_seconds = 0,
+                    last_accounted_at = %s, last_evaluated_slot = 0,
+                    last_slot_result = NULL, updated_at = NOW()
+                WHERE user_id = %s
+                RETURNING *
+                """,
+                (datetime.now(UTC), datetime.now(UTC), user_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            preference = self.get_preferences(user_id)
+            return preference
+        return _preference(row)
+
+    def reset_user_state(self, user_id: str) -> None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM chat_schedules WHERE user_id = %s",
+                (user_id,),
+            )
+            cursor.execute(
+                "DELETE FROM proactive_chat_jobs WHERE user_id = %s",
+                (user_id,),
+            )
+            cursor.execute(
+                "DELETE FROM proactive_chat_preferences WHERE user_id = %s",
+                (user_id,),
+            )
 
     def list_schedules(self, user_id: str) -> tuple[ChatSchedule, ...]:
         with transaction() as conn, conn.cursor() as cursor:
@@ -482,10 +561,52 @@ class PostgresProactiveChatRepository:
             )
             rows = cursor.fetchall()
             for row in rows:
+                preference = _preference(row)
                 last_user_at = row["last_user_at"]
-                if last_user_at is None or not self._spontaneous_allowed(
-                    _preference(row), last_user_at, now
+                if preference.pause_indefinite or (
+                    preference.paused_until is not None and preference.paused_until > now
                 ):
+                    self._touch_cycle_accounting(cursor, preference.user_id, now)
+                    continue
+                if last_user_at is not None and (
+                    preference.cycle_started_at is None
+                    or last_user_at > preference.cycle_started_at
+                ):
+                    self._reset_cycle(cursor, preference.user_id, now)
+                    continue
+                if self.is_quiet(preference, now):
+                    self._touch_cycle_accounting(cursor, preference.user_id, now)
+                    continue
+
+                accounted = max(preference.allowed_contact_seconds, 0)
+                if preference.last_accounted_at is not None:
+                    accounted += max(
+                        0, int((now - preference.last_accounted_at).total_seconds())
+                    )
+                accounted = min(accounted, _MAX_ACCUMULATED_SECONDS)
+                slot = accounted // _SLOT_SECONDS
+                if slot < 1 or slot <= preference.last_evaluated_slot:
+                    self._update_cycle_accounting(
+                        cursor,
+                        preference.user_id,
+                        accounted,
+                        now,
+                        preference.last_evaluated_slot,
+                        preference.last_slot_result,
+                    )
+                    continue
+
+                probability = _slot_probability(slot, preference.consecutive_unanswered)
+                hit = probability > 0 and random.random() < probability
+                self._update_cycle_accounting(
+                    cursor,
+                    preference.user_id,
+                    accounted,
+                    now,
+                    slot,
+                    "hit" if hit else "miss",
+                )
+                if not hit:
                     continue
                 conversation_id = postgres_repositories.get_or_create_active_conversation(
                     str(row["user_id"]), conn=conn
@@ -493,6 +614,49 @@ class PostgresProactiveChatRepository:
                 self._insert_job(cursor, None, str(row["user_id"]), conversation_id, now)
                 return True
         return False
+
+    def _touch_cycle_accounting(self, cursor, user_id: str, now: datetime) -> None:
+        cursor.execute(
+            """
+            UPDATE proactive_chat_preferences
+            SET last_accounted_at = %s, updated_at = NOW()
+            WHERE user_id = %s
+            """,
+            (now, user_id),
+        )
+
+    def _reset_cycle(self, cursor, user_id: str, now: datetime) -> None:
+        cursor.execute(
+            """
+            UPDATE proactive_chat_preferences
+            SET cycle_started_at = %s, allowed_contact_seconds = 0,
+                last_accounted_at = %s, last_evaluated_slot = 0,
+                last_slot_result = NULL, consecutive_unanswered = 0,
+                updated_at = NOW()
+            WHERE user_id = %s
+            """,
+            (now, now, user_id),
+        )
+
+    def _update_cycle_accounting(
+        self,
+        cursor,
+        user_id: str,
+        accounted_seconds: int,
+        now: datetime,
+        slot: int,
+        result: str | None,
+    ) -> None:
+        cursor.execute(
+            """
+            UPDATE proactive_chat_preferences
+            SET allowed_contact_seconds = %s, last_accounted_at = %s,
+                last_evaluated_slot = %s, last_slot_result = %s,
+                updated_at = NOW()
+            WHERE user_id = %s
+            """,
+            (accounted_seconds, now, slot, result, user_id),
+        )
 
     def has_recent_assistant_content(
         self,
@@ -704,14 +868,15 @@ class PostgresProactiveChatRepository:
                 )
                 sequence += 1
 
-            stickers = tuple(part for part in content_parts if part.type == "sticker")
-            if stickers and sticker_placement == "before_text":
-                insert_message("", "sticker", stickers)
-            for segment in reply_segments:
-                if segment.strip():
-                    insert_message(segment.strip(), "text", ())
-            if stickers and sticker_placement != "before_text":
-                insert_message("", "sticker", stickers)
+            stickers = tuple(
+                part for part in content_parts if part.type == "sticker"
+            )
+            for item in build_delivery_items(
+                tuple(segment.strip() for segment in reply_segments if segment.strip()),
+                stickers,
+                sticker_placement,
+            ):
+                insert_message(item.content, item.message_type, item.parts)
             if not messages:
                 insert_message("", "text", ())
 
@@ -806,42 +971,20 @@ class PostgresProactiveChatRepository:
             ),
         )
 
-    def _spontaneous_allowed(
-        self,
-        preference: ProactiveChatPreferences,
-        last_user_at: datetime,
-        now: datetime,
-    ) -> bool:
-        min_gap, maximum, window = _LEVEL_LIMITS[preference.proactivity_level]
-        if preference.consecutive_unanswered >= 2:
-            return False
-        if now - last_user_at < min_gap:
-            return False
-        if preference.last_proactive_at and now - preference.last_proactive_at < min_gap:
-            return False
-        if preference.window_started_at and now - preference.window_started_at < window:
-            return preference.proactive_count < maximum
-        return True
-
     def _mark_preference_delivery(
         self, cursor, preference: ProactiveChatPreferences, now: datetime
     ) -> None:
-        _, maximum, window = _LEVEL_LIMITS[preference.proactivity_level]
-        if preference.window_started_at is None or now - preference.window_started_at >= window:
-            count, started_at = 1, now
-        else:
-            count, started_at = (
-                min(preference.proactive_count + 1, maximum),
-                preference.window_started_at,
-            )
         cursor.execute(
             """
             UPDATE proactive_chat_preferences
-            SET last_proactive_at = %s, proactive_count = %s, window_started_at = %s,
-                consecutive_unanswered = consecutive_unanswered + 1, updated_at = NOW()
+            SET last_proactive_at = %s,
+                consecutive_unanswered = consecutive_unanswered + 1,
+                cycle_started_at = %s, allowed_contact_seconds = 0,
+                last_accounted_at = %s, last_evaluated_slot = 0,
+                last_slot_result = NULL, updated_at = NOW()
             WHERE user_id = %s
             """,
-            (now, count, started_at, preference.user_id),
+            (now, now, now, preference.user_id),
         )
 
     def _advance_schedule(self, cursor, schedule: ChatSchedule, now: datetime) -> None:

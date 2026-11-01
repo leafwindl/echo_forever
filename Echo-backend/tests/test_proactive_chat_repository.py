@@ -66,14 +66,18 @@ class ProactiveRepositoryTests(unittest.TestCase):
             "enabled": True,
             "allow_echo_scheduling": True,
             "allow_spontaneous_chat": True,
-            "proactivity_level": "active",
             "timezone": "Asia/Shanghai",
             "quiet_start": time(22, 30),
             "quiet_end": time(8),
             "explicit_reminder_quiet_policy": "defer",
             "notification_preview": False,
-            "proactive_count": 0,
-            "window_started_at": None,
+            "cycle_started_at": None,
+            "allowed_contact_seconds": 0,
+            "last_accounted_at": None,
+            "last_evaluated_slot": 0,
+            "last_slot_result": None,
+            "paused_until": None,
+            "pause_indefinite": False,
             "last_proactive_at": None,
             "consecutive_unanswered": 0,
         }
@@ -105,40 +109,19 @@ class ProactiveRepositoryTests(unittest.TestCase):
         self.assertIn("recent_failure.updated_at > NOW() - INTERVAL '10 minutes'", query)
         self.assertIn("recent_failure.error_code LIKE 'agent_failed:%'", query)
 
-    def test_spontaneous_policy_pauses_after_two_unanswered_messages(self):
-        now = datetime(2026, 8, 10, 8, tzinfo=UTC)
-        allowed = PostgresProactiveChatRepository()._spontaneous_allowed(
-            self._preference(consecutive_unanswered=2),
-            now - timedelta(hours=3),
-            now,
-        )
+    def test_half_hour_slot_probability_follows_the_new_table(self):
+        probability = repository_module._slot_probability
 
-        self.assertFalse(allowed)
+        self.assertAlmostEqual(probability(1, 0), 0.10)
+        self.assertAlmostEqual(probability(6, 0), 0.50)
+        self.assertAlmostEqual(probability(7, 0), 0.55)
+        self.assertAlmostEqual(probability(14, 0), 0.90)
+        self.assertAlmostEqual(probability(20, 0), 0.90)
+        self.assertAlmostEqual(probability(1, 1), 0.025)
+        self.assertEqual(probability(1, 2), 0.0)
 
-    def test_active_six_message_limit_uses_rolling_24_hour_window(self):
-        now = datetime(2026, 8, 10, 8, tzinfo=UTC)
-        repository = PostgresProactiveChatRepository()
-        blocked = repository._spontaneous_allowed(
-            self._preference(
-                proactive_count=6,
-                window_started_at=now - timedelta(hours=23),
-                last_proactive_at=now - timedelta(hours=3),
-            ),
-            now - timedelta(hours=3),
-            now,
-        )
-        reset = repository._spontaneous_allowed(
-            self._preference(
-                proactive_count=6,
-                window_started_at=now - timedelta(hours=24),
-                last_proactive_at=now - timedelta(hours=3),
-            ),
-            now - timedelta(hours=3),
-            now,
-        )
-
-        self.assertFalse(blocked)
-        self.assertTrue(reset)
+    def test_cycle_accounting_does_not_accumulate_beyond_the_cap(self):
+        self.assertEqual(repository_module._MAX_ACCUMULATED_SECONDS, 7 * 24 * 60 * 60)
 
     def test_delete_schedule_removes_row_and_suppresses_pending_jobs(self):
         cursor = _FakeCursor(one={"schedule_id": "schedule_a"})

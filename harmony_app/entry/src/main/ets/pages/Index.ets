@@ -4,7 +4,7 @@ import photoAccessHelper from '@ohos.file.photoAccessHelper';
 import dataSharePredicates from '@ohos.data.dataSharePredicates';
 import fs from '@ohos.file.fs';
 import { ApiClient } from '../common/ApiClient';
-import { normalizeMainlandPhone } from '../common/AppConfig';
+import { AppConfig, normalizeMainlandPhone } from '../common/AppConfig';
 import { SecureStore } from '../common/SecureStore';
 import { EchoRepository, messageFromJson } from '../data/EchoRepository';
 import { StudyFocusMedia } from '../data/StudyFocusMedia';
@@ -18,6 +18,7 @@ import {
   MemoryRecord,
   PersonaProfile,
   ProactiveChatPreferences,
+  RelationshipProposal,
   RelationshipState,
   StickerItem
 } from '../model/ApiModels';
@@ -26,7 +27,12 @@ import { HarmonyPush } from '../platform/HarmonyPush';
 import { NotificationsPage } from './NotificationsPage';
 import { DevicesPage } from './DevicesPage';
 import { UpdatePanel } from './UpdatePanel';
-import { relationshipModeLabel, relationshipStageLabel } from '../model/Relationship';
+import {
+  relationshipDirectionLabel,
+  relationshipModeLabel,
+  relationshipStageLabel,
+  relationshipTypeLabel
+} from '../model/Relationship';
 
 interface HarmonyFocusSession {
   sessionId: string;
@@ -62,7 +68,6 @@ interface ProactivePreferencesPatch {
   enabled?: boolean;
   allowEchoScheduling?: boolean;
   allowSpontaneousChat?: boolean;
-  proactivityLevel?: string;
   timezone?: string;
   quietStart?: string;
   quietEnd?: string;
@@ -153,12 +158,12 @@ struct Index {
     enabled: false,
     allowEchoScheduling: true,
     allowSpontaneousChat: false,
-    proactivityLevel: 'balanced',
     timezone: 'Asia/Shanghai',
     quietStart: '22:30',
     quietEnd: '08:00',
     explicitReminderQuietPolicy: 'defer',
-    notificationPreview: false
+    notificationPreview: false,
+    pauseIndefinite: false
   };
   @State private proactiveError: string = '';
   @State private proactiveSaving: boolean = false;
@@ -197,6 +202,9 @@ struct Index {
   };
   @State private relationshipState: RelationshipState | undefined = undefined;
   @State private relationshipModeSaving: boolean = false;
+  @State private pendingRelationshipProposal: RelationshipProposal | undefined = undefined;
+  @State private proposalDialogVisible: boolean = false;
+  private proposalShownId: string = '';
   @State private personaError: string = '';
   @State private personaSaving: boolean = false;
   @State private personaCustomTopic: string = '';
@@ -715,6 +723,7 @@ struct Index {
             if (item instanceof Object) parsed.push(messageFromJson(item as Record<string, Object>));
           });
           this.enqueueMessages(parsed, this.deliveryDelays(data));
+          void this.refreshPendingProposal(true);
         }
         if (eventName === 'chat.turn.failed') {
           this.serverTyping = false;
@@ -1055,13 +1064,77 @@ struct Index {
     this.personaSaving = true;
     this.personaError = '';
     try {
-      this.relationshipState = await this.repository.resetRelationship();
-      this.toast('关系进度已重置');
+      await this.repository.resetCompanionship();
+      this.relationshipState = await this.repository.getRelationship();
+      this.pendingRelationshipProposal = undefined;
+      this.proposalDialogVisible = false;
+      this.proposalShownId = '';
+      this.cancelRevealQueue();
+      this.greetingOverride = 'restart';
+      this.messages = [this.restartGreetingMessage()];
+      this.nextBeforeId = 0;
+      this.hasMoreHistory = false;
+      this.toast('已重新开始，账号和设备保留');
     } catch (error) {
       this.personaError = `重置失败：${this.describeError(error)}`;
       this.statusText = this.personaError;
     } finally {
       this.personaSaving = false;
+    }
+  }
+
+  private async refreshPendingProposal(showDialog: boolean): Promise<void> {
+    if (!this.repository) return;
+    try {
+      const state = await this.repository.getRelationship();
+      this.relationshipState = state;
+      const proposal = state.pendingProposal;
+      this.pendingRelationshipProposal = proposal;
+      if (proposal === undefined) {
+        this.proposalDialogVisible = false;
+        this.proposalShownId = '';
+        return;
+      }
+      if (showDialog && proposal.proposalId !== this.proposalShownId) {
+        this.proposalShownId = proposal.proposalId;
+        this.proposalDialogVisible = true;
+      }
+    } catch (_) {
+      // A relationship refresh failure must not interrupt chat delivery.
+    }
+  }
+
+  private async acceptRelationshipProposal(): Promise<void> {
+    const proposal = this.pendingRelationshipProposal;
+    if (!this.repository || proposal === undefined || this.relationshipModeSaving) return;
+    this.relationshipModeSaving = true;
+    try {
+      this.relationshipState = await this.repository.acceptRelationshipProposal(proposal.proposalId);
+      this.pendingRelationshipProposal = undefined;
+      this.proposalDialogVisible = false;
+      this.proposalShownId = '';
+      this.toast(`关系已更新为${relationshipTypeLabel(this.relationshipState.relationshipType)}`);
+    } catch (error) {
+      this.toast(`确认失败：${this.describeError(error)}`);
+    } finally {
+      this.relationshipModeSaving = false;
+    }
+  }
+
+  private async deferRelationshipProposal(): Promise<void> {
+    const proposal = this.pendingRelationshipProposal;
+    if (!this.repository || proposal === undefined) {
+      this.proposalDialogVisible = false;
+      return;
+    }
+    try {
+      await this.repository.deferRelationshipProposal(proposal.proposalId);
+      this.pendingRelationshipProposal = undefined;
+      this.proposalDialogVisible = false;
+      this.proposalShownId = '';
+      this.toast('好，那就先这样，我不催你');
+    } catch (error) {
+      this.toast(`稍后再试：${this.describeError(error)}`);
     }
   }
 
@@ -1109,7 +1182,6 @@ struct Index {
     payload.enabled = value.enabled;
     payload.allow_echo_scheduling = value.allowEchoScheduling;
     payload.allow_spontaneous_chat = value.allowSpontaneousChat;
-    payload.proactivity_level = value.proactivityLevel;
     payload.timezone = value.timezone;
     payload.quiet_start = value.quietStart;
     payload.quiet_end = value.quietEnd;
@@ -1128,9 +1200,6 @@ struct Index {
       allowSpontaneousChat: patch.allowSpontaneousChat === undefined
         ? current.allowSpontaneousChat
         : patch.allowSpontaneousChat,
-      proactivityLevel: patch.proactivityLevel === undefined
-        ? current.proactivityLevel
-        : patch.proactivityLevel,
       timezone: patch.timezone === undefined ? current.timezone : patch.timezone,
       quietStart: patch.quietStart === undefined ? current.quietStart : patch.quietStart,
       quietEnd: patch.quietEnd === undefined ? current.quietEnd : patch.quietEnd,
@@ -1139,7 +1208,9 @@ struct Index {
         : patch.explicitReminderQuietPolicy,
       notificationPreview: patch.notificationPreview === undefined
         ? current.notificationPreview
-        : patch.notificationPreview
+        : patch.notificationPreview,
+      pausedUntil: current.pausedUntil,
+      pauseIndefinite: current.pauseIndefinite
     };
   }
 
@@ -1157,6 +1228,34 @@ struct Index {
     } catch (error) {
       this.proactivePreferences = previous;
       this.proactiveError = `保存失败：${this.describeError(error)}`;
+    } finally {
+      this.proactiveSaving = false;
+    }
+  }
+
+  private async pauseProactiveContact(): Promise<void> {
+    if (!this.repository || this.proactiveSaving) return;
+    this.proactiveSaving = true;
+    this.proactiveError = '';
+    try {
+      this.proactivePreferences = await this.repository.pauseProactive(2);
+      this.toast('接下来两天不主动找你');
+    } catch (error) {
+      this.proactiveError = `暂停失败：${this.describeError(error)}`;
+    } finally {
+      this.proactiveSaving = false;
+    }
+  }
+
+  private async resumeProactiveContact(): Promise<void> {
+    if (!this.repository || this.proactiveSaving) return;
+    this.proactiveSaving = true;
+    this.proactiveError = '';
+    try {
+      this.proactivePreferences = await this.repository.resumeProactive();
+      this.toast('好，我可以再自然找你聊天了');
+    } catch (error) {
+      this.proactiveError = `恢复失败：${this.describeError(error)}`;
     } finally {
       this.proactiveSaving = false;
     }
@@ -1184,22 +1283,6 @@ struct Index {
     }
     this.proactiveTimeDialog = false;
     await this.saveProactivePreferences({ quietStart: start, quietEnd: end });
-  }
-
-  private proactiveFrequencyLabel(value: string): string {
-    if (value === 'conservative') return '保守';
-    if (value === 'active') return '主动';
-    return '平衡';
-  }
-
-  private proactiveFrequencyDescription(value: string): string {
-    if (value === 'conservative') {
-      return '至少 24 小时未互动，每周最多 4 次，最小间隔 24 小时。';
-    }
-    if (value === 'active') {
-      return '至少 2 小时未互动，每天最多 6 次，最小间隔 2 小时。';
-    }
-    return '至少 6 小时未互动，每天最多 4 次，最小间隔 6 小时。';
   }
 
   private scheduleDisplayLabel(schedule: ChatSchedule): string {
@@ -2598,7 +2681,7 @@ struct Index {
   private chatToolbar(): void {
     Row() {
       Text('Echo').fontSize(22).fontWeight(FontWeight.Bold).fontColor('#6750A4')
-      Text('v1.1.7').fontSize(12).fontColor('#6F6A78').margin({ left: 6 })
+      Text(`v${AppConfig.appVersion}`).fontSize(12).fontColor('#6F6A78').margin({ left: 6 })
       Blank().layoutWeight(1)
       Stack() {
         Button() {
@@ -2814,7 +2897,7 @@ struct Index {
     Column({ space: 0 }) {
       this.menuItem('一起学习', 'study')
       this.menuItem('我的 Echo', 'devices')
-      this.menuItem('个性化设置', 'persona')
+      this.menuItem('关于她', 'persona')
       this.menuItem('长期记忆', 'memory')
       this.menuItem('表情包库', 'stickers')
       this.menuItem('通知设置', 'notifications')
@@ -3265,13 +3348,13 @@ struct Index {
         .backgroundColor('#88000000')
         .onClick(() => this.personaConfirmAction = '')
       Column({ space: 16 }) {
-        Text(this.personaConfirmAction === 'persona' ? '恢复默认设置' : '重置关系进度')
+        Text(this.personaConfirmAction === 'persona' ? '恢复默认设置' : '重置关系')
           .fontSize(20)
           .fontWeight(FontWeight.Bold)
           .fontColor('#262331')
         Text(this.personaConfirmAction === 'persona'
           ? '只会重置个性化偏好，不会删除长期记忆或聊天记录。'
-          : '熟悉进度会回到初识阶段。你选择的朋友或 AI 恋人关系、个性化设置和长期记忆会保留。')
+          : '聊天、长期记忆、关系、提醒和称呼边界都会清空，关系回到初识；账号、设备和你的称呼保留。这个操作不能撤销。')
           .fontSize(15)
           .lineHeight(22)
           .fontColor('#49454F')
@@ -3300,6 +3383,211 @@ struct Index {
     .width('100%')
     .height('100%')
     .zIndex(40)
+  }
+
+  @Builder
+  private aboutHerPage(): void {
+    Stack() {
+      Column() {
+        Row() {
+          this.iconButton($r('app.media.arrow_back_outline'), () => this.navigate('chat'))
+          Text('关于她')
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#262331')
+            .layoutWeight(1)
+            .margin({ left: 4 })
+          this.iconButton($r('app.media.refresh_outline'), () => void this.loadPageData())
+        }
+        .width('100%')
+        .height(64)
+        .padding({ left: 10, right: 10 })
+        .backgroundColor('#F8F7FC')
+
+        Scroll() {
+          Column({ space: 20 }) {
+            Row({ space: 14 }) {
+              Text('鲸')
+                .fontSize(30)
+                .fontColor('#6750A4')
+                .width(52)
+                .height(52)
+                .textAlign(TextAlign.Center)
+                .backgroundColor('#F0EDF5')
+                .borderRadius(26)
+              Column({ space: 5 }) {
+                Text('Echo · AI 陪伴伙伴')
+                  .fontSize(22)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor('#262331')
+                Text('关系由相处慢慢形成，不用在这里调整人格。')
+                  .fontSize(13)
+                  .fontColor('#6F6A78')
+                  .width('100%')
+              }
+              .layoutWeight(1)
+              .alignItems(HorizontalAlign.Start)
+            }
+            .width('100%')
+
+            if (this.relationshipState === undefined) {
+              if (this.loading) {
+                LoadingProgress().width(28).height(28).color('#6750A4')
+              } else {
+                Row({ space: 8 }) {
+                  Text('关系加载失败').fontSize(14).fontColor('#BA1A1A').layoutWeight(1)
+                  Button('重试').fontSize(13).backgroundColor(Color.Transparent).fontColor('#6750A4')
+                    .onClick(() => void this.loadPageData())
+                }.width('100%')
+              }
+            } else {
+              Column({ space: 14 }) {
+                Text('关系')
+                  .fontSize(13)
+                  .fontColor('#6F6A78')
+                  .width('100%')
+                Text(relationshipTypeLabel(this.relationshipState.relationshipType))
+                  .fontSize(30)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor('#262331')
+                  .width('100%')
+                Row({ space: 10 }) {
+                  Column({ space: 4 }) {
+                    Text('互动').fontSize(12).fontColor('#6F6A78')
+                    Text(`${this.relationshipState.interactionTurns} 次`)
+                      .fontSize(16).fontColor('#262331')
+                  }.layoutWeight(1).padding(12).backgroundColor('#FFFFFF').borderRadius(10)
+                  Column({ space: 4 }) {
+                    Text('活跃').fontSize(12).fontColor('#6F6A78')
+                    Text(`${this.relationshipState.activeDays} 天`)
+                      .fontSize(16).fontColor('#262331')
+                  }.layoutWeight(1).padding(12).backgroundColor('#FFFFFF').borderRadius(10)
+                }.width('100%')
+              }
+              .width('100%')
+              .padding(18)
+              .backgroundColor('#F0EDF5')
+              .borderRadius(16)
+
+              if (this.relationshipState.pendingProposal !== undefined) {
+                Column({ space: 10 }) {
+                  Text('Echo 在等你回应')
+                    .fontSize(16)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor('#262331')
+                  Text(`她想和你确认：做${this.relationshipState.pendingProposal.directionLabel}吗？`)
+                    .fontSize(14)
+                    .fontColor('#49454F')
+                  Button('查看确认窗口')
+                    .width('100%')
+                    .height(44)
+                    .fontColor(Color.White)
+                    .backgroundColor('#6750A4')
+                    .onClick(() => {
+                      this.pendingRelationshipProposal = this.relationshipState?.pendingProposal;
+                      this.proposalDialogVisible = true;
+                    })
+                }
+                .width('100%')
+                .padding(16)
+                .backgroundColor('#FFF4E8')
+                .borderRadius(14)
+              }
+            }
+
+            Text('称呼、聊天方式等个性化设置不再放在这里；关系会随着真实交流自然变化。')
+              .fontSize(13)
+              .lineHeight(20)
+              .fontColor('#6F6A78')
+              .width('100%')
+
+            Button('重置关系')
+              .width('100%')
+              .height(46)
+              .backgroundColor('#F0EDF5')
+              .fontColor('#BA1A1A')
+              .enabled(!this.personaSaving)
+              .onClick(() => this.personaConfirmAction = 'relationship')
+            Text('会清空聊天、长期记忆、关系、提醒和称呼边界，只保留账号、设备与你的称呼。')
+              .fontSize(13)
+              .lineHeight(20)
+              .fontColor('#6F6A78')
+              .width('100%')
+
+            if (this.personaError.length > 0) {
+              Text(this.personaError)
+                .fontSize(13)
+                .lineHeight(20)
+                .fontColor('#BA1A1A')
+                .width('100%')
+            }
+          }
+          .width('100%')
+          .padding({ left: 20, right: 20, top: 20, bottom: 32 })
+        }
+        .layoutWeight(1)
+        .width('100%')
+        .scrollable(ScrollDirection.Vertical)
+        .scrollBar(BarState.Auto)
+      }
+      .width('100%')
+      .height('100%')
+      if (this.personaConfirmAction.length > 0) {
+        this.personaConfirmDialog()
+      }
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  private relationshipProposalDialog(): void {
+    Stack() {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#88000000')
+        .onClick(() => this.proposalDialogVisible = false)
+      Column({ space: 14 }) {
+        Text('和 Echo 的关系')
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#262331')
+        Text(this.pendingRelationshipProposal === undefined
+          ? 'Echo 想和你确认一件事。'
+          : `Echo 想和你确认：从现在开始，做${relationshipDirectionLabel(this.pendingRelationshipProposal.direction)}吗？`)
+          .fontSize(16)
+          .lineHeight(24)
+          .fontColor('#49454F')
+          .width('100%')
+        Text('确认后，关于她页面会更新你们的关系。')
+          .fontSize(13)
+          .fontColor('#6F6A78')
+          .width('100%')
+        Button(this.relationshipModeSaving ? '确认中…' : '愿意')
+          .width('100%')
+          .height(46)
+          .fontColor(Color.White)
+          .backgroundColor(this.relationshipModeSaving ? '#A99BC7' : '#6750A4')
+          .enabled(!this.relationshipModeSaving)
+          .onClick(() => void this.acceptRelationshipProposal())
+        Button('再想想')
+          .width('100%')
+          .height(44)
+          .backgroundColor('#F0EDF5')
+          .fontColor('#49454F')
+          .enabled(!this.relationshipModeSaving)
+          .onClick(() => void this.deferRelationshipProposal())
+      }
+      .width('84%')
+      .padding(22)
+      .backgroundColor('#FFFBFE')
+      .borderRadius(20)
+    }
+    .width('100%')
+    .height('100%')
+    .alignContent(Alignment.Center)
+    .zIndex(60)
   }
 
   @Builder
@@ -3624,19 +3912,6 @@ struct Index {
   }
 
   @Builder
-  private proactiveLevelButton(value: string): void {
-    Button(this.proactiveFrequencyLabel(value))
-      .layoutWeight(1)
-      .height(40)
-      .fontSize(14)
-      .fontColor(this.proactivePreferences.proactivityLevel === value ? '#FFFFFF' : '#49454F')
-      .backgroundColor(this.proactivePreferences.proactivityLevel === value ? '#6750A4' : '#F0EDF5')
-      .enabled(this.proactivePreferences.enabled && !this.proactiveSaving)
-      .opacity(this.proactivePreferences.enabled && !this.proactiveSaving ? 1 : 0.45)
-      .onClick(() => void this.saveProactivePreferences({ proactivityLevel: value }))
-  }
-
-  @Builder
   private proactiveTimeDialogView(): void {
     Stack() {
       Column()
@@ -3746,24 +4021,50 @@ struct Index {
               (value: boolean) => void this.saveProactivePreferences({ allowSpontaneousChat: value })
             )
 
-            Text('频率')
-              .fontSize(15)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#262331')
-              .width('100%')
-              .margin({ top: 10, bottom: 8 })
-            Row({ space: 8 }) {
-              this.proactiveLevelButton('conservative')
-              this.proactiveLevelButton('balanced')
-              this.proactiveLevelButton('active')
+            Row({ space: 12 }) {
+              Column({ space: 4 }) {
+                Text(this.proactivePreferences.pauseIndefinite
+                  ? '已暂停主动联系'
+                  : (this.proactivePreferences.pausedUntil !== undefined
+                    ? '已暂停主动联系'
+                    : '暂停主动联系'))
+                  .fontSize(16)
+                  .fontColor('#262331')
+                Text(this.proactivePreferences.pauseIndefinite
+                  ? '直到你主动恢复'
+                  : (this.proactivePreferences.pausedUntil !== undefined
+                    ? `暂停到 ${this.proactivePreferences.pausedUntil}`
+                    : '也可以在聊天里说“这两天别主动找我”'))
+                  .fontSize(13)
+                  .fontColor('#6F6A78')
+              }
+              .layoutWeight(1)
+              .alignItems(HorizontalAlign.Start)
+              Button(this.proactivePreferences.pauseIndefinite ||
+                this.proactivePreferences.pausedUntil !== undefined ? '恢复' : '暂停两天')
+                .height(40)
+                .fontSize(14)
+                .backgroundColor('#F0EDF5')
+                .fontColor('#49454F')
+                .enabled(!this.proactiveSaving)
+                .onClick(() => {
+                  if (this.proactivePreferences.pauseIndefinite ||
+                    this.proactivePreferences.pausedUntil !== undefined) {
+                    void this.resumeProactiveContact();
+                  } else {
+                    void this.pauseProactiveContact();
+                  }
+                })
             }
             .width('100%')
-            Text(this.proactiveFrequencyDescription(this.proactivePreferences.proactivityLevel))
+            .padding({ top: 12, bottom: 8 })
+
+            Text('Echo 会在合适的时间自然联系，不需要反复调整频率。')
               .fontSize(13)
               .lineHeight(20)
               .fontColor('#6F6A78')
               .width('100%')
-              .margin({ top: 8, bottom: 12 })
+              .margin({ bottom: 8 })
 
             Row().width('100%').height(1).backgroundColor('#E7E0EC')
             Text('通知与安静时段')
@@ -4286,7 +4587,7 @@ struct Index {
     } else if (this.page === 'tasks') {
       this.tasksPage();
     } else if (this.page === 'persona') {
-      this.personaPage()
+      this.aboutHerPage()
     } else if (this.page === 'study') {
       this.studyFocusPage();
     } else if (this.page === 'proactive') {
@@ -4343,6 +4644,9 @@ struct Index {
             onClose: () => this.updateOpen = false,
             onLockChange: (locked: boolean) => this.updateLocked = locked
           })
+        }
+        if (this.proposalDialogVisible) {
+          this.relationshipProposalDialog()
         }
       }
       .height('100%')

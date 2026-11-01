@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     temperature: float = Field(default=0.8, validation_alias="TEMPERATURE")
     max_tokens: int = Field(default=500, validation_alias="MAX_TOKENS")
     chat_max_tokens: int = Field(
-        default=1000,
+        default=1800,
         validation_alias="CHAT_MAX_TOKENS",
         ge=200,
         le=8192,
@@ -677,6 +677,12 @@ class Settings(BaseSettings):
         validation_alias="CHAT_STICKER_DELAY_MS",
         ge=0,
         le=5000,
+    )
+    chat_max_total_delay_ms: int = Field(
+        default=15000,
+        validation_alias="CHAT_MAX_TOTAL_DELAY_MS",
+        ge=3000,
+        le=30000,
     )
     chat_rate_limit_requests: int = Field(
         default=10,

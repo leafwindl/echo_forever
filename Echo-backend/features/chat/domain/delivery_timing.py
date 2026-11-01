@@ -10,6 +10,7 @@ class DeliveryTimingPolicy:
     followup_text_delay_ms: int
     final_text_delay_ms: int
     sticker_delay_ms: int
+    maximum_total_delay_ms: int = 3000
 
     def build(
         self,
@@ -38,8 +39,10 @@ class DeliveryTimingPolicy:
 
         # Long helpful answers must not turn into a lengthy simulated typing queue.
         total_delay = sum(delays)
-        if total_delay > 3000:
-            delays = [delay * 3000 // total_delay for delay in delays]
+        if total_delay > self.maximum_total_delay_ms:
+            delays = [
+                delay * self.maximum_total_delay_ms // total_delay for delay in delays
+            ]
 
         return ChatDeliveryPresentation(
             agent_elapsed_ms=max(agent_elapsed_ms, 0),

@@ -11,6 +11,7 @@ import {
   MemoryRecord,
   PersonaProfile,
   ProactiveChatPreferences,
+  RelationshipProposal,
   RelationshipState,
   StickerItem
 } from '../model/ApiModels';
@@ -296,6 +297,29 @@ export class EchoRepository {
     return this.toRelationship(value);
   }
 
+  async resetCompanionship(): Promise<void> {
+    await this.api.post<Record<string, Object>>('/account/reset');
+  }
+
+  async acceptRelationshipProposal(proposalId: string): Promise<RelationshipState> {
+    const value = await this.api.post<Record<string, Object>>(
+      `/relationship/proposals/${encodePath(proposalId)}/accept`
+    );
+    return this.toRelationship(value);
+  }
+
+  async deferRelationshipProposal(proposalId: string): Promise<void> {
+    await this.api.post<Record<string, Object>>(
+      `/relationship/proposals/${encodePath(proposalId)}/defer`
+    );
+  }
+
+  async declineRelationshipProposal(proposalId: string): Promise<void> {
+    await this.api.post<Record<string, Object>>(
+      `/relationship/proposals/${encodePath(proposalId)}/decline`
+    );
+  }
+
   async logout(refreshToken: string, deviceId: string): Promise<void> {
     const body: Record<string, Object> = {};
     body.refresh_token = refreshToken;
@@ -310,6 +334,19 @@ export class EchoRepository {
 
   async updateProactivePreferences(data: Record<string, Object>): Promise<ProactiveChatPreferences> {
     const value = await this.api.put<Record<string, Object>>('/proactive/preferences', data);
+    return this.toProactivePreferences(value);
+  }
+
+  async pauseProactive(days: number): Promise<ProactiveChatPreferences> {
+    const body: Record<string, Object> = {};
+    body.days = days;
+    body.indefinite = false;
+    const value = await this.api.post<Record<string, Object>>('/proactive/pause', body);
+    return this.toProactivePreferences(value);
+  }
+
+  async resumeProactive(): Promise<ProactiveChatPreferences> {
+    const value = await this.api.post<Record<string, Object>>('/proactive/resume');
     return this.toProactivePreferences(value);
   }
 
@@ -477,13 +514,28 @@ export class EchoRepository {
   }
 
   private toRelationship(value: Record<string, Object>): RelationshipState {
+    let pending: RelationshipProposal | undefined = undefined;
+    if (value.pending_proposal !== undefined && value.pending_proposal !== null) {
+      const raw = value.pending_proposal as Record<string, Object>;
+      pending = {
+        proposalId: this.asString(raw.proposal_id),
+        direction: this.asString(raw.direction),
+        directionLabel: this.asString(raw.direction_label),
+        status: this.asString(raw.status),
+        createdAt: this.asString(raw.created_at),
+        expiresAt: this.asString(raw.expires_at)
+      };
+    }
     return {
       relationshipMode: this.asString(value.relationship_mode) || 'friend',
+      relationshipType: this.asString(value.relationship_type) || 'acquaintance',
+      relationshipTypeLabel: this.asString(value.relationship_type_label) || '初识',
       stage: this.asString(value.stage),
       stageLabel: this.asString(value.stage_label),
       interactionTurns: this.asNumber(value.interaction_turns),
       activeDays: this.asNumber(value.active_days),
       affectionPermission: this.asString(value.affection_permission),
+      pendingProposal: pending,
       schemaVersion: this.asNumber(value.schema_version),
       createdAt: this.asString(value.created_at),
       updatedAt: this.asString(value.updated_at)
@@ -497,12 +549,13 @@ export class EchoRepository {
         ? true
         : this.asBoolean(value.allow_echo_scheduling),
       allowSpontaneousChat: this.asBoolean(value.allow_spontaneous_chat),
-      proactivityLevel: this.asString(value.proactivity_level) || 'balanced',
       timezone: this.asString(value.timezone) || 'Asia/Shanghai',
       quietStart: this.shortTime(this.asString(value.quiet_start), '22:30'),
       quietEnd: this.shortTime(this.asString(value.quiet_end), '08:00'),
       explicitReminderQuietPolicy: this.asString(value.explicit_reminder_quiet_policy) || 'defer',
-      notificationPreview: this.asBoolean(value.notification_preview)
+      notificationPreview: this.asBoolean(value.notification_preview),
+      pausedUntil: this.asString(value.paused_until),
+      pauseIndefinite: this.asBoolean(value.pause_indefinite)
     };
   }
 

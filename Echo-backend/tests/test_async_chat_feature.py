@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from features.agent.domain.delivery import (
     AgentDeliveryPlanError,
+    build_delivery_items,
     build_natural_delivery_plan,
     validate_agent_delivery_segments,
 )
@@ -154,13 +155,13 @@ class AgentDeliveryPlanTests(unittest.TestCase):
 
         self.assertEqual(plan.text_segments, paragraphs)
 
-    def test_merges_only_paragraphs_beyond_the_six_message_safety_limit(self):
-        paragraphs = tuple(f"第{index}个独立想法。" for index in range(1, 9))
+    def test_merges_only_paragraphs_beyond_the_ten_message_safety_limit(self):
+        paragraphs = tuple(f"第{index}个独立想法。" for index in range(1, 13))
         plan = build_natural_delivery_plan("\n\n".join(paragraphs), "chat")
 
-        self.assertEqual(len(plan.text_segments), 6)
-        self.assertEqual(plan.text_segments[:5], paragraphs[:5])
-        self.assertEqual(plan.text_segments[5], "\n\n".join(paragraphs[5:]))
+        self.assertEqual(len(plan.text_segments), 10)
+        self.assertEqual(plan.text_segments[:9], paragraphs[:9])
+        self.assertEqual(plan.text_segments[9], "\n\n".join(paragraphs[9:]))
 
     def test_splits_long_natural_reply_at_sentence_boundaries(self):
         sentences = tuple(f"这是第{index}句完整的话。" for index in range(1, 41))
@@ -168,7 +169,7 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         plan = build_natural_delivery_plan(raw, "chat")
 
         self.assertGreater(len(plan.text_segments), 1)
-        self.assertLessEqual(len(plan.text_segments), 6)
+        self.assertLessEqual(len(plan.text_segments), 10)
         self.assertTrue(all(segment.endswith("。") for segment in plan.text_segments))
         self.assertEqual("".join(plan.text_segments), raw)
 
@@ -176,6 +177,38 @@ class AgentDeliveryPlanTests(unittest.TestCase):
         plan = build_natural_delivery_plan("那就找呀。\n\n这理由我还挺喜欢的 (｡•̀ᴗ-)✧", "chat")
         self.assertEqual(len(plan.text_segments), 2)
         self.assertTrue(plan.text_segments[1].endswith("(｡•̀ᴗ-)✧"))
+
+    def test_sticker_can_be_interleaved_between_text_beats(self):
+        items = build_delivery_items(
+            ("第一句。", "第二句。", "第三句。"),
+            (
+                ContentPart(
+                    type="sticker",
+                    sticker_id="sticker-1",
+                    url="https://example.com/1.jpg",
+                    after_text_index=1,
+                ),
+            ),
+            "after_text",
+        )
+
+        self.assertEqual(
+            [item.message_type for item in items],
+            ["text", "text", "sticker", "text"],
+        )
+        self.assertEqual(items[2].parts[0].sticker_id, "sticker-1")
+
+    def test_short_multi_sentence_split_preserves_every_character(self):
+        raw = "今天终于把项目修好了。刚才还说要删掉它呢。现在又开始得意了。不过这一下，确实该开心。这一路真的辛苦你了。"
+        with patch(
+            "features.agent.domain.delivery._NATURAL_SHORT_SPLIT_PERCENT",
+            100,
+        ):
+            plan = build_natural_delivery_plan(raw, "chat")
+
+        self.assertGreater(len(plan.text_segments), 1)
+        self.assertLessEqual(len(plan.text_segments), 6)
+        self.assertEqual("".join(plan.text_segments), raw)
 
     def test_technical_layout_is_not_a_series_of_chat_bubbles(self):
         examples = (

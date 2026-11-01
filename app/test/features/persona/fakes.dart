@@ -22,11 +22,16 @@ class FakePersonaRepository implements PersonaRepository {
   Object? resetPersonaError;
   Object? getRelationshipError;
   Object? resetRelationshipError;
+  Object? resetCompanionshipError;
   int getPersonaCalls = 0;
   int updatePersonaCalls = 0;
   int resetPersonaCalls = 0;
   int getRelationshipCalls = 0;
   int resetRelationshipCalls = 0;
+  int resetCompanionshipCalls = 0;
+  String? acceptedProposalId;
+  String? deferredProposalId;
+  String? declinedProposalId;
   RelationshipMode? updatedRelationshipMode;
   Object? updateRelationshipModeError;
   final List<PersonaUpdate> updates = <PersonaUpdate>[];
@@ -78,6 +83,45 @@ class FakePersonaRepository implements PersonaRepository {
     relationship =
         nextResetRelationship ?? const RelationshipStateDto.initial();
     return relationship;
+  }
+
+  @override
+  Future<RelationshipStateDto> acceptRelationshipProposal(
+    String proposalId,
+  ) async {
+    acceptedProposalId = proposalId;
+    relationship = RelationshipStateDto(
+      relationshipMode: relationship.relationshipMode,
+      relationshipType: relationship.pendingProposal?.direction ?? 'friend',
+      relationshipTypeLabel:
+          relationship.pendingProposal?.directionLabel ?? '朋友',
+      stage: relationship.stage,
+      stageLabel: relationship.stageLabel,
+      interactionTurns: relationship.interactionTurns,
+      activeDays: relationship.activeDays,
+      affectionPermission: relationship.affectionPermission,
+      schemaVersion: relationship.schemaVersion,
+      createdAt: relationship.createdAt,
+      updatedAt: relationship.updatedAt,
+    );
+    return relationship;
+  }
+
+  @override
+  Future<void> deferRelationshipProposal(String proposalId) async {
+    deferredProposalId = proposalId;
+  }
+
+  @override
+  Future<void> declineRelationshipProposal(String proposalId) async {
+    declinedProposalId = proposalId;
+  }
+
+  @override
+  Future<void> resetCompanionship() async {
+    resetCompanionshipCalls += 1;
+    if (resetCompanionshipError != null) throw resetCompanionshipError!;
+    relationship = const RelationshipStateDto.initial();
   }
 
   @override

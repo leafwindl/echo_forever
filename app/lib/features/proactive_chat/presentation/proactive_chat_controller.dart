@@ -81,6 +81,40 @@ class ProactiveChatController extends AsyncNotifier<ProactiveChatState> {
     }
   }
 
+  Future<void> pause({int? days, bool indefinite = false}) async {
+    final current = state.asData?.value;
+    if (current == null || current.isSaving) return;
+    state = AsyncData(current.copyWith(isSaving: true, clearError: true));
+    try {
+      final saved = await ref
+          .read(proactiveChatApiProvider)
+          .pause(days: days, indefinite: indefinite);
+      state = AsyncData(
+        current.copyWith(preferences: saved, isSaving: false, clearError: true),
+      );
+    } on Object catch (error) {
+      state = AsyncData(
+        current.copyWith(isSaving: false, error: _asAppException(error)),
+      );
+    }
+  }
+
+  Future<void> resume() async {
+    final current = state.asData?.value;
+    if (current == null || current.isSaving) return;
+    state = AsyncData(current.copyWith(isSaving: true, clearError: true));
+    try {
+      final saved = await ref.read(proactiveChatApiProvider).resume();
+      state = AsyncData(
+        current.copyWith(preferences: saved, isSaving: false, clearError: true),
+      );
+    } on Object catch (error) {
+      state = AsyncData(
+        current.copyWith(isSaving: false, error: _asAppException(error)),
+      );
+    }
+  }
+
   Future<void> setScheduleStatus(ChatSchedule schedule, String status) async {
     final current = state.asData?.value;
     if (current == null || current.isSaving) return;

@@ -4,7 +4,11 @@ import logging
 import time
 from datetime import UTC, datetime, timedelta
 
-from features.agent.domain.delivery import AgentDeliveryPlanError, validate_agent_delivery_segments
+from features.agent.domain.delivery import (
+    AgentDeliveryPlanError,
+    build_delivery_items,
+    validate_agent_delivery_segments,
+)
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.domain.delivery_timing import DeliveryTimingPolicy
 from features.chat.domain.services import ChatRequestGuard
@@ -60,6 +64,19 @@ class ProcessProactiveChatJobs:
                 return True
             if schedule is None and not preference.allow_spontaneous_chat:
                 self.repository.suppress_job(job.job_id, "spontaneous_disabled")
+                return True
+            if (
+                (schedule is None or schedule.created_by == "echo_agent")
+                and preference.pause_indefinite
+            ):
+                self.repository.suppress_job(job.job_id, "proactive_paused")
+                return True
+            if (
+                (schedule is None or schedule.created_by == "echo_agent")
+                and preference.paused_until is not None
+                and preference.paused_until > datetime.now(UTC)
+            ):
+                self.repository.suppress_job(job.job_id, "proactive_paused")
                 return True
             if (
                 schedule is not None
@@ -157,12 +174,18 @@ class ProcessProactiveChatJobs:
                     reason,
                 )
                 return True
-            delivery_types = ["text" for _ in prepared.reply_segments]
-            if any(part.type == "sticker" for part in prepared.content_parts):
-                if prepared.sticker_placement == "before_text":
-                    delivery_types.insert(0, "sticker")
-                else:
-                    delivery_types.append("sticker")
+            delivery_types = [
+                item.message_type
+                for item in build_delivery_items(
+                    prepared.reply_segments,
+                    tuple(
+                        part
+                        for part in prepared.content_parts
+                        if part.type == "sticker"
+                    ),
+                    prepared.sticker_placement,
+                )
+            ]
             presentation = self.timing_policy.build(
                 delivery_types=tuple(delivery_types or ["text"]),
                 agent_elapsed_ms=int((time.perf_counter() - started) * 1000),

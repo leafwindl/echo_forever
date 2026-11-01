@@ -24,6 +24,11 @@ def reset_persona(user_id: str) -> UserPreferences:
     return get_persona_management_service().reset(user_id)
 
 
+def reset_persona_companionship_preferences(user_id: str) -> UserPreferences:
+    """清空称呼边界和表达偏好，保留用户称呼与 onboarding 状态。"""
+    return get_persona_management_service().reset_companionship_preferences(user_id)
+
+
 __all__ = [
     "PERSONA_SCHEMA_VERSION",
     "PersonaManagementService",
@@ -33,5 +38,6 @@ __all__ = [
     "UserPreferences",
     "get_persona",
     "reset_persona",
+    "reset_persona_companionship_preferences",
     "update_persona",
 ]

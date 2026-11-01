@@ -10,7 +10,6 @@ class ProactivePreferencesRequest(BaseModel):
     enabled: bool = False
     allow_echo_scheduling: bool = True
     allow_spontaneous_chat: bool = False
-    proactivity_level: Literal["conservative", "balanced", "active"] = "balanced"
     timezone: str = Field(default="Asia/Shanghai", min_length=1, max_length=80)
     quiet_start: time = time(22, 30)
     quiet_end: time = time(8, 0)
@@ -18,8 +17,22 @@ class ProactivePreferencesRequest(BaseModel):
     notification_preview: bool = False
 
 
-class ProactivePreferencesResponse(ProactivePreferencesRequest):
-    pass
+class ProactivePreferencesResponse(BaseModel):
+    enabled: bool
+    allow_echo_scheduling: bool
+    allow_spontaneous_chat: bool
+    timezone: str
+    quiet_start: time
+    quiet_end: time
+    explicit_reminder_quiet_policy: str
+    notification_preview: bool
+    paused_until: datetime | None = None
+    pause_indefinite: bool = False
+
+
+class ProactivePauseRequest(BaseModel):
+    days: int | None = Field(default=None, ge=1, le=30)
+    indefinite: bool = False
 
 
 class ChatScheduleCreateRequest(BaseModel):

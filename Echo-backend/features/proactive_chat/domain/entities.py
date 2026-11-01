@@ -10,14 +10,18 @@ class ProactiveChatPreferences:
     enabled: bool
     allow_echo_scheduling: bool
     allow_spontaneous_chat: bool
-    proactivity_level: str
     timezone: str
     quiet_start: time
     quiet_end: time
     explicit_reminder_quiet_policy: str
     notification_preview: bool
-    proactive_count: int = 0
-    window_started_at: datetime | None = None
+    cycle_started_at: datetime | None = None
+    allowed_contact_seconds: int = 0
+    last_accounted_at: datetime | None = None
+    last_evaluated_slot: int = 0
+    last_slot_result: str | None = None
+    paused_until: datetime | None = None
+    pause_indefinite: bool = False
     last_proactive_at: datetime | None = None
     consecutive_unanswered: int = 0
 

@@ -64,28 +64,38 @@ class ProactiveChatPage extends ConsumerWidget {
                     preferences.copyWith(allowSpontaneousChat: value),
                   ),
           ),
-          const SizedBox(height: 12),
-          Text('频率', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          SegmentedButton<ProactivityLevel>(
-            segments: ProactivityLevel.values
-                .map(
-                  (level) => ButtonSegment<ProactivityLevel>(
-                    value: level,
-                    label: Text(level.label),
-                  ),
-                )
-                .toList(growable: false),
-            selected: <ProactivityLevel>{preferences.proactivityLevel},
-            onSelectionChanged: !preferences.enabled || state.isSaving
-                ? null
-                : (levels) => controller.savePreferences(
-                    preferences.copyWith(proactivityLevel: levels.first),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              preferences.paused
+                  ? Icons.pause_circle_outline_rounded
+                  : Icons.notifications_paused_outlined,
+            ),
+            title: Text(
+              preferences.paused ? '已暂停主动联系' : '暂停主动联系',
+            ),
+            subtitle: Text(
+              preferences.paused
+                  ? (preferences.pauseIndefinite
+                        ? '直到你主动恢复'
+                        : '暂停到 ${preferences.pausedUntil ?? ''}')
+                  : '也可以在聊天里说“这两天别主动找我”',
+            ),
+            trailing: preferences.paused
+                ? TextButton(
+                    onPressed: state.isSaving ? null : controller.resume,
+                    child: const Text('恢复'),
+                  )
+                : TextButton(
+                    onPressed: state.isSaving
+                        ? null
+                        : () => controller.pause(days: 2),
+                    child: const Text('暂停两天'),
                   ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
-            _frequencyDescription(preferences.proactivityLevel),
+            'Echo 会在合适的时间自然联系，不需要反复调整频率。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const Divider(height: 32),
@@ -187,9 +197,4 @@ class ProactiveChatPage extends ConsumerWidget {
   String _formatTime(TimeOfDay value) =>
       '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
 
-  String _frequencyDescription(ProactivityLevel level) => switch (level) {
-    ProactivityLevel.conservative => '至少 24 小时未互动，每周最多 4 次，最小间隔 24 小时。',
-    ProactivityLevel.balanced => '至少 6 小时未互动，每天最多 4 次，最小间隔 6 小时。',
-    ProactivityLevel.active => '至少 2 小时未互动，每天最多 6 次，最小间隔 2 小时。',
-  };
 }

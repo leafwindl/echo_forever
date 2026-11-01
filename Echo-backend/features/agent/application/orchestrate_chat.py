@@ -15,6 +15,7 @@ from features.agent.domain.delivery import (
     AgentDeliveryPlan,
     AgentDeliveryPlanError,
     build_natural_delivery_plan,
+    validate_agent_delivery_segments,
 )
 from features.agent.domain.entities import (
     AgentModelResponse,
@@ -34,6 +35,28 @@ from features.agent.domain.services import (
 from features.agent.domain.tools import ToolExecutionContext, ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+CHAT_BEAT_INSTRUCTION = (
+    "本轮文字聊天如果打算发两条以上消息，必须调用 emit_chat_beats 一次给出 1-10 条，"
+    "不要用换行直接写多段。普通闲聊 2-5 条，斗嘴、玩笑、情绪强时可以 6-10 条，"
+    "每条只放一个语气点，允许“哈哈”“你认真的？”这类独立短反应。"
+    "谈心、解释、安慰或需要完整长回答时，用 1 条完整长文本（300-800 字也可以），"
+    "不要为了气泡数拆碎，也不要为了简短省略重要内容；之后最多再跟 1-2 条短句。"
+    "同一次回复里如果既有表情包又有多条文字，先调用 send_sticker，再调用 emit_chat_beats。"
+    "表情包不要默认放第一条之后：先判断这张图回应的是哪一句，再在 send_sticker 中用 "
+    "after_text_index 指定夹在那条文字之后。开场/打招呼可以放 0，吐槽和得意图放在"
+    "对应调侃句后，安慰图放在接住情绪那句后，收尾图放最后一条后；不确定就放在最贴合"
+    "语气的那条之后，而不是机械固定位置。"
+)
+
+_DEEP_TALK_PATTERN = re.compile(
+    r"压力|难过|焦虑|失眠|睡不着|孤独|委屈|崩溃|心事|难受|抑郁|想聊聊|认真聊|陪我聊"
+)
+CHAT_DEEP_TALK_INSTRUCTION = (
+    "这一轮用户在认真谈心或求助。请用 1 条完整长文本回复，大约 300-600 字；"
+    "先把对方的感受接住，再给具体、不过度说教的陪伴和建议。"
+    "不要拆成很多短气泡，也不要为了简短省略重要内容。"
+)
 
 FINAL_RETRY_INSTRUCTION = (
     "上一条没有形成可交付的最终回复。现在不要再调用任何工具，只根据本轮已经返回的"
@@ -122,10 +145,17 @@ class OrchestrateChatWithAgent:
             sticker_intent=sticker_intent,
             call_route_instruction=call_route_instruction,
         )
+        if conversation_mode == "chat":
+            agent_messages.append({"role": "system", "content": CHAT_BEAT_INSTRUCTION})
+            if _DEEP_TALK_PATTERN.search(message or ""):
+                agent_messages.append(
+                    {"role": "system", "content": CHAT_DEEP_TALK_INSTRUCTION}
+                )
         tool_results: list[AgentToolResult] = []
         content_parts: list[ContentPart] = []
         sources: list[SourceReference] = []
         sticker_placement = "after_text"
+        emitted_beats: tuple[str, ...] = ()
         model_steps = 0
         tool_call_count = 0
         progress_reported = False
@@ -251,6 +281,7 @@ class OrchestrateChatWithAgent:
                                         conversation_id=conversation_id,
                                         conversation_mode=conversation_mode,
                                         trigger_message=message,
+                                        agent_turn_id=run_id,
                                         prior_results=tuple(tool_results),
                                     ),
                                     call,
@@ -268,6 +299,17 @@ class OrchestrateChatWithAgent:
                             sources,
                             sticker_placement,
                         )
+                        if (
+                            call.tool_name == "emit_chat_beats"
+                            and tool_result.status == AgentToolStatus.COMPLETED
+                        ):
+                            raw_beats = tool_result.data.get("beats")
+                            if isinstance(raw_beats, list):
+                                emitted_beats = tuple(
+                                    str(beat).strip()
+                                    for beat in raw_beats
+                                    if str(beat).strip()
+                                )
                         if conversation_mode == "call":
                             if call.tool_name in {
                                 "search_web",
@@ -288,6 +330,20 @@ class OrchestrateChatWithAgent:
                                     )
                                 else:
                                     tools = ()
+                    if emitted_beats:
+                        validate_agent_delivery_segments(emitted_beats)
+                        self.repository.finish(run_id, model_steps + tool_call_count)
+                        return AgentTurnResult(
+                            status=AgentRunStatus.COMPLETED,
+                            reply_text="\n".join(emitted_beats),
+                            sources=tuple(sources),
+                            content_parts=tuple(content_parts),
+                            tool_results=tuple(tool_results),
+                            run_id=run_id,
+                            model_steps=model_steps,
+                            reply_segments=emitted_beats,
+                            sticker_placement=sticker_placement,
+                        )
                     continue
 
                 try:

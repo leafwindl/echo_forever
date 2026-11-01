@@ -52,6 +52,9 @@ class ContentPart:
     text: str = ""
     sticker_id: str = ""
     url: str = ""
+    # Place a sticker after this 0-based text segment. -1 keeps legacy
+    # before_text/after_text placement for the whole reply.
+    after_text_index: int = -1
 
 
 @dataclass(frozen=True)

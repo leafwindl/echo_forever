@@ -16,6 +16,7 @@ class ToolExecutionContext:
     conversation_id: str | None = None
     conversation_mode: str = "chat"
     trigger_message: str = ""
+    agent_turn_id: str = ""
     prior_results: tuple[AgentToolResult, ...] = field(default_factory=tuple)
 
 

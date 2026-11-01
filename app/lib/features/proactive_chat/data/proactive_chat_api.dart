@@ -24,6 +24,24 @@ class ProactiveChatApi {
     return ProactiveChatPreferences.fromJson(response.data!);
   }
 
+  Future<ProactiveChatPreferences> pause({int? days, bool indefinite = false}) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      Endpoints.proactivePause,
+      data: <String, dynamic>{
+        'days': days ?? 2,
+        'indefinite': indefinite,
+      },
+    );
+    return ProactiveChatPreferences.fromJson(response.data!);
+  }
+
+  Future<ProactiveChatPreferences> resume() async {
+    final response = await _client.post<Map<String, dynamic>>(
+      Endpoints.proactiveResume,
+    );
+    return ProactiveChatPreferences.fromJson(response.data!);
+  }
+
   Future<List<ChatSchedule>> listSchedules() async {
     final response = await _client.get<Map<String, dynamic>>(
       Endpoints.proactiveSchedules,

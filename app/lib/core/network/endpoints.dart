@@ -8,6 +8,8 @@ class Endpoints {
   static const health = '/health';
   static const pushTokensMe = '/push/tokens/me';
   static const proactivePreferences = '/proactive/preferences';
+  static const proactivePause = '/proactive/pause';
+  static const proactiveResume = '/proactive/resume';
   static const proactiveSchedules = '/proactive/schedules';
   static const studyFocusSessions = '/study-focus/sessions';
   static const devices = '/devices';

@@ -39,4 +39,13 @@ async def process_proactive_chat_once() -> bool:
     return await get_proactive_worker().run_once()
 
 
-__all__ = ["get_proactive_repository", "process_proactive_chat_once"]
+def reset_user_proactive_state(user_id: str) -> None:
+    """Reset preferences, reminders and queued jobs for a new companionship cycle."""
+    get_proactive_repository().reset_user_state(user_id)
+
+
+__all__ = [
+    "get_proactive_repository",
+    "process_proactive_chat_once",
+    "reset_user_proactive_state",
+]

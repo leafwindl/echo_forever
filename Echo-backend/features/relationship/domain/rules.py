@@ -35,6 +35,18 @@ _PACE_THRESHOLDS = {
     "open": (("familiar", 20, 2), ("trusted", 45, 5), ("close", 70, 14)),
 }
 
+_STAGE_ORDER = {"new": 0, "familiar": 1, "trusted": 2, "close": 3}
+_NEXT_RELATIONSHIP_TYPE = {
+    "acquaintance": "friend",
+    "friend": "ambiguous",
+    "ambiguous": "partner",
+}
+_REQUIRED_STAGE_FOR_DIRECTION = {
+    "friend": "familiar",
+    "ambiguous": "trusted",
+    "partner": "trusted",
+}
+
 
 def detect_relationship_signals(user_message: str) -> tuple[RelationshipSignal, ...]:
     clean_message = user_message.strip()
@@ -81,6 +93,39 @@ def resolve_relationship_stage(state: RelationshipState, relationship_pace: str)
     return RELATIONSHIP_STAGES[max(current_index, candidate_index)]
 
 
+def resolve_proposable_direction(
+    state: RelationshipState,
+    *,
+    blocked_directions: frozenset[str] = frozenset(),
+    recent_support: bool = True,
+) -> str:
+    """Return the single relationship direction Echo may naturally bring up.
+
+    The stage is only an internal eligibility check. A direction still needs
+    concrete interaction evidence, no active boundary, and the user's current
+    affection permission. This function never changes the relationship type.
+    """
+    if state.affection_permission == "restrained":
+        return ""
+    if state.relationship_type not in _NEXT_RELATIONSHIP_TYPE:
+        return ""
+
+    direction = _NEXT_RELATIONSHIP_TYPE[state.relationship_type]
+    if direction in blocked_directions:
+        return ""
+    if not recent_support:
+        return ""
+
+    required_stage = _REQUIRED_STAGE_FOR_DIRECTION[direction]
+    if _STAGE_ORDER.get(state.stage, 0) < _STAGE_ORDER[required_stage]:
+        return ""
+    if direction in {"ambiguous", "partner"} and state.positive_signal_count < 1:
+        return ""
+    if direction == "partner" and state.explicit_relation_signal_count < 1:
+        return ""
+    return direction
+
+
 def infer_interaction_warmth(user_message: str) -> str:
     signals = detect_relationship_signals(user_message)
     signal_types = {signal.event_type for signal in signals}
@@ -100,6 +145,9 @@ def build_relationship_context(
     user_message: str,
     relationship_pace: str,
     affection_style: str,
+    *,
+    blocked_directions: frozenset[str] = frozenset(),
+    recent_support: bool = True,
 ) -> RelationshipContext:
     signals = detect_relationship_signals(user_message)
     signal_types = {signal.event_type for signal in signals}
@@ -114,10 +162,16 @@ def build_relationship_context(
         effective_affection_style = "restrained"
 
     resolved_stage = resolve_relationship_stage(state, relationship_pace)
+    resolved_state = replace(state, stage=resolved_stage, affection_permission=permission)
     return RelationshipContext(
-        state=replace(state, stage=resolved_stage),
+        state=resolved_state,
         interaction_warmth=infer_interaction_warmth(user_message),
         effective_affection_style=effective_affection_style,
+        proposable_direction=resolve_proposable_direction(
+            resolved_state,
+            blocked_directions=blocked_directions,
+            recent_support=recent_support,
+        ),
     )
 
 

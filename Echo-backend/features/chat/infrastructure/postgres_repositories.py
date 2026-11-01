@@ -217,7 +217,10 @@ def _add_message_record(
             cursor.execute(
                 """
                 UPDATE proactive_chat_preferences
-                SET consecutive_unanswered = 0, updated_at = NOW()
+                SET consecutive_unanswered = 0,
+                    cycle_started_at = NOW(), allowed_contact_seconds = 0,
+                    last_accounted_at = NOW(), last_evaluated_slot = 0,
+                    last_slot_result = NULL, updated_at = NOW()
                 WHERE user_id = %s
                 """,
                 (user_id,),

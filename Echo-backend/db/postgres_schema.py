@@ -303,6 +303,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             user_id TEXT PRIMARY KEY,
             relationship_mode TEXT NOT NULL DEFAULT 'friend'
                 CHECK (relationship_mode IN ('friend', 'ai_partner')),
+            relationship_type VARCHAR(24) NOT NULL DEFAULT 'acquaintance'
+                CHECK (relationship_type IN ('acquaintance', 'friend', 'ambiguous', 'partner')),
+            relationship_type_updated_at TIMESTAMPTZ,
+            reset_epoch BIGINT NOT NULL DEFAULT 0,
             stage VARCHAR(32) NOT NULL DEFAULT 'new',
             score INTEGER NOT NULL DEFAULT 0 CHECK (score BETWEEN 0 AND 100),
             interaction_turns INTEGER NOT NULL DEFAULT 0 CHECK (interaction_turns >= 0),
@@ -331,6 +335,48 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             source_message_id BIGINT,
             metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS relationship_proposals (
+            id BIGSERIAL PRIMARY KEY,
+            proposal_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            direction VARCHAR(24) NOT NULL
+                CHECK (direction IN ('friend', 'ambiguous', 'partner')),
+            status VARCHAR(16) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'accepted', 'declined', 'deferred', 'expired', 'cancelled')),
+            conversation_id TEXT,
+            agent_turn_id TEXT,
+            source_message_id BIGINT,
+            evidence TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            resolved_at TIMESTAMPTZ,
+            expires_at TIMESTAMPTZ NOT NULL
+        )
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_relationship_proposals_pending_direction
+        ON relationship_proposals(user_id, direction)
+        WHERE status = 'pending'
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_relationship_proposals_user_status
+        ON relationship_proposals(user_id, status, created_at DESC)
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS relationship_direction_boundaries (
+            user_id TEXT NOT NULL,
+            direction VARCHAR(24) NOT NULL
+                CHECK (direction IN ('friend', 'ambiguous', 'partner')),
+            status VARCHAR(16) NOT NULL
+                CHECK (status IN ('declined', 'deferred')),
+            reason TEXT NOT NULL DEFAULT '',
+            source_message_id BIGINT,
+            revisit_after TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (user_id, direction)
         )
         """,
         f"""
@@ -645,16 +691,19 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             enabled BOOLEAN NOT NULL DEFAULT FALSE,
             allow_echo_scheduling BOOLEAN NOT NULL DEFAULT TRUE,
             allow_spontaneous_chat BOOLEAN NOT NULL DEFAULT FALSE,
-            proactivity_level VARCHAR(16) NOT NULL DEFAULT 'balanced'
-                CHECK (proactivity_level IN ('conservative', 'balanced', 'active')),
             timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',
             quiet_start TIME NOT NULL DEFAULT '22:30',
             quiet_end TIME NOT NULL DEFAULT '08:00',
             explicit_reminder_quiet_policy VARCHAR(16) NOT NULL DEFAULT 'defer'
                 CHECK (explicit_reminder_quiet_policy IN ('honor', 'defer')),
             notification_preview BOOLEAN NOT NULL DEFAULT FALSE,
-            proactive_count INTEGER NOT NULL DEFAULT 0,
-            window_started_at TIMESTAMPTZ,
+            cycle_started_at TIMESTAMPTZ,
+            allowed_contact_seconds INTEGER NOT NULL DEFAULT 0,
+            last_accounted_at TIMESTAMPTZ,
+            last_evaluated_slot INTEGER NOT NULL DEFAULT 0,
+            last_slot_result VARCHAR(16),
+            paused_until TIMESTAMPTZ,
+            pause_indefinite BOOLEAN NOT NULL DEFAULT FALSE,
             last_proactive_at TIMESTAMPTZ,
             consecutive_unanswered INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -891,6 +940,16 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_chat_schedules_user_status_next ON chat_schedules(user_id, status, next_run_at)",
         "CREATE INDEX IF NOT EXISTS idx_proactive_jobs_due ON proactive_chat_jobs(status, scheduled_for, id)",
         "CREATE INDEX IF NOT EXISTS idx_proactive_jobs_user ON proactive_chat_jobs(user_id, created_at DESC)",
+        "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS cycle_started_at TIMESTAMPTZ",
+        "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS allowed_contact_seconds INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS last_accounted_at TIMESTAMPTZ",
+        "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS last_evaluated_slot INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS last_slot_result VARCHAR(16)",
+        "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS paused_until TIMESTAMPTZ",
+        "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS pause_indefinite BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE proactive_chat_preferences DROP COLUMN IF EXISTS proactivity_level",
+        "ALTER TABLE proactive_chat_preferences DROP COLUMN IF EXISTS proactive_count",
+        "ALTER TABLE proactive_chat_preferences DROP COLUMN IF EXISTS window_started_at",
         "ALTER TABLE push_targets ALTER COLUMN provider SET DEFAULT 'getui'",
         "CREATE INDEX IF NOT EXISTS idx_push_targets_user_status ON push_targets(user_id, status)",
         "CREATE INDEX IF NOT EXISTS idx_notification_outbox_due ON notification_outbox(status, next_attempt_at, id)",
@@ -904,6 +963,11 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_user_personas_updated_at ON user_personas(updated_at DESC)",
         "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS relationship_mode "
         "TEXT NOT NULL DEFAULT 'friend' CHECK (relationship_mode IN ('friend', 'ai_partner'))",
+        "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS relationship_type "
+        "VARCHAR(24) NOT NULL DEFAULT 'acquaintance' "
+        "CHECK (relationship_type IN ('acquaintance', 'friend', 'ambiguous', 'partner'))",
+        "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS relationship_type_updated_at TIMESTAMPTZ",
+        "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS reset_epoch BIGINT NOT NULL DEFAULT 0",
         "ALTER TABLE relationship_states ALTER COLUMN schema_version SET DEFAULT 2",
         "UPDATE relationship_states SET schema_version = 2 WHERE schema_version < 2",
         "CREATE INDEX IF NOT EXISTS idx_relationship_states_stage ON relationship_states(stage)",

@@ -4,6 +4,10 @@ from dataclasses import dataclass
 RELATIONSHIP_SCHEMA_VERSION = 2
 RELATIONSHIP_STAGES = ("new", "familiar", "trusted", "close")
 RELATIONSHIP_MODES = ("friend", "ai_partner")
+RELATIONSHIP_TYPES = ("acquaintance", "friend", "ambiguous", "partner")
+RELATIONSHIP_DIRECTIONS = ("friend", "ambiguous", "partner")
+PROPOSAL_STATUSES = ("pending", "accepted", "declined", "deferred", "expired", "cancelled")
+BOUNDARY_STATUSES = ("declined", "deferred")
 AFFECTION_PERMISSIONS = ("unknown", "restrained", "welcomed")
 INTERACTION_WARMTH_LEVELS = ("reserved", "normal", "warm")
 
@@ -12,6 +16,19 @@ STAGE_LABELS = {
     "familiar": "熟悉",
     "trusted": "信赖",
     "close": "亲近",
+}
+
+RELATIONSHIP_TYPE_LABELS = {
+    "acquaintance": "初识",
+    "friend": "朋友",
+    "ambiguous": "暧昧",
+    "partner": "恋人",
+}
+
+RELATIONSHIP_DIRECTION_LABELS = {
+    "friend": "朋友",
+    "ambiguous": "暧昧",
+    "partner": "恋人",
 }
 
 
@@ -30,6 +47,9 @@ class RelationshipState:
     user_id: str
     stage: str = "new"
     relationship_mode: str = "friend"
+    relationship_type: str = "acquaintance"
+    relationship_type_updated_at: str | None = None
+    reset_epoch: int = 0
     score: int = 0
     interaction_turns: int = 0
     active_days: int = 0
@@ -52,6 +72,33 @@ class RelationshipContext:
     state: RelationshipState
     interaction_warmth: str
     effective_affection_style: str
+    proposable_direction: str = ""
+
+
+@dataclass(frozen=True)
+class RelationshipProposal:
+    proposal_id: str
+    user_id: str
+    direction: str
+    status: str
+    conversation_id: str | None = None
+    agent_turn_id: str | None = None
+    source_message_id: int | None = None
+    evidence: str = ""
+    created_at: str | None = None
+    resolved_at: str | None = None
+    expires_at: str | None = None
+
+
+@dataclass(frozen=True)
+class RelationshipDirectionBoundary:
+    user_id: str
+    direction: str
+    status: str
+    reason: str = ""
+    source_message_id: int | None = None
+    revisit_after: str | None = None
+    updated_at: str | None = None
 
 
 @dataclass(frozen=True)

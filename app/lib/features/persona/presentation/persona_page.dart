@@ -1,69 +1,32 @@
+import 'package:echo_app/core/di/providers.dart';
 import 'package:echo_app/core/routing/route_names.dart';
+import 'package:echo_app/features/chat/presentation/chat_controller.dart';
 import 'package:echo_app/features/persona/data/persona_api.dart';
-import 'package:echo_app/features/persona/domain/persona.dart';
 import 'package:echo_app/features/persona/presentation/persona_controller.dart';
-import 'package:echo_app/features/persona/presentation/persona_editor_fields.dart';
-import 'package:echo_app/features/persona/presentation/persona_form_model.dart';
 import 'package:echo_app/shared/widgets/echo_loading_view.dart';
-import 'package:echo_app/shared/widgets/primary_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class PersonaPage extends ConsumerStatefulWidget {
+class PersonaPage extends ConsumerWidget {
   const PersonaPage({super.key});
 
   @override
-  ConsumerState<PersonaPage> createState() => _PersonaPageState();
-}
-
-class _PersonaPageState extends ConsumerState<PersonaPage> {
-  PersonaDraft _draft = PersonaDraft.defaults();
-  var _dirty = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final personaState = ref.watch(personaControllerProvider);
-    final current = personaState.asData?.value;
-    final relationshipState = ref.watch(relationshipStateProvider);
-    ref.listen(personaControllerProvider, (previous, next) {
-      final nextPersona = next.asData?.value;
-      if (nextPersona == null || _dirty) {
-        return;
-      }
-      final nextDraft = PersonaDraft.fromPersona(nextPersona.persona);
-      if (_draft != nextDraft) {
-        setState(() {
-          _draft = nextDraft;
-        });
-      }
-    });
-
-    if (current == null && personaState.isLoading) {
-      return const Scaffold(
-        body: SafeArea(child: EchoLoadingView(label: '正在加载个性化设置')),
-      );
-    }
-
-    final errorText = current?.error?.detail;
-
+  Widget build(BuildContext context, WidgetRef ref) {
+    final relationship = ref.watch(relationshipStateProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('个性化设置'),
+        title: const Text('关于她'),
         leading: BackButton(onPressed: () => context.pop()),
         actions: <Widget>[
           IconButton(
             tooltip: '长期记忆',
-            onPressed: personaState.isLoading
-                ? null
-                : () => context.pushNamed(RouteNames.memory),
+            onPressed: () => context.pushNamed(RouteNames.memory),
             icon: const Icon(Icons.bookmark_outline_rounded),
           ),
           IconButton(
-            tooltip: '重新加载',
-            onPressed: personaState.isLoading
-                ? null
-                : () => ref.read(personaControllerProvider.notifier).refresh(),
+            tooltip: '刷新',
+            onPressed: () => ref.invalidate(relationshipStateProvider),
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
@@ -80,19 +43,19 @@ class _PersonaPageState extends ConsumerState<PersonaPage> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      const Icon(Icons.tune_rounded, size: 44),
+                      const Icon(Icons.favorite_rounded, size: 44),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Text(
-                              '个性化设置',
+                              'Echo · AI 陪伴伙伴',
                               style: Theme.of(context).textTheme.headlineSmall,
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '这里的设置会直接影响文字聊天和硬件语音中的称呼、语气、关系节奏和长期记忆。',
+                              '关系由相处慢慢形成，不用在这里调整人格。',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           ],
@@ -100,86 +63,29 @@ class _PersonaPageState extends ConsumerState<PersonaPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  _RelationshipSummary(
-                    relationshipState: relationshipState,
-                    isSaving: current?.isSaving ?? false,
-                    onModeChanged: _updateRelationshipMode,
-                    onRetry: () => ref.invalidate(relationshipStateProvider),
-                  ),
-                  if (errorText != null) ...<Widget>[
-                    const SizedBox(height: 16),
-                    Material(
-                      color: Theme.of(context).colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: Text(
-                                errorText,
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onErrorContainer,
-                                ),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: personaState.isLoading
-                                  ? null
-                                  : () => ref
-                                        .read(
-                                          personaControllerProvider.notifier,
-                                        )
-                                        .refresh(),
-                              child: const Text('重试'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 24),
-                  PersonaEditorFields(
-                    draft: _draft,
-                    onChanged: (next) {
-                      setState(() {
-                        _draft = next;
-                        _dirty = true;
-                      });
-                    },
+                  relationship.when(
+                    loading: () => const EchoLoadingView(label: '正在加载关系'),
+                    error: (error, _) => _RelationshipError(
+                      onRetry: () => ref.invalidate(relationshipStateProvider),
+                    ),
+                    data: (state) => _RelationshipCard(
+                      state: state,
+                      onOpenProposal: state.pendingProposal == null
+                          ? null
+                          : () => _showProposalDialog(context, ref, state),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  PrimaryButton(
-                    label: '保存设置',
-                    isLoading: current?.isSaving ?? false,
-                    onPressed: personaState.isLoading ? null : _save,
+                  const SizedBox(height: 20),
+                  Text(
+                    '聊天、长期记忆、关系、提醒和称呼边界会在这里一起重置；账号、设备和你的称呼保留。',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: current?.isSaving == true
-                              ? null
-                              : _resetPersona,
-                          icon: const Icon(Icons.restart_alt_rounded),
-                          label: const Text('恢复默认'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: current?.isSaving == true
-                              ? null
-                              : _resetRelationship,
-                          icon: const Icon(Icons.link_off_rounded),
-                          label: const Text('重置关系'),
-                        ),
-                      ),
-                    ],
+                  OutlinedButton.icon(
+                    onPressed: () => _confirmReset(context, ref),
+                    icon: const Icon(Icons.link_off_rounded),
+                    label: const Text('重置关系'),
                   ),
                 ],
               ),
@@ -190,230 +96,185 @@ class _PersonaPageState extends ConsumerState<PersonaPage> {
     );
   }
 
-  Future<void> _save() async {
-    final persona = await ref
-        .read(personaControllerProvider.notifier)
-        .updatePersona(_draft.toUpdate());
-    if (!mounted) {
-      return;
-    }
-    if (persona == null) {
-      final detail = ref
-          .read(personaControllerProvider)
-          .asData
-          ?.value
-          .error
-          ?.detail;
-      if (detail != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(detail)));
-      }
-      return;
-    }
-    setState(() {
-      _draft = PersonaDraft.fromPersona(persona);
-      _dirty = false;
-    });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('设置已保存')));
-  }
-
-  Future<void> _resetPersona() async {
-    final confirmed = await _confirmDanger(
-      title: '恢复默认设置',
-      content: '只会重置个性化偏好，不会删除长期记忆或聊天记录。',
-      actionLabel: '恢复默认',
-    );
-    if (!confirmed || !mounted) {
-      return;
-    }
-    final persona = await ref
-        .read(personaControllerProvider.notifier)
-        .resetPersona();
-    if (!mounted || persona == null) {
-      return;
-    }
-    setState(() {
-      _draft = PersonaDraft.fromPersona(persona);
-      _dirty = false;
-    });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已恢复默认设置')));
-  }
-
-  Future<void> _updateRelationshipMode(RelationshipMode mode) async {
-    final result = await ref
-        .read(personaControllerProvider.notifier)
-        .updateRelationshipMode(mode);
-    if (!mounted) return;
-    final detail = ref
-        .read(personaControllerProvider)
-        .asData
-        ?.value
-        .error
-        ?.detail;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result == null ? detail ?? '相处方式保存失败，请重试' : '已切换为${mode.label}',
+  Future<void> _confirmReset(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('重置关系'),
+        content: const Text(
+          '聊天、长期记忆、关系、提醒和称呼边界都会清空，关系回到初识；'
+          '账号、设备和你的称呼保留。这个操作不能撤销。',
         ),
-      ),
-    );
-  }
-
-  Future<void> _resetRelationship() async {
-    final confirmed = await _confirmDanger(
-      title: '重置关系进度',
-      content: '熟悉进度会回到初识阶段。你选择的朋友或 AI 恋人关系、个性化设置和长期记忆会保留。',
-      actionLabel: '重置关系',
-    );
-    if (!confirmed || !mounted) {
-      return;
-    }
-    final relationship = await ref
-        .read(personaControllerProvider.notifier)
-        .resetRelationship();
-    if (!mounted || relationship == null) {
-      return;
-    }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('关系进度已重置')));
-  }
-
-  Future<bool> _confirmDanger({
-    required String title,
-    required String content,
-    required String actionLabel,
-  }) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: Text(title),
-              content: Text(content),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: Text(actionLabel),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-  }
-}
-
-class _RelationshipSummary extends StatelessWidget {
-  const _RelationshipSummary({
-    required this.relationshipState,
-    required this.onRetry,
-    required this.isSaving,
-    required this.onModeChanged,
-  });
-
-  final AsyncValue<RelationshipStateDto> relationshipState;
-  final VoidCallback onRetry;
-  final bool isSaving;
-  final ValueChanged<RelationshipMode> onModeChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return relationshipState.when(
-      data: (relationship) => Material(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Text(
-                '和 Echo 的关系',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              const Text('相处方式由你选择，熟悉程度随交流积累。选择后立即生效。'),
-              const SizedBox(height: 12),
-              SegmentedButton<RelationshipMode>(
-                segments: RelationshipMode.values
-                    .map(
-                      (mode) =>
-                          ButtonSegment(value: mode, label: Text(mode.label)),
-                    )
-                    .toList(growable: false),
-                selected: <RelationshipMode>{relationship.relationshipMode},
-                onSelectionChanged: isSaving
-                    ? null
-                    : (selected) {
-                        final mode = selected.single;
-                        if (mode != relationship.relationshipMode) {
-                          onModeChanged(mode);
-                        }
-                      },
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: <Widget>[
-                  _InfoChip(
-                    label: '熟悉程度',
-                    value: relationship.displayStageLabel,
-                  ),
-                  _InfoChip(
-                    label: '互动',
-                    value: '${relationship.interactionTurns} 次',
-                  ),
-                  _InfoChip(label: '活跃', value: '${relationship.activeDays} 天'),
-                ],
-              ),
-            ],
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
           ),
-        ),
-      ),
-      loading: () => const LinearProgressIndicator(minHeight: 2),
-      error: (_, _) => Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              '关系进度加载失败',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('确认重置'),
           ),
-          TextButton(onPressed: onRetry, child: const Text('重试')),
         ],
       ),
     );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref.read(personaRepositoryProvider).resetCompanionship();
+      ref.invalidate(relationshipStateProvider);
+      ref.invalidate(chatControllerProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已重新开始，账号和设备保留')),
+        );
+      }
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('重置失败：$error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _showProposalDialog(
+    BuildContext context,
+    WidgetRef ref,
+    RelationshipStateDto state,
+  ) async {
+    final proposal = state.pendingProposal;
+    if (proposal == null) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('和 Echo 的关系'),
+        content: Text(
+          'Echo 想和你确认：从现在开始，做${proposal.directionLabel}吗？',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('再想想'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('愿意'),
+          ),
+        ],
+      ),
+    );
+    try {
+      if (accepted == true) {
+        await ref
+            .read(personaRepositoryProvider)
+            .acceptRelationshipProposal(proposal.proposalId);
+      } else {
+        await ref
+            .read(personaRepositoryProvider)
+            .deferRelationshipProposal(proposal.proposalId);
+      }
+      ref.invalidate(relationshipStateProvider);
+    } on Object catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('关系确认失败：$error')),
+        );
+      }
+    }
   }
 }
 
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.label, required this.value});
+class _RelationshipCard extends StatelessWidget {
+  const _RelationshipCard({
+    required this.state,
+    required this.onOpenProposal,
+  });
+
+  final RelationshipStateDto state;
+  final VoidCallback? onOpenProposal;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text('关系', style: Theme.of(context).textTheme.labelMedium),
+            Text(
+              state.relationshipTypeLabel,
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: _Metric(
+                    label: '互动',
+                    value: '${state.interactionTurns} 次',
+                  ),
+                ),
+                Expanded(
+                  child: _Metric(
+                    label: '活跃',
+                    value: '${state.activeDays} 天',
+                  ),
+                ),
+              ],
+            ),
+            if (onOpenProposal != null) ...<Widget>[
+              const SizedBox(height: 14),
+              FilledButton(
+                onPressed: onOpenProposal,
+                child: Text(
+                  '查看确认窗口（${state.pendingProposal!.directionLabel}）',
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({required this.label, required this.value});
 
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Text('$label · $value'),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(label, style: Theme.of(context).textTheme.labelSmall),
+        Text(value, style: Theme.of(context).textTheme.titleMedium),
+      ],
+    );
+  }
+}
+
+class _RelationshipError extends StatelessWidget {
+  const _RelationshipError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            '关系加载失败',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+        TextButton(onPressed: onRetry, child: const Text('重试')),
+      ],
     );
   }
 }

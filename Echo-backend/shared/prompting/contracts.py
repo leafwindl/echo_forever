@@ -31,9 +31,11 @@ class UserPreferences(Protocol):
 class RelationshipState(Protocol):
     stage: str
     relationship_mode: str
+    relationship_type: str
 
 
 class RelationshipContext(Protocol):
     state: RelationshipState
     interaction_warmth: str
     effective_affection_style: str
+    proposable_direction: str

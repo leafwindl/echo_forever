@@ -46,13 +46,25 @@ export interface PersonaProfile {
   onboardingCompleted: boolean;
 }
 
+export interface RelationshipProposal {
+  proposalId: string;
+  direction: string;
+  directionLabel: string;
+  status: string;
+  createdAt?: string;
+  expiresAt?: string;
+}
+
 export interface RelationshipState {
   relationshipMode: string;
+  relationshipType: string;
+  relationshipTypeLabel: string;
   stage: string;
   stageLabel: string;
   interactionTurns: number;
   activeDays: number;
   affectionPermission: string;
+  pendingProposal?: RelationshipProposal;
   schemaVersion: number;
   createdAt?: string;
   updatedAt?: string;
@@ -139,10 +151,11 @@ export interface ProactiveChatPreferences {
   enabled: boolean;
   allowEchoScheduling: boolean;
   allowSpontaneousChat: boolean;
-  proactivityLevel: string;
   timezone: string;
   quietStart: string;
   quietEnd: string;
   explicitReminderQuietPolicy: string;
   notificationPreview: boolean;
+  pausedUntil?: string;
+  pauseIndefinite: boolean;
 }

@@ -2,12 +2,30 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import zlib
 from dataclasses import dataclass
+
+from features.agent.domain.entities import ContentPart
 
 _NATURAL_DELIVERY_MODES = frozenset({"chat", "proactive"})
 _STICKER_PLACEMENTS = frozenset({"before_text", "after_text"})
-_NATURAL_MAX_TEXT_SEGMENTS = 6
+_NATURAL_MAX_TEXT_SEGMENTS = 10
 _NATURAL_SEGMENT_TARGET_CHARS = 180
+_NATURAL_SHORT_SPLIT_MIN_CHARS = 45
+_NATURAL_SHORT_SPLIT_PERCENT = 55
+_CONNECTIVE_PREFIXES = (
+    "不过",
+    "但是",
+    "可是",
+    "所以",
+    "因为",
+    "然后",
+    "而且",
+    "只是",
+    "就是",
+    "再说",
+    "其实",
+)
 _STRUCTURED_BLOCK = re.compile(r"```|~~~|(?m:^\s*(?:[-*+]\s|\d+[.)、]\s|\||>\s))")
 _URL_OR_INLINE_CODE = re.compile(r"https?://\S+|`[^`]+`")
 _INTERNAL_CONTEXT_MARKER = re.compile(
@@ -52,6 +70,55 @@ class AgentDeliveryPlanError(ValueError):
     """The model did not satisfy the final delivery contract."""
 
     error_code = "llm_output_malformed"
+
+
+@dataclass(frozen=True)
+class DeliveryItem:
+    message_type: str
+    content: str
+    parts: tuple[ContentPart, ...] = ()
+
+
+def build_delivery_items(
+    text_segments: tuple[str, ...],
+    content_parts: tuple[ContentPart, ...] = (),
+    sticker_placement: str = "after_text",
+) -> tuple[DeliveryItem, ...]:
+    """Interleave text and stickers while preserving a requested beat index."""
+    texts = tuple(segment.strip() for segment in text_segments if segment.strip())
+    indexed: dict[int, list[ContentPart]] = {}
+    global_parts: list[ContentPart] = []
+    for part in content_parts:
+        if part.type != "sticker":
+            global_parts.append(part)
+            continue
+        if part.after_text_index >= 0:
+            indexed.setdefault(part.after_text_index, []).append(part)
+        else:
+            global_parts.append(part)
+
+    items: list[DeliveryItem] = []
+    if global_parts and sticker_placement == "before_text":
+        items.extend(
+            DeliveryItem("sticker", "", (part,)) for part in global_parts
+        )
+    for index, text in enumerate(texts):
+        items.append(DeliveryItem("text", text))
+        items.extend(
+            DeliveryItem("sticker", "", (part,))
+            for part in indexed.get(index, ())
+        )
+    for index in sorted(indexed):
+        if index < len(texts):
+            continue
+        items.extend(
+            DeliveryItem("sticker", "", (part,)) for part in indexed[index]
+        )
+    if global_parts and sticker_placement != "before_text":
+        items.extend(
+            DeliveryItem("sticker", "", (part,)) for part in global_parts
+        )
+    return tuple(items)
 
 
 def validate_agent_delivery_segments(segments: tuple[str, ...]) -> None:
@@ -143,31 +210,60 @@ def build_natural_delivery_plan(
 
     segments: list[str] = []
     for paragraph in paragraphs:
-        segments.extend([paragraph] if preserve_layout else _split_long_paragraph(paragraph))
+        segments.extend(
+            [paragraph] if preserve_layout else _split_natural_paragraph(paragraph)
+        )
     segments = _fit_segment_limit(segments)
     normalized = tuple(segment.strip() for segment in segments if segment.strip())
     validate_agent_delivery_segments(normalized)
     return AgentDeliveryPlan(normalized, sticker_placement)
 
 
-def _split_long_paragraph(paragraph: str) -> list[str]:
-    if len(paragraph) <= _NATURAL_SEGMENT_TARGET_CHARS or _URL_OR_INLINE_CODE.search(paragraph):
+def _split_natural_paragraph(paragraph: str) -> list[str]:
+    if _URL_OR_INLINE_CODE.search(paragraph):
         return [paragraph]
     sentences = _complete_sentences(paragraph)
     if len(sentences) <= 1:
         return [paragraph]
-    result: list[str] = []
+    if len(paragraph) > _NATURAL_SEGMENT_TARGET_CHARS:
+        return _group_sentences(
+            sentences,
+            maximum_chars=_NATURAL_SEGMENT_TARGET_CHARS,
+            maximum_groups=_NATURAL_MAX_TEXT_SEGMENTS,
+        )
+    if sum(len(sentence.strip()) for sentence in sentences) < _NATURAL_SHORT_SPLIT_MIN_CHARS:
+        return [paragraph]
+    # Keep the same reply stable across retries while allowing some short
+    # multi-sentence replies to form two or three natural bubbles.
+    if zlib.crc32(paragraph.encode("utf-8")) % 100 >= _NATURAL_SHORT_SPLIT_PERCENT:
+        return [paragraph]
+    return _group_sentences(sentences)
+
+
+def _group_sentences(
+    sentences: list[str],
+    maximum_chars: int = 120,
+    maximum_groups: int = _NATURAL_MAX_TEXT_SEGMENTS,
+) -> list[str]:
+    groups: list[str] = []
     current = ""
     for sentence in sentences:
-        candidate = f"{current}{sentence}" if current else sentence
-        if current and len(candidate) > _NATURAL_SEGMENT_TARGET_CHARS:
-            result.append(current)
+        if not current:
             current = sentence
+            continue
+        starts_with_connector = sentence.lstrip().startswith(_CONNECTIVE_PREFIXES)
+        too_short_to_stand = len(sentence.strip()) < 8
+        would_overflow = len(current) + len(sentence) > maximum_chars
+        if starts_with_connector or too_short_to_stand or would_overflow:
+            current = f"{current}{sentence}"
         else:
-            current = candidate
+            groups.append(current)
+            current = sentence
     if current:
-        result.append(current)
-    return result
+        groups.append(current)
+    if len(groups) > maximum_groups:
+        groups = [*groups[: maximum_groups - 1], "".join(groups[maximum_groups - 1 :])]
+    return groups
 
 
 def _complete_sentences(text: str) -> list[str]:

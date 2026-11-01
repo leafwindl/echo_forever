@@ -4,7 +4,11 @@ import uuid
 
 from db.postgres_connection import get_connection, transaction
 
-from features.agent.domain.delivery import validate_agent_delivery_segments
+from features.agent.domain.delivery import (
+    DeliveryItem,
+    build_delivery_items,
+    validate_agent_delivery_segments,
+)
 from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
     ChatAcceptedTurn,
@@ -316,21 +320,31 @@ class PostgresAsyncChatRepository:
             sticker_parts = tuple(
                 part for part in reply.content_parts if part.type == "sticker" and part.sticker_id
             )
-            deliveries: list[tuple[str, str, tuple[ContentPart, ...]]] = []
-            if sticker_parts and reply.sticker_placement == "before_text":
-                deliveries.extend(("sticker", "", (part,)) for part in sticker_parts)
-            deliveries.extend(("text", segment, ()) for segment in text_segments)
-            if sticker_parts and reply.sticker_placement != "before_text":
-                deliveries.extend(("sticker", "", (part,)) for part in sticker_parts)
+            deliveries = list(
+                build_delivery_items(
+                    text_segments,
+                    sticker_parts,
+                    reply.sticker_placement,
+                )
+            )
             if not deliveries:
-                deliveries.append(("text", "刚才这次回复没有完成，再和我说一次好吗？", ()))
+                deliveries.append(
+                    DeliveryItem("text", "刚才这次回复没有完成，再和我说一次好吗？")
+                )
 
             created_messages: list[ChatHistoryMessage] = []
             last_text_index = max(
-                (index for index, delivery in enumerate(deliveries) if delivery[0] == "text"),
+                (
+                    index
+                    for index, delivery in enumerate(deliveries)
+                    if delivery.message_type == "text"
+                ),
                 default=-1,
             )
-            for sequence, (message_type, content, parts) in enumerate(deliveries):
+            for sequence, delivery in enumerate(deliveries):
+                message_type = delivery.message_type
+                content = delivery.content
+                parts = delivery.parts
                 internal_id, stable_message_id = postgres_repositories._add_message_record(
                     user_id=turn.user_id,
                     role="assistant",

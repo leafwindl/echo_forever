@@ -28,6 +28,7 @@ from features.agent.domain.tools import ToolExecutionContext, ToolRegistry
 from features.agent.infrastructure.container import get_chat_agent
 from features.agent.infrastructure.model import ProviderAgentConversationModel
 from features.agent.infrastructure.tools import (
+    register_beat_tools,
     register_schedule_tools,
     register_sticker_tools,
     register_time_tool,
@@ -153,6 +154,7 @@ def _build_orchestrator(
     repository = FakeAgentRunRepository()
     registry = ToolRegistry()
     register_sticker_tools(registry, search=search, send=send)
+    register_beat_tools(registry)
     register_time_tool(registry, FakeClock(), "Asia/Shanghai")
     register_web_search_tool(registry, web_search or FakeWebSearch())
     return (
@@ -367,7 +369,7 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
         get_chat_agent.cache_clear()
         try:
             agent = get_chat_agent()
-            self.assertEqual(agent.model.max_tokens, 1000)
+            self.assertEqual(agent.model.max_tokens, 1800)
             self.assertTrue(agent.model.disable_thinking)
         finally:
             get_chat_agent.cache_clear()
@@ -550,6 +552,39 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
             "好，这个提醒已经取消了。",
         )
 
+    async def test_emit_chat_beats_becomes_the_final_reply_without_extra_model_call(
+        self,
+    ):
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    text="",
+                    tool_calls=(
+                        AgentToolCall(
+                            call_id="beats-1",
+                            tool_name="emit_chat_beats",
+                            arguments={"beats": ["第一句。", "第二句。", "第三句。"]},
+                        ),
+                    ),
+                )
+            ]
+        )
+        orchestrator, repository, _ = _build_orchestrator(model)
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="随便聊聊",
+            messages=[{"role": "user", "content": "随便聊聊"}],
+        )
+
+        self.assertEqual(result.status, AgentRunStatus.COMPLETED)
+        self.assertEqual(
+            result.reply_segments,
+            ("第一句。", "第二句。", "第三句。"),
+        )
+        self.assertEqual(len(model.calls), 1)
+        self.assertEqual(repository.finishes[0][0], "run_test")
+
     async def test_daily_letter_truncation_fails_without_repeating_empty_calls(self):
         model = SequenceAgentModel(
             [
@@ -640,7 +675,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reply_text, "这个笑得很有感染力，给你。")
         self.assertEqual(result.content_parts[0].sticker_id, sticker.sticker_id)
         self.assertEqual(result.sticker_placement, "before_text")
-        self.assertEqual(searches, [("user_a", "开心有感染力", 3)])
+        self.assertEqual(searches, [("user_a", "开心", 3)])
         self.assertEqual(sends, [("user_a", sticker.sticker_id)])
         self.assertEqual([call["status"] for call in repository.tool_calls], ["completed"])
         self.assertEqual(
@@ -819,6 +854,86 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.content_parts, ())
         self.assertEqual(sent, [])
         self.assertEqual(repository.tool_calls[0]["error_code"], "tool_not_allowed_in_mode")
+
+    async def test_long_sticker_intent_falls_back_to_embedded_keyword(self):
+        sticker = _sticker()
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    tool_calls=(
+                        AgentToolCall(
+                            call_id="call_sticker",
+                            tool_name="send_sticker",
+                            arguments={
+                                "intent": "开心得意，准备斗嘴的调皮表情",
+                                "placement": "after_text",
+                            },
+                        ),
+                    )
+                ),
+                AgentModelResponse(text=_delivery("给你一张。")),
+            ]
+        )
+        queries = []
+
+        def search(_user_id, query, _limit):
+            queries.append(query)
+            return [sticker] if query == "开心" else []
+
+        orchestrator, _, _ = _build_orchestrator(
+            model,
+            search=search,
+            send=lambda _user_id, _sticker_id: sticker,
+        )
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="来张表情包",
+            messages=[{"role": "user", "content": "来张表情包"}],
+        )
+
+        self.assertEqual(result.content_parts[0].sticker_id, sticker.sticker_id)
+        self.assertIn("开心", queries)
+
+    async def test_sticker_can_be_positioned_between_emitted_beats(self):
+        sticker = _sticker()
+        model = SequenceAgentModel(
+            [
+                AgentModelResponse(
+                    tool_calls=(
+                        AgentToolCall(
+                            call_id="call_sticker",
+                            tool_name="send_sticker",
+                            arguments={
+                                "intent": "开心",
+                                "placement": "after_text",
+                                "after_text_index": 1,
+                            },
+                        ),
+                        AgentToolCall(
+                            call_id="call_beats",
+                            tool_name="emit_chat_beats",
+                            arguments={"beats": ["第一句。", "第二句。", "第三句。"]},
+                        ),
+                    )
+                ),
+            ]
+        )
+        orchestrator, _, _ = _build_orchestrator(
+            model,
+            search=lambda _user_id, _query, _limit: [sticker],
+            send=lambda _user_id, _sticker_id: sticker,
+        )
+
+        result = await orchestrator.execute(
+            user_id="user_a",
+            message="来斗嘴",
+            messages=[{"role": "user", "content": "来斗嘴"}],
+        )
+
+        self.assertEqual(result.reply_segments, ("第一句。", "第二句。", "第三句。"))
+        self.assertEqual(result.content_parts[0].after_text_index, 1)
+        self.assertEqual(result.content_parts[0].sticker_id, sticker.sticker_id)
 
     async def test_model_can_send_stickers_on_consecutive_chat_turns(self):
         sticker = _sticker()

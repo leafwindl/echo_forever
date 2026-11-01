@@ -5,7 +5,7 @@
 - API: `https://api.echoaiforever.cn`
 - APK download: `https://download.echoaiforever.cn`
 - Repository: `/opt/echo/app`
-- Current release: Android `1.1.0+15`, backend branch `master`
+- Current release: Android `1.1.9+25`, backend branch `master`
 
 ## Server layout
 

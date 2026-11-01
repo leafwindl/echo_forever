@@ -45,6 +45,7 @@ def get_delivery_timing_policy() -> DeliveryTimingPolicy:
             followup_text_delay_ms=settings.chat_followup_text_delay_ms,
             final_text_delay_ms=settings.chat_final_text_delay_ms,
             sticker_delay_ms=settings.chat_sticker_delay_ms,
+            maximum_total_delay_ms=settings.chat_max_total_delay_ms,
         )
     return _delivery_timing_policy
 

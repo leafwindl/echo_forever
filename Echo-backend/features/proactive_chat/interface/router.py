@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,6 +14,7 @@ from features.proactive_chat.interface.schemas import (
     ChatScheduleListResponse,
     ChatScheduleResponse,
     ChatScheduleUpdateRequest,
+    ProactivePauseRequest,
     ProactivePreferencesRequest,
     ProactivePreferencesResponse,
 )
@@ -27,12 +29,13 @@ def _preferences_response(value) -> ProactivePreferencesResponse:
         enabled=value.enabled,
         allow_echo_scheduling=value.allow_echo_scheduling,
         allow_spontaneous_chat=value.allow_spontaneous_chat,
-        proactivity_level=value.proactivity_level,
         timezone=value.timezone,
         quiet_start=value.quiet_start,
         quiet_end=value.quiet_end,
         explicit_reminder_quiet_policy=value.explicit_reminder_quiet_policy,
         notification_preview=value.notification_preview,
+        paused_until=value.paused_until,
+        pause_indefinite=value.pause_indefinite,
     )
 
 
@@ -67,6 +70,24 @@ def update_preferences(request: ProactivePreferencesRequest, current_user: Curre
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _preferences_response(result)
+
+
+@router.post("/pause", response_model=ProactivePreferencesResponse)
+def pause_spontaneous(request: ProactivePauseRequest, current_user: CurrentUserDependency):
+    until = None
+    if not request.indefinite:
+        until = datetime.now(UTC) + timedelta(days=request.days or 2)
+    value = repository.pause_spontaneous(
+        current_user.user_id,
+        until=until,
+        indefinite=request.indefinite,
+    )
+    return _preferences_response(value)
+
+
+@router.post("/resume", response_model=ProactivePreferencesResponse)
+def resume_spontaneous(current_user: CurrentUserDependency):
+    return _preferences_response(repository.resume_spontaneous(current_user.user_id))
 
 
 @router.get("/schedules", response_model=ChatScheduleListResponse)

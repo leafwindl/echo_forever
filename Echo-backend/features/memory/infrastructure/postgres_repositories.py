@@ -474,6 +474,28 @@ def list_runnable_jobs(job_type: Optional[str] = None, limit: int = 20) -> List[
     return [_row_to_job(row) for row in rows]
 
 
+def cancel_user_extraction_jobs(user_id: str, conn=None) -> int:
+    if conn is None:
+        with transaction() as tx:
+            return cancel_user_extraction_jobs(user_id, conn=tx)
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE background_jobs
+            SET status = 'cancelled',
+                error = 'user_companionship_reset',
+                finished_at = NOW(),
+                updated_at = NOW()
+            WHERE job_type = 'memory_extraction'
+              AND payload->>'user_id' = %s
+              AND status IN ('pending', 'retry', 'running')
+            """,
+            (user_id,),
+        )
+        return cursor.rowcount
+
+
 def reset_running_jobs(job_type: Optional[str] = None, conn=None) -> int:
     if conn is None:
         with transaction() as tx:

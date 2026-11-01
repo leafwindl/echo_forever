@@ -11,6 +11,9 @@ from features.agent.infrastructure.model import ProviderAgentConversationModel
 from features.agent.infrastructure.postgres_repository import PostgresAgentRunRepository
 from features.agent.infrastructure.proactive_planner import ProviderProactiveDecisionPlanner
 from features.agent.infrastructure.tools import (
+    register_beat_tools,
+    register_proactive_tools,
+    register_relationship_tools,
     register_schedule_tools,
     register_sticker_tools,
     register_time_tool,
@@ -22,6 +25,9 @@ from features.agent.infrastructure.tools import (
 def get_chat_agent() -> OrchestrateChatWithAgent:
     registry = ToolRegistry()
     register_sticker_tools(registry)
+    register_beat_tools(registry)
+    register_relationship_tools(registry)
+    register_proactive_tools(registry)
     register_schedule_tools(registry)
     register_time_tool(registry, SystemClock(), settings.default_user_timezone)
     register_web_search_tool(registry, TavilyWebSearchProvider())

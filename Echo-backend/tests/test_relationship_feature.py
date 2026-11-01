@@ -20,6 +20,7 @@ from features.relationship.domain.rules import (
     calculate_relationship_score,
     detect_relationship_signals,
     infer_interaction_warmth,
+    resolve_proposable_direction,
     resolve_relationship_stage,
 )
 
@@ -53,6 +54,9 @@ class InMemoryRelationshipRepository:
         assert user_id == self.state.user_id
         self.state = replace(self.state, relationship_mode=relationship_mode)
         return self.state
+
+    def list_direction_boundaries(self, user_id):
+        return ()
 
 
 class RelationshipRuleTests(unittest.TestCase):
@@ -130,6 +134,51 @@ class RelationshipRuleTests(unittest.TestCase):
     def test_negated_happiness_does_not_trigger_warm_turn(self):
         self.assertEqual("normal", infer_interaction_warmth("和你聊天不开心"))
         self.assertEqual("warm", infer_interaction_warmth("开始不开心，后来终于搞定了"))
+
+    def test_proposable_direction_requires_stage_and_evidence(self):
+        familiar = RelationshipState(
+            user_id="user-a",
+            stage="familiar",
+            relationship_type="acquaintance",
+            positive_signal_count=1,
+            explicit_relation_signal_count=0,
+        )
+        self.assertEqual("friend", resolve_proposable_direction(familiar))
+        self.assertEqual("", resolve_proposable_direction(familiar, recent_support=False))
+        self.assertEqual(
+            "",
+            resolve_proposable_direction(
+                familiar, blocked_directions=frozenset({"friend"})
+            ),
+        )
+
+        ambiguous = RelationshipState(
+            user_id="user-a",
+            stage="trusted",
+            relationship_type="friend",
+            positive_signal_count=1,
+            explicit_relation_signal_count=0,
+        )
+        self.assertEqual("ambiguous", resolve_proposable_direction(ambiguous))
+
+        partner_without_consent = RelationshipState(
+            user_id="user-a",
+            stage="trusted",
+            relationship_type="ambiguous",
+            positive_signal_count=1,
+            explicit_relation_signal_count=0,
+        )
+        self.assertEqual("", resolve_proposable_direction(partner_without_consent))
+
+    def test_restrained_permission_blocks_proposal(self):
+        state = RelationshipState(
+            user_id="user-a",
+            stage="familiar",
+            relationship_type="acquaintance",
+            positive_signal_count=1,
+            affection_permission="restrained",
+        )
+        self.assertEqual("", resolve_proposable_direction(state))
 
     def test_advance_records_active_day_and_explicit_permission(self):
         progress = advance_relationship_state(

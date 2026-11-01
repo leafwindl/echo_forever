@@ -48,3 +48,14 @@ class PersonaManagementService:
             ),
         )
         return self.repository.save(preferences)
+
+    def reset_companionship_preferences(self, user_id: str) -> UserPreferences:
+        """Clear boundaries and style preferences, keeping the user's name."""
+        existing = self.repository.get(user_id.strip())
+        preferences = build_user_preferences(
+            user_id,
+            PersonaUpdate(preferred_name=existing.preferred_name if existing else None),
+            is_customized=False,
+            onboarding_completed=bool(existing and existing.onboarding_completed),
+        )
+        return self.repository.save(preferences)

@@ -8,8 +8,11 @@ from db.postgres_connection import get_connection, transaction
 
 from features.relationship.domain.entities import (
     RELATIONSHIP_SCHEMA_VERSION,
+    RelationshipDirectionBoundary,
+    RelationshipProposal,
     RelationshipSignal,
     RelationshipState,
+    RelationshipValidationError,
     default_relationship_state,
 )
 from features.relationship.domain.rules import calculate_relationship_score
@@ -28,6 +31,9 @@ def _state_from_row(row: dict[str, Any]) -> RelationshipState:
         user_id=str(row["user_id"]),
         stage=str(row["stage"]),
         relationship_mode=str(row.get("relationship_mode") or "friend"),
+        relationship_type=str(row.get("relationship_type") or "acquaintance"),
+        relationship_type_updated_at=_timestamp_text(row.get("relationship_type_updated_at")),
+        reset_epoch=int(row.get("reset_epoch") or 0),
         score=int(row["score"]),
         interaction_turns=int(row["interaction_turns"]),
         active_days=int(row["active_days"]),
@@ -47,12 +53,54 @@ def _state_from_row(row: dict[str, Any]) -> RelationshipState:
 
 
 _STATE_COLUMNS = """
-    user_id, stage, relationship_mode, score, interaction_turns, active_days,
+    user_id, stage, relationship_mode, relationship_type,
+    relationship_type_updated_at, reset_epoch, score, interaction_turns, active_days,
     shared_memory_count, positive_signal_count, explicit_relation_signal_count,
     boundary_signal_count, affection_permission, last_interaction_date,
     last_interaction_at, last_boundary_at, stage_updated_at,
     created_at, updated_at, schema_version
 """
+
+_PROPOSAL_COLUMNS = """
+    proposal_id, user_id, direction, status, conversation_id, agent_turn_id,
+    source_message_id, evidence, created_at, resolved_at, expires_at
+"""
+
+_BOUNDARY_COLUMNS = """
+    user_id, direction, status, reason, source_message_id, revisit_after, updated_at
+"""
+
+
+def _proposal_from_row(row: dict[str, Any]) -> RelationshipProposal:
+    return RelationshipProposal(
+        proposal_id=str(row["proposal_id"]),
+        user_id=str(row["user_id"]),
+        direction=str(row["direction"]),
+        status=str(row["status"]),
+        conversation_id=str(row["conversation_id"]) if row.get("conversation_id") else None,
+        agent_turn_id=str(row["agent_turn_id"]) if row.get("agent_turn_id") else None,
+        source_message_id=int(row["source_message_id"])
+        if row.get("source_message_id") is not None
+        else None,
+        evidence=str(row.get("evidence") or ""),
+        created_at=_timestamp_text(row.get("created_at")),
+        resolved_at=_timestamp_text(row.get("resolved_at")),
+        expires_at=_timestamp_text(row.get("expires_at")),
+    )
+
+
+def _boundary_from_row(row: dict[str, Any]) -> RelationshipDirectionBoundary:
+    return RelationshipDirectionBoundary(
+        user_id=str(row["user_id"]),
+        direction=str(row["direction"]),
+        status=str(row["status"]),
+        reason=str(row.get("reason") or ""),
+        source_message_id=int(row["source_message_id"])
+        if row.get("source_message_id") is not None
+        else None,
+        revisit_after=_timestamp_text(row.get("revisit_after")),
+        updated_at=_timestamp_text(row.get("updated_at")),
+    )
 
 
 class PostgresRelationshipRepository:
@@ -121,15 +169,16 @@ class PostgresRelationshipRepository:
             cursor.execute(
                 f"""
                 INSERT INTO relationship_states (
-                    user_id, stage, relationship_mode, score, interaction_turns, active_days,
+                    user_id, stage, relationship_mode, relationship_type,
+                    relationship_type_updated_at, reset_epoch, score, interaction_turns, active_days,
                     shared_memory_count, positive_signal_count, explicit_relation_signal_count,
                     boundary_signal_count, affection_permission, last_interaction_date,
                     last_interaction_at, last_boundary_at, stage_updated_at,
                     created_at, updated_at, schema_version
                 )
                 VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, COALESCE(%s, NOW()), COALESCE(%s, NOW()), %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), COALESCE(%s, NOW()), %s
                 )
                 ON CONFLICT (user_id) DO UPDATE SET
                     stage = EXCLUDED.stage,
@@ -153,6 +202,9 @@ class PostgresRelationshipRepository:
                     state.user_id,
                     state.stage,
                     state.relationship_mode,
+                    state.relationship_type,
+                    state.relationship_type_updated_at,
+                    state.reset_epoch,
                     state.score,
                     state.interaction_turns,
                     state.active_days,
@@ -212,13 +264,252 @@ class PostgresRelationshipRepository:
             raise RuntimeError("Relationship mode update returned no row")
         return _state_from_row(row)
 
+    def update_relationship_type(
+        self, user_id: str, relationship_type: str
+    ) -> RelationshipState:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                UPDATE relationship_states
+                SET relationship_type = %s,
+                    relationship_type_updated_at = NOW(),
+                    updated_at = NOW()
+                WHERE user_id = %s
+                RETURNING {_STATE_COLUMNS}
+                """,
+                (relationship_type, user_id),
+            )
+            row = cursor.fetchone()
+        if not row:
+            raise RuntimeError("Relationship type update returned no row")
+        return _state_from_row(row)
+
+    def create_proposal(
+        self,
+        *,
+        user_id: str,
+        direction: str,
+        conversation_id: str | None,
+        agent_turn_id: str | None,
+        evidence: str,
+        expires_at: str,
+    ) -> RelationshipProposal:
+        proposal_id = f"rel_prop_{uuid.uuid4().hex}"
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                INSERT INTO relationship_proposals (
+                    proposal_id, user_id, direction, status, conversation_id,
+                    agent_turn_id, evidence, expires_at
+                )
+                VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s::timestamptz)
+                ON CONFLICT (user_id, direction) WHERE status = 'pending' DO NOTHING
+                RETURNING {_PROPOSAL_COLUMNS}
+                """,
+                (
+                    proposal_id,
+                    user_id,
+                    direction,
+                    conversation_id,
+                    agent_turn_id,
+                    evidence,
+                    expires_at,
+                ),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                cursor.execute(
+                    f"""
+                    SELECT {_PROPOSAL_COLUMNS}
+                    FROM relationship_proposals
+                    WHERE user_id = %s AND direction = %s AND status = 'pending'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (user_id, direction),
+                )
+                row = cursor.fetchone()
+        if row is None:
+            raise RuntimeError("Relationship proposal insert returned no row")
+        return _proposal_from_row(row)
+
+    def get_pending_proposal(self, user_id: str) -> RelationshipProposal | None:
+        with get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT {_PROPOSAL_COLUMNS}
+                FROM relationship_proposals
+                WHERE user_id = %s
+                  AND status = 'pending'
+                  AND expires_at > NOW()
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+        return _proposal_from_row(row) if row else None
+
+    def get_proposal(self, user_id: str, proposal_id: str) -> RelationshipProposal | None:
+        with get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT {_PROPOSAL_COLUMNS}
+                FROM relationship_proposals
+                WHERE user_id = %s AND proposal_id = %s
+                """,
+                (user_id, proposal_id),
+            )
+            row = cursor.fetchone()
+        return _proposal_from_row(row) if row else None
+
+    def accept_proposal(
+        self,
+        *,
+        user_id: str,
+        proposal_id: str,
+        relationship_type: str,
+        resolved_at: str,
+    ) -> RelationshipState:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT direction
+                FROM relationship_proposals
+                WHERE user_id = %s
+                  AND proposal_id = %s
+                  AND status = 'pending'
+                  AND expires_at > NOW()
+                FOR UPDATE
+                """,
+                (user_id, proposal_id),
+            )
+            proposal = cursor.fetchone()
+            if proposal is None:
+                raise RelationshipValidationError("Proposal is not pending")
+            cursor.execute(
+                """
+                UPDATE relationship_proposals
+                SET status = 'accepted', resolved_at = %s::timestamptz
+                WHERE user_id = %s AND proposal_id = %s
+                """,
+                (resolved_at, user_id, proposal_id),
+            )
+            cursor.execute(
+                f"""
+                UPDATE relationship_states
+                SET relationship_type = %s,
+                    relationship_type_updated_at = %s::timestamptz,
+                    updated_at = %s::timestamptz
+                WHERE user_id = %s
+                RETURNING {_STATE_COLUMNS}
+                """,
+                (relationship_type, resolved_at, resolved_at, user_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise RuntimeError("Relationship type update returned no row")
+        return _state_from_row(row)
+
+    def resolve_proposal(
+        self,
+        *,
+        user_id: str,
+        proposal_id: str,
+        status: str,
+        resolved_at: str,
+    ) -> RelationshipProposal:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                UPDATE relationship_proposals
+                SET status = %s, resolved_at = %s::timestamptz
+                WHERE user_id = %s AND proposal_id = %s AND status = 'pending'
+                RETURNING {_PROPOSAL_COLUMNS}
+                """,
+                (status, resolved_at, user_id, proposal_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise RelationshipValidationError("Proposal is not pending")
+        return _proposal_from_row(row)
+
+    def list_direction_boundaries(
+        self, user_id: str
+    ) -> tuple[RelationshipDirectionBoundary, ...]:
+        with get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT {_BOUNDARY_COLUMNS}
+                FROM relationship_direction_boundaries
+                WHERE user_id = %s
+                ORDER BY direction
+                """,
+                (user_id,),
+            )
+            rows = cursor.fetchall()
+        return tuple(_boundary_from_row(row) for row in rows)
+
+    def upsert_direction_boundary(
+        self,
+        *,
+        user_id: str,
+        direction: str,
+        status: str,
+        reason: str,
+        source_message_id: int | None,
+        revisit_after: str | None,
+    ) -> RelationshipDirectionBoundary:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                INSERT INTO relationship_direction_boundaries (
+                    user_id, direction, status, reason, source_message_id, revisit_after
+                )
+                VALUES (%s, %s, %s, %s, %s, %s::timestamptz)
+                ON CONFLICT (user_id, direction) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    reason = EXCLUDED.reason,
+                    source_message_id = EXCLUDED.source_message_id,
+                    revisit_after = EXCLUDED.revisit_after,
+                    updated_at = NOW()
+                RETURNING {_BOUNDARY_COLUMNS}
+                """,
+                (user_id, direction, status, reason, source_message_id, revisit_after),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise RuntimeError("Relationship boundary upsert returned no row")
+        return _boundary_from_row(row)
+
+    def cancel_pending_proposals(self, user_id: str) -> int:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE relationship_proposals
+                SET status = 'cancelled', resolved_at = NOW()
+                WHERE user_id = %s AND status = 'pending'
+                """,
+                (user_id,),
+            )
+            return max(cursor.rowcount, 0)
+
     def reset(self, user_id: str) -> RelationshipState:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute("DELETE FROM relationship_events WHERE user_id = %s", (user_id,))
             cursor.execute(
+                "DELETE FROM relationship_proposals WHERE user_id = %s", (user_id,)
+            )
+            cursor.execute(
+                "DELETE FROM relationship_direction_boundaries WHERE user_id = %s",
+                (user_id,),
+            )
+            cursor.execute(
                 f"""
                 UPDATE relationship_states SET
-                    stage = 'new', score = 0, interaction_turns = 0, active_days = 0,
+                    stage = 'new', relationship_type = 'acquaintance',
+                    relationship_type_updated_at = NULL, reset_epoch = reset_epoch + 1,
+                    score = 0, interaction_turns = 0, active_days = 0,
                     shared_memory_count = 0, positive_signal_count = 0,
                     explicit_relation_signal_count = 0, boundary_signal_count = 0,
                     affection_permission = 'unknown', last_interaction_date = NULL,

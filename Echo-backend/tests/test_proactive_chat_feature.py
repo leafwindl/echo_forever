@@ -21,6 +21,8 @@ class FakeScheduleRepository:
         self.preference = SimpleNamespace(
             enabled=enabled,
             allow_echo_scheduling=allow_echo_scheduling,
+            pause_indefinite=False,
+            paused_until=None,
         )
         self.created = []
 
@@ -163,6 +165,8 @@ class _DueSpontaneousJobRepository:
             allow_spontaneous_chat=True,
             allow_echo_scheduling=True,
             consecutive_unanswered=0,
+            pause_indefinite=False,
+            paused_until=None,
         )
         self.suppressed = []
         self.context_changes = list(context_changes)
