@@ -25,7 +25,7 @@ _APPROVAL_MESSAGES = {
 }
 
 
-async def _default_approval(title: str, message: str, *, warning: bool = False) -> bool:
+async def default_approval(title: str, message: str, *, warning: bool = False) -> bool:
     return await asyncio.to_thread(
         ask_windows_approval,
         title,
@@ -65,7 +65,7 @@ def _execute_action(command: Command) -> dict[str, Any]:
 async def execute_command(
     command: Command,
     *,
-    approval: Approval = _default_approval,
+    approval: Approval = default_approval,
 ) -> dict[str, Any]:
     text = _approval_text(command)
     warning = command.action in {"camera_capture", "screen_capture"}

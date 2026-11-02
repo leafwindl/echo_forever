@@ -23,6 +23,7 @@ class DesktopConfig:
     node_id: str
     node_name: str
     token: str
+    auto_approve: bool = True
 
     @property
     def websocket_url(self) -> str:
@@ -44,6 +45,7 @@ def load_config() -> DesktopConfig | None:
         node_id=str(payload["node_id"]),
         node_name=str(payload["node_name"]),
         token=str(payload["token"]),
+        auto_approve=bool(payload.get("auto_approve", True)),
     )
 
 

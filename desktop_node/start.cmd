@@ -9,5 +9,5 @@ if not exist "%PYTHON%" (
   exit /b 1
 )
 set "PYTHONPATH=%ROOT%"
-"%PYTHON%" -B -m echo_desktop run
+"%PYTHON%" -B -m echo_desktop client
 pause

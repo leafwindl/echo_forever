@@ -21,7 +21,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pair.add_argument("--name", default=platform.node() or "我的电脑")
     pair.add_argument("--server", default="https://api.echoaiforever.cn")
 
-    subparsers.add_parser("run", help="连接 Echo 并等待电脑操作")
+    subparsers.add_parser("client", help="打开桌面客户端窗口")
+    subparsers.add_parser("run", help="连接 Echo 并等待电脑操作（无界面）")
     subparsers.add_parser("status", help="查看本机配对状态")
     subparsers.add_parser("logout", help="删除本机保存的节点 token")
     return parser
@@ -41,6 +42,11 @@ def main() -> None:
         print(f"配对成功：{config.node_name} ({config.node_id})")
         print(f"配置已保存到：{config_path()}")
         print("现在运行：python -m echo_desktop run")
+        return
+    if args.command == "client":
+        from echo_desktop.gui import main as gui_main
+
+        gui_main()
         return
     if args.command == "run":
         config = load_config()
