@@ -85,6 +85,9 @@ class FakeQuiet:
     def is_quiet(self, user_id, now):
         return self.quiet
 
+    def can_send_spontaneous(self, user_id, now):
+        return not self.quiet
+
 
 class FakeComposer:
     def __init__(self, text="给你留了句话"):

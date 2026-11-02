@@ -236,6 +236,8 @@ class PresenceService:
         )
         if used >= self.proactive_message_budget:
             return ""
+        if not self.quiet_hours.can_send_spontaneous(state.user_id, now):
+            return ""
         if (
             state.last_proactive_message_at is not None
             and now - state.last_proactive_message_at < self.proactive_message_interval

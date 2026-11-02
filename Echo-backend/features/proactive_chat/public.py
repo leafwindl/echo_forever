@@ -36,6 +36,7 @@ def get_proactive_worker() -> ProcessProactiveChatJobs:
             event_broker=get_chat_event_broker(),
             timing_policy=get_delivery_timing_policy(),
             lease_seconds=settings.proactive_chat_job_lease_seconds,
+            allow_spontaneous_jobs=not settings.presence_enabled,
         )
     return _worker
 

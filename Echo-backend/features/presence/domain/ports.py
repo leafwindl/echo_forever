@@ -56,6 +56,8 @@ class PresenceThoughtGenerator(Protocol):
 class PresenceQuietHours(Protocol):
     def is_quiet(self, user_id: str, now: datetime) -> bool: ...
 
+    def can_send_spontaneous(self, user_id: str, now: datetime) -> bool: ...
+
 
 class PresenceMessageComposer(Protocol):
     async def compose(

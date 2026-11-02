@@ -85,3 +85,13 @@ class ProactiveQuietHours:
         if start == end:
             return False
         return start <= local < end if start < end else local >= start or local < end
+
+    def can_send_spontaneous(self, user_id: str, now: datetime) -> bool:
+        from features.proactive_chat.public import get_proactive_preferences
+
+        preference = get_proactive_preferences(user_id)
+        if not preference.enabled or not preference.allow_spontaneous_chat:
+            return False
+        if preference.pause_indefinite:
+            return False
+        return preference.paused_until is None or preference.paused_until <= now

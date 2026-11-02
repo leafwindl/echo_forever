@@ -30,6 +30,7 @@ class ProcessProactiveChatJobs:
         event_broker: ChatEventBroker,
         timing_policy: DeliveryTimingPolicy,
         lease_seconds: int,
+        allow_spontaneous_jobs: bool = True,
     ):
         self.repository = repository
         self.reply_generator = reply_generator
@@ -37,11 +38,17 @@ class ProcessProactiveChatJobs:
         self.event_broker = event_broker
         self.timing_policy = timing_policy
         self.lease_seconds = lease_seconds
+        self.allow_spontaneous_jobs = allow_spontaneous_jobs
 
     async def run_once(self) -> bool:
         job = self.repository.claim_due_job(self.lease_seconds)
         if job is None:
+            if not self.allow_spontaneous_jobs:
+                return False
             return self.repository.create_spontaneous_job_if_due()
+        if job.schedule_id is None and not self.allow_spontaneous_jobs:
+            self.repository.suppress_job(job.job_id, "presence_owns_spontaneous")
+            return True
         if not self.request_guard.try_acquire(job.user_id):
             self.repository.defer_job_to(
                 job.job_id,
