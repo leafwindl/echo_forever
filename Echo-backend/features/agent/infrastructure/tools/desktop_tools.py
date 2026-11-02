@@ -44,6 +44,35 @@ class DesktopScreenArguments(BaseModel):
     )
 
 
+class DesktopMusicSearchArguments(BaseModel):
+    query: str = Field(
+        min_length=1,
+        max_length=160,
+        description="要搜索并播放的歌曲或歌手。",
+    )
+
+
+class DesktopNotepadWriteArguments(BaseModel):
+    text: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="要写进新记事本窗口的文字。",
+    )
+
+
+class DesktopDshTaskArguments(BaseModel):
+    instruction: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="交给 DSH 的独立任务描述。",
+    )
+    workspace: str = Field(
+        default="",
+        max_length=300,
+        description="可选工作目录；留空使用用户主目录。",
+    )
+
+
 class DesktopStatusArguments(BaseModel):
     pass
 
@@ -231,6 +260,64 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
             },
         )
 
+    async def music_search_handler(context: ToolExecutionContext, arguments: BaseModel):
+        parsed = DesktopMusicSearchArguments.model_validate(arguments)
+        return await _run_desktop_action(
+            context=context,
+            tool_name="desktop_music_search_play",
+            action="music_search_play",
+            arguments=parsed.model_dump(),
+            timeout_seconds=65,
+        )
+
+    async def notepad_write_handler(context: ToolExecutionContext, arguments: BaseModel):
+        parsed = DesktopNotepadWriteArguments.model_validate(arguments)
+        try:
+            result = await execute_desktop_action(
+                user_id=context.user_id,
+                action="notepad_write",
+                arguments=parsed.model_dump(),
+                timeout_seconds=45,
+            )
+        except DesktopError as exc:
+            return _failed("desktop_notepad_write", exc.code, exc.message)
+        return _completed(
+            "desktop_notepad_write",
+            safe_for_model=(
+                f"已在记事本写入 {result.data.get('char_count', 0)} 个字，"
+                "默认没有保存文件。"
+            ),
+            data={"node_id": result.node_id, "char_count": result.data.get("char_count")},
+        )
+
+    async def dsh_handler(context: ToolExecutionContext, arguments: BaseModel):
+        parsed = DesktopDshTaskArguments.model_validate(arguments)
+        try:
+            result = await execute_desktop_action(
+                user_id=context.user_id,
+                action="dsh_task",
+                arguments=parsed.model_dump(),
+                timeout_seconds=320,
+            )
+        except DesktopError as exc:
+            return _failed("desktop_dsh_task", exc.code, exc.message)
+        output = str(result.data.get("result") or "").strip()
+        if not output:
+            return _failed(
+                "desktop_dsh_task",
+                "dsh_empty_result",
+                "DSH 结束了，但没有返回可用结果。",
+            )
+        return _completed(
+            "desktop_dsh_task",
+            safe_for_model=f"DSH 最终结果：\n{output[:6000]}",
+            data={
+                "node_id": result.node_id,
+                "workspace": result.data.get("workspace"),
+                "exit_code": result.data.get("exit_code"),
+            },
+        )
+
     async def status_handler(context: ToolExecutionContext, arguments: BaseModel):
         DesktopStatusArguments.model_validate(arguments)
         nodes = list_desktop_nodes(context.user_id)
@@ -317,6 +404,49 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         handler=look_handler,
         risk=ToolRisk.READ,
         timeout_seconds=70,
+        max_calls=1,
+    )
+    _register(
+        registry,
+        name="desktop_music_search_play",
+        description=(
+            "在用户电脑的网易云音乐里搜索并播放指定歌曲或歌手。"
+            "仅当用户明确要求放某首歌，或主动动作已经决定放歌时使用。"
+            "电脑端会请求本地批准（总是允许时直接执行）。"
+        ),
+        arguments_model=DesktopMusicSearchArguments,
+        handler=music_search_handler,
+        risk=ToolRisk.CREATE_INTERNAL,
+        timeout_seconds=75,
+        max_calls=1,
+    )
+    _register(
+        registry,
+        name="desktop_notepad_write",
+        description=(
+            "在用户电脑上打开一个新的记事本窗口并写入指定文字。"
+            "仅当用户明确要求写字，或主动动作已经决定写一张便签时使用；"
+            "默认不保存文件、不覆盖已有文档。"
+        ),
+        arguments_model=DesktopNotepadWriteArguments,
+        handler=notepad_write_handler,
+        risk=ToolRisk.CREATE_INTERNAL,
+        timeout_seconds=55,
+        max_calls=1,
+    )
+    _register(
+        registry,
+        name="desktop_dsh_task",
+        description=(
+            "让用户电脑上的 DSH 执行一个独立任务，并返回最终结果。"
+            "DSH 拥有电脑的完整权限，可能修改文件或运行命令；"
+            "只有用户明确要求使用 DSH 时才调用，不要把普通聊天或简单操作交给 DSH。"
+            "任务可能持续几分钟，适合代码检查、修复、运行测试等。"
+        ),
+        arguments_model=DesktopDshTaskArguments,
+        handler=dsh_handler,
+        risk=ToolRisk.DESTRUCTIVE,
+        timeout_seconds=340,
         max_calls=1,
     )
     _register(

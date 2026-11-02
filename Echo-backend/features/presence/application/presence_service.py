@@ -12,8 +12,10 @@ from features.presence.domain.entities import (
     PresenceTickResult,
 )
 from features.presence.domain.ports import (
+    PresenceActionExecutor,
     PresenceContextSource,
     PresenceMemorySource,
+    PresenceMemoryWriter,
     PresenceMessageComposer,
     PresenceMessageDelivery,
     PresenceQuietHours,
@@ -49,6 +51,8 @@ class PresenceService:
         thought_generator: PresenceThoughtGenerator,
         message_composer: PresenceMessageComposer,
         message_delivery: PresenceMessageDelivery,
+        memory_writer: PresenceMemoryWriter,
+        action_executor: PresenceActionExecutor,
         quiet_hours: PresenceQuietHours,
         active_window_minutes: int,
         silence_minutes: int,
@@ -56,6 +60,9 @@ class PresenceService:
         daily_thought_budget: int,
         proactive_message_budget: int,
         proactive_message_interval_minutes: int,
+        proactive_action_budget: int,
+        proactive_action_interval_minutes: int,
+        memory_salience_threshold: float,
         context_messages: int,
         max_candidate_users: int,
     ):
@@ -65,6 +72,8 @@ class PresenceService:
         self.thought_generator = thought_generator
         self.message_composer = message_composer
         self.message_delivery = message_delivery
+        self.memory_writer = memory_writer
+        self.action_executor = action_executor
         self.quiet_hours = quiet_hours
         self.active_window = timedelta(minutes=active_window_minutes)
         self.silence_window = timedelta(minutes=silence_minutes)
@@ -74,6 +83,11 @@ class PresenceService:
         self.proactive_message_interval = timedelta(
             minutes=proactive_message_interval_minutes
         )
+        self.proactive_action_budget = proactive_action_budget
+        self.proactive_action_interval = timedelta(
+            minutes=proactive_action_interval_minutes
+        )
+        self.memory_salience_threshold = memory_salience_threshold
         self.context_messages = context_messages
         self.max_candidate_users = max_candidate_users
 
@@ -97,6 +111,8 @@ class PresenceService:
             status = PresenceStatus.SLEEPING
 
         state = self._with_activity(state, status, last_user_at, current)
+        state = self._account_previous_outreach(state, context, current)
+        self.repository.save_state(state)
         if not state.enabled:
             return self._finish(state, "skipped", "presence_disabled", current)
 
@@ -162,7 +178,7 @@ class PresenceService:
             text=cleaned,
             salience=max(0.0, min(float(draft.salience), 1.0)),
             shareable=bool(draft.shareable),
-            action_intent=_compact(draft.action_intent, 160),
+            action_intent=_compact(draft.action_intent, 2000),
             source_memory_id=memory.memory_id if memory else "",
             source_memory_text=_compact(memory.content, 500) if memory else "",
             created_at=current,
@@ -185,6 +201,58 @@ class PresenceService:
             detail={"thought_id": thought.thought_id, "salience": thought.salience},
             now=current,
         )
+        if thought.salience >= self.memory_salience_threshold:
+            try:
+                memory_id = await self.memory_writer.remember(
+                    user_id=user_id,
+                    text=thought.text,
+                    salience=thought.salience,
+                )
+                if memory_id:
+                    self.repository.record_event(
+                        user_id=user_id,
+                        event_type="thought_memory_written",
+                        detail={"thought_id": thought.thought_id, "memory_id": memory_id},
+                        now=current,
+                    )
+            except Exception:
+                logger.warning(
+                    "Presence thought memory write failed user_id=%s",
+                    user_id,
+                    exc_info=True,
+                )
+        action_result = await self._maybe_execute_action(
+            state=state,
+            thought=thought,
+            now=current,
+        )
+        if action_result:
+            state = PresenceState(
+                **{
+                    **state.__dict__,
+                    "proactive_actions_used": (
+                        0
+                        if state.proactive_action_budget_date != current.date()
+                        else state.proactive_actions_used
+                    )
+                    + 1,
+                    "proactive_action_budget_date": current.date(),
+                    "last_proactive_action_at": current,
+                    "last_decision": "action",
+                    "last_decision_reason": f"action:{thought.action_intent.split(':', 1)[0]}",
+                    "last_tick_at": current,
+                }
+            )
+            self.repository.save_state(state)
+            return PresenceTickResult(
+                user_id=user_id,
+                status=state.status,
+                decision="action",
+                reason=state.last_decision_reason,
+                thought=thought,
+                action_result=action_result,
+                thoughts_used=state.thoughts_used,
+            )
         message_text = ""
         if thought.shareable:
             message_text = await self._maybe_deliver_message(
@@ -205,6 +273,8 @@ class PresenceService:
                         )
                         + 1,
                         "proactive_budget_date": current.date(),
+                        "outreach_sent_count": state.outreach_sent_count + 1,
+                        "outreach_last_counted_at": None,
                         "last_decision": "message",
                         "last_decision_reason": "proactive_message",
                         "last_tick_at": current,
@@ -221,6 +291,63 @@ class PresenceService:
             thoughts_used=state.thoughts_used,
         )
 
+    async def _maybe_execute_action(
+        self,
+        *,
+        state: PresenceState,
+        thought: PresenceThought,
+        now: datetime,
+    ) -> str:
+        intent = thought.action_intent.strip()
+        kind = intent.split(":", 1)[0].lower() if ":" in intent else ""
+        if kind not in {"music", "notepad", "dsh"}:
+            return ""
+        used = (
+            state.proactive_actions_used
+            if state.proactive_action_budget_date == now.date()
+            else 0
+        )
+        if used >= self.proactive_action_budget:
+            return ""
+        if (
+            state.last_proactive_action_at is not None
+            and now - state.last_proactive_action_at < self.proactive_action_interval
+        ):
+            return ""
+        if self.quiet_hours.is_quiet(state.user_id, now):
+            return ""
+        if not self.quiet_hours.can_send_spontaneous(state.user_id, now):
+            return ""
+        try:
+            result = await self.action_executor.execute(
+                user_id=state.user_id,
+                action_intent=intent,
+                thought_id=thought.thought_id,
+            )
+        except Exception:
+            logger.warning(
+                "Presence action failed user_id=%s kind=%s",
+                state.user_id,
+                kind,
+                exc_info=True,
+            )
+            self.repository.record_event(
+                user_id=state.user_id,
+                event_type="action_failed",
+                detail={"thought_id": thought.thought_id, "kind": kind},
+                now=now,
+            )
+            return ""
+        if not result:
+            return ""
+        self.repository.record_event(
+            user_id=state.user_id,
+            event_type="action_executed",
+            detail={"thought_id": thought.thought_id, "kind": kind},
+            now=now,
+        )
+        return result
+
     async def _maybe_deliver_message(
         self,
         *,
@@ -234,13 +361,19 @@ class PresenceService:
             if state.proactive_budget_date == now.date()
             else 0
         )
-        if used >= self.proactive_message_budget:
+        downshifted = (
+            state.outreach_downshift_until is not None
+            and now < state.outreach_downshift_until
+        )
+        budget = 1 if downshifted else self.proactive_message_budget
+        interval = timedelta(hours=4) if downshifted else self.proactive_message_interval
+        if used >= budget:
             return ""
         if not self.quiet_hours.can_send_spontaneous(state.user_id, now):
             return ""
         if (
             state.last_proactive_message_at is not None
-            and now - state.last_proactive_message_at < self.proactive_message_interval
+            and now - state.last_proactive_message_at < interval
         ):
             return ""
         if (
@@ -307,6 +440,42 @@ class PresenceService:
             if result.status == PresenceStatus.ACTIVE:
                 continue
         return processed
+
+    def _account_previous_outreach(
+        self,
+        state: PresenceState,
+        context,
+        now: datetime,
+    ) -> PresenceState:
+        sent_at = state.last_proactive_message_at
+        if sent_at is None or state.outreach_last_counted_at == sent_at:
+            return state
+        if (
+            context.last_user_message_at is not None
+            and context.last_user_message_at > sent_at
+        ):
+            return PresenceState(
+                **{
+                    **state.__dict__,
+                    "outreach_replied_count": state.outreach_replied_count + 1,
+                    "consecutive_unanswered": 0,
+                    "outreach_downshift_until": None,
+                    "outreach_last_counted_at": sent_at,
+                }
+            )
+        if now - sent_at < timedelta(hours=2):
+            return state
+        unanswered = state.consecutive_unanswered + 1
+        return PresenceState(
+            **{
+                **state.__dict__,
+                "consecutive_unanswered": unanswered,
+                "outreach_last_counted_at": sent_at,
+                "outreach_downshift_until": (
+                    now + timedelta(days=7) if unanswered >= 2 else state.outreach_downshift_until
+                ),
+            }
+        )
 
     def _with_activity(self, state, status, last_user_at, now) -> PresenceState:
         return PresenceState(

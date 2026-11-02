@@ -204,6 +204,18 @@ class Settings(BaseSettings):
         ge=30,
         le=720,
     )
+    presence_proactive_action_budget: int = Field(
+        default=1,
+        validation_alias="PRESENCE_PROACTIVE_ACTION_BUDGET",
+        ge=0,
+        le=6,
+    )
+    presence_proactive_action_interval_minutes: int = Field(
+        default=240,
+        validation_alias="PRESENCE_PROACTIVE_ACTION_INTERVAL_MINUTES",
+        ge=30,
+        le=1440,
+    )
     presence_message_max_tokens: int = Field(
         default=180,
         validation_alias="PRESENCE_MESSAGE_MAX_TOKENS",
@@ -215,6 +227,12 @@ class Settings(BaseSettings):
         validation_alias="PRESENCE_MESSAGE_TEMPERATURE",
         ge=0.0,
         le=2.0,
+    )
+    presence_memory_salience_threshold: float = Field(
+        default=0.7,
+        validation_alias="PRESENCE_MEMORY_SALIENCE_THRESHOLD",
+        ge=0.0,
+        le=1.0,
     )
     database_url: str = Field(default="", validation_alias="DATABASE_URL")
     db_pool_size: int = Field(default=5, validation_alias="DB_POOL_SIZE")

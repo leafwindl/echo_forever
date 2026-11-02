@@ -62,6 +62,59 @@ class MemoryPresenceSource:
         )
 
 
+class DesktopPresenceActionExecutor:
+    async def execute(
+        self,
+        *,
+        user_id: str,
+        action_intent: str,
+        thought_id: str,
+    ) -> str:
+        from features.desktop.public import DesktopError, execute_desktop_action
+
+        _ = thought_id
+        kind, _, argument = action_intent.partition(":")
+        kind = kind.strip().lower()
+        argument = argument.strip()
+        if not argument:
+            return ""
+        if kind == "music":
+            action = "music_search_play"
+            arguments = {"query": argument[:160]}
+            timeout = 65
+        elif kind == "notepad":
+            action = "notepad_write"
+            arguments = {"text": argument[:2000]}
+            timeout = 45
+        elif kind == "dsh":
+            action = "dsh_task"
+            arguments = {"instruction": argument[:2000], "workspace": ""}
+            timeout = 300
+        else:
+            return ""
+        try:
+            result = await execute_desktop_action(
+                user_id=user_id,
+                action=action,
+                arguments=arguments,
+                timeout_seconds=timeout,
+            )
+        except DesktopError:
+            return ""
+        return str(result.data.get("result") or result.data.get("preview") or "ok")
+
+
+class MemoryPresenceWriter:
+    async def remember(self, *, user_id: str, text: str, salience: float) -> str | None:
+        from features.memory.public import remember_presence_thought
+
+        return await remember_presence_thought(
+            user_id,
+            content=text,
+            salience=salience,
+        )
+
+
 class ChatPresenceMessageDelivery:
     async def deliver(self, *, user_id: str, thought_id: str, text: str) -> bool:
         from features.chat.public import deliver_external_assistant_message

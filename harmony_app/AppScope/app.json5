@@ -1,8 +1,8 @@
 {
   "app": {
     "bundleName": "cn.echoaiforever.echo_app.dev",
-    "versionCode": 10109,
-    "versionName": "1.1.9",
+    "versionCode": 10110,
+    "versionName": "1.1.10",
     "icon": "$media:echo_launcher_icon",
     "label": "$string:app_name"
   }

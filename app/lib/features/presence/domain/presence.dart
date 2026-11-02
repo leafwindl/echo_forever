@@ -38,6 +38,10 @@ class PresenceSnapshot {
     this.lastThoughtAt,
     this.lastDecision = '',
     this.lastDecisionReason = '',
+    this.outreachSentCount = 0,
+    this.outreachRepliedCount = 0,
+    this.responseRate = 0,
+    this.outreachDownshiftUntil,
     this.thoughts = const <PresenceThought>[],
   });
 
@@ -56,6 +60,12 @@ class PresenceSnapshot {
       ),
       lastDecision: json['last_decision'] as String? ?? '',
       lastDecisionReason: json['last_decision_reason'] as String? ?? '',
+      outreachSentCount: json['outreach_sent_count'] as int? ?? 0,
+      outreachRepliedCount: json['outreach_replied_count'] as int? ?? 0,
+      responseRate: (json['response_rate'] as num?)?.toDouble() ?? 0,
+      outreachDownshiftUntil: DateTime.tryParse(
+        json['outreach_downshift_until'] as String? ?? '',
+      ),
       thoughts: (json['thoughts'] as List? ?? const <Object?>[])
           .whereType<Map<String, dynamic>>()
           .map(PresenceThought.fromJson)
@@ -72,6 +82,10 @@ class PresenceSnapshot {
   final DateTime? lastThoughtAt;
   final String lastDecision;
   final String lastDecisionReason;
+  final int outreachSentCount;
+  final int outreachRepliedCount;
+  final double responseRate;
+  final DateTime? outreachDownshiftUntil;
   final List<PresenceThought> thoughts;
 
   String get statusLabel {

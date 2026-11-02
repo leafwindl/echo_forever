@@ -19,21 +19,50 @@ _MEDIA_KEYS = {
 _TARGET_MARKERS = ("网易云音乐", "CloudMusic")
 
 
+def _cloudmusic_pids() -> set[int]:
+    try:
+        completed = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq cloudmusic.exe", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except OSError:
+        return set()
+    pids: set[int] = set()
+    for line in completed.stdout.splitlines():
+        fields = line.strip().strip('"').split('","')
+        if len(fields) < 2:
+            continue
+        try:
+            pids.add(int(fields[1]))
+        except ValueError:
+            continue
+    return pids
+
+
 def _find_cloudmusic_window() -> int:
     user32 = ctypes.windll.user32
+    pids = _cloudmusic_pids()
     found: list[int] = []
 
     @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     def callback(hwnd, _lparam):
-        if not user32.IsWindowVisible(hwnd):
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pids and int(pid.value) not in pids:
             return True
         length = user32.GetWindowTextLengthW(hwnd)
-        if length <= 0:
-            return True
-        buffer = ctypes.create_unicode_buffer(length + 1)
-        user32.GetWindowTextW(hwnd, buffer, length + 1)
-        title = buffer.value
-        if any(marker in title for marker in _TARGET_MARKERS):
+        if length > 0:
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buffer, length + 1)
+            if any(marker in buffer.value for marker in _TARGET_MARKERS):
+                found.append(int(hwnd))
+                return False
+        class_name = ctypes.create_unicode_buffer(128)
+        user32.GetClassNameW(hwnd, class_name, 128)
+        if pids and class_name.value:
             found.append(int(hwnd))
             return False
         return True

@@ -32,6 +32,15 @@ def get_my_presence(
         daily_thought_budget=settings.presence_daily_thought_budget,
         last_decision=state.last_decision,
         last_decision_reason=state.last_decision_reason,
+        outreach_sent_count=state.outreach_sent_count,
+        outreach_replied_count=state.outreach_replied_count,
+        consecutive_unanswered=state.consecutive_unanswered,
+        outreach_downshift_until=state.outreach_downshift_until,
+        response_rate=(
+            state.outreach_replied_count / state.outreach_sent_count
+            if state.outreach_sent_count
+            else 0.0
+        ),
         thoughts=[
             PresenceThoughtResponse(
                 thought_id=item.thought_id,

@@ -56,7 +56,7 @@ class PresencePage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '她独处时产生的想法。默认只留在这里，不会自动发到聊天。',
+                  '她独处时产生的想法。值得的时候会变成主动消息，偶尔也会变成动作。',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
@@ -186,6 +186,21 @@ class _BudgetCard extends StatelessWidget {
             '心跳每 15 分钟检查一次；只有值得的时候才会留下一个念头。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          const SizedBox(height: 10),
+          Text(
+            snapshot.outreachSentCount == 0
+                ? '主动消息：还没有发出过'
+                : '主动消息回应率：${(snapshot.responseRate * 100).round()}%'
+                      '（${snapshot.outreachRepliedCount}/${snapshot.outreachSentCount}）',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (snapshot.outreachDownshiftUntil != null)
+            Text(
+              '最近回应较少，已自动降频到每天最多 1 条。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.tertiary,
+              ),
+            ),
         ],
       ),
     );

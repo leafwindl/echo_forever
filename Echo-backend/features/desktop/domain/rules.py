@@ -41,6 +41,9 @@ def normalize_capabilities(capabilities: tuple[str, ...] | list[str]) -> tuple[s
         "media_control",
         "screen_capture",
         "camera_capture",
+        "dsh_task",
+        "music_search_play",
+        "notepad_write",
     }
     return tuple(dict.fromkeys(item for item in capabilities if item in allowed))
 
@@ -59,4 +62,23 @@ def validate_action_arguments(action: str, arguments: dict) -> dict:
     if action in {"screen_capture", "camera_capture"}:
         question = str(arguments.get("question") or "").strip()
         return {"question": question[:300]}
+    if action == "dsh_task":
+        instruction = str(arguments.get("instruction") or "").strip()
+        if not instruction:
+            raise ValueError("instruction is required")
+        workspace = str(arguments.get("workspace") or "").strip()
+        return {
+            "instruction": instruction[:2000],
+            "workspace": workspace[:300],
+        }
+    if action == "music_search_play":
+        query = str(arguments.get("query") or "").strip()
+        if not query:
+            raise ValueError("query is required")
+        return {"query": query[:160]}
+    if action == "notepad_write":
+        text = str(arguments.get("text") or "").strip()
+        if not text:
+            raise ValueError("text is required")
+        return {"text": text[:2000]}
     raise ValueError("unsupported desktop action")

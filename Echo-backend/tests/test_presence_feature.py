@@ -106,6 +106,24 @@ class FakeDelivery:
         return True
 
 
+class FakeMemoryWriter:
+    def __init__(self):
+        self.written: list[tuple[str, float]] = []
+
+    async def remember(self, *, user_id, text, salience):
+        self.written.append((text, salience))
+        return "mem_test"
+
+
+class FakeActionExecutor:
+    def __init__(self):
+        self.calls: list[str] = []
+
+    async def execute(self, *, user_id, action_intent, thought_id):
+        self.calls.append(action_intent)
+        return "played" if action_intent.startswith("music:") else "done"
+
+
 def _service(
     repository,
     context,
@@ -122,6 +140,9 @@ def _service(
         "daily_thought_budget": 8,
         "proactive_message_budget": 3,
         "proactive_message_interval_minutes": 120,
+        "proactive_action_budget": 1,
+        "proactive_action_interval_minutes": 240,
+        "memory_salience_threshold": 0.7,
         "context_messages": 8,
         "max_candidate_users": 20,
     }
@@ -133,6 +154,8 @@ def _service(
         thought_generator=generator or FakeGenerator(),
         message_composer=composer or FakeComposer(),
         message_delivery=delivery or FakeDelivery(),
+        memory_writer=FakeMemoryWriter(),
+        action_executor=FakeActionExecutor(),
         quiet_hours=quiet or FakeQuiet(),
         **values,
     )
@@ -205,6 +228,48 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(repository.thoughts), 1)
         self.assertEqual(repository.state.thoughts_used, 1)
         self.assertEqual(repository.state.last_decision, "thought")
+
+    async def test_action_intent_runs_desktop_action_instead_of_message(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository()
+        action_executor = FakeActionExecutor()
+        delivery = FakeDelivery()
+        generator = FakeGenerator(
+            ThoughtDraft(
+                text="外面在放歌，想给他放一首晴天",
+                salience=0.6,
+                shareable=True,
+                action_intent="music:晴天",
+            )
+        )
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=2)),
+            generator=generator,
+            delivery=delivery,
+        )
+        service.action_executor = action_executor
+        result = await service.tick("user-1", now=now)
+        self.assertEqual(result.decision, "action")
+        self.assertEqual(action_executor.calls, ["music:晴天"])
+        self.assertEqual(delivery.delivered, [])
+        self.assertEqual(repository.state.proactive_actions_used, 1)
+
+    async def test_high_salience_thought_is_written_to_memory(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository()
+        writer = FakeMemoryWriter()
+        generator = FakeGenerator(
+            ThoughtDraft(text="他说最近总睡不好，我记着这件事", salience=0.8)
+        )
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=2)),
+            generator=generator,
+        )
+        service.memory_writer = writer
+        await service.tick("user-1", now=now)
+        self.assertEqual(writer.written, [("他说最近总睡不好，我记着这件事", 0.8)])
 
     async def test_shareable_thought_delivers_one_message(self):
         now = datetime.now(UTC)

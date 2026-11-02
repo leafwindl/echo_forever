@@ -9,6 +9,9 @@ DESKTOP_CAPABILITIES: tuple[str, ...] = (
     "media_control",
     "screen_capture",
     "camera_capture",
+    "dsh_task",
+    "music_search_play",
+    "notepad_write",
 )
 
 ALLOWED_APPS: tuple[str, ...] = (

@@ -69,6 +69,20 @@ class PresenceMessageComposer(Protocol):
     ) -> str: ...
 
 
+class PresenceActionExecutor(Protocol):
+    async def execute(
+        self,
+        *,
+        user_id: str,
+        action_intent: str,
+        thought_id: str,
+    ) -> str: ...
+
+
+class PresenceMemoryWriter(Protocol):
+    async def remember(self, *, user_id: str, text: str, salience: float) -> str | None: ...
+
+
 class PresenceMessageDelivery(Protocol):
     async def deliver(
         self,

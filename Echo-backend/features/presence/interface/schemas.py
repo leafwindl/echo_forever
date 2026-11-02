@@ -24,4 +24,9 @@ class PresenceResponse(BaseModel):
     daily_thought_budget: int
     last_decision: str = ""
     last_decision_reason: str = ""
+    outreach_sent_count: int = 0
+    outreach_replied_count: int = 0
+    consecutive_unanswered: int = 0
+    outreach_downshift_until: datetime | None = None
+    response_rate: float = 0.0
     thoughts: list[PresenceThoughtResponse] = Field(default_factory=list)

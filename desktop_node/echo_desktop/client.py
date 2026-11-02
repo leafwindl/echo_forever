@@ -19,7 +19,15 @@ from echo_desktop.executor import default_approval, execute_command
 from echo_desktop.logging import append_log
 from echo_desktop.protocol import ActionError, Command, parse_command, result_payload
 
-CAPABILITIES = ["open_app", "media_control", "screen_capture", "camera_capture"]
+CAPABILITIES = [
+    "open_app",
+    "media_control",
+    "screen_capture",
+    "camera_capture",
+    "dsh_task",
+    "music_search_play",
+    "notepad_write",
+]
 
 
 class DesktopAuthenticationError(RuntimeError):

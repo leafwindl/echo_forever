@@ -2,11 +2,11 @@
 
 Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter 客户端和 FastAPI 服务端组成。它把连续文字聊天、主动联系、定时提醒、语音通话、学习专注、表情包、长期记忆和每日来信放在同一条可持久化的陪伴链路中。
 
-当前生产版本：**v1.1.9**
+当前生产版本：**v1.1.10**
 
 | 部件 | 当前值 |
 | --- | --- |
-| Android APK | `1.1.9+25` |
+| Android APK | `1.1.10+26` |
 | Android 包名 | `cn.echoaiforever.echo_app` |
 | 公网 API | `https://api.echoaiforever.cn` |
 | APK 下载域名 | `https://download.echoaiforever.cn` |

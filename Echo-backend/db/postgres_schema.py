@@ -873,6 +873,18 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             proactive_messages_used INTEGER NOT NULL DEFAULT 0
                 CHECK (proactive_messages_used >= 0),
             proactive_budget_date DATE,
+            outreach_sent_count INTEGER NOT NULL DEFAULT 0
+                CHECK (outreach_sent_count >= 0),
+            outreach_replied_count INTEGER NOT NULL DEFAULT 0
+                CHECK (outreach_replied_count >= 0),
+            consecutive_unanswered INTEGER NOT NULL DEFAULT 0
+                CHECK (consecutive_unanswered >= 0),
+            outreach_downshift_until TIMESTAMPTZ,
+            outreach_last_counted_at TIMESTAMPTZ,
+            proactive_actions_used INTEGER NOT NULL DEFAULT 0
+                CHECK (proactive_actions_used >= 0),
+            proactive_action_budget_date DATE,
+            last_proactive_action_at TIMESTAMPTZ,
             last_decision VARCHAR(24) NOT NULL DEFAULT '',
             last_decision_reason VARCHAR(64) NOT NULL DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1105,6 +1117,22 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS proactive_messages_used "
         "INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS proactive_budget_date DATE",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS outreach_sent_count "
+        "INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS outreach_replied_count "
+        "INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS consecutive_unanswered "
+        "INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS outreach_downshift_until "
+        "TIMESTAMPTZ",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS outreach_last_counted_at "
+        "TIMESTAMPTZ",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS proactive_actions_used "
+        "INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS proactive_action_budget_date "
+        "DATE",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS last_proactive_action_at "
+        "TIMESTAMPTZ",
         "CREATE INDEX IF NOT EXISTS idx_desktop_nodes_user_status "
         "ON desktop_nodes(user_id, status, last_seen_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_desktop_pairing_codes_expires "

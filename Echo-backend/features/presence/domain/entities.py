@@ -26,6 +26,14 @@ class PresenceState:
     last_proactive_message_at: datetime | None = None
     proactive_messages_used: int = 0
     proactive_budget_date: date | None = None
+    outreach_sent_count: int = 0
+    outreach_replied_count: int = 0
+    consecutive_unanswered: int = 0
+    outreach_downshift_until: datetime | None = None
+    outreach_last_counted_at: datetime | None = None
+    proactive_actions_used: int = 0
+    proactive_action_budget_date: date | None = None
+    last_proactive_action_at: datetime | None = None
     last_decision: str = ""
     last_decision_reason: str = ""
 
@@ -82,4 +90,5 @@ class PresenceTickResult:
     reason: str
     thought: PresenceThought | None = None
     message_text: str = ""
+    action_result: str = ""
     thoughts_used: int = 0
