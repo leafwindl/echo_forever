@@ -3521,7 +3521,7 @@ struct Index {
                   .padding({ left: 8, right: 8, top: 3, bottom: 3 })
               }
               .width('100%')
-              Text('她独处时产生的内心念头，默认只留在这里，不会自动发到聊天。')
+              Text('她独处时产生的内心念头；值得的时候会变成主动消息，偶尔也会变成动作。')
                 .fontSize(13)
                 .fontColor('#6F6A78')
                 .width('100%')
@@ -3550,6 +3550,18 @@ struct Index {
                 .fontSize(12)
                 .fontColor('#6F6A78')
                 .width('100%')
+              Text((this.presence?.outreachSentCount ?? 0) === 0
+                ? '主动消息：还没有发出过'
+                : `主动消息回应率：${Math.round((this.presence?.responseRate ?? 0) * 100)}%（${this.presence?.outreachRepliedCount ?? 0}/${this.presence?.outreachSentCount ?? 0}）`)
+                .fontSize(12)
+                .fontColor('#6F6A78')
+                .width('100%')
+              if ((this.presence?.outreachDownshiftUntil ?? '').length > 0) {
+                Text('最近回应较少，已自动降频到每天最多 1 条。')
+                  .fontSize(12)
+                  .fontColor('#6750A4')
+                  .width('100%')
+              }
             }
             .width('100%')
             .padding(16)

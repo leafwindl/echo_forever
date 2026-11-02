@@ -73,8 +73,19 @@ def _find_cloudmusic_window() -> int:
 
 def _focus_window(hwnd: int) -> None:
     user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
     user32.ShowWindow(hwnd, 9)
-    user32.SetForegroundWindow(hwnd)
+    current_thread = kernel32.GetCurrentThreadId()
+    target_thread = user32.GetWindowThreadProcessId(hwnd, None)
+    attached = False
+    if target_thread and target_thread != current_thread:
+        attached = bool(user32.AttachThreadInput(current_thread, target_thread, True))
+    try:
+        user32.SetForegroundWindow(hwnd)
+        user32.SetFocus(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(current_thread, target_thread, False)
 
 
 def _is_cloudmusic_running() -> bool:

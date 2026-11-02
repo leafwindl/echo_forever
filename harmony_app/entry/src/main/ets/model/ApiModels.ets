@@ -166,6 +166,10 @@ export interface PresenceSnapshot {
   dailyThoughtBudget: number;
   lastDecision: string;
   lastDecisionReason: string;
+  outreachSentCount: number;
+  outreachRepliedCount: number;
+  responseRate: number;
+  outreachDownshiftUntil?: string;
   thoughts: PresenceThought[];
 }
 

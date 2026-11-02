@@ -282,6 +282,10 @@ export class EchoRepository {
       dailyThoughtBudget: this.asNumber(result.daily_thought_budget),
       lastDecision: this.asString(result.last_decision),
       lastDecisionReason: this.asString(result.last_decision_reason),
+      outreachSentCount: this.asNumber(result.outreach_sent_count),
+      outreachRepliedCount: this.asNumber(result.outreach_replied_count),
+      responseRate: this.asNumber(result.response_rate),
+      outreachDownshiftUntil: this.asString(result.outreach_downshift_until),
       thoughts: this.asArray(result.thoughts).map((item): PresenceThought => ({
         thoughtId: this.asString(item.thought_id),
         text: this.asString(item.text),
