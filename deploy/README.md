@@ -12,7 +12,8 @@
 - Repository: `/opt/echo/app`
 - Public API: `https://api.echoaiforever.cn`
 - Backend listener: `127.0.0.1:8000`
-- Nginx configuration: `/etc/nginx/conf.d/echo.conf`
+- Nginx configuration: `/etc/nginx/sites-enabled/echo-backend`
+- Desktop node WebSocket: `/desktop/nodes/ws` must pass `Upgrade`/`Connection` headers
 
 Only ports 22, 80, and 443 should be public. PostgreSQL 5432 and backend 8000 stay local.
 
