@@ -8,6 +8,7 @@ class RouteNames {
   static const chat = 'chat';
   static const home = 'home';
   static const persona = 'persona';
+  static const presence = 'presence';
   static const memory = 'memory';
   static const letters = 'letters';
   static const stickers = 'stickers';

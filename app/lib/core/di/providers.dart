@@ -26,6 +26,8 @@ import 'package:echo_app/features/memory/data/memory_api.dart';
 import 'package:echo_app/features/memory/data/memory_repository.dart';
 import 'package:echo_app/features/persona/data/persona_api.dart';
 import 'package:echo_app/features/persona/data/persona_repository.dart';
+import 'package:echo_app/features/presence/data/presence_api.dart';
+import 'package:echo_app/features/presence/data/presence_repository.dart';
 import 'package:echo_app/features/push/presentation/push_controller.dart';
 import 'package:echo_app/features/stickers/data/stickers_api.dart';
 import 'package:echo_app/features/stickers/data/stickers_repository.dart';
@@ -119,6 +121,14 @@ final personaApiProvider = Provider<PersonaApi>((ref) {
 
 final personaRepositoryProvider = Provider<PersonaRepository>((ref) {
   return PersonaRepositoryImpl(ref.watch(personaApiProvider));
+});
+
+final presenceApiProvider = Provider<PresenceApi>((ref) {
+  return PresenceApi(ref.watch(authenticatedDioClientProvider));
+});
+
+final presenceRepositoryProvider = Provider<PresenceRepository>((ref) {
+  return PresenceRepositoryImpl(ref.watch(presenceApiProvider));
 });
 
 final memoryApiProvider = Provider<MemoryApi>((ref) {

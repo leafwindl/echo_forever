@@ -10,6 +10,8 @@ import {
   MemoryListResult,
   MemoryRecord,
   PersonaProfile,
+  PresenceSnapshot,
+  PresenceThought,
   ProactiveChatPreferences,
   RelationshipProposal,
   RelationshipState,
@@ -264,6 +266,31 @@ export class EchoRepository {
 
   async getPersona(): Promise<Record<string, Object>> {
     return this.api.get<Record<string, Object>>('/persona/me');
+  }
+
+  async getPresence(): Promise<PresenceSnapshot> {
+    const query: Record<string, string> = {};
+    query.thought_limit = '20';
+    const result = await this.api.get<Record<string, Object>>('/presence/me', query);
+    return {
+      status: this.asString(result.status),
+      enabled: this.asBoolean(result.enabled),
+      lastUserMessageAt: this.asString(result.last_user_message_at),
+      lastTickAt: this.asString(result.last_tick_at),
+      lastThoughtAt: this.asString(result.last_thought_at),
+      thoughtsUsed: this.asNumber(result.thoughts_used),
+      dailyThoughtBudget: this.asNumber(result.daily_thought_budget),
+      lastDecision: this.asString(result.last_decision),
+      lastDecisionReason: this.asString(result.last_decision_reason),
+      thoughts: this.asArray(result.thoughts).map((item): PresenceThought => ({
+        thoughtId: this.asString(item.thought_id),
+        text: this.asString(item.text),
+        salience: this.asNumber(item.salience),
+        shareable: this.asBoolean(item.shareable),
+        actionIntent: this.asString(item.action_intent),
+        createdAt: this.asString(item.created_at)
+      }))
+    };
   }
 
   async getPersonaProfile(): Promise<PersonaProfile> {

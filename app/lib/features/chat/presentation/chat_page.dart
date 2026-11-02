@@ -24,6 +24,7 @@ enum _ChatMenuAction {
   studyFocus,
   devices,
   persona,
+  presence,
   memory,
   stickers,
   notificationSettings,
@@ -123,6 +124,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               PopupMenuItem<_ChatMenuAction>(
                 value: _ChatMenuAction.persona,
                 child: Text('关于她'),
+              ),
+              PopupMenuItem<_ChatMenuAction>(
+                value: _ChatMenuAction.presence,
+                child: Text('她的状态'),
               ),
               PopupMenuItem<_ChatMenuAction>(
                 value: _ChatMenuAction.memory,
@@ -311,6 +316,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         unawaited(context.pushNamed(RouteNames.devices));
       case _ChatMenuAction.persona:
         unawaited(context.pushNamed(RouteNames.persona));
+      case _ChatMenuAction.presence:
+        unawaited(context.pushNamed(RouteNames.presence));
       case _ChatMenuAction.memory:
         unawaited(context.pushNamed(RouteNames.memory));
       case _ChatMenuAction.stickers:

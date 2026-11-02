@@ -147,6 +147,28 @@ export interface ChatSchedule {
   updatedAt?: string;
 }
 
+export interface PresenceThought {
+  thoughtId: string;
+  text: string;
+  salience: number;
+  shareable: boolean;
+  actionIntent: string;
+  createdAt: string;
+}
+
+export interface PresenceSnapshot {
+  status: string;
+  enabled: boolean;
+  lastUserMessageAt?: string;
+  lastTickAt?: string;
+  lastThoughtAt?: string;
+  thoughtsUsed: number;
+  dailyThoughtBudget: number;
+  lastDecision: string;
+  lastDecisionReason: string;
+  thoughts: PresenceThought[];
+}
+
 export interface ProactiveChatPreferences {
   enabled: boolean;
   allowEchoScheduling: boolean;

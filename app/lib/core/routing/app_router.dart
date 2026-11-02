@@ -12,6 +12,7 @@ import 'package:echo_app/features/memory/presentation/memory_page.dart';
 import 'package:echo_app/features/onboarding/presentation/onboarding_page.dart';
 import 'package:echo_app/features/persona/presentation/persona_controller.dart';
 import 'package:echo_app/features/persona/presentation/persona_page.dart';
+import 'package:echo_app/features/presence/presentation/presence_page.dart';
 import 'package:echo_app/features/proactive_chat/presentation/proactive_chat_page.dart';
 import 'package:echo_app/features/proactive_chat/presentation/scheduled_tasks_page.dart';
 import 'package:echo_app/features/push/presentation/notification_settings_page.dart';
@@ -106,6 +107,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/persona',
         name: RouteNames.persona,
         builder: (context, state) => const PersonaPage(),
+      ),
+      GoRoute(
+        path: '/presence',
+        name: RouteNames.presence,
+        builder: (context, state) => const PresencePage(),
       ),
       GoRoute(
         path: '/memory',

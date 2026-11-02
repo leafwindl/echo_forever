@@ -17,6 +17,8 @@ import {
   MemoryListResult,
   MemoryRecord,
   PersonaProfile,
+  PresenceSnapshot,
+  PresenceThought,
   ProactiveChatPreferences,
   RelationshipProposal,
   RelationshipState,
@@ -209,6 +211,8 @@ struct Index {
   @State private personaSaving: boolean = false;
   @State private personaCustomTopic: string = '';
   @State private personaConfirmAction: string = '';
+  @State private presence: PresenceSnapshot | undefined = undefined;
+  @State private presenceError: string = '';
   @State private loading: boolean = false;
   @State private statusText: string = '';
   @State private onboarding: boolean = false;
@@ -1165,6 +1169,10 @@ struct Index {
         this.personaName = persona.preferredName;
         this.relationshipState = await this.repository.getRelationship();
       }
+      if (this.page === 'presence') {
+        this.presenceError = '';
+        this.presence = await this.repository.getPresence();
+      }
     } catch (error) {
       this.statusText = `加载失败：${this.describeError(error)}`;
       if (this.page === 'memory') this.memoryError = this.describeError(error);
@@ -1172,6 +1180,7 @@ struct Index {
         this.proactiveError = this.describeError(error);
       }
       if (this.page === 'persona') this.personaError = this.statusText;
+      if (this.page === 'presence') this.presenceError = this.statusText;
     } finally {
       this.loading = false;
     }
@@ -2898,6 +2907,7 @@ struct Index {
       this.menuItem('一起学习', 'study')
       this.menuItem('我的 Echo', 'devices')
       this.menuItem('关于她', 'persona')
+      this.menuItem('她的状态', 'presence')
       this.menuItem('长期记忆', 'memory')
       this.menuItem('表情包库', 'stickers')
       this.menuItem('通知设置', 'notifications')
@@ -3383,6 +3393,170 @@ struct Index {
     .width('100%')
     .height('100%')
     .zIndex(40)
+  }
+
+  private presenceStatusLabel(status: string): string {
+    if (status === 'active') return '正在陪你';
+    if (status === 'sleeping') return '安静着';
+    if (status === 'focused') return '在专注';
+    if (status === 'resting') return '低功耗';
+    return '闲着';
+  }
+
+  private presenceRelative(value: string | undefined): string {
+    if (value === undefined || value.length === 0) return '刚才';
+    const time = new Date(value).getTime();
+    if (Number.isNaN(time)) return '刚才';
+    const minutes = Math.max(0, Math.floor((Date.now() - time) / 60000));
+    if (minutes < 1) return '刚刚';
+    if (minutes < 60) return `${minutes} 分钟前`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} 小时前`;
+    return `${Math.floor(hours / 24)} 天前`;
+  }
+
+  @Builder
+  private presencePage(): void {
+    Column() {
+      Row() {
+        this.iconButton($r('app.media.arrow_back_outline'), () => this.navigate('chat'))
+        Text('她的状态')
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#262331')
+          .layoutWeight(1)
+          .margin({ left: 4 })
+        this.iconButton($r('app.media.refresh_outline'), () => void this.loadPageData())
+      }
+      .width('100%')
+      .height(64)
+      .padding({ left: 10, right: 10 })
+      .backgroundColor('#F8F7FC')
+
+      if (this.loading && this.presence === undefined) {
+        Column({ space: 12 }) {
+          LoadingProgress().width(32).height(32).color('#6750A4')
+          Text('正在看她刚才在想什么').fontSize(14).fontColor('#6F6A78')
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+      } else if (this.presenceError.length > 0 && this.presence === undefined) {
+        Column({ space: 12 }) {
+          Text(this.presenceError).fontSize(14).fontColor('#BA1A1A').textAlign(TextAlign.Center)
+          Button('重试').onClick(() => void this.loadPageData())
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+        .padding(24)
+      } else {
+        Scroll() {
+          Column({ space: 16 }) {
+            Column({ space: 8 }) {
+              Row({ space: 8 }) {
+                Text(this.presenceStatusLabel(this.presence?.status ?? 'idle'))
+                  .fontSize(24)
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor('#262331')
+                Text(this.presence?.enabled === false ? '已暂停' : '持续在场')
+                  .fontSize(12)
+                  .fontColor('#6750A4')
+                  .backgroundColor('#EDE7F6')
+                  .borderRadius(10)
+                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+              }
+              .width('100%')
+              Text('她独处时产生的内心念头，默认只留在这里，不会自动发到聊天。')
+                .fontSize(13)
+                .fontColor('#6F6A78')
+                .width('100%')
+              if ((this.presence?.lastThoughtAt ?? '').length > 0) {
+                Text(`最近念头：${this.presenceRelative(this.presence?.lastThoughtAt)}`)
+                  .fontSize(12)
+                  .fontColor('#6F6A78')
+                  .width('100%')
+              }
+            }
+            .width('100%')
+            .padding(16)
+            .backgroundColor('#FFFBFE')
+            .borderRadius(16)
+
+            Column({ space: 8 }) {
+              Row() {
+                Text('今天的念头').fontSize(14).fontWeight(FontWeight.Medium)
+                Blank()
+                Text(`${this.presence?.thoughtsUsed ?? 0} / ${this.presence?.dailyThoughtBudget ?? 8}`)
+                  .fontSize(13)
+                  .fontColor('#6F6A78')
+              }
+              .width('100%')
+              Text('心跳每 15 分钟检查一次；只有值得的时候才会留下一个念头。')
+                .fontSize(12)
+                .fontColor('#6F6A78')
+                .width('100%')
+            }
+            .width('100%')
+            .padding(16)
+            .backgroundColor('#FFFBFE')
+            .borderRadius(16)
+
+            Row() {
+              Text('内心念头').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#262331')
+              Blank()
+              Text(`${this.presence?.thoughts.length ?? 0} 条`).fontSize(12).fontColor('#6F6A78')
+            }
+            .width('100%')
+
+            if ((this.presence?.thoughts.length ?? 0) === 0) {
+              Column({ space: 8 }) {
+                Text('还没有独处念头').fontSize(15).fontWeight(FontWeight.Medium)
+                Text('等她安静一会儿，这里会出现她刚才在想的事。')
+                  .fontSize(12)
+                  .fontColor('#6F6A78')
+                  .textAlign(TextAlign.Center)
+              }
+              .width('100%')
+              .padding({ top: 34, bottom: 34, left: 20, right: 20 })
+              .backgroundColor('#FFFBFE')
+              .borderRadius(16)
+            } else {
+              ForEach(this.presence?.thoughts ?? [], (thought: PresenceThought) => {
+                Column({ space: 8 }) {
+                  Text(thought.text)
+                    .fontSize(15)
+                    .fontColor('#262331')
+                    .lineHeight(23)
+                    .width('100%')
+                  Row({ space: 6 }) {
+                    Text(`◷ ${this.presenceRelative(thought.createdAt)}`)
+                      .fontSize(11)
+                      .fontColor('#8B8794')
+                    Blank()
+                    if (thought.salience >= 0.6) {
+                      Text('记得比较深').fontSize(11).fontColor('#6750A4')
+                    }
+                  }
+                  .width('100%')
+                }
+                .width('100%')
+                .padding(16)
+                .backgroundColor('#FFFBFE')
+                .borderRadius(16)
+              }, (thought: PresenceThought) => thought.thoughtId)
+            }
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 16, bottom: 32 })
+        }
+        .layoutWeight(1)
+        .width('100%')
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#F8F7FC')
   }
 
   @Builder
@@ -4586,6 +4760,8 @@ struct Index {
       this.stickersPage();
     } else if (this.page === 'tasks') {
       this.tasksPage();
+    } else if (this.page === 'presence') {
+      this.presencePage();
     } else if (this.page === 'persona') {
       this.aboutHerPage()
     } else if (this.page === 'study') {
