@@ -23,6 +23,11 @@ python scripts/create_desktop_pairing_code.py --phone +86137...
 ```powershell
 cd desktop_node
 python -m echo_desktop pair --code 123456 --server https://api.echoaiforever.cn
+```
+
+之后双击 `desktop_node/start.cmd`，或：
+
+```powershell
 python -m echo_desktop run
 ```
 
