@@ -34,16 +34,16 @@ def pair_node(
     node_name: str,
 ) -> DesktopConfig:
     base = server_url.rstrip("/")
-    response = httpx.post(
-        f"{base}/desktop/nodes/pair",
-        json={
-            "code": code,
-            "name": node_name,
-            "fingerprint": machine_fingerprint(),
-            "capabilities": CAPABILITIES,
-        },
-        timeout=20,
-    )
+    with httpx.Client(trust_env=False, timeout=20) as client:
+        response = client.post(
+            f"{base}/desktop/nodes/pair",
+            json={
+                "code": code,
+                "name": node_name,
+                "fingerprint": machine_fingerprint(),
+                "capabilities": CAPABILITIES,
+            },
+        )
     if response.status_code != 200:
         try:
             detail = response.json().get("detail", response.text)
@@ -64,6 +64,7 @@ async def _session(config: DesktopConfig) -> None:
     async with connect(
         config.websocket_url,
         additional_headers=headers,
+        proxy=None,
         ping_interval=20,
         ping_timeout=20,
         open_timeout=20,
