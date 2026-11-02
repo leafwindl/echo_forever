@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 
 MEMORY_EXTRACTION_JOB_TYPE = "memory_extraction"
 VALID_MEMORY_STATUSES = frozenset({"active", "inactive", "deleted"})
@@ -49,13 +48,13 @@ class Memory:
     user_id: str
     memory_type: str
     content: str
-    source_message_id: Optional[int]
+    source_message_id: int | None
     confidence: float
     importance: MemoryImportance
     status: str
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    expires_at: Optional[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    expires_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +104,16 @@ class MemoryExtractionResult:
     updated: int = 0
     deactivated: int = 0
     ignored: int = 0
+
+
+@dataclass(frozen=True)
+class MemoryRecallHit:
+    """A compact memory hit for cross-feature companions that need one cue."""
+
+    memory_id: str
+    content: str
+    importance: int = 3
+    similarity: float = 0.0
 
 
 @dataclass(frozen=True)

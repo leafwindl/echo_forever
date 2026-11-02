@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, datetime
+from enum import StrEnum
+
+
+class PresenceStatus(StrEnum):
+    ACTIVE = "active"
+    IDLE = "idle"
+    RESTING = "resting"
+    SLEEPING = "sleeping"
+    FOCUSED = "focused"
+
+
+@dataclass(frozen=True)
+class PresenceState:
+    user_id: str
+    status: str = PresenceStatus.IDLE
+    enabled: bool = True
+    last_user_message_at: datetime | None = None
+    last_tick_at: datetime | None = None
+    last_thought_at: datetime | None = None
+    thought_budget_date: date | None = None
+    thoughts_used: int = 0
+    last_decision: str = ""
+    last_decision_reason: str = ""
+
+
+@dataclass(frozen=True)
+class PresenceThought:
+    thought_id: str
+    user_id: str
+    text: str
+    salience: float
+    shareable: bool
+    action_intent: str = ""
+    source_memory_id: str = ""
+    source_memory_text: str = ""
+    created_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class PresenceMessage:
+    role: str
+    content: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class PresenceContext:
+    messages: tuple[PresenceMessage, ...]
+    last_user_message_at: datetime | None
+    last_user_text: str
+    recent_assistant_text: str
+
+
+@dataclass(frozen=True)
+class PresenceMemory:
+    memory_id: str
+    content: str
+    importance: int = 3
+
+
+@dataclass(frozen=True)
+class ThoughtDraft:
+    text: str
+    salience: float
+    shareable: bool = False
+    action_intent: str = ""
+
+
+@dataclass(frozen=True)
+class PresenceTickResult:
+    user_id: str
+    status: str
+    decision: str
+    reason: str
+    thought: PresenceThought | None = None
+    thoughts_used: int = 0

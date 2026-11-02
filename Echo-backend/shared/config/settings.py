@@ -134,6 +134,64 @@ class Settings(BaseSettings):
         ge=100_000,
         le=10_000_000,
     )
+    presence_enabled: bool = Field(
+        default=True,
+        validation_alias="PRESENCE_ENABLED",
+    )
+    presence_tick_interval_seconds: int = Field(
+        default=900,
+        validation_alias="PRESENCE_TICK_INTERVAL_SECONDS",
+        ge=60,
+        le=3600,
+    )
+    presence_active_window_minutes: int = Field(
+        default=5,
+        validation_alias="PRESENCE_ACTIVE_WINDOW_MINUTES",
+        ge=1,
+        le=60,
+    )
+    presence_silence_minutes: int = Field(
+        default=30,
+        validation_alias="PRESENCE_SILENCE_MINUTES",
+        ge=5,
+        le=720,
+    )
+    presence_min_thought_interval_minutes: int = Field(
+        default=45,
+        validation_alias="PRESENCE_MIN_THOUGHT_INTERVAL_MINUTES",
+        ge=5,
+        le=720,
+    )
+    presence_daily_thought_budget: int = Field(
+        default=8,
+        validation_alias="PRESENCE_DAILY_THOUGHT_BUDGET",
+        ge=1,
+        le=48,
+    )
+    presence_context_messages: int = Field(
+        default=8,
+        validation_alias="PRESENCE_CONTEXT_MESSAGES",
+        ge=2,
+        le=30,
+    )
+    presence_max_candidate_users: int = Field(
+        default=20,
+        validation_alias="PRESENCE_MAX_CANDIDATE_USERS",
+        ge=1,
+        le=200,
+    )
+    presence_thought_max_tokens: int = Field(
+        default=300,
+        validation_alias="PRESENCE_THOUGHT_MAX_TOKENS",
+        ge=100,
+        le=1200,
+    )
+    presence_thought_temperature: float = Field(
+        default=0.9,
+        validation_alias="PRESENCE_THOUGHT_TEMPERATURE",
+        ge=0.0,
+        le=2.0,
+    )
     database_url: str = Field(default="", validation_alias="DATABASE_URL")
     db_pool_size: int = Field(default=5, validation_alias="DB_POOL_SIZE")
     db_pool_timeout_seconds: int = Field(

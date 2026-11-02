@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from features.proactive_chat.application.worker import ProcessProactiveChatJobs
+from features.proactive_chat.domain.entities import ProactiveChatPreferences
 from features.proactive_chat.infrastructure.postgres_repository import (
     PostgresProactiveChatRepository,
 )
@@ -10,6 +11,10 @@ _worker: ProcessProactiveChatJobs | None = None
 
 def get_proactive_repository() -> PostgresProactiveChatRepository:
     return PostgresProactiveChatRepository()
+
+
+def get_proactive_preferences(user_id: str) -> ProactiveChatPreferences:
+    return get_proactive_repository().get_preferences(user_id)
 
 
 def get_proactive_worker() -> ProcessProactiveChatJobs:
@@ -45,6 +50,7 @@ def reset_user_proactive_state(user_id: str) -> None:
 
 
 __all__ = [
+    "get_proactive_preferences",
     "get_proactive_repository",
     "process_proactive_chat_once",
     "reset_user_proactive_state",

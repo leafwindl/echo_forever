@@ -12,6 +12,7 @@ from features.memory.domain.entities import (
     MemoryListResult,
     MemoryNotFoundError,
     MemoryOperationError,
+    MemoryRecallHit,
     MemoryValidationError,
 )
 from features.memory.domain.extraction_rules import parse_memory_extraction, should_extract_memory
@@ -29,6 +30,36 @@ def list_memories(user_id: str, memory_status: str = "active", limit: int = 50) 
     """稳定的模块入口：供界面或管理能力读取记忆，不暴露应用层细节。"""
     service = get_memory_management_service()
     return service.list_memories(user_id=user_id, memory_status=memory_status, limit=limit)
+
+
+async def recall_memory(user_id: str, query: str, limit: int = 1) -> list[MemoryRecallHit]:
+    """Stable one-cue recall for companion workers; falls back to importance."""
+    cleaned = query.strip()
+    if cleaned:
+        try:
+            rows = await retrieve_relevant_memories(user_id, cleaned, top_k=limit)
+        except Exception:
+            rows = []
+        if rows:
+            return [
+                MemoryRecallHit(
+                    memory_id=str(row["memory_id"]),
+                    content=str(row["content"]),
+                    importance=int(row.get("importance") or 3),
+                    similarity=float(row.get("similarity_score") or 0.0),
+                )
+                for row in rows
+            ]
+    memories = list_memories(user_id, limit=max(limit, 5)).memories
+    memories.sort(key=lambda item: item.importance.value, reverse=True)
+    return [
+        MemoryRecallHit(
+            memory_id=item.memory_id,
+            content=item.content,
+            importance=item.importance.value,
+        )
+        for item in memories[:limit]
+    ]
 
 
 def delete_memory(user_id: str, memory_id: str) -> MemoryDeleteResult:
@@ -98,6 +129,7 @@ __all__ = [
     "MemoryManagementService",
     "MemoryNotFoundError",
     "MemoryOperationError",
+    "MemoryRecallHit",
     "MemoryValidationError",
     "backfill_memory_embeddings",
     "cancel_pending_memory_extraction_jobs",
@@ -106,6 +138,7 @@ __all__ = [
     "list_memories",
     "list_memory_embedding_records",
     "parse_memory_extraction",
+    "recall_memory",
     "retrieve_relevant_memories",
     "resume_pending_memory_extraction_jobs",
     "schedule_memory_extraction",

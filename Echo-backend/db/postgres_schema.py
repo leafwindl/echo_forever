@@ -859,6 +859,47 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS presence_states (
+            user_id TEXT PRIMARY KEY,
+            status VARCHAR(16) NOT NULL DEFAULT 'idle'
+                CHECK (status IN ('active', 'idle', 'resting', 'sleeping', 'focused')),
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            last_user_message_at TIMESTAMPTZ,
+            last_tick_at TIMESTAMPTZ,
+            last_thought_at TIMESTAMPTZ,
+            thought_budget_date DATE,
+            thoughts_used INTEGER NOT NULL DEFAULT 0 CHECK (thoughts_used >= 0),
+            last_decision VARCHAR(24) NOT NULL DEFAULT '',
+            last_decision_reason VARCHAR(64) NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS presence_thoughts (
+            id BIGSERIAL PRIMARY KEY,
+            thought_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            salience NUMERIC(4, 3) NOT NULL DEFAULT 0 CHECK (salience >= 0 AND salience <= 1),
+            shareable BOOLEAN NOT NULL DEFAULT FALSE,
+            action_intent TEXT NOT NULL DEFAULT '',
+            source_memory_id TEXT NOT NULL DEFAULT '',
+            source_memory_text TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS presence_events (
+            id BIGSERIAL PRIMARY KEY,
+            event_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            event_type VARCHAR(32) NOT NULL,
+            detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS firmware_releases (
             id BIGSERIAL PRIMARY KEY,
             release_id TEXT NOT NULL UNIQUE,
@@ -1061,6 +1102,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ON desktop_pairing_codes(expires_at) WHERE consumed_at IS NULL",
         "CREATE INDEX IF NOT EXISTS idx_desktop_actions_user_created "
         "ON desktop_actions(user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_presence_thoughts_user_created "
+        "ON presence_thoughts(user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_presence_events_user_created "
+        "ON presence_events(user_id, created_at DESC)",
         """
         CREATE INDEX IF NOT EXISTS idx_firmware_releases_latest
         ON firmware_releases(board_type, board_variant, version DESC)

@@ -676,6 +676,23 @@ def get_conversation_messages(
     ]
 
 
+def list_recent_chat_user_ids(limit: int = 100) -> tuple[str, ...]:
+    """Return users with recent chat activity for the presence heartbeat."""
+    with get_connection() as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT user_id
+            FROM chat_messages
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+            GROUP BY user_id
+            ORDER BY MAX(created_at) DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return tuple(str(row["user_id"]) for row in cursor.fetchall())
+
+
 def list_messages_page(
     user_id: str,
     conversation_id: str,

@@ -22,7 +22,12 @@ from features.chat.infrastructure.container import (
     get_send_chat_message_use_case,
 )
 from features.chat.infrastructure.events import ChatEvent, get_chat_event_broker
-from features.chat.infrastructure.postgres_repositories import add_external_assistant_message
+from features.chat.infrastructure.postgres_repositories import (
+    add_external_assistant_message,
+)
+from features.chat.infrastructure.postgres_repositories import (
+    list_recent_chat_user_ids as _list_recent_chat_user_ids,
+)
 
 
 def clear_chat_context(user_id: str) -> ChatContextClearResult:
@@ -48,6 +53,11 @@ def accept_chat_message(
 
 async def process_pending_chat_turn_once() -> bool:
     return await get_process_pending_chat_turns_use_case().run_once()
+
+
+def list_recent_chat_user_ids(limit: int = 100) -> tuple[str, ...]:
+    """Stable read entry for the presence heartbeat's candidate users."""
+    return _list_recent_chat_user_ids(limit)
 
 
 def list_chat_messages(
@@ -213,6 +223,7 @@ __all__ = [
     "accept_chat_message",
     "generate_chat_reply",
     "list_chat_messages",
+    "list_recent_chat_user_ids",
     "process_pending_chat_turn_once",
     "send_chat_message",
 ]

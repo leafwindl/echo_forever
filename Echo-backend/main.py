@@ -20,6 +20,7 @@ from features.letters.public import generate_due_letters, publish_due_letters
 from features.memory.interface.router import router as memory_router
 from features.memory.public import resume_pending_memory_extraction_jobs
 from features.persona.interface.router import router as persona_router
+from features.presence.public import process_presence_once
 from features.proactive_chat.interface.router import router as proactive_chat_router
 from features.proactive_chat.public import process_proactive_chat_once
 from features.push.interface.router import router as push_router
@@ -115,6 +116,17 @@ async def run_chat_turn_loop() -> None:
             await asyncio.sleep(0)
 
 
+async def run_presence_loop() -> None:
+    while True:
+        try:
+            processed = await process_presence_once()
+            if processed:
+                logger.info("Presence heartbeat created thoughts=%s", processed)
+        except Exception:
+            logger.warning("Presence heartbeat failed", exc_info=True)
+        await asyncio.sleep(settings.presence_tick_interval_seconds)
+
+
 async def run_proactive_chat_loop() -> None:
     while True:
         try:
@@ -161,6 +173,7 @@ async def lifespan(_app: FastAPI):
     sticker_generation_task: asyncio.Task[None] | None = None
     chat_turn_task: asyncio.Task[None] | None = None
     proactive_chat_task: asyncio.Task[None] | None = None
+    presence_task: asyncio.Task[None] | None = None
     push_notification_task: asyncio.Task[None] | None = None
     sticker_embedding_backfill_task = asyncio.create_task(
         run_sticker_embedding_backfill_once()
@@ -175,6 +188,8 @@ async def lifespan(_app: FastAPI):
         chat_turn_task = asyncio.create_task(run_chat_turn_loop())
     if settings.proactive_chat_enabled:
         proactive_chat_task = asyncio.create_task(run_proactive_chat_loop())
+    if settings.presence_enabled:
+        presence_task = asyncio.create_task(run_presence_loop())
     if settings.push_enabled:
         push_notification_task = asyncio.create_task(run_push_notification_loop())
 
@@ -201,6 +216,10 @@ async def lifespan(_app: FastAPI):
             proactive_chat_task.cancel()
             with suppress(asyncio.CancelledError):
                 await proactive_chat_task
+        if presence_task:
+            presence_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await presence_task
         if push_notification_task:
             push_notification_task.cancel()
             with suppress(asyncio.CancelledError):
