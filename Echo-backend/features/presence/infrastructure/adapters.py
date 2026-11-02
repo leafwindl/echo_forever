@@ -61,6 +61,19 @@ class MemoryPresenceSource:
         )
 
 
+class ChatPresenceMessageDelivery:
+    async def deliver(self, *, user_id: str, thought_id: str, text: str) -> bool:
+        from features.chat.public import deliver_external_assistant_message
+
+        await deliver_external_assistant_message(
+            user_id=user_id,
+            content=text,
+            idempotency_key=f"presence:{thought_id}",
+            source="presence",
+        )
+        return True
+
+
 class ProactiveQuietHours:
     def is_quiet(self, user_id: str, now: datetime) -> bool:
         from features.proactive_chat.public import get_proactive_preferences

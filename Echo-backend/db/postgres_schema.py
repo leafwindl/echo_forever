@@ -869,6 +869,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             last_thought_at TIMESTAMPTZ,
             thought_budget_date DATE,
             thoughts_used INTEGER NOT NULL DEFAULT 0 CHECK (thoughts_used >= 0),
+            last_proactive_message_at TIMESTAMPTZ,
+            proactive_messages_used INTEGER NOT NULL DEFAULT 0
+                CHECK (proactive_messages_used >= 0),
+            proactive_budget_date DATE,
             last_decision VARCHAR(24) NOT NULL DEFAULT '',
             last_decision_reason VARCHAR(64) NOT NULL DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1096,6 +1100,11 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         WHERE status='active'
         """,
         "ALTER TABLE desktop_nodes ADD COLUMN IF NOT EXISTS fingerprint TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS "
+        "last_proactive_message_at TIMESTAMPTZ",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS proactive_messages_used "
+        "INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS proactive_budget_date DATE",
         "CREATE INDEX IF NOT EXISTS idx_desktop_nodes_user_status "
         "ON desktop_nodes(user_id, status, last_seen_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_desktop_pairing_codes_expires "
@@ -1123,7 +1132,6 @@ def build_postgres_schema_text(vector_dimension: int | None = None) -> str:
 
 def init_db() -> None:
     """Initialize the PostgreSQL + pgvector schema."""
-    with transaction() as conn:
-        with conn.cursor() as cursor:
-            for statement in build_postgres_schema_sql():
-                cursor.execute(statement)
+    with transaction() as conn, conn.cursor() as cursor:
+        for statement in build_postgres_schema_sql():
+            cursor.execute(statement)

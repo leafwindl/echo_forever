@@ -55,3 +55,23 @@ class PresenceThoughtGenerator(Protocol):
 
 class PresenceQuietHours(Protocol):
     def is_quiet(self, user_id: str, now: datetime) -> bool: ...
+
+
+class PresenceMessageComposer(Protocol):
+    async def compose(
+        self,
+        *,
+        thought: PresenceThought,
+        context: PresenceContext,
+        now: datetime,
+    ) -> str: ...
+
+
+class PresenceMessageDelivery(Protocol):
+    async def deliver(
+        self,
+        *,
+        user_id: str,
+        thought_id: str,
+        text: str,
+    ) -> bool: ...

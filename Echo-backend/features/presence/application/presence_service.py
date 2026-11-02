@@ -14,6 +14,8 @@ from features.presence.domain.entities import (
 from features.presence.domain.ports import (
     PresenceContextSource,
     PresenceMemorySource,
+    PresenceMessageComposer,
+    PresenceMessageDelivery,
     PresenceQuietHours,
     PresenceRepository,
     PresenceThoughtGenerator,
@@ -45,11 +47,15 @@ class PresenceService:
         context_source: PresenceContextSource,
         memory_source: PresenceMemorySource,
         thought_generator: PresenceThoughtGenerator,
+        message_composer: PresenceMessageComposer,
+        message_delivery: PresenceMessageDelivery,
         quiet_hours: PresenceQuietHours,
         active_window_minutes: int,
         silence_minutes: int,
         min_thought_interval_minutes: int,
         daily_thought_budget: int,
+        proactive_message_budget: int,
+        proactive_message_interval_minutes: int,
         context_messages: int,
         max_candidate_users: int,
     ):
@@ -57,11 +63,17 @@ class PresenceService:
         self.context_source = context_source
         self.memory_source = memory_source
         self.thought_generator = thought_generator
+        self.message_composer = message_composer
+        self.message_delivery = message_delivery
         self.quiet_hours = quiet_hours
         self.active_window = timedelta(minutes=active_window_minutes)
         self.silence_window = timedelta(minutes=silence_minutes)
         self.thought_interval = timedelta(minutes=min_thought_interval_minutes)
         self.daily_thought_budget = daily_thought_budget
+        self.proactive_message_budget = proactive_message_budget
+        self.proactive_message_interval = timedelta(
+            minutes=proactive_message_interval_minutes
+        )
         self.context_messages = context_messages
         self.max_candidate_users = max_candidate_users
 
@@ -173,14 +185,110 @@ class PresenceService:
             detail={"thought_id": thought.thought_id, "salience": thought.salience},
             now=current,
         )
+        message_text = ""
+        if thought.shareable:
+            message_text = await self._maybe_deliver_message(
+                state=state,
+                thought=thought,
+                context=context,
+                now=current,
+            )
+            if message_text:
+                state = PresenceState(
+                    **{
+                        **state.__dict__,
+                        "last_proactive_message_at": current,
+                        "proactive_messages_used": (
+                            0
+                            if state.proactive_budget_date != current.date()
+                            else state.proactive_messages_used
+                        )
+                        + 1,
+                        "proactive_budget_date": current.date(),
+                        "last_decision": "message",
+                        "last_decision_reason": "proactive_message",
+                        "last_tick_at": current,
+                    }
+                )
+                self.repository.save_state(state)
         return PresenceTickResult(
             user_id=user_id,
             status=state.status,
-            decision="thought",
-            reason="inner_thought",
+            decision="message" if message_text else "thought",
+            reason="proactive_message" if message_text else "inner_thought",
             thought=thought,
+            message_text=message_text,
             thoughts_used=state.thoughts_used,
         )
+
+    async def _maybe_deliver_message(
+        self,
+        *,
+        state: PresenceState,
+        thought: PresenceThought,
+        context,
+        now: datetime,
+    ) -> str:
+        used = (
+            state.proactive_messages_used
+            if state.proactive_budget_date == now.date()
+            else 0
+        )
+        if used >= self.proactive_message_budget:
+            return ""
+        if (
+            state.last_proactive_message_at is not None
+            and now - state.last_proactive_message_at < self.proactive_message_interval
+        ):
+            return ""
+        try:
+            text = await self.message_composer.compose(
+                thought=thought,
+                context=context,
+                now=now,
+            )
+        except Exception:
+            logger.warning(
+                "Presence message compose failed user_id=%s",
+                state.user_id,
+                exc_info=True,
+            )
+            self.repository.record_event(
+                user_id=state.user_id,
+                event_type="message_compose_failed",
+                detail={"thought_id": thought.thought_id},
+                now=now,
+            )
+            return ""
+        if not text.strip():
+            return ""
+        try:
+            awaited = self.message_delivery.deliver(
+                user_id=state.user_id,
+                thought_id=thought.thought_id,
+                text=text,
+            )
+            await awaited
+        except Exception:
+            logger.warning(
+                "Presence message delivery failed user_id=%s",
+                state.user_id,
+                exc_info=True,
+            )
+            self.repository.record_event(
+                user_id=state.user_id,
+                event_type="message_delivery_failed",
+                detail={"thought_id": thought.thought_id},
+                now=now,
+            )
+            return ""
+        self.repository.record_event(
+            user_id=state.user_id,
+            event_type="message_delivered",
+            detail={"thought_id": thought.thought_id, "text": text[:160]},
+            now=now,
+        )
+        return text
 
     async def run_once(self, *, now: datetime | None = None) -> int:
         current = now or datetime.now(UTC)

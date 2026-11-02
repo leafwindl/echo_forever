@@ -515,13 +515,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       if (!mounted || !_scrollController.hasClients) {
         return;
       }
-      unawaited(
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-        ),
-      );
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     });
   }
 }
@@ -624,7 +618,7 @@ class _ChatPanel extends StatelessWidget {
               itemCount:
                   state.messages.length +
                   (state.hasMoreHistory || state.isLoadingMoreHistory ? 1 : 0) +
-                  (state.echoTyping ? 1 : 0),
+                  (state.echoTyping && state.messages.isEmpty ? 1 : 0),
               itemBuilder: (context, index) {
                 final hasHistoryControl =
                     state.hasMoreHistory || state.isLoadingMoreHistory;
@@ -635,18 +629,33 @@ class _ChatPanel extends StatelessWidget {
                   );
                 }
                 final messageIndex = index - (hasHistoryControl ? 1 : 0);
-                if (messageIndex == state.messages.length && state.echoTyping) {
+                if (state.messages.isEmpty && state.echoTyping) {
                   return const _TypingIndicatorBubble();
                 }
                 final message = state.messages[messageIndex];
-                return _MessageBubble(
-                  key: ValueKey<String>('chat-message-${message.id}'),
-                  message: message,
-                  onOpenSource: onOpenSource,
-                  onCopySource: onCopySource,
-                  onRetry: message.clientMessageId.isEmpty
-                      ? null
-                      : () => onRetryMessage(message.clientMessageId),
+                final showTimeSeparator = _shouldShowTimeSeparator(
+                  state.messages,
+                  messageIndex,
+                );
+                final showTyping = state.echoTyping &&
+                    messageIndex == state.messages.length - 1;
+                return Column(
+                  key: ValueKey<String>('chat-entry-${message.id}'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    if (showTimeSeparator)
+                      _ChatTimeSeparator(createdAt: message.createdAt!),
+                    _MessageBubble(
+                      key: ValueKey<String>('chat-message-${message.id}'),
+                      message: message,
+                      onOpenSource: onOpenSource,
+                      onCopySource: onCopySource,
+                      onRetry: message.clientMessageId.isEmpty
+                          ? null
+                          : () => onRetryMessage(message.clientMessageId),
+                    ),
+                    if (showTyping) const _TypingIndicatorBubble(),
+                  ],
                 );
               },
             ),
@@ -1139,6 +1148,68 @@ class _SourceTile extends StatelessWidget {
             icon: const Icon(Icons.copy_rounded, size: 18),
           ),
         ],
+      ),
+    );
+  }
+}
+
+bool _shouldShowTimeSeparator(List<ChatMessage> messages, int index) {
+  final current = messages[index].createdAt;
+  if (current == null) return false;
+  if (index == 0) return true;
+  final previous = messages[index - 1].createdAt;
+  if (previous == null) return true;
+  if (current.year != previous.year ||
+      current.month != previous.month ||
+      current.day != previous.day) {
+    return true;
+  }
+  return current.difference(previous).abs() >= const Duration(minutes: 5);
+}
+
+String _formatChatTimestamp(DateTime value) {
+  final local = value.toLocal();
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(local.year, local.month, local.day);
+  final time = '${local.hour.toString().padLeft(2, '0')}:'
+      '${local.minute.toString().padLeft(2, '0')}';
+  final difference = today.difference(day).inDays;
+  if (difference == 0) return time;
+  if (difference == 1) return '昨天 $time';
+  if (difference > 1 && difference < 7) {
+    const weekdays = <String>['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    return '${weekdays[local.weekday - 1]} $time';
+  }
+  if (local.year == now.year) {
+    return '${local.month}月${local.day}日 $time';
+  }
+  return '${local.year}年${local.month}月${local.day}日 $time';
+}
+
+class _ChatTimeSeparator extends StatelessWidget {
+  const _ChatTimeSeparator({required this.createdAt});
+
+  final DateTime createdAt;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            _formatChatTimestamp(createdAt),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
       ),
     );
   }

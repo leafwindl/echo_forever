@@ -86,12 +86,39 @@ class FakeQuiet:
         return self.quiet
 
 
-def _service(repository, context, generator=None, quiet=None, **overrides):
+class FakeComposer:
+    def __init__(self, text="给你留了句话"):
+        self.text = text
+
+    async def compose(self, **kwargs):
+        return self.text
+
+
+class FakeDelivery:
+    def __init__(self):
+        self.delivered: list[tuple[str, str]] = []
+
+    async def deliver(self, *, user_id, thought_id, text):
+        self.delivered.append((user_id, text))
+        return True
+
+
+def _service(
+    repository,
+    context,
+    generator=None,
+    quiet=None,
+    composer=None,
+    delivery=None,
+    **overrides,
+):
     values = {
         "active_window_minutes": 5,
         "silence_minutes": 30,
         "min_thought_interval_minutes": 45,
         "daily_thought_budget": 8,
+        "proactive_message_budget": 3,
+        "proactive_message_interval_minutes": 120,
         "context_messages": 8,
         "max_candidate_users": 20,
     }
@@ -101,6 +128,8 @@ def _service(repository, context, generator=None, quiet=None, **overrides):
         context_source=context,
         memory_source=FakeMemory(),
         thought_generator=generator or FakeGenerator(),
+        message_composer=composer or FakeComposer(),
+        message_delivery=delivery or FakeDelivery(),
         quiet_hours=quiet or FakeQuiet(),
         **values,
     )
@@ -173,6 +202,52 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(repository.thoughts), 1)
         self.assertEqual(repository.state.thoughts_used, 1)
         self.assertEqual(repository.state.last_decision, "thought")
+
+    async def test_shareable_thought_delivers_one_message(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository()
+        delivery = FakeDelivery()
+        generator = FakeGenerator(
+            ThoughtDraft(text="想起上次说的事", salience=0.7, shareable=True)
+        )
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=2)),
+            generator=generator,
+            composer=FakeComposer("上次说的事后来怎么样了？"),
+            delivery=delivery,
+        )
+        result = await service.tick("user-1", now=now)
+        self.assertEqual(result.decision, "message")
+        self.assertEqual(result.message_text, "上次说的事后来怎么样了？")
+        self.assertEqual(len(delivery.delivered), 1)
+        self.assertEqual(repository.state.proactive_messages_used, 1)
+        self.assertEqual(repository.state.last_decision, "message")
+
+    async def test_proactive_message_budget_blocks_extra_messages(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository(
+            PresenceState(
+                user_id="user-1",
+                proactive_messages_used=3,
+                proactive_budget_date=now.date(),
+                thought_budget_date=now.date(),
+            )
+        )
+        delivery = FakeDelivery()
+        generator = FakeGenerator(
+            ThoughtDraft(text="又想起一件事", salience=0.7, shareable=True)
+        )
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=2)),
+            generator=generator,
+            composer=FakeComposer("想跟你说件事"),
+            delivery=delivery,
+        )
+        result = await service.tick("user-1", now=now)
+        self.assertEqual(result.decision, "thought")
+        self.assertEqual(delivery.delivered, [])
 
     async def test_duplicate_thought_is_not_stored(self):
         now = datetime.now(UTC)

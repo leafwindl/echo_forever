@@ -23,6 +23,9 @@ class PresenceState:
     last_thought_at: datetime | None = None
     thought_budget_date: date | None = None
     thoughts_used: int = 0
+    last_proactive_message_at: datetime | None = None
+    proactive_messages_used: int = 0
+    proactive_budget_date: date | None = None
     last_decision: str = ""
     last_decision_reason: str = ""
 
@@ -77,4 +80,5 @@ class PresenceTickResult:
     decision: str
     reason: str
     thought: PresenceThought | None = None
+    message_text: str = ""
     thoughts_used: int = 0

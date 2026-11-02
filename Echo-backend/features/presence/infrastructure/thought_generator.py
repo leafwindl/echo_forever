@@ -41,9 +41,16 @@ class ProviderPresenceThoughtGenerator:
         recent_thoughts: tuple[PresenceThought, ...],
         now: datetime,
     ) -> ThoughtDraft:
+        status_labels = {
+            "active": "正在和用户聊天",
+            "idle": "空闲",
+            "resting": "休息",
+            "sleeping": "安静时段",
+            "focused": "专注",
+        }
         facts = {
             "now": now.isoformat(),
-            "presence_status": state.status,
+            "presence_status": status_labels.get(state.status, "空闲"),
             "last_user_message_at": (
                 context.last_user_message_at.isoformat()
                 if context.last_user_message_at

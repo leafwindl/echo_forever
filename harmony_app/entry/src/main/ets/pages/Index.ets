@@ -2739,9 +2739,15 @@ struct Index {
         }.width('100%').padding({ left: 16, right: 16, top: 4, bottom: 4 })
       }
       List({ space: 0, scroller: this.chatScroller }) {
-        ForEach(this.messages, (message: ChatMessage) => {
+        ForEach(this.messages, (message: ChatMessage, index: number) => {
           ListItem() {
-            this.messageBubble(message, 144)
+            Column() {
+              if (this.shouldShowChatTime(index)) {
+                this.chatTimeSeparator(this.chatTimeLabel(message.createdAt))
+              }
+              this.messageBubble(message, 144)
+            }
+            .width('100%')
           }
         }, (message: ChatMessage) => `${message.id}_${message.clientMessageId ?? ''}`)
         if (this.echoTyping) {
@@ -2792,6 +2798,54 @@ struct Index {
     }
     .layoutWeight(1)
     .width('100%')
+  }
+
+  private shouldShowChatTime(index: number): boolean {
+    if (index < 0 || index >= this.messages.length) return false;
+    const current = this.messages[index].createdAt;
+    if (current.length === 0) return false;
+    const currentTime = new Date(current).getTime();
+    if (Number.isNaN(currentTime)) return false;
+    if (index === 0) return true;
+    const previous = this.messages[index - 1].createdAt;
+    if (previous.length === 0) return true;
+    const previousTime = new Date(previous).getTime();
+    if (Number.isNaN(previousTime)) return true;
+    if (new Date(currentTime).toDateString() !== new Date(previousTime).toDateString()) return true;
+    return Math.abs(currentTime - previousTime) >= 5 * 60 * 1000;
+  }
+
+  private chatTimeLabel(value: string): string {
+    const time = new Date(value);
+    if (Number.isNaN(time.getTime())) return '';
+    const pad = (number: number): string => number < 10 ? `0${number}` : `${number}`;
+    const clock = `${pad(time.getHours())}:${pad(time.getMinutes())}`;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const day = new Date(time.getFullYear(), time.getMonth(), time.getDate()).getTime();
+    const days = Math.floor((today - day) / (24 * 60 * 60 * 1000));
+    if (days === 0) return clock;
+    if (days === 1) return `昨天 ${clock}`;
+    if (days > 1 && days < 7) {
+      const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      return `${weekdays[time.getDay()]} ${clock}`;
+    }
+    return `${time.getMonth() + 1}月${time.getDate()}日 ${clock}`;
+  }
+
+  @Builder
+  private chatTimeSeparator(label: string): void {
+    Row() {
+      Text(label)
+        .fontSize(11)
+        .fontColor('#8B8794')
+        .backgroundColor('#EDEAF0')
+        .borderRadius(10)
+        .padding({ left: 9, right: 9, top: 3, bottom: 3 })
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .padding({ top: 10, bottom: 10 })
   }
 
   @Builder

@@ -20,6 +20,9 @@ def _state(row: dict[str, Any]) -> PresenceState:
         last_thought_at=row.get("last_thought_at"),
         thought_budget_date=row.get("thought_budget_date"),
         thoughts_used=int(row.get("thoughts_used") or 0),
+        last_proactive_message_at=row.get("last_proactive_message_at"),
+        proactive_messages_used=int(row.get("proactive_messages_used") or 0),
+        proactive_budget_date=row.get("proactive_budget_date"),
         last_decision=str(row.get("last_decision") or ""),
         last_decision_reason=str(row.get("last_decision_reason") or ""),
     )
@@ -64,6 +67,8 @@ class PostgresPresenceRepository:
                 SET status = %s, enabled = %s, last_user_message_at = %s,
                     last_tick_at = %s, last_thought_at = %s,
                     thought_budget_date = %s, thoughts_used = %s,
+                    last_proactive_message_at = %s, proactive_messages_used = %s,
+                    proactive_budget_date = %s,
                     last_decision = %s, last_decision_reason = %s,
                     updated_at = NOW()
                 WHERE user_id = %s
@@ -76,6 +81,9 @@ class PostgresPresenceRepository:
                     state.last_thought_at,
                     state.thought_budget_date,
                     state.thoughts_used,
+                    state.last_proactive_message_at,
+                    state.proactive_messages_used,
+                    state.proactive_budget_date,
                     state.last_decision,
                     state.last_decision_reason,
                     state.user_id,
