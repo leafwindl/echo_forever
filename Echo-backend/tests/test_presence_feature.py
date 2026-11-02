@@ -229,6 +229,30 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.state.thoughts_used, 1)
         self.assertEqual(repository.state.last_decision, "thought")
 
+    async def test_two_unanswered_outreaches_downshift_future_messages(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository(
+            PresenceState(
+                user_id="user-1",
+                last_proactive_message_at=now - timedelta(hours=3),
+                outreach_sent_count=1,
+                consecutive_unanswered=1,
+                thought_budget_date=now.date(),
+            )
+        )
+        generator = FakeGenerator(
+            ThoughtDraft(text="又想起他上次说的事", salience=0.5, shareable=True)
+        )
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=4)),
+            generator=generator,
+        )
+        result = await service.tick("user-1", now=now)
+        self.assertEqual(result.decision, "thought")
+        self.assertEqual(repository.state.consecutive_unanswered, 2)
+        self.assertIsNotNone(repository.state.outreach_downshift_until)
+
     async def test_action_intent_runs_desktop_action_instead_of_message(self):
         now = datetime.now(UTC)
         repository = FakeRepository()
