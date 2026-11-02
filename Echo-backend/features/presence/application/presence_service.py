@@ -241,6 +241,11 @@ class PresenceService:
             and now - state.last_proactive_message_at < self.proactive_message_interval
         ):
             return ""
+        if (
+            context.last_assistant_at is not None
+            and now - context.last_assistant_at < self.proactive_message_interval
+        ):
+            return ""
         try:
             text = await self.message_composer.compose(
                 thought=thought,

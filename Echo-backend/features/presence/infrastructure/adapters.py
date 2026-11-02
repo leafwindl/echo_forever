@@ -38,6 +38,7 @@ class ChatPresenceContextSource:
             recent_assistant_text=(
                 " ".join(last_assistant.content.split())[:300] if last_assistant else ""
             ),
+            last_assistant_at=last_assistant.created_at if last_assistant else None,
         )
 
     def recent_user_ids(self, limit: int) -> tuple[str, ...]:

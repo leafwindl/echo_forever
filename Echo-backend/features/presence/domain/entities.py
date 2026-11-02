@@ -56,6 +56,7 @@ class PresenceContext:
     last_user_message_at: datetime | None
     last_user_text: str
     recent_assistant_text: str
+    last_assistant_at: datetime | None = None
 
 
 @dataclass(frozen=True)
