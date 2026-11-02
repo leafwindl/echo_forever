@@ -45,44 +45,65 @@ def _cloudmusic_pids() -> set[int]:
 def _find_cloudmusic_window() -> int:
     user32 = ctypes.windll.user32
     pids = _cloudmusic_pids()
-    found: list[int] = []
+    candidates: list[tuple[int, int]] = []
+    rect = wintypes.RECT()
 
     @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     def callback(hwnd, _lparam):
+        if not user32.IsWindowVisible(hwnd):
+            return True
         pid = wintypes.DWORD()
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         if pids and int(pid.value) not in pids:
             return True
         length = user32.GetWindowTextLengthW(hwnd)
+        title = ""
         if length > 0:
             buffer = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buffer, length + 1)
-            if any(marker in buffer.value for marker in _TARGET_MARKERS):
-                found.append(int(hwnd))
-                return False
-        class_name = ctypes.create_unicode_buffer(128)
-        user32.GetClassNameW(hwnd, class_name, 128)
-        if pids and class_name.value:
-            found.append(int(hwnd))
-            return False
+            title = buffer.value
+        if title.endswith("SystemHint"):
+            return True
+        if user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            area = max(0, rect.right - rect.left) * max(0, rect.bottom - rect.top)
+            if area > 0:
+                candidates.append((area, int(hwnd)))
         return True
 
     user32.EnumWindows(callback, 0)
-    return found[0] if found else 0
+    if not candidates:
+        return 0
+    return max(candidates)[1]
 
 
 def _focus_window(hwnd: int) -> None:
     user32 = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
+    user32.GetWindowThreadProcessId.argtypes = [
+        wintypes.HWND,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    user32.AttachThreadInput.argtypes = [
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.BOOL,
+    ]
+    user32.AttachThreadInput.restype = wintypes.BOOL
     user32.ShowWindow(hwnd, 9)
+    user32.BringWindowToTop(hwnd)
     current_thread = kernel32.GetCurrentThreadId()
-    target_thread = user32.GetWindowThreadProcessId(hwnd, None)
+    target_thread_id = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(target_thread_id))
+    target_thread = int(target_thread_id.value)
     attached = False
     if target_thread and target_thread != current_thread:
         attached = bool(user32.AttachThreadInput(current_thread, target_thread, True))
     try:
+        user32.keybd_event(0x12, 0, 0, 0)
         user32.SetForegroundWindow(hwnd)
         user32.SetFocus(hwnd)
+        user32.keybd_event(0x12, 0, KEYEVENTF_KEYUP, 0)
     finally:
         if attached:
             user32.AttachThreadInput(current_thread, target_thread, False)
