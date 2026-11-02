@@ -18,6 +18,7 @@ from shared.interface.dependencies import CurrentUser, get_current_user
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
 from features.desktop.domain.entities import DesktopNode, DesktopPairingError
+from features.desktop.domain.rules import normalize_capabilities
 from features.desktop.infrastructure.container import get_desktop_node_hub, get_desktop_service
 from features.desktop.interface.schemas import (
     DesktopNodeListResponse,
@@ -152,6 +153,13 @@ async def desktop_node_ws(websocket: WebSocket):
         while True:
             payload = await websocket.receive_json()
             if not isinstance(payload, dict):
+                continue
+            if payload.get("type") == "hello":
+                capabilities = normalize_capabilities(
+                    payload.get("capabilities") or ()
+                )
+                service.update_capabilities(node.node_id, capabilities)
+                channel.capabilities = capabilities
                 continue
             hub.handle_message(node, payload)
     except WebSocketDisconnect:

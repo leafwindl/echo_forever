@@ -40,6 +40,9 @@ class DesktopService:
     def mark_online(self, node: DesktopNode) -> None:
         self.repository.mark_online(node.node_id, node.capabilities)
 
+    def update_capabilities(self, node_id: str, capabilities: tuple[str, ...]) -> None:
+        self.repository.mark_online(node_id, capabilities)
+
     def mark_offline(self, node: DesktopNode) -> None:
         self.repository.mark_offline(node.node_id)
 

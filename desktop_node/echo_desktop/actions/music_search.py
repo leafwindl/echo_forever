@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+from ctypes import wintypes
 import time
 
 from echo_desktop.actions.media import _find_cloudmusic_window, _focus_window
@@ -28,6 +29,19 @@ def _combo(control: int, key: int) -> None:
     user32.keybd_event(control, 0, KEYEVENTF_KEYUP, 0)
 
 
+def _click_search_box(hwnd: int) -> None:
+    user32 = ctypes.windll.user32
+    rect = wintypes.RECT()
+    if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+        return
+    width = max(1, rect.right - rect.left)
+    x = rect.left + int(width * 0.28)
+    y = rect.top + 54
+    user32.SetCursorPos(x, y)
+    user32.mouse_event(0x0002, 0, 0, 0, 0)
+    user32.mouse_event(0x0004, 0, 0, 0, 0)
+
+
 def search_and_play(query: str) -> dict:
     song = " ".join(str(query or "").split()).strip()
     if not song:
@@ -40,8 +54,9 @@ def search_and_play(query: str) -> dict:
         )
     _focus_window(hwnd)
     time.sleep(0.3)
-    _combo(VK_CONTROL, VK_F)
-    time.sleep(0.5)
+    _click_search_box(hwnd)
+    time.sleep(0.3)
+    _combo(VK_CONTROL, 0x41)
     _set_clipboard(song)
     _combo(VK_CONTROL, VK_V)
     time.sleep(0.2)
