@@ -102,6 +102,38 @@ class Settings(BaseSettings):
     app_version: str = Field(default="dev", validation_alias="APP_VERSION")
     build_revision: str = Field(default="unknown", validation_alias="BUILD_REVISION")
     enable_api_docs: bool = Field(default=False, validation_alias="ENABLE_API_DOCS")
+    desktop_pairing_code_ttl_seconds: int = Field(
+        default=600,
+        validation_alias="DESKTOP_PAIRING_CODE_TTL_SECONDS",
+        ge=60,
+        le=3600,
+    )
+    desktop_command_timeout_seconds: int = Field(
+        default=45,
+        validation_alias="DESKTOP_COMMAND_TIMEOUT_SECONDS",
+        ge=10,
+        le=120,
+    )
+    desktop_vision_enabled: bool = Field(
+        default=True,
+        validation_alias="DESKTOP_VISION_ENABLED",
+    )
+    desktop_vision_model: str = Field(
+        default="deepseek-v4-flash-vision-exp",
+        validation_alias="DESKTOP_VISION_MODEL",
+    )
+    desktop_vision_max_tokens: int = Field(
+        default=500,
+        validation_alias="DESKTOP_VISION_MAX_TOKENS",
+        ge=100,
+        le=2000,
+    )
+    desktop_capture_max_bytes: int = Field(
+        default=3_000_000,
+        validation_alias="DESKTOP_CAPTURE_MAX_BYTES",
+        ge=100_000,
+        le=10_000_000,
+    )
     database_url: str = Field(default="", validation_alias="DATABASE_URL")
     db_pool_size: int = Field(default=5, validation_alias="DB_POOL_SIZE")
     db_pool_timeout_seconds: int = Field(

@@ -45,6 +45,7 @@
 | `stickers` | 表情资产、搜索、生成和发送 |
 | `voice` | ASR、TTS、语音资源与清理 |
 | `devices` | 配对、连接、设备语音、声纹录入与校准 |
+| `desktop` | Windows 电脑节点配对、在线状态、审批后的电脑操作与审计 |
 | `firmware_releases` | 设备固件版本数据与查询 |
 | `study_focus` | 专注记录、完成反馈与专注证据 |
 | `push` | 推送目标、通知 Outbox、发送与重试 |

@@ -12,6 +12,7 @@ from features.assistant_persona.public import get_assistant_persona
 from features.auth.interface.router import router as auth_router
 from features.chat.interface.router import router as chat_router
 from features.chat.public import process_pending_chat_turn_once
+from features.desktop.interface.router import router as desktop_router
 from features.devices.interface.router import router as devices_router
 from features.devices.interface.speaker_router import router as speaker_router
 from features.letters.interface.router import router as letters_router
@@ -251,6 +252,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(chat_router)
+    app.include_router(desktop_router)
     app.include_router(devices_router)
     app.include_router(speaker_router)
     app.include_router(memory_router)

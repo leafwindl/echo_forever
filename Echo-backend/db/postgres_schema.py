@@ -817,6 +817,48 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS desktop_nodes (
+            id BIGSERIAL PRIMARY KEY,
+            node_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            fingerprint TEXT NOT NULL DEFAULT '',
+            token_hash CHAR(64) NOT NULL UNIQUE,
+            capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
+            status VARCHAR(16) NOT NULL DEFAULT 'offline'
+                CHECK (status IN ('online', 'offline', 'revoked')),
+            last_seen_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS desktop_pairing_codes (
+            id BIGSERIAL PRIMARY KEY,
+            code_hash CHAR(64) NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            consumed_at TIMESTAMPTZ,
+            attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS desktop_actions (
+            id BIGSERIAL PRIMARY KEY,
+            action_id TEXT NOT NULL UNIQUE,
+            node_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            status VARCHAR(16) NOT NULL
+                CHECK (status IN ('running', 'completed', 'failed', 'timed_out', 'denied')),
+            error_code TEXT,
+            duration_ms INTEGER,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            completed_at TIMESTAMPTZ
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS firmware_releases (
             id BIGSERIAL PRIMARY KEY,
             release_id TEXT NOT NULL UNIQUE,
@@ -1012,6 +1054,13 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         ON app_releases(platform, channel, version_code DESC)
         WHERE status='active'
         """,
+        "ALTER TABLE desktop_nodes ADD COLUMN IF NOT EXISTS fingerprint TEXT NOT NULL DEFAULT ''",
+        "CREATE INDEX IF NOT EXISTS idx_desktop_nodes_user_status "
+        "ON desktop_nodes(user_id, status, last_seen_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_desktop_pairing_codes_expires "
+        "ON desktop_pairing_codes(expires_at) WHERE consumed_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_desktop_actions_user_created "
+        "ON desktop_actions(user_id, created_at DESC)",
         """
         CREATE INDEX IF NOT EXISTS idx_firmware_releases_latest
         ON firmware_releases(board_type, board_variant, version DESC)
