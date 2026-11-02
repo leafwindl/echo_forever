@@ -4,18 +4,17 @@ import asyncio
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from features.chat.public import list_chat_messages, list_recent_chat_user_ids
-from features.memory.public import recall_memory
 from features.presence.domain.entities import (
     PresenceContext,
     PresenceMemory,
     PresenceMessage,
 )
-from features.proactive_chat.public import get_proactive_preferences
 
 
 class ChatPresenceContextSource:
     async def load(self, user_id: str, limit: int) -> PresenceContext:
+        from features.chat.public import list_chat_messages
+
         page = await asyncio.to_thread(
             list_chat_messages,
             user_id,
@@ -42,11 +41,15 @@ class ChatPresenceContextSource:
         )
 
     def recent_user_ids(self, limit: int) -> tuple[str, ...]:
+        from features.chat.public import list_recent_chat_user_ids
+
         return list_recent_chat_user_ids(limit)
 
 
 class MemoryPresenceSource:
     async def recall(self, user_id: str, query: str) -> PresenceMemory | None:
+        from features.memory.public import recall_memory
+
         hits = await recall_memory(user_id, query, limit=1)
         if not hits:
             return None
@@ -60,6 +63,8 @@ class MemoryPresenceSource:
 
 class ProactiveQuietHours:
     def is_quiet(self, user_id: str, now: datetime) -> bool:
+        from features.proactive_chat.public import get_proactive_preferences
+
         preference = get_proactive_preferences(user_id)
         local = now.astimezone(ZoneInfo(preference.timezone)).time()
         start, end = preference.quiet_start, preference.quiet_end

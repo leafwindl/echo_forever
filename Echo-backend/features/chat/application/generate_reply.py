@@ -93,6 +93,7 @@ class GenerateChatReply:
         schedule_repository=None,
         summary_update_in_background: bool = False,
         call_reply_max_chars: int = 80,
+        presence_cue_provider: Callable[[str], str] | None = None,
     ):
         self.conversation_repository = conversation_repository
         self.context_provider = context_provider
@@ -104,6 +105,7 @@ class GenerateChatReply:
         self.schedule_repository = schedule_repository
         self.summary_update_in_background = summary_update_in_background
         self.call_reply_max_chars = call_reply_max_chars
+        self.presence_cue_provider = presence_cue_provider
         self._summary_tasks: set[asyncio.Task[bool]] = set()
 
     async def _update_summary(self, user_id: str, conversation_id: str) -> bool:
@@ -341,6 +343,12 @@ class GenerateChatReply:
                     ),
                 }
             )
+        presence_cue = ""
+        if self.presence_cue_provider is not None:
+            try:
+                presence_cue = self.presence_cue_provider(clean_user_id).strip()
+            except Exception:
+                logger.warning("Presence cue lookup failed user_id=%s", clean_user_id)
         agent_messages = context.messages
         agent_message = clean_message
         call_reply_limiter: CallReplyStreamLimiter | None = None
@@ -397,6 +405,8 @@ class GenerateChatReply:
                 decision,
             )
             agent_message = "根据后端批准的主动聊天安全摘要生成自然正文。"
+        if presence_cue:
+            agent_messages.append({"role": "system", "content": presence_cue})
         agent_kwargs = {
             "conversation_mode": conversation_mode,
             "sticker_intent": sticker_intent,

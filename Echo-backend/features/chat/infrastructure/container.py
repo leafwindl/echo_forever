@@ -38,6 +38,12 @@ _process_pending_chat_turns_use_case: ProcessPendingChatTurns | None = None
 _delivery_timing_policy: DeliveryTimingPolicy | None = None
 
 
+def _presence_cue(user_id: str) -> str:
+    from features.presence.public import build_presence_cue
+
+    return build_presence_cue(user_id)
+
+
 def get_delivery_timing_policy() -> DeliveryTimingPolicy:
     global _delivery_timing_policy
     if _delivery_timing_policy is None:
@@ -64,6 +70,7 @@ def get_generate_chat_reply_use_case() -> GenerateChatReply:
             schedule_repository=PostgresProactiveChatRepository(),
             summary_update_in_background=True,
             call_reply_max_chars=settings.call_reply_max_chars,
+            presence_cue_provider=_presence_cue,
         )
     return _generate_chat_reply_use_case
 
