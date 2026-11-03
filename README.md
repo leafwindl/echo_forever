@@ -15,6 +15,15 @@ Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter / HarmonyOS �
 | 数据库 | PostgreSQL 16 + pgvector |
 | 推送 | 个推 RestAPI V2 主通道 |
 
+## 界面预览
+
+<p align="center">
+  <img src="docs/assets/readme/echo-chat.jpg" width="300" alt="Echo 手机聊天界面与主动消息通知">
+  <img src="docs/assets/readme/echo-desktop.png" width="520" alt="Echo Desktop Windows 电脑节点">
+</p>
+
+<p align="center"><sub>左：手机端聊天与主动消息；右：Windows 电脑节点状态和本地操作日志。截图来自 v1.1.10，界面会随版本继续调整。</sub></p>
+
 ## v1.1.10 更新摘要
 
 - 新增“她的状态”页，能看到 Echo 的状态、今日念头预算和内心念头。
