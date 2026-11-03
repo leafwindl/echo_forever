@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.so
@@ -41,10 +41,11 @@ Echo-backend/static/voices/
 tmp/
 tmp_getui/
 
-# HarmonyOS generated files
+# HarmonyOS generated files and local signing configuration
 harmony_app/.hvigor/
 harmony_app/**/build/
 harmony_app/**/oh_modules/
+harmony_app/build-profile.json5
 
 # OS garbage
 .DS_Store

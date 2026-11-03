@@ -137,11 +137,12 @@ HarmonyOS 客户端使用 DevEco Studio / hvigor 构建，默认走手机 USB �
 
 ```powershell
 cd harmony_app
-# 使用 DevEco Studio 的 hvigor 完成 assembleHap
+copy build-profile.example.json5 build-profile.json5
+# 用 DevEco Studio 配置本地签名，然后完成 assembleHap
 .\scripts\install-usb.ps1
 ```
 
-安装脚本会核对包名、版本号和已有应用数据保留情况。
+`build-profile.json5` 已被 Git 忽略，签名证书、keystore 密码和本机路径只保存在本地。仓库只提交不含签名的 `build-profile.example.json5`。安装脚本会核对包名、版本号和已有应用数据保留情况。
 
 ## 生产部署边界
 
