@@ -1,6 +1,6 @@
 # Echo
 
-Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter 客户端和 FastAPI 服务端组成。它把连续文字聊天、主动联系、定时提醒、语音通话、学习专注、表情包、长期记忆和每日来信放在同一条可持久化的陪伴链路中。
+Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter / HarmonyOS 客户端和 FastAPI 服务端组成。它把连续文字聊天、主动联系、定时提醒、语音通话、学习专注、表情包、长期记忆、每日来信和 Presence 持续在场放在同一条可持久化的陪伴链路中。
 
 当前生产版本：**v1.1.10**
 
@@ -8,21 +8,34 @@ Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter 客户端和 F
 | --- | --- |
 | Android APK | `1.1.10+26` |
 | Android 包名 | `cn.echoaiforever.echo_app` |
+| HarmonyOS | `1.1.10 (10110)`，开发签名包通过 USB 覆盖安装 |
 | 公网 API | `https://api.echoaiforever.cn` |
 | APK 下载域名 | `https://download.echoaiforever.cn` |
-| 生产分支 | `master`；实际版本以 `/health` 返回为准 |
+| 生产分支 | `master`；实际版本以 `/version` 返回为准 |
 | 数据库 | PostgreSQL 16 + pgvector |
 | 推送 | 个推 RestAPI V2 主通道 |
+
+## v1.1.10 更新摘要
+
+- 新增“她的状态”页，能看到 Echo 的状态、今日念头预算和内心念头。
+- 聊天窗口按 5 分钟间隔和跨天显示时间条，Flutter 与 HarmonyOS 均已支持。
+- Presence 主动消息正式接管原有自发主动链路；明确提醒仍由主动聊天任务处理。
+- 主动消息统计回应率，连续两次未回应自动降频。
+- 主动动作支持放歌、记事本和 DSH；DSH 使用独立 `headless` 任务并具备完整电脑权限。
+- 高重要度念头（salience ≥ 0.7）写入长期记忆。
+- 念头和主动消息统一使用用户本地时区，不再把 UTC 当成本地时间。
+- 新增 HarmonyOS 1.1.10 构建和 Android 1.1.10+26 发布。
 
 ## 当前能力
 
 - 手机号验证码登录、刷新会话和安全退出。
 - 首次引导、Echo 人格、用户偏好和关系阶段。
 - 异步文字聊天：用户可以连续发送文字或表情包，Echo 回复以多段文字和独立图片逐步到达。
+- 聊天时间分隔：间隔超过 5 分钟或跨天时显示时间条，避免消息上下衔接突兀。
 - SSE 实时交付、断线补偿和聊天历史游标分页；聊天记录保存在服务端，不因退出 APP 消失。
-- Agent 工具编排：可靠时间、可选联网搜索、表情包搜索与发送、主动聊天任务管理。
+- Agent 工具编排：可靠时间、可选联网搜索、表情包搜索与发送、主动聊天任务管理，以及电脑节点操作。
 - 表情包库：官方表情包、用户私人表情包、语义标签、优先级和冷却机制。
-- 长期记忆、对话摘要、关系事件和用户可管理的记忆页面。
+- 长期记忆、对话摘要、关系事件和用户可管理的记忆页面；高重要度 Presence 念头会写入长期记忆。
 - PCM 语音通话：16 kHz、单声道、PCM16LE，WebSocket 流式 ASR 失败时降级为整段 PCM 识别，CosyVoice 返回语音。
 - 每日来信：独立的来信生成、发布、未读和已读链路。
 - 主动聊天与提醒：每日/每周/一次性任务、安静时段、频率策略、未回复暂停和任务管理。
@@ -30,13 +43,25 @@ Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter 客户端和 F
 - 应用内更新：服务端发布版本元数据，客户端校验包名、版本号、SHA-256 后请求 Android 安装器。
 - Echo 人物显示：使用 `app/assets/character/` 中的 idle 和 sit 素材。
 - 产品展示站：实时读取公开 Android 发布记录，展示当前版本、发布日期和更新说明。
-- Windows 电脑节点：独立桌面客户端显示连接状态和操作日志；可配置总是允许，打开网易云音乐、控制播放、看屏幕和单次看摄像头；图片只转成文字描述，不落盘。
-- Presence 持续在场：每 15 分钟轻量心跳，在用户沉默时生成内部念头，持久化状态和念头，为后续接续与主动行为提供基础。
+- Windows 电脑节点：独立桌面客户端显示连接状态和操作日志；可配置总是允许，打开网易云音乐、控制播放、看屏幕、单次看摄像头、写记事本、执行 DSH 任务；图片只转成文字描述，不落盘。
+- Presence 持续在场：每 15 分钟轻量心跳；用户沉默 20 分钟后可生成内部念头，念头间隔至少 30 分钟，每天最多 12 个。
+- Presence 主动消息：每天最多 6 条、间隔至少 1 小时，使用用户本地时区；连续两次未回应后自动降频。
+- Presence 主动动作：每天最多 3 次、间隔至少 1.5 小时，支持放歌、写记事本和交给 DSH。
+- Presence 状态页：展示当前状态、今日念头预算、内心念头和主动消息回应率。
+- HarmonyOS 客户端：ArkTS 实现聊天、状态页、时间分隔、更新和 USB 覆盖安装流程。
+
+## 当前边界
+
+- 主动动作要求 Windows 电脑节点在线；放歌依赖网易云音乐主窗口和 Windows UI 自动化，窗口最小化到托盘时可能失败，失败不会自动重试。
+- DSH 动作以完整电脑权限执行，只在用户信任电脑节点并开启“总是允许”时使用。
+- Android 直接下载安装，鸿蒙使用开发签名 USB 覆盖安装，两者都不是应用商店分发。
+- 主动消息和动作受每日预算、间隔、安静时段和未回应降频限制；频率仍需要根据真实使用反馈继续调整。
 
 ## 仓库结构
 
 ```text
 app/                    Flutter 客户端
+harmony_app/            HarmonyOS / ArkTS 客户端
 Echo-backend/           FastAPI 服务端
 assets/                 官方表情包、Echo 品牌和设计素材
 doc/                    业务流程、展示说明、部署和测试文档
@@ -92,10 +117,22 @@ cd app
 flutter build apk --release --no-pub `
   --dart-define=ECHO_ENV=production `
   --dart-define=ECHO_BASE_URL=https://api.echoaiforever.cn `
-  --dart-define=APP_VERSION=1.1.0
+  --dart-define=APP_VERSION=1.1.10
 ```
 
 APK 构建后由发布脚本上传 COS，并把版本元数据写入生产 PostgreSQL。不要在服务器构建 APK，也不要把签名文件、个推服务端密钥或 COS 密钥提交到 Git。
+
+### 3. 构建和安装 HarmonyOS 客户端
+
+HarmonyOS 客户端使用 DevEco Studio / hvigor 构建，默认走手机 USB 同签名覆盖安装，不卸载、不清数据：
+
+```powershell
+cd harmony_app
+# 使用 DevEco Studio 的 hvigor 完成 assembleHap
+.\scripts\install-usb.ps1
+```
+
+安装脚本会核对包名、版本号和已有应用数据保留情况。
 
 ## 生产部署边界
 
@@ -116,14 +153,17 @@ uv run pytest Echo-backend/tests -q
 cd app
 flutter analyze
 flutter test
+node ../harmony_app/tests/platform-features.test.cjs
+node ../harmony_app/tests/startup-regression.test.cjs
 ```
 
-当前发布检查结果：Flutter analyze 0 issues，客户端 119 项测试通过，后端 296 项测试通过，架构检查通过。
+当前发布检查结果：Flutter analyze 0 issues，客户端 **109** 项测试通过，后端 **527** 项测试通过（8 项跳过），架构检查通过，HarmonyOS 回归测试通过。
 
 ## 文档入口
 
 - [`Echo-backend/README.md`](Echo-backend/README.md)：服务端模块、接口、配置和数据流。
 - [`app/README.md`](app/README.md)：客户端页面、消息交互、构建和测试。
+- [`docs/Echo Presence 业务设计.md`](docs/Echo%20Presence%20业务设计.md)：Presence 状态、念头、主动消息、主动动作、回应率和降频规则。
 - [`doc/Echo v1.0.9 当前功能与扩展基线.md`](doc/Echo%20v1.0.9%20当前功能与扩展基线.md)：当前版本的业务逻辑、对话/来信边界和新功能接入规则。
 - [`doc/Echo v1.0 业务流程与数据流.md`](doc/Echo%20v1.0%20业务流程与数据流.md)：v1.0 早期业务链路历史基线，仅用于追溯。
 - [`doc/Echo v1.0.7 功能业务与展示站说明.md`](doc/Echo%20v1.0.7%20功能业务与展示站说明.md)：v1.0.7 展示站历史快照，仅用于追溯。
