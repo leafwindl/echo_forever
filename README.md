@@ -174,6 +174,7 @@ node ../harmony_app/tests/startup-regression.test.cjs
 - [`Echo-backend/README.md`](Echo-backend/README.md)：服务端模块、接口、配置和数据流。
 - [`app/README.md`](app/README.md)：客户端页面、消息交互、构建和测试。
 - [`docs/Echo Presence 业务设计.md`](docs/Echo%20Presence%20业务设计.md)：Presence 状态、念头、主动消息、主动动作、回应率和降频规则。
+- [`docs/Echo 手机 Agent 实施计划.md`](docs/Echo%20手机%20Agent%20实施计划.md)：安卓手机 Agent 的 A（ADB 原型）/B（独立 App）路线、里程碑、风险和验收标准。
 - [`doc/Echo v1.0.9 当前功能与扩展基线.md`](doc/Echo%20v1.0.9%20当前功能与扩展基线.md)：当前版本的业务逻辑、对话/来信边界和新功能接入规则。
 - [`doc/Echo v1.0 业务流程与数据流.md`](doc/Echo%20v1.0%20业务流程与数据流.md)：v1.0 早期业务链路历史基线，仅用于追溯。
 - [`doc/Echo v1.0.7 功能业务与展示站说明.md`](doc/Echo%20v1.0.7%20功能业务与展示站说明.md)：v1.0.7 展示站历史快照，仅用于追溯。
