@@ -22,6 +22,7 @@ public class AgentForegroundService extends Service {
 
     private final AgentWebSocketClient socket = new AgentWebSocketClient();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private boolean reconnectScheduled;
 
     public static boolean isRunning() {
         return running;
@@ -53,6 +54,8 @@ public class AgentForegroundService extends Service {
     public void onDestroy() {
         running = false;
         connected = false;
+        reconnectScheduled = false;
+        mainHandler.removeCallbacksAndMessages(null);
         socket.close();
         status = "已停止";
         super.onDestroy();
@@ -77,6 +80,7 @@ public class AgentForegroundService extends Service {
             @Override
             public void onOpen() {
                 connected = true;
+                reconnectScheduled = false;
                 status = "已连接";
                 updateNotification();
             }
@@ -91,6 +95,7 @@ public class AgentForegroundService extends Service {
                 connected = false;
                 status = "连接已关闭";
                 updateNotification();
+                scheduleReconnect();
             }
 
             @Override
@@ -98,8 +103,22 @@ public class AgentForegroundService extends Service {
                 connected = false;
                 status = "连接失败：" + message;
                 updateNotification();
+                scheduleReconnect();
             }
         });
+    }
+
+    private void scheduleReconnect() {
+        if (!running || reconnectScheduled) {
+            return;
+        }
+        reconnectScheduled = true;
+        mainHandler.postDelayed(() -> {
+            reconnectScheduled = false;
+            if (running && !connected) {
+                connectIfConfigured();
+            }
+        }, 5000);
     }
 
     private void handleMessage(String text) {
