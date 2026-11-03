@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.media.projection.MediaProjectionConfig;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -202,12 +201,7 @@ public class MainActivity extends Activity {
         MediaProjectionManager manager = (MediaProjectionManager) getSystemService(
                 MEDIA_PROJECTION_SERVICE
         );
-        Intent intent = Build.VERSION.SDK_INT >= 34
-                ? manager.createScreenCaptureIntent(
-                        MediaProjectionConfig.createConfigForDefaultDisplay()
-                )
-                : manager.createScreenCaptureIntent();
-        startActivityForResult(intent, REQUEST_SCREEN_CAPTURE);
+        startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_SCREEN_CAPTURE);
     }
 
     @Override

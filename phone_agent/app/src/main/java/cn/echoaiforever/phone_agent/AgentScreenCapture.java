@@ -13,6 +13,7 @@ import android.media.projection.MediaProjectionManager;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Base64;
+import android.util.Log;
 import android.util.DisplayMetrics;
 import android.view.WindowManager;
 
@@ -43,6 +44,7 @@ final class AgentScreenCapture {
                 Context.MEDIA_PROJECTION_SERVICE
         );
         projection = manager.getMediaProjection(resultCode, data);
+        Log.e("EchoScreen", "projection=" + (projection != null) + " result=" + resultCode);
         if (projection == null) {
             return false;
         }
@@ -87,6 +89,7 @@ final class AgentScreenCapture {
             }
         }
         if (image == null) {
+            Log.e("EchoScreen", "no image from reader");
             return "";
         }
         try {

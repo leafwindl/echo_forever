@@ -69,6 +69,10 @@ public class AgentForegroundService extends Service {
         }
         if (intent != null && intent.hasExtra("projection_result_code")) {
             int resultCode = intent.getIntExtra("projection_result_code", 0);
+            android.util.Log.e(
+                    "EchoScreen",
+                    "service projection extras result=" + resultCode
+            );
             Intent projectionData = intent.getParcelableExtra("projection_data");
             if (projectionData != null) {
                 try {
