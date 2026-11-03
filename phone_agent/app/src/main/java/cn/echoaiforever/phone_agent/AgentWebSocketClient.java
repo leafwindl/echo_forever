@@ -23,6 +23,7 @@ final class AgentWebSocketClient {
 
     private final OkHttpClient client = new OkHttpClient.Builder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
+            .pingInterval(20, TimeUnit.SECONDS)
             .build();
     private volatile WebSocket socket;
     private volatile boolean connected;
