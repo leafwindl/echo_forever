@@ -2,7 +2,7 @@
 
 > 日期：2026-11-03  
 > 设备：PJC110，Android 15（API 35）  
-> 状态：B0 完成，B1 骨架完成，B2 基础配对/WebSocket/observe/action/launch_app 已在本地端到端验证。
+> 状态：B0 完成，B1 骨架完成，B2 基础配对/WebSocket/observe/action/launch_app 已在本地和生产端到端验证。
 
 ## B0 产品边界
 
@@ -142,7 +142,8 @@ Crashed services: {}
   - `online=true`
 - 生产远程 `observe` 返回当前界面 UI 树
 - 生产远程 `action/home` 成功
-- 后端 revision：`fdac59d`
+- 后端 revision：`fdac59d`（手机端重连提交 `d77db00`）
+- WebSocket 断开后前台服务每 5 秒重连一次
 
 ### B2 还缺
 
