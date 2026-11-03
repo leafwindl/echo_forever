@@ -54,6 +54,7 @@ def get_presence_service() -> PresenceService:
         proactive_action_interval_minutes=(
             settings.presence_proactive_action_interval_minutes
         ),
+        message_min_salience=settings.presence_message_min_salience,
         memory_salience_threshold=settings.presence_memory_salience_threshold,
         context_messages=settings.presence_context_messages,
         max_candidate_users=settings.presence_max_candidate_users,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from providers.llm_provider import get_llm_provider
 
@@ -34,7 +35,8 @@ class ProviderPresenceMessageComposer:
             "salience": thought.salience,
             "last_user_text": context.last_user_text,
             "last_assistant_text": context.recent_assistant_text,
-            "now": now.isoformat(),
+            "now": now.astimezone(ZoneInfo(context.timezone)).isoformat(),
+            "timezone": context.timezone,
         }
         response = await get_llm_provider().chat_completion_message(
             messages=[

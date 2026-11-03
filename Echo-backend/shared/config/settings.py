@@ -151,19 +151,19 @@ class Settings(BaseSettings):
         le=60,
     )
     presence_silence_minutes: int = Field(
-        default=30,
+        default=20,
         validation_alias="PRESENCE_SILENCE_MINUTES",
         ge=5,
         le=720,
     )
     presence_min_thought_interval_minutes: int = Field(
-        default=45,
+        default=30,
         validation_alias="PRESENCE_MIN_THOUGHT_INTERVAL_MINUTES",
         ge=5,
         le=720,
     )
     presence_daily_thought_budget: int = Field(
-        default=8,
+        default=12,
         validation_alias="PRESENCE_DAILY_THOUGHT_BUDGET",
         ge=1,
         le=48,
@@ -193,25 +193,25 @@ class Settings(BaseSettings):
         le=2.0,
     )
     presence_proactive_message_budget: int = Field(
-        default=3,
+        default=6,
         validation_alias="PRESENCE_PROACTIVE_MESSAGE_BUDGET",
         ge=0,
         le=12,
     )
     presence_proactive_message_interval_minutes: int = Field(
-        default=120,
+        default=60,
         validation_alias="PRESENCE_PROACTIVE_MESSAGE_INTERVAL_MINUTES",
         ge=30,
         le=720,
     )
     presence_proactive_action_budget: int = Field(
-        default=1,
+        default=3,
         validation_alias="PRESENCE_PROACTIVE_ACTION_BUDGET",
         ge=0,
         le=6,
     )
     presence_proactive_action_interval_minutes: int = Field(
-        default=240,
+        default=90,
         validation_alias="PRESENCE_PROACTIVE_ACTION_INTERVAL_MINUTES",
         ge=30,
         le=1440,
@@ -227,6 +227,12 @@ class Settings(BaseSettings):
         validation_alias="PRESENCE_MESSAGE_TEMPERATURE",
         ge=0.0,
         le=2.0,
+    )
+    presence_message_min_salience: float = Field(
+        default=0.3,
+        validation_alias="PRESENCE_MESSAGE_MIN_SALIENCE",
+        ge=0.0,
+        le=1.0,
     )
     presence_memory_salience_threshold: float = Field(
         default=0.7,

@@ -62,6 +62,7 @@ class PresenceService:
         proactive_message_interval_minutes: int,
         proactive_action_budget: int,
         proactive_action_interval_minutes: int,
+        message_min_salience: float,
         memory_salience_threshold: float,
         context_messages: int,
         max_candidate_users: int,
@@ -87,6 +88,7 @@ class PresenceService:
         self.proactive_action_interval = timedelta(
             minutes=proactive_action_interval_minutes
         )
+        self.message_min_salience = message_min_salience
         self.memory_salience_threshold = memory_salience_threshold
         self.context_messages = context_messages
         self.max_candidate_users = max_candidate_users
@@ -254,7 +256,7 @@ class PresenceService:
                 thoughts_used=state.thoughts_used,
             )
         message_text = ""
-        if thought.shareable:
+        if thought.shareable or thought.salience >= self.message_min_salience:
             message_text = await self._maybe_deliver_message(
                 state=state,
                 thought=thought,

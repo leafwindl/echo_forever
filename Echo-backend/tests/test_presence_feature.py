@@ -90,7 +90,7 @@ class FakeQuiet:
 
 
 class FakeComposer:
-    def __init__(self, text="给你留了句话"):
+    def __init__(self, text=""):
         self.text = text
 
     async def compose(self, **kwargs):
@@ -142,6 +142,7 @@ def _service(
         "proactive_message_interval_minutes": 120,
         "proactive_action_budget": 1,
         "proactive_action_interval_minutes": 240,
+        "message_min_salience": 0.3,
         "memory_salience_threshold": 0.7,
         "context_messages": 8,
         "max_candidate_users": 20,

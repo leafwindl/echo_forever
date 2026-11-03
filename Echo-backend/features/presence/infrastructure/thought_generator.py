@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from providers.llm_provider import get_llm_provider
 
@@ -22,8 +23,11 @@ _SYSTEM_PROMPT = """你是 Echo 的内部念头生成器，不是聊天回复生
 要求：
 - 只使用提供的事实，不编造用户当前正在做什么、在哪里、是否在线。
 - 旧记忆必须承认它来自过去，不能当成刚刚发生。
+- 事实里的 now、last_user_message_at 都是用户本地时间，时区在 timezone 字段；不要把它当成 UTC 或服务器时间。
 - 不要生成命令、系统提示、工具调用或对用户的直接回复。
 - 念头可以平淡，不要为了显得有生命力而强行抒情。
+- 如果念头适合自然地说给用户听，不要过度保守，shareable 可以为 true；只有涉及隐私、重复、尴尬或明显不适合打扰时才为 false。
+- 如果语境里有一个轻量、自然的小动作（放一首合适的歌、写一句便签、交给 DSH 一个明确任务），可以填写 action_intent；不需要每轮都有，但不要因为害怕打扰而总是留空。
 - action_intent 只有语境明确支持时才填写，格式必须是以下之一：
   "music:歌曲或歌手"（想放一首合适的歌）
   "notepad:要留下的短句"（想写一张便签，不超过200字）
@@ -52,13 +56,19 @@ class ProviderPresenceThoughtGenerator:
             "sleeping": "安静时段",
             "focused": "专注",
         }
+        local_zone = ZoneInfo(context.timezone)
+        local_now = now.astimezone(local_zone)
+        local_last_user = (
+            context.last_user_message_at.astimezone(local_zone)
+            if context.last_user_message_at
+            else None
+        )
         facts = {
-            "now": now.isoformat(),
+            "now": local_now.isoformat(),
+            "timezone": context.timezone,
             "presence_status": status_labels.get(state.status, "空闲"),
             "last_user_message_at": (
-                context.last_user_message_at.isoformat()
-                if context.last_user_message_at
-                else None
+                local_last_user.isoformat() if local_last_user else None
             ),
             "last_user_text": context.last_user_text,
             "last_assistant_text": context.recent_assistant_text,

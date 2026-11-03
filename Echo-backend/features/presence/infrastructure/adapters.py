@@ -14,7 +14,9 @@ from features.presence.domain.entities import (
 class ChatPresenceContextSource:
     async def load(self, user_id: str, limit: int) -> PresenceContext:
         from features.chat.public import list_chat_messages
+        from features.proactive_chat.public import get_proactive_preferences
 
+        timezone = get_proactive_preferences(user_id).timezone or "Asia/Shanghai"
         page = await asyncio.to_thread(
             list_chat_messages,
             user_id,
@@ -39,6 +41,7 @@ class ChatPresenceContextSource:
                 " ".join(last_assistant.content.split())[:300] if last_assistant else ""
             ),
             last_assistant_at=last_assistant.created_at if last_assistant else None,
+            timezone=timezone,
         )
 
     def recent_user_ids(self, limit: int) -> tuple[str, ...]:

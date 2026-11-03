@@ -65,6 +65,7 @@ class PresenceContext:
     last_user_text: str
     recent_assistant_text: str
     last_assistant_at: datetime | None = None
+    timezone: str = "Asia/Shanghai"
 
 
 @dataclass(frozen=True)
