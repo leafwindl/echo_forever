@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Echo Phone Agent</string>
+    <string name="accessibility_description">允许 Echo Phone Agent 读取界面、点击、输入和返回，用于执行用户交给它的手机任务。</string>
+    <string name="notification_channel">Echo Phone Agent</string>
+    <string name="notification_title">Echo Phone Agent 正在运行</string>
+    <string name="notification_text">点击返回 Agent 状态页</string>
+</resources>

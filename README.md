@@ -77,6 +77,7 @@ doc/                    业务流程、展示说明、部署和测试文档
 deploy/                 Docker、Nginx 和发布说明
 site/                   Echo 产品展示站
 desktop_node/           独立的 Windows 电脑节点（Python，不混入 App）
+phone_agent/            B 阶段独立安卓执行端（原生 Java 骨架）
 scripts/                架构检查、COS、APK 和电脑节点配对脚本
 docker-compose.yml      PostgreSQL、后端和备份服务编排
 ```
@@ -176,6 +177,7 @@ node ../harmony_app/tests/startup-regression.test.cjs
 - [`docs/Echo Presence 业务设计.md`](docs/Echo%20Presence%20业务设计.md)：Presence 状态、念头、主动消息、主动动作、回应率和降频规则。
 - [`docs/Echo 手机 Agent 实施计划.md`](docs/Echo%20手机%20Agent%20实施计划.md)：安卓手机 Agent 的 A（ADB 原型）/B（独立 App）路线、里程碑、风险和验收标准。
 - [`docs/Echo 手机 Agent A 阶段记录.md`](docs/Echo%20手机%20Agent%20A%20阶段记录.md)：A 阶段实测环境、8 项任务结果、phone_lab 能力和限制。
+- [`docs/Echo Phone Agent B 阶段记录.md`](docs/Echo%20Phone%20Agent%20B%20阶段记录.md)：B0 产品边界、B1 独立 App 骨架和真机验证记录。
 - [`doc/Echo v1.0.9 当前功能与扩展基线.md`](doc/Echo%20v1.0.9%20当前功能与扩展基线.md)：当前版本的业务逻辑、对话/来信边界和新功能接入规则。
 - [`doc/Echo v1.0 业务流程与数据流.md`](doc/Echo%20v1.0%20业务流程与数据流.md)：v1.0 早期业务链路历史基线，仅用于追溯。
 - [`doc/Echo v1.0.7 功能业务与展示站说明.md`](doc/Echo%20v1.0.7%20功能业务与展示站说明.md)：v1.0.7 展示站历史快照，仅用于追溯。
