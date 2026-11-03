@@ -205,6 +205,7 @@ Crashed services: {}
 2. MediaProjection
    - 已实现授权、VirtualDisplay、JPEG 编码
    - 当前 ColorOS/Android 15 上授权后取不到有效画面
+   - 已确认系统创建了投影 token，但应用侧没有拿到可用帧
    - 未把失败方案包装成“已支持”
 
 因此 B3 暂不宣称手机远程截图完成。ADB `screencap` 仍可用于开发机本地调试，但不能作为手机独立运行时的远程截图。

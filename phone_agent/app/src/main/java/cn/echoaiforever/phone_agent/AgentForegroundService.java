@@ -6,6 +6,7 @@ import android.content.pm.ServiceInfo;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Handler;
@@ -39,6 +40,27 @@ public class AgentForegroundService extends Service {
         return status;
     }
 
+    public static boolean startScreenCapture(
+            Context context,
+            int resultCode,
+            Intent data
+    ) {
+        AgentForegroundService current = instance;
+        if (current == null) {
+            return false;
+        }
+        boolean started = current.screenCapture.start(resultCode, data);
+        if (started && Build.VERSION.SDK_INT >= 29) {
+            current.startForeground(
+                    NOTIFICATION_ID,
+                    current.buildNotification("手机截图已授权"),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                            | ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            );
+        }
+        return started;
+    }
+
     public static String captureScreenshot() {
         AgentForegroundService current = instance;
         if (current != null && current.screenCapture.isReady()) {
@@ -66,29 +88,6 @@ public class AgentForegroundService extends Service {
             );
         } else {
             startForeground(NOTIFICATION_ID, buildNotification("正在连接 Echo 后端"));
-        }
-        if (intent != null && intent.hasExtra("projection_result_code")) {
-            int resultCode = intent.getIntExtra("projection_result_code", 0);
-            android.util.Log.e(
-                    "EchoScreen",
-                    "service projection extras result=" + resultCode
-            );
-            Intent projectionData = intent.getParcelableExtra("projection_data");
-            if (projectionData != null) {
-                try {
-                    if (screenCapture.start(resultCode, projectionData)
-                            && Build.VERSION.SDK_INT >= 29) {
-                        startForeground(
-                                NOTIFICATION_ID,
-                                buildNotification("手机截图已授权"),
-                                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                                        | ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-                        );
-                    }
-                } catch (Exception exc) {
-                    status = "截图授权失败";
-                }
-            }
         }
         connectIfConfigured();
         return START_STICKY;

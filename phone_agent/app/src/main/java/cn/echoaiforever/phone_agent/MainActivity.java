@@ -210,15 +210,16 @@ public class MainActivity extends Activity {
         if (requestCode != REQUEST_SCREEN_CAPTURE || resultCode != RESULT_OK || data == null) {
             return;
         }
-        Intent serviceIntent = new Intent(this, AgentForegroundService.class);
-        serviceIntent.putExtra("projection_result_code", resultCode);
-        serviceIntent.putExtra("projection_data", data);
-        if (Build.VERSION.SDK_INT >= 26) {
-            startForegroundService(serviceIntent);
-        } else {
-            startService(serviceIntent);
-        }
-        Toast.makeText(this, "截图授权已发送", Toast.LENGTH_SHORT).show();
+        boolean started = AgentForegroundService.startScreenCapture(
+                this,
+                resultCode,
+                data
+        );
+        Toast.makeText(
+                this,
+                started ? "截图授权成功" : "截图授权失败，请先启动前台服务",
+                Toast.LENGTH_SHORT
+        ).show();
     }
 
     private void startAgentService() {
