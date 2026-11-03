@@ -21,6 +21,8 @@ data/backups/
 
 # Environment & secrets
 .env
+.venv/
+phone_lab/.venv/
 *.pem
 *.key
 *.jks
