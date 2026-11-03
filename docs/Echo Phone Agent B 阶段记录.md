@@ -132,9 +132,20 @@ Crashed services: {}
 - 后端全量测试：**531 passed, 8 skipped**
 - 架构检查通过
 
+### 生产验证
+
+- 后端已部署到 `https://api.echoaiforever.cn`
+- Nginx 增加 `/mobile-agent/ws` WebSocket 代理（与 `/desktop/nodes/ws` 相同的 Upgrade 配置）
+- 手机使用生产地址重新配对成功
+- 生产设备在线：
+  - `name=Echo 测试手机`
+  - `online=true`
+- 生产远程 `observe` 返回当前界面 UI 树
+- 生产远程 `action/home` 成功
+- 后端 revision：`fdac59d`
+
 ### B2 还缺
 
-- 生产后端部署验证
 - MediaProjection 截图授权
 - 通知读取
 - 多步任务、任务进度、紧急停止

@@ -1,6 +1,6 @@
 # Echo 手机 Agent 实施计划
 
-> 状态：A 阶段完成；B0/B1 骨架完成，B2 待开始  
+> 状态：A 阶段完成；B0/B1 骨架完成；B2 配对、WebSocket、observe/action/launch_app 已完成本地和生产验证  
 > 目标设备：闲置安卓手机 PJC110，Android 15（API 35），USB 调试已开启  
 > 路线：先做 A（电脑端 ADB 原型），再做 B（手机端 Agent App）  
 > 默认不 Root。
