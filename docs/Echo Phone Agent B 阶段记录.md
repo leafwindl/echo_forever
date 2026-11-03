@@ -2,7 +2,7 @@
 
 > 日期：2026-11-03  
 > 设备：PJC110，Android 15（API 35）  
-> 状态：B0 完成，B1 骨架完成，B2 基础配对/WebSocket/observe/action/launch_app 已在本地和生产端到端验证。
+> 状态：B0/B1/B2 完成；B3 的通知、审计、Agent 工具、解绑和安全加固已完成；手机截图受 ColorOS 权限限制，尚未打通。
 
 ## B0 产品边界
 
@@ -147,9 +147,71 @@ Crashed services: {}
 
 ### B2 还缺
 
-- MediaProjection 截图授权
-- 通知读取
-- 多步任务、任务进度、紧急停止
-- 操作审计
 - 高风险操作确认
 - 正式分发前关闭明文 HTTP
+
+## B3 已实现
+
+### 通知读取
+
+- 新增 `AgentNotificationListener`
+- 只读取当前通知的包名、标题、文本、时间
+- 不点击通知、不读取通知历史
+- 生产验证：返回淘宝、抖音、华为健康等当前通知
+- 手机端可通过“打开通知读取设置”授权
+
+### 操作审计
+
+- 新增 `mobile_agent_actions` 表
+- 每条远程命令记录：
+  - action_id
+  - device_id / user_id
+  - action
+  - running/completed/failed/timed_out
+  - error_code
+  - duration_ms
+- 新增 `GET /mobile-agent/audit`
+- 生产验证：`observe`、`notifications` 等动作均落入审计
+
+### Agent 工具
+
+后端已注册：
+
+- `phone_status`
+- `phone_observe`
+- `phone_screenshot`（受手机截图能力限制）
+- `phone_launch_app`
+- `phone_action`
+- `phone_notifications`
+- `phone_stop`
+- `phone_run_task`（受限多步循环，最多 20 步）
+
+工具通过 `mobile_agent/public.py` 访问稳定 API，不直接依赖 PostgreSQL。
+
+### 解除配对与安全
+
+- 手机端“解除本机配对”清除设备令牌和设备 ID，并尝试调用后端撤销
+- 后端新增 `POST /mobile-agent/unpair`（设备令牌自撤销）
+- 默认关闭明文 HTTP，仅放行 `127.0.0.1`、`localhost`、`10.0.2.2` 用于本地 adb reverse
+- 生产地址继续使用 HTTPS
+
+### 截图限制
+
+已尝试两种方案：
+
+1. 无障碍 `takeScreenshot`
+   - 配置 `canTakeScreenshot=true`
+   - ColorOS 绑定后能力位未包含截图，调用返回不可用
+2. MediaProjection
+   - 已实现授权、VirtualDisplay、JPEG 编码
+   - 当前 ColorOS/Android 15 上授权后取不到有效画面
+   - 未把失败方案包装成“已支持”
+
+因此 B3 暂不宣称手机远程截图完成。ADB `screencap` 仍可用于开发机本地调试，但不能作为手机独立运行时的远程截图。
+
+### B3 还缺
+
+- 可在 ColorOS 真机工作的截图方案（需要继续评估系统限制或改用专用设备）
+- 高风险操作二次确认
+- 完整多步任务状态推送和用户中断 UI
+- 令牌加密存储/Keystore

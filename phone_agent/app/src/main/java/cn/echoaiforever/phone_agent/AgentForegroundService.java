@@ -2,6 +2,7 @@ package cn.echoaiforever.phone_agent;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
+import android.content.pm.ServiceInfo;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -22,6 +23,7 @@ public class AgentForegroundService extends Service {
     private static volatile AgentForegroundService instance;
 
     private final AgentWebSocketClient socket = new AgentWebSocketClient();
+    private final AgentScreenCapture screenCapture = new AgentScreenCapture(this);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private boolean reconnectScheduled;
 
@@ -38,6 +40,10 @@ public class AgentForegroundService extends Service {
     }
 
     public static String captureScreenshot() {
+        AgentForegroundService current = instance;
+        if (current != null && current.screenCapture.isReady()) {
+            return current.screenCapture.captureBase64();
+        }
         AgentAccessibilityService service = AgentAccessibilityService.instance();
         return service == null ? "" : service.captureScreenshotBase64();
     }
@@ -52,7 +58,34 @@ public class AgentForegroundService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         running = true;
-        startForeground(NOTIFICATION_ID, buildNotification("正在连接 Echo 后端"));
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification("正在连接 Echo 后端"),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            );
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification("正在连接 Echo 后端"));
+        }
+        if (intent != null && intent.hasExtra("projection_result_code")) {
+            int resultCode = intent.getIntExtra("projection_result_code", 0);
+            Intent projectionData = intent.getParcelableExtra("projection_data");
+            if (projectionData != null) {
+                try {
+                    if (screenCapture.start(resultCode, projectionData)
+                            && Build.VERSION.SDK_INT >= 29) {
+                        startForeground(
+                                NOTIFICATION_ID,
+                                buildNotification("手机截图已授权"),
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                                        | ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                        );
+                    }
+                } catch (Exception exc) {
+                    status = "截图授权失败";
+                }
+            }
+        }
         connectIfConfigured();
         return START_STICKY;
     }
@@ -65,6 +98,7 @@ public class AgentForegroundService extends Service {
         instance = null;
         mainHandler.removeCallbacksAndMessages(null);
         socket.close();
+        screenCapture.stop();
         status = "已停止";
         super.onDestroy();
     }

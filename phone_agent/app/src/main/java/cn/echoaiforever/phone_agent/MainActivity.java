@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.media.projection.MediaProjectionConfig;
+import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -19,6 +21,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
+    private static final int REQUEST_SCREEN_CAPTURE = 42;
+
     private TextView statusView;
     private TextView detailView;
     private EditText serverUrl;
@@ -82,6 +86,7 @@ public class MainActivity extends Activity {
         root.addView(button("停止前台服务", v -> stopAgentService()));
         root.addView(button("读取当前界面", v -> readCurrentUi()));
         root.addView(button("回到桌面", v -> goHome()));
+        root.addView(button("授权手机截图", v -> requestScreenCapture()));
         root.addView(button("打开通知读取设置", v -> openNotificationSettings()));
         root.addView(button("解除本机配对", v -> unpair()));
 
@@ -191,6 +196,35 @@ public class MainActivity extends Activity {
 
     private void openNotificationSettings() {
         startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+    }
+
+    private void requestScreenCapture() {
+        MediaProjectionManager manager = (MediaProjectionManager) getSystemService(
+                MEDIA_PROJECTION_SERVICE
+        );
+        Intent intent = Build.VERSION.SDK_INT >= 34
+                ? manager.createScreenCaptureIntent(
+                        MediaProjectionConfig.createConfigForDefaultDisplay()
+                )
+                : manager.createScreenCaptureIntent();
+        startActivityForResult(intent, REQUEST_SCREEN_CAPTURE);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_SCREEN_CAPTURE || resultCode != RESULT_OK || data == null) {
+            return;
+        }
+        Intent serviceIntent = new Intent(this, AgentForegroundService.class);
+        serviceIntent.putExtra("projection_result_code", resultCode);
+        serviceIntent.putExtra("projection_data", data);
+        if (Build.VERSION.SDK_INT >= 26) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
+        Toast.makeText(this, "截图授权已发送", Toast.LENGTH_SHORT).show();
     }
 
     private void startAgentService() {

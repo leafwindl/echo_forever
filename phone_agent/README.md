@@ -13,16 +13,18 @@ B 阶段独立安卓执行端。当前是 B0/B1 骨架，不是完整产品。
 - App 状态页：无障碍开关、前台服务状态、界面读取、桌面返回
 - 后端配对：地址、配对码、设备名
 - OkHttp WebSocket 长连接
-- 远程命令：observe、launch_app、tap、tap_text、home/back/recents、text
+- 远程命令：observe、launch_app、tap、tap_text、home/back/recents、text、notifications、stop
+- 通知读取：NotificationListenerService，只读当前通知
+- 解除本机配对
+- 默认关闭明文 HTTP，仅允许本地回环测试
 
 ## 尚未实现
 
-- MediaProjection 截图
-- 通知读取
+- 可用的远程截图（无障碍截图和 MediaProjection 在当前 ColorOS 设备上均未打通）
 - 长按/滑动/滚动
-- 多步任务、任务进度
-- 审计、紧急停止、高风险操作确认
-- 正式分发前的 HTTPS/安全加固
+- 多步任务状态推送
+- 高风险操作二次确认
+- 令牌 Keystore 加密
 
 ## 构建
 
@@ -59,4 +61,6 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 - 仅用于专用测试手机
 - 不 Root
 - 不自动绕过锁屏、支付、生物识别
-- 当前允许明文 HTTP，仅用于 adb reverse 本地测试；正式分发前必须收紧
+- 明文 HTTP 只放行 `127.0.0.1`/`localhost`/`10.0.2.2`，其余必须 HTTPS
+- 截图和通知读取仍需要用户手动授权
+- 当前是专用测试机工具，不是面向普通用户的成品
