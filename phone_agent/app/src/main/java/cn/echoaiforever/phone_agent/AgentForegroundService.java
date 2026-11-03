@@ -19,6 +19,7 @@ public class AgentForegroundService extends Service {
     private static volatile boolean running = false;
     private static volatile String status = "未连接";
     private static volatile boolean connected = false;
+    private static volatile AgentForegroundService instance;
 
     private final AgentWebSocketClient socket = new AgentWebSocketClient();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -36,9 +37,15 @@ public class AgentForegroundService extends Service {
         return status;
     }
 
+    public static String captureScreenshot() {
+        AgentAccessibilityService service = AgentAccessibilityService.instance();
+        return service == null ? "" : service.captureScreenshotBase64();
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
+        instance = this;
         createChannel();
     }
 
@@ -55,6 +62,7 @@ public class AgentForegroundService extends Service {
         running = false;
         connected = false;
         reconnectScheduled = false;
+        instance = null;
         mainHandler.removeCallbacksAndMessages(null);
         socket.close();
         status = "已停止";

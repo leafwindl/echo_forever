@@ -15,6 +15,20 @@ final class AgentCommandHandler {
             if ("observe".equals(action)) {
                 return observe();
             }
+            if ("screenshot".equals(action)) {
+                return screenshot();
+            }
+            if ("notifications".equals(action)) {
+                return notifications();
+            }
+            if ("stop".equals(action)) {
+                JSONObject data = new JSONObject();
+                data.put("stopped", true);
+                JSONObject result = new JSONObject();
+                result.put("ok", true);
+                result.put("data", data);
+                return result;
+            }
             if ("launch_app".equals(action)) {
                 return launchApp(context, arguments.optString("package", ""));
             }
@@ -36,6 +50,29 @@ final class AgentCommandHandler {
         data.put("text", service.dumpTree());
         data.put("package", service.currentPackage());
         data.put("class", service.currentWindow());
+        JSONObject result = new JSONObject();
+        result.put("ok", true);
+        result.put("data", data);
+        return result;
+    }
+
+    private static JSONObject screenshot() throws Exception {
+        String image = AgentForegroundService.captureScreenshot();
+        if (image.isEmpty()) {
+            return error("screenshot_unavailable", "尚未授权截图，或当前屏幕不可截取");
+        }
+        JSONObject data = new JSONObject();
+        data.put("image_base64", image);
+        data.put("mime", "image/jpeg");
+        JSONObject result = new JSONObject();
+        result.put("ok", true);
+        result.put("data", data);
+        return result;
+    }
+
+    private static JSONObject notifications() throws Exception {
+        JSONObject data = new JSONObject();
+        data.put("notifications", AgentNotificationListener.snapshot());
         JSONObject result = new JSONObject();
         result.put("ok", true);
         result.put("data", data);

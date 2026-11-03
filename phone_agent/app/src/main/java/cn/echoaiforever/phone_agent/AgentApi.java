@@ -17,6 +17,19 @@ final class AgentApi {
     private AgentApi() {
     }
 
+    static void unpair(String baseUrl, String token) throws IOException {
+        Request request = new Request.Builder()
+                .url(AgentConfig.normalizeBaseUrl(baseUrl) + "/mobile-agent/unpair")
+                .header("Authorization", "Bearer " + token)
+                .post(RequestBody.create("{}", JSON))
+                .build();
+        try (Response response = CLIENT.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("解除配对失败 HTTP " + response.code());
+            }
+        }
+    }
+
     static PairResult pair(String baseUrl, String code, String deviceName) throws IOException {
         JSONObject payload = new JSONObject();
         try {

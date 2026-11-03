@@ -44,3 +44,18 @@ class MobileAgentCommandResponse(BaseModel):
     command_id: str
     device_id: str
     data: dict[str, Any]
+
+
+class MobileAgentAuditItem(BaseModel):
+    action_id: str
+    device_id: str
+    action: str
+    status: str
+    error_code: str | None = None
+    duration_ms: int | None = None
+    created_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class MobileAgentAuditResponse(BaseModel):
+    items: list[MobileAgentAuditItem]

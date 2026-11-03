@@ -28,6 +28,8 @@ from features.mobile_agent.infrastructure.container import (
     get_mobile_agent_service,
 )
 from features.mobile_agent.interface.schemas import (
+    MobileAgentAuditItem,
+    MobileAgentAuditResponse,
     MobileAgentCommandRequest,
     MobileAgentCommandResponse,
     MobileAgentDeviceListResponse,
@@ -78,7 +80,7 @@ def _device_response(device, online: bool) -> MobileAgentDeviceResponse:
 
 def _validate_command(action: str, arguments: dict[str, Any]) -> dict[str, Any]:
     action = action.strip()
-    if action == "observe":
+    if action in {"observe", "screenshot", "notifications", "stop"}:
         return {}
     if action == "launch_app":
         package = str(arguments.get("package") or "").strip()
@@ -134,6 +136,21 @@ def pair_device(payload: PairMobileAgentRequest, request: Request):
     )
 
 
+@router.post("/unpair", status_code=status.HTTP_204_NO_CONTENT)
+def unpair_device(request: Request):
+    authorization = request.headers.get("authorization", "")
+    token = authorization.removeprefix("Bearer ").strip()
+    service = get_mobile_agent_service()
+    device = service.authenticate(token)
+    if device is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid mobile agent token",
+        )
+    service.revoke(device.user_id, device.device_id)
+    return None
+
+
 @router.get("/devices", response_model=MobileAgentDeviceListResponse)
 def list_devices(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -145,6 +162,17 @@ def list_devices(
             _device_response(device, hub.is_online(device.device_id))
             for device in service.list_devices(current_user.user_id)
         ]
+    )
+
+
+@router.get("/audit", response_model=MobileAgentAuditResponse)
+def get_audit(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    limit: int = 50,
+):
+    rows = get_mobile_agent_service().list_actions(current_user.user_id, limit)
+    return MobileAgentAuditResponse(
+        items=[MobileAgentAuditItem(**row) for row in rows]
     )
 
 

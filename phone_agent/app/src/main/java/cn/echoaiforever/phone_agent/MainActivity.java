@@ -2,6 +2,7 @@ package cn.echoaiforever.phone_agent;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -81,6 +82,8 @@ public class MainActivity extends Activity {
         root.addView(button("停止前台服务", v -> stopAgentService()));
         root.addView(button("读取当前界面", v -> readCurrentUi()));
         root.addView(button("回到桌面", v -> goHome()));
+        root.addView(button("打开通知读取设置", v -> openNotificationSettings()));
+        root.addView(button("解除本机配对", v -> unpair()));
 
         TextView serverLabel = new TextView(this);
         serverLabel.setText("后端地址（本地测试可用 http://127.0.0.1:8000）");
@@ -159,7 +162,17 @@ public class MainActivity extends Activity {
                         + "\n后端连接：" + (AgentForegroundService.isConnected() ? "已连接" : "未连接")
                         + "\n连接状态：" + AgentForegroundService.statusText()
                         + "\n设备：" + (deviceId.isEmpty() ? "尚未配对" : deviceId)
+                        + "\n通知读取：" + (isNotificationListenerEnabled() ? "已开启" : "未开启")
         );
+    }
+
+    private boolean isNotificationListenerEnabled() {
+        String enabled = Settings.Secure.getString(
+                getContentResolver(),
+                "enabled_notification_listeners"
+        );
+        ComponentName component = new ComponentName(this, AgentNotificationListener.class);
+        return enabled != null && enabled.contains(component.flattenToString());
     }
 
     private boolean isAccessibilityEnabled() {
@@ -176,6 +189,10 @@ public class MainActivity extends Activity {
         startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
     }
 
+    private void openNotificationSettings() {
+        startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+    }
+
     private void startAgentService() {
         Intent intent = new Intent(this, AgentForegroundService.class);
         if (Build.VERSION.SDK_INT >= 26) {
@@ -190,6 +207,28 @@ public class MainActivity extends Activity {
     private void stopAgentService() {
         stopService(new Intent(this, AgentForegroundService.class));
         refreshStatus();
+    }
+
+    private void unpair() {
+        String baseUrl = AgentConfig.baseUrl(this);
+        String token = preferences.getString(AgentConfig.DEVICE_TOKEN, "");
+        preferences.edit()
+                .remove(AgentConfig.DEVICE_TOKEN)
+                .remove(AgentConfig.DEVICE_ID)
+                .apply();
+        stopService(new Intent(this, AgentForegroundService.class));
+        pairingCode.setText("");
+        refreshStatus();
+        if (!token.isEmpty()) {
+            new Thread(() -> {
+                try {
+                    AgentApi.unpair(baseUrl, token);
+                } catch (Exception ignored) {
+                    // Local unpair is what matters on the phone; server revocation is best effort.
+                }
+            }, "phone-agent-unpair").start();
+        }
+        Toast.makeText(this, "本机配对信息已清除", Toast.LENGTH_SHORT).show();
     }
 
     private void readCurrentUi() {

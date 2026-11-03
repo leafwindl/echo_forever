@@ -873,6 +873,21 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS mobile_agent_actions (
+            id BIGSERIAL PRIMARY KEY,
+            action_id TEXT NOT NULL UNIQUE,
+            device_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            status VARCHAR(16) NOT NULL
+                CHECK (status IN ('running', 'completed', 'failed', 'timed_out')),
+            error_code TEXT,
+            duration_ms INTEGER,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            completed_at TIMESTAMPTZ
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS mobile_agent_pairing_codes (
             id BIGSERIAL PRIMARY KEY,
             code_hash CHAR(64) NOT NULL UNIQUE,
@@ -1168,6 +1183,8 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ON mobile_agent_devices(user_id, status, last_seen_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_pairing_expires "
         "ON mobile_agent_pairing_codes(expires_at) WHERE consumed_at IS NULL",
+        "CREATE INDEX IF NOT EXISTS idx_mobile_agent_actions_user_created "
+        "ON mobile_agent_actions(user_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_presence_thoughts_user_created "
         "ON presence_thoughts(user_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_presence_events_user_created "

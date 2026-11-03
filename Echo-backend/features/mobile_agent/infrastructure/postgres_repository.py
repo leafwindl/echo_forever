@@ -136,3 +136,50 @@ class PostgresMobileAgentRepository:
                 """,
                 (device_id,),
             )
+
+    def record_action_start(
+        self, *, action_id: str, device_id: str, user_id: str, action: str
+    ) -> None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO mobile_agent_actions (
+                    action_id, device_id, user_id, action, status
+                ) VALUES (%s, %s, %s, %s, 'running')
+                """,
+                (action_id, device_id, user_id, action),
+            )
+
+    def record_action_finish(
+        self,
+        *,
+        action_id: str,
+        status: str,
+        error_code: str | None,
+        duration_ms: int,
+    ) -> None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE mobile_agent_actions
+                SET status = %s, error_code = %s, duration_ms = %s,
+                    completed_at = NOW()
+                WHERE action_id = %s
+                """,
+                (status, error_code, duration_ms, action_id),
+            )
+
+    def list_actions(self, user_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        with get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT action_id, device_id, action, status, error_code,
+                       duration_ms, created_at, completed_at
+                FROM mobile_agent_actions
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (user_id, max(1, min(limit, 200))),
+            )
+            return [dict(row) for row in cursor.fetchall()]

@@ -13,6 +13,7 @@ from features.agent.infrastructure.proactive_planner import ProviderProactiveDec
 from features.agent.infrastructure.tools import (
     register_beat_tools,
     register_desktop_tools,
+    register_mobile_agent_tools,
     register_proactive_tools,
     register_relationship_tools,
     register_schedule_tools,
@@ -28,6 +29,7 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
     register_sticker_tools(registry)
     register_beat_tools(registry)
     register_desktop_tools(registry)
+    register_mobile_agent_tools(registry)
     register_relationship_tools(registry)
     register_proactive_tools(registry)
     register_schedule_tools(registry)

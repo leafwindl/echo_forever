@@ -2,15 +2,25 @@ package cn.echoaiforever.phone_agent;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
+import android.graphics.Bitmap;
+import android.graphics.ColorSpace;
 import android.graphics.Path;
 import android.graphics.Rect;
+import android.hardware.HardwareBuffer;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Base64;
+import android.view.Display;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class AgentAccessibilityService extends AccessibilityService {
     private static volatile AgentAccessibilityService instance;
@@ -61,6 +71,86 @@ public class AgentAccessibilityService extends AccessibilityService {
 
     public String currentWindow() {
         return lastWindow;
+    }
+
+    public String captureScreenshotBase64() {
+        if (Build.VERSION.SDK_INT < 30) {
+            return "";
+        }
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<String> encoded = new AtomicReference<>("");
+        Thread worker = new Thread(() -> {
+            try {
+                takeScreenshot(
+                        Display.DEFAULT_DISPLAY,
+                        getMainExecutor(),
+                        new TakeScreenshotCallback() {
+                            @Override
+                            public void onSuccess(ScreenshotResult screenshot) {
+                                HardwareBuffer buffer = screenshot.getHardwareBuffer();
+                                try {
+                                    ColorSpace colorSpace = screenshot.getColorSpace();
+                                    Bitmap hardware = Bitmap.wrapHardwareBuffer(
+                                            buffer,
+                                            colorSpace
+                                    );
+                                    if (hardware == null) {
+                                        return;
+                                    }
+                                    Bitmap software = hardware.copy(
+                                            Bitmap.Config.ARGB_8888,
+                                            false
+                                    );
+                                    hardware.recycle();
+                                    if (software == null) {
+                                        return;
+                                    }
+                                    int targetWidth = Math.min(720, software.getWidth());
+                                    int targetHeight = Math.round(
+                                            software.getHeight()
+                                                    * (targetWidth / (float) software.getWidth())
+                                    );
+                                    Bitmap scaled = Bitmap.createScaledBitmap(
+                                            software,
+                                            targetWidth,
+                                            targetHeight,
+                                            true
+                                    );
+                                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                                    scaled.compress(Bitmap.CompressFormat.JPEG, 65, stream);
+                                    software.recycle();
+                                    if (scaled != software) {
+                                        scaled.recycle();
+                                    }
+                                    encoded.set(
+                                            Base64.encodeToString(
+                                                    stream.toByteArray(),
+                                                    Base64.NO_WRAP
+                                            )
+                                    );
+                                } finally {
+                                    buffer.close();
+                                    latch.countDown();
+                                }
+                            }
+
+                            @Override
+                            public void onFailure(int errorCode) {
+                                latch.countDown();
+                            }
+                        }
+                );
+            } catch (Exception exc) {
+                latch.countDown();
+            }
+        }, "echo-accessibility-screenshot");
+        worker.start();
+        try {
+            latch.await(3, TimeUnit.SECONDS);
+        } catch (InterruptedException exc) {
+            Thread.currentThread().interrupt();
+        }
+        return encoded.get();
     }
 
     public boolean tap(int x, int y) {
