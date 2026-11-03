@@ -859,6 +859,31 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS mobile_agent_devices (
+            id BIGSERIAL PRIMARY KEY,
+            device_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            token_hash CHAR(64) NOT NULL UNIQUE,
+            status VARCHAR(16) NOT NULL DEFAULT 'offline'
+                CHECK (status IN ('online', 'offline', 'revoked')),
+            last_seen_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS mobile_agent_pairing_codes (
+            id BIGSERIAL PRIMARY KEY,
+            code_hash CHAR(64) NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            consumed_at TIMESTAMPTZ,
+            attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS presence_states (
             user_id TEXT PRIMARY KEY,
             status VARCHAR(16) NOT NULL DEFAULT 'idle'
@@ -1139,6 +1164,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ON desktop_pairing_codes(expires_at) WHERE consumed_at IS NULL",
         "CREATE INDEX IF NOT EXISTS idx_desktop_actions_user_created "
         "ON desktop_actions(user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_mobile_agent_devices_user_status "
+        "ON mobile_agent_devices(user_id, status, last_seen_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_mobile_agent_pairing_expires "
+        "ON mobile_agent_pairing_codes(expires_at) WHERE consumed_at IS NULL",
         "CREATE INDEX IF NOT EXISTS idx_presence_thoughts_user_created "
         "ON presence_thoughts(user_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_presence_events_user_created "

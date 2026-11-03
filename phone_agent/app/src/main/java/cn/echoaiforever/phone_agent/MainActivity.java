@@ -20,13 +20,15 @@ import android.widget.Toast;
 public class MainActivity extends Activity {
     private TextView statusView;
     private TextView detailView;
-    private EditText pairingToken;
+    private EditText serverUrl;
+    private EditText pairingCode;
+    private EditText deviceName;
     private SharedPreferences preferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        preferences = getSharedPreferences("phone_agent", MODE_PRIVATE);
+        preferences = AgentConfig.prefs(this);
         setContentView(buildContentView());
         if (Build.VERSION.SDK_INT >= 33
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
@@ -80,19 +82,42 @@ public class MainActivity extends Activity {
         root.addView(button("读取当前界面", v -> readCurrentUi()));
         root.addView(button("回到桌面", v -> goHome()));
 
-        TextView pairingLabel = new TextView(this);
-        pairingLabel.setText("配对令牌（本地占位，后续接后端签发）");
-        pairingLabel.setTextSize(13);
-        pairingLabel.setPadding(0, dp(20), 0, dp(6));
-        root.addView(pairingLabel);
+        TextView serverLabel = new TextView(this);
+        serverLabel.setText("后端地址（本地测试可用 http://127.0.0.1:8000）");
+        serverLabel.setTextSize(13);
+        serverLabel.setPadding(0, dp(20), 0, dp(6));
+        root.addView(serverLabel);
 
-        pairingToken = new EditText(this);
-        pairingToken.setSingleLine(true);
-        pairingToken.setHint("尚未配对");
-        pairingToken.setText(preferences.getString("pairing_token", ""));
-        root.addView(pairingToken);
+        serverUrl = new EditText(this);
+        serverUrl.setSingleLine(true);
+        serverUrl.setText(preferences.getString(
+                AgentConfig.BASE_URL,
+                AgentConfig.DEFAULT_BASE_URL
+        ));
+        root.addView(serverUrl);
 
-        root.addView(button("保存配对令牌", v -> savePairingToken()));
+        TextView codeLabel = new TextView(this);
+        codeLabel.setText("配对码（在 Echo 后端生成）");
+        codeLabel.setTextSize(13);
+        codeLabel.setPadding(0, dp(12), 0, dp(6));
+        root.addView(codeLabel);
+
+        pairingCode = new EditText(this);
+        pairingCode.setSingleLine(true);
+        pairingCode.setHint("例如 ABCD2345");
+        pairingCode.setText(preferences.getString(AgentConfig.PAIRING_CODE, ""));
+        root.addView(pairingCode);
+
+        deviceName = new EditText(this);
+        deviceName.setSingleLine(true);
+        deviceName.setHint("设备名称");
+        deviceName.setText(preferences.getString(
+                AgentConfig.DEVICE_NAME,
+                "Echo 的手机"
+        ));
+        root.addView(deviceName);
+
+        root.addView(button("配对并连接", v -> pairAndConnect()));
 
         TextView boundary = new TextView(this);
         boundary.setText(
@@ -126,11 +151,14 @@ public class MainActivity extends Activity {
         statusView.setTextColor(
                 connected ? Color.rgb(32, 120, 72) : Color.rgb(160, 70, 50)
         );
+        String deviceId = preferences.getString(AgentConfig.DEVICE_ID, "");
         detailView.setText(
                 "系统开关：" + (enabled ? "已开启" : "未开启")
                         + "\n应用包名：" + getPackageName()
                         + "\n前台服务：" + (AgentForegroundService.isRunning() ? "运行中" : "未运行")
-                        + "\n网络协议：待接入后端"
+                        + "\n后端连接：" + (AgentForegroundService.isConnected() ? "已连接" : "未连接")
+                        + "\n连接状态：" + AgentForegroundService.statusText()
+                        + "\n设备：" + (deviceId.isEmpty() ? "尚未配对" : deviceId)
         );
     }
 
@@ -182,11 +210,43 @@ public class MainActivity extends Activity {
         service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME);
     }
 
-    private void savePairingToken() {
+    private void pairAndConnect() {
+        final String baseUrl = AgentConfig.normalizeBaseUrl(
+                serverUrl.getText().toString()
+        );
+        final String code = pairingCode.getText().toString().trim().toUpperCase();
+        final String name = deviceName.getText().toString().trim();
+        if (code.isEmpty()) {
+            Toast.makeText(this, "先填写后端生成的配对码", Toast.LENGTH_SHORT).show();
+            return;
+        }
         preferences.edit()
-                .putString("pairing_token", pairingToken.getText().toString().trim())
+                .putString(AgentConfig.BASE_URL, baseUrl)
+                .putString(AgentConfig.PAIRING_CODE, code)
+                .putString(AgentConfig.DEVICE_NAME, name)
                 .apply();
-        Toast.makeText(this, "配对令牌已保存在本机", Toast.LENGTH_SHORT).show();
+        detailView.setText("正在配对：" + baseUrl);
+        new Thread(() -> {
+            try {
+                AgentApi.PairResult result = AgentApi.pair(baseUrl, code, name);
+                preferences.edit()
+                        .putString(AgentConfig.DEVICE_TOKEN, result.token)
+                        .putString(AgentConfig.DEVICE_ID, result.deviceId)
+                        .putString(AgentConfig.DEVICE_NAME, result.name)
+                        .apply();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "配对成功", Toast.LENGTH_SHORT).show();
+                    startAgentService();
+                    refreshStatus();
+                });
+            } catch (Exception exc) {
+                String message = exc.getMessage() == null ? exc.toString() : exc.getMessage();
+                runOnUiThread(() -> {
+                    detailView.setText("配对失败：" + message);
+                    Toast.makeText(this, "配对失败", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }, "phone-agent-pair").start();
     }
 
     private int dp(int value) {

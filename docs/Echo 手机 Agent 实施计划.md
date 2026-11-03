@@ -235,21 +235,23 @@ stop               紧急停止
 
 ### B2. 后端模块
 
-- [ ] 新增 `mobile_agent` 业务模块
-- [ ] 设备配对和一次性令牌
-- [ ] WebSocket 连接管理
-- [ ] 设备在线状态
-- [ ] 任务队列和超时
+- [x] 新增 `mobile_agent` 业务模块
+- [x] 设备配对和一次性令牌
+- [x] WebSocket 连接管理
+- [x] 设备在线状态
+- [x] 单命令超时（WebSocket 命令通道）
+- [ ] 多步任务队列
 - [ ] 操作审计
 - [ ] 截图临时存储和清理
-- [ ] Agent 工具：
+- [ ] Agent 工具（HTTP 命令通道已可用，模型工具未注册）：
   - `phone_status`
   - `phone_observe`
   - `phone_launch_app`
   - `phone_action`
   - `phone_run_task`
 - [ ] 高风险操作确认策略
-- [ ] 设备不在线、权限缺失、锁屏时返回明确错误
+- [x] 设备不在线时返回明确错误
+- [ ] 权限缺失、锁屏时的完整错误映射
 
 ### B3. Agent 执行循环
 

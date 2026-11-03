@@ -7,15 +7,32 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+
+import org.json.JSONObject;
 
 public class AgentForegroundService extends Service {
     private static final String CHANNEL_ID = "echo_phone_agent";
     private static final int NOTIFICATION_ID = 2107;
     private static volatile boolean running = false;
+    private static volatile String status = "未连接";
+    private static volatile boolean connected = false;
+
+    private final AgentWebSocketClient socket = new AgentWebSocketClient();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     public static boolean isRunning() {
         return running;
+    }
+
+    public static boolean isConnected() {
+        return connected;
+    }
+
+    public static String statusText() {
+        return status;
     }
 
     @Override
@@ -27,19 +44,101 @@ public class AgentForegroundService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         running = true;
-        startForeground(NOTIFICATION_ID, buildNotification());
+        startForeground(NOTIFICATION_ID, buildNotification("正在连接 Echo 后端"));
+        connectIfConfigured();
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
         running = false;
+        connected = false;
+        socket.close();
+        status = "已停止";
         super.onDestroy();
     }
 
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    private void connectIfConfigured() {
+        String baseUrl = AgentConfig.baseUrl(this);
+        String token = AgentConfig.prefs(this).getString(AgentConfig.DEVICE_TOKEN, "");
+        if (token == null || token.trim().isEmpty()) {
+            status = "未配对";
+            connected = false;
+            updateNotification();
+            return;
+        }
+        status = "连接中";
+        socket.connect(baseUrl, token, new AgentWebSocketClient.Listener() {
+            @Override
+            public void onOpen() {
+                connected = true;
+                status = "已连接";
+                updateNotification();
+            }
+
+            @Override
+            public void onMessage(String text) {
+                handleMessage(text);
+            }
+
+            @Override
+            public void onClosed(String reason) {
+                connected = false;
+                status = "连接已关闭";
+                updateNotification();
+            }
+
+            @Override
+            public void onFailure(String message) {
+                connected = false;
+                status = "连接失败：" + message;
+                updateNotification();
+            }
+        });
+    }
+
+    private void handleMessage(String text) {
+        try {
+            JSONObject payload = new JSONObject(text);
+            String type = payload.optString("type", "");
+            if ("command".equals(type)) {
+                String commandId = payload.optString("command_id", "");
+                String action = payload.optString("action", "");
+                JSONObject arguments = payload.optJSONObject("arguments");
+                if (arguments == null) {
+                    arguments = new JSONObject();
+                }
+                JSONObject finalArguments = arguments;
+                mainHandler.post(() -> executeCommand(commandId, action, finalArguments));
+            }
+        } catch (Exception exc) {
+            status = "消息解析失败";
+            updateNotification();
+        }
+    }
+
+    private void executeCommand(String commandId, String action, JSONObject arguments) {
+        JSONObject result = AgentCommandHandler.handle(this, action, arguments);
+        JSONObject response = new JSONObject();
+        try {
+            response.put("type", "result");
+            response.put("command_id", commandId);
+            if (result.optBoolean("ok", false)) {
+                response.put("data", result.optJSONObject("data"));
+            } else {
+                response.put("error", result.optJSONObject("error"));
+            }
+            socket.send(response);
+            status = "已连接";
+        } catch (Exception exc) {
+            status = "结果回传失败";
+        }
+        updateNotification();
     }
 
     private void createChannel() {
@@ -56,7 +155,12 @@ public class AgentForegroundService extends Service {
         manager.createNotificationChannel(channel);
     }
 
-    private Notification buildNotification() {
+    private void updateNotification() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        manager.notify(NOTIFICATION_ID, buildNotification(status));
+    }
+
+    private Notification buildNotification(String text) {
         Intent open = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this,
@@ -66,7 +170,7 @@ public class AgentForegroundService extends Service {
         );
         return new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle(getString(R.string.notification_title))
-                .setContentText(getString(R.string.notification_text))
+                .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_menu_compass)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)

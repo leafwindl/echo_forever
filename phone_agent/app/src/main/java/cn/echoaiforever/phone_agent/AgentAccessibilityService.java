@@ -1,7 +1,10 @@
 package cn.echoaiforever.phone_agent;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.GestureDescription;
+import android.graphics.Path;
 import android.graphics.Rect;
+import android.os.Bundle;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
@@ -50,6 +53,74 @@ public class AgentAccessibilityService extends AccessibilityService {
 
     public String describeState() {
         return "package=" + lastPackage + "\nclass=" + lastWindow;
+    }
+
+    public String currentPackage() {
+        return lastPackage;
+    }
+
+    public String currentWindow() {
+        return lastWindow;
+    }
+
+    public boolean tap(int x, int y) {
+        Path path = new Path();
+        path.moveTo(x, y);
+        GestureDescription gesture = new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(path, 0, 50))
+                .build();
+        return dispatchGesture(gesture, null, null);
+    }
+
+    public boolean setFocusedText(String text) {
+        AccessibilityNodeInfo focused = findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (focused == null) {
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            focused = findEditable(root, 0);
+        }
+        if (focused == null) {
+            return false;
+        }
+        Bundle arguments = new Bundle();
+        arguments.putCharSequence(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                text
+        );
+        return focused.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments);
+    }
+
+    public boolean performGlobal(String action) {
+        int globalAction;
+        switch (action) {
+            case "back":
+                globalAction = GLOBAL_ACTION_BACK;
+                break;
+            case "home":
+                globalAction = GLOBAL_ACTION_HOME;
+                break;
+            case "recents":
+                globalAction = GLOBAL_ACTION_RECENTS;
+                break;
+            default:
+                return false;
+        }
+        return performGlobalAction(globalAction);
+    }
+
+    private AccessibilityNodeInfo findEditable(AccessibilityNodeInfo node, int depth) {
+        if (node == null || depth > 30) {
+            return null;
+        }
+        if (node.isEditable() && node.isEnabled()) {
+            return node;
+        }
+        for (int index = 0; index < node.getChildCount(); index++) {
+            AccessibilityNodeInfo match = findEditable(node.getChild(index), depth + 1);
+            if (match != null) {
+                return match;
+            }
+        }
+        return null;
     }
 
     public String dumpTree() {

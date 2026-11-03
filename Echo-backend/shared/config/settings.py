@@ -102,6 +102,18 @@ class Settings(BaseSettings):
     app_version: str = Field(default="dev", validation_alias="APP_VERSION")
     build_revision: str = Field(default="unknown", validation_alias="BUILD_REVISION")
     enable_api_docs: bool = Field(default=False, validation_alias="ENABLE_API_DOCS")
+    mobile_agent_pairing_code_ttl_seconds: int = Field(
+        default=300,
+        validation_alias="MOBILE_AGENT_PAIRING_CODE_TTL_SECONDS",
+        ge=60,
+        le=3600,
+    )
+    mobile_agent_command_timeout_seconds: int = Field(
+        default=30,
+        validation_alias="MOBILE_AGENT_COMMAND_TIMEOUT_SECONDS",
+        ge=5,
+        le=120,
+    )
     desktop_pairing_code_ttl_seconds: int = Field(
         default=600,
         validation_alias="DESKTOP_PAIRING_CODE_TTL_SECONDS",

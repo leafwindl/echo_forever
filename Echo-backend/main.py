@@ -19,6 +19,7 @@ from features.letters.interface.router import router as letters_router
 from features.letters.public import generate_due_letters, publish_due_letters
 from features.memory.interface.router import router as memory_router
 from features.memory.public import resume_pending_memory_extraction_jobs
+from features.mobile_agent.interface.router import router as mobile_agent_router
 from features.persona.interface.router import router as persona_router
 from features.presence.interface.router import router as presence_router
 from features.presence.public import process_presence_once
@@ -273,6 +274,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(chat_router)
     app.include_router(desktop_router)
+    app.include_router(mobile_agent_router)
     app.include_router(presence_router)
     app.include_router(devices_router)
     app.include_router(speaker_router)
