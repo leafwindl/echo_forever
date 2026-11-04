@@ -59,11 +59,15 @@ final class AgentCommandHandler {
     private static JSONObject screenshot() throws Exception {
         String image = AgentForegroundService.captureScreenshot();
         if (image.isEmpty()) {
-            return error("screenshot_unavailable", "尚未授权截图，或当前屏幕不可截取");
+            return error(
+                    "screenshot_unavailable",
+                    "ADB 截图桥不可用，请确认 PC 桥进程和 adb reverse 已启动"
+            );
         }
         JSONObject data = new JSONObject();
         data.put("image_base64", image);
         data.put("mime", AgentForegroundService.captureScreenshotMime());
+        data.put("source", "adb_bridge");
         JSONObject result = new JSONObject();
         result.put("ok", true);
         result.put("data", data);

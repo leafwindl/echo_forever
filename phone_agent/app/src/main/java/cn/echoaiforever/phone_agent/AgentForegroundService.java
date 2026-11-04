@@ -6,7 +6,6 @@ import android.content.pm.ServiceInfo;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Handler;
@@ -27,7 +26,6 @@ public class AgentForegroundService extends Service {
     private static volatile String captureMime = "image/jpeg";
 
     private final AgentWebSocketClient socket = new AgentWebSocketClient();
-    private final AgentScreenCapture screenCapture = new AgentScreenCapture(this);
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private boolean reconnectScheduled;
 
@@ -43,44 +41,11 @@ public class AgentForegroundService extends Service {
         return status;
     }
 
-    public static boolean startScreenCapture(
-            Context context,
-            int resultCode,
-            Intent data
-    ) {
-        AgentForegroundService current = instance;
-        if (current == null) {
-            return false;
-        }
-        boolean started = current.screenCapture.start(resultCode, data);
-        if (started && Build.VERSION.SDK_INT >= 29) {
-            current.startForeground(
-                    NOTIFICATION_ID,
-                    current.buildNotification("手机截图已授权"),
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                            | ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            );
-        }
-        return started;
-    }
-
     public static String captureScreenshotMime() {
         return captureMime;
     }
 
     public static String captureScreenshot() {
-        AgentForegroundService current = instance;
-        if (current != null && current.screenCapture.isReady()) {
-            captureMime = "image/jpeg";
-            return current.screenCapture.captureBase64();
-        }
-        AgentAccessibilityService service = AgentAccessibilityService.instance();
-        String accessibility = service == null ? "" : service.captureScreenshotBase64();
-        if (!accessibility.isEmpty()) {
-            captureMime = "image/jpeg";
-            return accessibility;
-        }
-
         AtomicReference<JSONObject> bridge = new AtomicReference<>();
         Thread worker = new Thread(
                 () -> bridge.set(AgentScreenshotBridge.capture()),
@@ -131,7 +96,6 @@ public class AgentForegroundService extends Service {
         instance = null;
         mainHandler.removeCallbacksAndMessages(null);
         socket.close();
-        screenCapture.stop();
         status = "已停止";
         super.onDestroy();
     }

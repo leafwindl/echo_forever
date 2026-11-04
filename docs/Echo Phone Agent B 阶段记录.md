@@ -73,9 +73,10 @@ Crashed services: {}
 
 - ColorOS 开启无障碍时会弹出系统安全提示，必须人工确认；自动化安装/激活不能完全静默。
 - Portal 的无障碍服务在同一台手机上曾报告故障；我们的 Echo 服务目前已成功绑定。
-- 截图授权、MediaProjection、通知读取、任务多步规划和操作审计尚未实现。
+- 截图采用 PC ADB 桥，不依赖手机独立屏幕捕获。
+- 通知读取、基础多步任务和操作审计已实现。
 - 配对令牌保存在本机 SharedPreferences；当前版本是专用测试机骨架，不应作为生产安全实现。
-- 当前 App 允许明文 HTTP，仅用于本地 adb reverse 测试；正式分发前必须移除或限制。
+- 当前 App 仅放行本地回环明文 HTTP，用于 adb reverse；其他地址必须 HTTPS。
 
 ## B2 基础通道
 
@@ -195,20 +196,19 @@ Crashed services: {}
 - 默认关闭明文 HTTP，仅放行 `127.0.0.1`、`localhost`、`10.0.2.2` 用于本地 adb reverse
 - 生产地址继续使用 HTTPS
 
-### 截图限制
+### 截图方案：PC ADB 桥（已定稿）
 
-已尝试两种方案：
+用户已确认后续开发固定采用 PC/ADB 截图，不要求手机独立运行。
+
+已尝试并放弃/移除：
 
 1. 无障碍 `takeScreenshot`
-   - 配置 `canTakeScreenshot=true`
-   - ColorOS 绑定后能力位未包含截图，调用返回不可用
+   - ColorOS 绑定后能力位不包含截图，调用不可用
 2. MediaProjection
-   - 已实现授权、VirtualDisplay、JPEG 编码
-   - 当前 ColorOS/Android 15 上授权后取不到有效画面
-   - 已确认系统创建了投影 token，但应用侧没有拿到可用帧
-   - 未把失败方案包装成“已支持”
+   - ColorOS/Android 15 授权后取不到有效帧
+   - 不作为产品方案，相关代码已从 APK 主路径移除
 
-因此 B3 暂不宣称手机独立运行的 MediaProjection 截图完成。
+因此 `phone_agent` 截图只依赖 PC 桥；手机端不再暴露“授权手机截图”按钮。
 
 ### ADB 截图桥（已接入）
 
@@ -242,7 +242,6 @@ audit     -> 200, 12 items
 
 ### B3 还缺
 
-- 可在 ColorOS 真机工作的截图方案（需要继续评估系统限制或改用专用设备）
 - 高风险操作二次确认
 - 完整多步任务状态推送和用户中断 UI
 - 令牌加密存储/Keystore
