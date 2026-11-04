@@ -73,6 +73,15 @@ class SkillRunner:
     async def wait(self, seconds: float) -> None:
         await asyncio.sleep(seconds)
 
+    async def wait_for_package(self, package: str, timeout_seconds: float = 6.0) -> bool:
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        while asyncio.get_running_loop().time() < deadline:
+            snapshot = await self.observe()
+            if str(snapshot.get("package") or "") == package:
+                return True
+            await self.wait(0.5)
+        return False
+
 
 _RESULT_LINE = re.compile(
     r"^\s*(?P<label>.+?)\s+\[(?P<x1>\d+),(?P<y1>\d+)\]"
@@ -120,18 +129,32 @@ class NetEaseMusicSkill:
             raise AppSkillError("invalid_query", "歌曲/歌手关键词不能为空")
 
         await runner.act("open_uri", {"uri": "orpheus://search"})
-        await runner.wait(0.8)
+        if not await runner.wait_for_package(self.package, 6.0):
+            raise AppSkillError("app_not_foreground", "网易云音乐没有回到前台")
+        await runner.wait(0.5)
         await runner.act("action", {"kind": "tap", "x": 600, "y": 164})
         await runner.wait(0.3)
         await runner.act("action", {"kind": "text", "text": query})
-        await runner.wait(0.5)
+        await runner.wait(0.8)
         await runner.act("action", {"kind": "tap", "x": 953, "y": 164})
-        await runner.wait(1.8)
-        await runner.act("action", {"kind": "tap_text", "text": "单曲"})
+        await runner.wait(2.0)
+        try:
+            await runner.act("action", {"kind": "tap_text", "text": "单曲"})
+        except MobileAgentError:
+            pass
         await runner.wait(1.2)
         observed = await runner.observe()
         text = str(observed.get("text") or "")
         point = _first_result_for_query(text, query)
+        if point is None:
+            try:
+                await runner.act("action", {"kind": "tap_text", "text": "单曲"})
+                await runner.wait(1.0)
+                observed = await runner.observe()
+                text = str(observed.get("text") or "")
+                point = _first_result_for_query(text, query)
+            except MobileAgentError:
+                point = None
         if point is None:
             raise AppSkillError(
                 "song_not_found",
