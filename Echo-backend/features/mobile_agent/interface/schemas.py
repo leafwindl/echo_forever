@@ -59,3 +59,15 @@ class MobileAgentAuditItem(BaseModel):
 
 class MobileAgentAuditResponse(BaseModel):
     items: list[MobileAgentAuditItem]
+
+
+class AppSkillRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=100)
+    device_id: str = Field(default="", max_length=100)
+
+
+class AppSkillResponse(BaseModel):
+    skill: str
+    device_id: str
+    action: str
+    data: dict[str, Any]

@@ -13,6 +13,7 @@ from features.agent.domain.entities import (
     ToolSpecification,
 )
 from features.agent.domain.tools import ToolDefinition, ToolExecutionContext, ToolRegistry
+from features.mobile_agent.application.skills import AppSkillError, run_app_skill
 from features.mobile_agent.domain.entities import MobileAgentError
 from features.mobile_agent.public import (
     execute_mobile_agent_action,
@@ -50,6 +51,11 @@ class PhoneActionArguments(BaseModel):
 
 
 class PhoneNotificationsArguments(BaseModel):
+    device_id: str = Field(default="", max_length=100)
+
+
+class PhonePlayMusicArguments(BaseModel):
+    query: str = Field(min_length=1, max_length=100)
     device_id: str = Field(default="", max_length=100)
 
 
@@ -271,6 +277,30 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
             data=data,
         )
 
+    async def play_music_handler(context: ToolExecutionContext, arguments: BaseModel):
+        parsed = PhonePlayMusicArguments.model_validate(arguments)
+        try:
+            result = await run_app_skill(
+                user_id=context.user_id,
+                skill="netmusic",
+                action="play",
+                parameters={"query": parsed.query},
+                device_id=parsed.device_id,
+            )
+        except AppSkillError as exc:
+            return _failed("phone_play_music", exc.code, exc.message)
+        except MobileAgentError as exc:
+            return _failed("phone_play_music", exc.code, exc.message)
+        playing = bool(result.data.get("playing"))
+        return _completed(
+            "phone_play_music",
+            safe_for_model=(
+                f"已在网易云音乐处理“{parsed.query}”，"
+                f"{'正在播放' if playing else '已选择歌曲但未确认播放'}。"
+            ),
+            data={"device_id": result.device_id, **result.data},
+        )
+
     async def notifications_handler(context: ToolExecutionContext, arguments: BaseModel):
         parsed = PhoneNotificationsArguments.model_validate(arguments)
         device = _online_device(context.user_id, parsed.device_id)
@@ -487,6 +517,19 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         risk=ToolRisk.DESTRUCTIVE,
         timeout_seconds=35,
         max_calls=8,
+    )
+    _register(
+        registry,
+        name="phone_play_music",
+        description=(
+            "在网易云音乐里搜索歌曲或歌手，选择第一条结果并播放。"
+            "只用于音乐播放，不处理支付、账号或评论发布。"
+        ),
+        arguments_model=PhonePlayMusicArguments,
+        handler=play_music_handler,
+        risk=ToolRisk.READ,
+        timeout_seconds=60,
+        max_calls=2,
     )
     _register(
         registry,

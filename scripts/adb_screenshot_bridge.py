@@ -73,6 +73,49 @@ class Bridge:
             raise RuntimeError("adb screencap did not return a PNG")
         return payload
 
+    def type_text(self, text: str) -> None:
+        encoded = base64.b64encode(text.encode("utf-8")).decode("ascii")
+        subprocess.run(
+            self._base() + ["shell", "am", "broadcast", "-a", "ADB_CLEAR_TEXT"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            self._base()
+            + [
+                "shell",
+                "am",
+                "broadcast",
+                "-a",
+                "ADB_INPUT_B64",
+                "--es",
+                "msg",
+                encoded,
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+    def keyevent(self, keycode: int) -> None:
+        subprocess.run(
+            self._base() + ["shell", "input", "keyevent", str(keycode)],
+            check=True,
+            capture_output=True,
+        )
+
+    def ensure_keyboard(self) -> None:
+        component = "com.android.adbkeyboard/.AdbIME"
+        subprocess.run(
+            self._base() + ["shell", "ime", "enable", component],
+            check=False,
+            capture_output=True,
+        )
+        subprocess.run(
+            self._base() + ["shell", "ime", "set", component],
+            check=False,
+            capture_output=True,
+        )
+
 
 class Handler(BaseHTTPRequestHandler):
     bridge: Bridge
@@ -108,6 +151,34 @@ class Handler(BaseHTTPRequestHandler):
             },
         )
 
+    def do_POST(self) -> None:  # noqa: N802
+        if self.path.rstrip("/") not in {"/text", "/key"}:
+            self._json(404, {"error": "not_found"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length) or b"{}")
+        except Exception:
+            self._json(400, {"error": "invalid_json"})
+            return
+        try:
+            if self.path.rstrip("/") == "/text":
+                text = str(body.get("text") or "")
+                if not text or len(text) > 2000:
+                    self._json(400, {"error": "invalid_text"})
+                    return
+                self.bridge.type_text(text)
+                self._json(200, {"ok": True, "source": "adb_keyboard"})
+                return
+            keycode = int(body.get("keycode") or 0)
+            if keycode <= 0:
+                self._json(400, {"error": "invalid_keycode"})
+                return
+            self.bridge.keyevent(keycode)
+            self._json(200, {"ok": True, "keycode": keycode})
+        except Exception as exc:
+            self._json(503, {"error": "input_failed", "detail": str(exc)})
+
     def log_message(self, format: str, *args) -> None:
         print(f"[adb-bridge] {format % args}", flush=True)
 
@@ -125,6 +196,7 @@ def main() -> None:
     args = parser.parse_args()
 
     bridge = Bridge(resolve_adb(args.adb), args.serial)
+    bridge.ensure_keyboard()
     if not args.no_reverse:
         try:
             bridge.reverse(args.port)

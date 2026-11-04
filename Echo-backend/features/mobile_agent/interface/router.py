@@ -16,6 +16,10 @@ from fastapi import (
 from shared.interface.dependencies import CurrentUser, get_current_user
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
+from features.mobile_agent.application.skills import (
+    AppSkillError,
+    run_app_skill,
+)
 from features.mobile_agent.domain.entities import (
     MobileAgentActionError,
     MobileAgentError,
@@ -28,6 +32,8 @@ from features.mobile_agent.infrastructure.container import (
     get_mobile_agent_service,
 )
 from features.mobile_agent.interface.schemas import (
+    AppSkillRequest,
+    AppSkillResponse,
     MobileAgentAuditItem,
     MobileAgentAuditResponse,
     MobileAgentCommandRequest,
@@ -87,6 +93,17 @@ def _validate_command(action: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if not package or len(package) > 200:
             raise ValueError("package is required")
         return {"package": package}
+    if action == "open_uri":
+        uri = str(arguments.get("uri") or "").strip()
+        if not (
+            uri.startswith("http://")
+            or uri.startswith("https://")
+            or uri.startswith("orpheus://")
+        ):
+            raise ValueError("unsupported uri scheme")
+        if len(uri) > 2000:
+            raise ValueError("uri is too long")
+        return {"uri": uri}
     if action == "action":
         kind = str(arguments.get("kind") or "").strip()
         if kind == "tap":
@@ -100,6 +117,11 @@ def _validate_command(action: str, arguments: dict[str, Any]) -> dict[str, Any]:
             return {"kind": "tap_text", "text": text[:200]}
         if kind in {"back", "home", "recents"}:
             return {"kind": kind}
+        if kind == "key":
+            keycode = int(arguments.get("keycode") or 0)
+            if keycode <= 0 or keycode > 300:
+                raise ValueError("valid keycode is required")
+            return {"kind": "key", "keycode": keycode}
         if kind == "text":
             text = str(arguments.get("text") or "")
             if not text or len(text) > 2000:
@@ -162,6 +184,42 @@ def list_devices(
             _device_response(device, hub.is_online(device.device_id))
             for device in service.list_devices(current_user.user_id)
         ]
+    )
+
+
+@router.post(
+    "/skills/{skill}/{action}",
+    response_model=AppSkillResponse,
+)
+async def run_skill(
+    skill: str,
+    action: str,
+    payload: AppSkillRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    try:
+        result = await run_app_skill(
+            user_id=current_user.user_id,
+            skill=skill,
+            action=action,
+            parameters={"query": payload.query},
+            device_id=payload.device_id,
+        )
+    except AppSkillError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except MobileAgentError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    return AppSkillResponse(
+        skill=result.skill,
+        device_id=result.device_id,
+        action=result.action,
+        data=result.data,
     )
 
 

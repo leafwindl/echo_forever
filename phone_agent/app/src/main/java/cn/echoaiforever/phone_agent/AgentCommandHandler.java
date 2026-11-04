@@ -3,6 +3,7 @@ package cn.echoaiforever.phone_agent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 
 import org.json.JSONObject;
 
@@ -31,6 +32,9 @@ final class AgentCommandHandler {
             }
             if ("launch_app".equals(action)) {
                 return launchApp(context, arguments.optString("package", ""));
+            }
+            if ("open_uri".equals(action)) {
+                return openUri(context, arguments.optString("uri", ""));
             }
             if ("action".equals(action)) {
                 return performAction(arguments);
@@ -102,12 +106,34 @@ final class AgentCommandHandler {
         return result;
     }
 
+    private static JSONObject openUri(Context context, String value) throws Exception {
+        String uri = value == null ? "" : value.trim();
+        if (!(uri.startsWith("http://")
+                || uri.startsWith("https://")
+                || uri.startsWith("orpheus://"))) {
+            return error("invalid_uri", "只允许 http/https/orpheus URI");
+        }
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        context.startActivity(intent);
+        JSONObject data = new JSONObject();
+        data.put("uri", uri);
+        JSONObject result = new JSONObject();
+        result.put("ok", true);
+        result.put("data", data);
+        return result;
+    }
+
     private static JSONObject performAction(JSONObject arguments) throws Exception {
+        String kind = arguments.optString("kind", "");
+        if ("key".equals(kind)) {
+            boolean success = AgentInputBridge.key(arguments.optInt("keycode", 0));
+            return actionResult(kind, success);
+        }
         AgentAccessibilityService service = AgentAccessibilityService.instance();
         if (service == null) {
             return error("accessibility_unavailable", "无障碍服务未连接");
         }
-        String kind = arguments.optString("kind", "");
         boolean success;
         switch (kind) {
             case "tap":
@@ -121,6 +147,9 @@ final class AgentCommandHandler {
                 break;
             case "text":
                 success = service.setFocusedText(arguments.optString("text", ""));
+                if (!success) {
+                    success = AgentInputBridge.typeText(arguments.optString("text", ""));
+                }
                 break;
             case "back":
             case "home":
@@ -130,6 +159,10 @@ final class AgentCommandHandler {
             default:
                 return error("unsupported_action_kind", "不支持的动作：" + kind);
         }
+        return actionResult(kind, success);
+    }
+
+    private static JSONObject actionResult(String kind, boolean success) throws Exception {
         if (!success) {
             return error("action_failed", "手机动作没有成功执行：" + kind);
         }
