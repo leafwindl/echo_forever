@@ -111,6 +111,21 @@ _RESULT_LINE = re.compile(
 )
 
 
+def _label_point(text: str, label: str) -> tuple[int, int] | None:
+    for line in text.splitlines():
+        match = _RESULT_LINE.match(line)
+        if not match:
+            continue
+        if match.group("label").strip() != label:
+            continue
+        x1 = int(match.group("x1"))
+        x2 = int(match.group("x2"))
+        y1 = int(match.group("y1"))
+        y2 = int(match.group("y2"))
+        return (x1 + x2) // 2, (y1 + y2) // 2
+    return None
+
+
 def _first_clickable_result(text: str) -> tuple[int, int] | None:
     candidates: list[tuple[int, int, int]] = []
     skip = {"综合", "番剧", "直播", "用户", "影视", "图文", "搜索", "返回", "评论", "简介"}
@@ -198,17 +213,37 @@ class BilibiliSkill:
                 "playing": True,
                 "observed": after_text[:3000],
             }
-        with contextlib.suppress(MobileAgentError):
-            await runner.act("action", {"kind": "tap_text", "text": "评论"})
-        await runner.wait(1.2)
+        comment_point = _label_point(after_text, "评论")
+        if comment_point is not None:
+            await runner.act(
+                "action",
+                {"kind": "tap", "x": comment_point[0], "y": comment_point[1]},
+            )
+        else:
+            with contextlib.suppress(MobileAgentError):
+                await runner.act("action", {"kind": "tap_text", "text": "评论"})
+        await runner.wait(1.5)
         comments = await runner.observe()
         comments_text = str(comments.get("text") or "")
+        visible = any(
+            marker in comments_text
+            for marker in ("全部评论", "暂无评论", "展开更多", "回复")
+        )
+        scrolled = 0
+        if visible:
+            for _ in range(max(0, min(int(parameters.get("count") or 2), 5))):
+                await runner.swipe(540, 1900, 540, 1000, 450)
+                await runner.wait(1.0)
+                scrolled += 1
+            comments = await runner.observe()
+            comments_text = str(comments.get("text") or "")
         return {
             "query": query,
             "package": self.package,
             "selected": point,
             "playing": True,
-            "comments_visible": "评论" in comments_text,
+            "comments_visible": visible,
+            "comments_scrolled": scrolled,
             "observed": comments_text[:3000],
         }
 
