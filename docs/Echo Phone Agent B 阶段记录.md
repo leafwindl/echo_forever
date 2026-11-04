@@ -2,7 +2,7 @@
 
 > 日期：2026-11-03  
 > 设备：PJC110，Android 15（API 35）  
-> 状态：B0/B1/B2 完成；B3 的通知、审计、Agent 工具、解绑和安全加固已完成；手机截图受 ColorOS 权限限制，尚未打通。
+> 状态：B0/B1/B2 完成；B3 完成；截图固定采用 PC/ADB 桥，已打通。
 
 ## B0 产品边界
 
@@ -13,9 +13,9 @@
 - [x] 无障碍服务由用户手动开启
 - [x] 前台服务常驻
 - [x] 配对令牌由后端签发
-- [ ] 截图授权
+- [x] 截图采用 PC/ADB 桥
 - [ ] 高风险操作确认
-- [ ] 操作审计和紧急停止
+- [x] 操作审计和紧急停止
 
 ## B1 已实现
 
@@ -180,7 +180,7 @@ Crashed services: {}
 
 - `phone_status`
 - `phone_observe`
-- `phone_screenshot`（受手机截图能力限制）
+- `phone_screenshot`（通过 PC/ADB 桥）
 - `phone_launch_app`
 - `phone_action`
 - `phone_notifications`
@@ -225,8 +225,7 @@ Crashed services: {}
 - 用 `adb exec-out screencap -p` 截全屏
 - 返回 PNG base64
 
-手机端 `screenshot` 在投影和辅助功能截图都不可用时，会尝试请求
-`http://127.0.0.1:8765/screenshot`。
+手机端 `screenshot` 请求 `http://127.0.0.1:8765/screenshot`；这是固定截图路径。
 
 生产验证：
 
