@@ -419,3 +419,28 @@ phone_xiaohongshu
 ```
 
 只做浏览，不发评论、不私信、不购物。
+
+
+## 微信固定联系人技能
+
+专用微信账号只有联系人“叶子”。新增 `WechatSkill`：
+
+- 打开微信
+- 打开“叶子”聊天
+- 输入文本
+- 点击发送
+- 固定联系人，禁止任意联系人、群聊、图片、文件
+
+API：
+
+```text
+POST /mobile-agent/skills/wechat/send
+```
+
+Agent 工具：
+
+```text
+phone_wechat_send
+```
+
+本地真机已实际发送两条测试消息，截图确认消息出现在“叶子”聊天中。

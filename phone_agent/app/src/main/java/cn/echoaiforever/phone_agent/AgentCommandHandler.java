@@ -193,6 +193,9 @@ final class AgentCommandHandler {
                     success = AgentInputBridge.typeText(arguments.optString("text", ""));
                 }
                 break;
+            case "input_text":
+                success = AgentInputBridge.typeText(arguments.optString("text", ""));
+                break;
             case "back":
             case "home":
             case "recents":

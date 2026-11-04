@@ -355,7 +355,7 @@ class XiaohongshuSkill:
         await runner.wait(0.8)
         await runner.act("action", {"kind": "tap", "x": 600, "y": 185})
         await runner.wait(0.3)
-        await runner.act("action", {"kind": "text", "text": query})
+        await runner.act("action", {"kind": "input_text", "text": query})
         await runner.wait(0.5)
         await runner.act("action", {"kind": "tap", "x": 948, "y": 185})
         await runner.wait(2.2)
@@ -444,6 +444,70 @@ class XiaohongshuSkill:
         }
 
 
+class WechatSkill:
+    name = "wechat"
+    package = "com.tencent.mm"
+    actions = ("open_chat", "send")
+    allowed_contact = "叶子"
+
+    async def _open_chat(self, runner: SkillRunner) -> None:
+        await runner.act("launch_app", {"package": self.package})
+        if not await runner.wait_for_package(self.package, 6.0):
+            raise AppSkillError("app_not_foreground", "微信没有回到前台")
+        await runner.wait(1.0)
+        snapshot = await runner.observe()
+        text = str(snapshot.get("text") or "")
+        if "发送" in text or "按住" in text:
+            return
+        with contextlib.suppress(MobileAgentError):
+            await runner.act(
+                "action",
+                {"kind": "tap_text", "text": self.allowed_contact},
+            )
+        await runner.wait(1.2)
+
+    async def run(
+        self,
+        runner: SkillRunner,
+        action: str,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        if action not in self.actions:
+            raise AppSkillError("unsupported_skill_action", f"不支持：{action}")
+        await self._open_chat(runner)
+        if action == "open_chat":
+            observed = await runner.observe()
+            return {
+                "package": self.package,
+                "contact": self.allowed_contact,
+                "opened": observed.get("package") == self.package,
+            }
+        message = str(parameters.get("text") or "").strip()
+        if not message or len(message) > 500:
+            raise AppSkillError("invalid_message", "消息内容不能为空且不能超过 500 字")
+        # This skill is intentionally pinned to the only contact on the
+        # dedicated WeChat account; no arbitrary contact can be selected.
+        await runner.act("action", {"kind": "tap", "x": 540, "y": 2280})
+        await runner.wait(0.3)
+        await runner.act("action", {"kind": "input_text", "text": message})
+        await runner.wait(0.5)
+        with contextlib.suppress(MobileAgentError):
+            await runner.act("action", {"kind": "tap_text", "text": "发送"})
+        # The keyboard shifts the send button to this position.
+        await runner.act("action", {"kind": "tap", "x": 970, "y": 2180})
+        await runner.wait(2.0)
+        observed = await runner.observe()
+        observed_text = str(observed.get("text") or "")
+        return {
+            "package": self.package,
+            "contact": self.allowed_contact,
+            "sent": True,
+            "verified_in_ui": message in observed_text,
+            "message": message,
+            "observed": observed_text[:2000],
+        }
+
+
 class NetEaseMusicSkill:
     name = "netmusic"
     package = "com.netease.cloudmusic"
@@ -467,7 +531,7 @@ class NetEaseMusicSkill:
         await runner.wait(0.5)
         await runner.act("action", {"kind": "tap", "x": 600, "y": 164})
         await runner.wait(0.3)
-        await runner.act("action", {"kind": "text", "text": query})
+        await runner.act("action", {"kind": "input_text", "text": query})
         await runner.wait(0.8)
         await runner.act("action", {"kind": "tap", "x": 953, "y": 164})
         await runner.wait(2.0)
@@ -519,6 +583,7 @@ _SKILLS: dict[str, AppSkill] = {
     "bilibili": BilibiliSkill(),
     "douyin": DouyinSkill(),
     "xiaohongshu": XiaohongshuSkill(),
+    "wechat": WechatSkill(),
 }
 
 
@@ -571,6 +636,7 @@ __all__ = [
     "BilibiliSkill",
     "DouyinSkill",
     "NetEaseMusicSkill",
+    "WechatSkill",
     "XiaohongshuSkill",
     "SkillRunResult",
     "run_app_skill",

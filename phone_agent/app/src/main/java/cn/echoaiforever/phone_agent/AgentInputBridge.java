@@ -3,6 +3,7 @@ package cn.echoaiforever.phone_agent;
 import org.json.JSONObject;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -31,7 +32,7 @@ final class AgentInputBridge {
 
     static boolean typeText(String text) {
         try {
-            return post(TEXT_URL, new JSONObject().put("text", text));
+            return postOnWorker(TEXT_URL, new JSONObject().put("text", text));
         } catch (Exception exc) {
             return false;
         }
@@ -39,7 +40,7 @@ final class AgentInputBridge {
 
     static boolean key(int keycode) {
         try {
-            return post(KEY_URL, new JSONObject().put("keycode", keycode));
+            return postOnWorker(KEY_URL, new JSONObject().put("keycode", keycode));
         } catch (Exception exc) {
             return false;
         }
@@ -47,7 +48,7 @@ final class AgentInputBridge {
 
     static boolean openUri(String uri) {
         try {
-            return post(URI_URL, new JSONObject().put("uri", uri));
+            return postOnWorker(URI_URL, new JSONObject().put("uri", uri));
         } catch (Exception exc) {
             return false;
         }
@@ -55,10 +56,28 @@ final class AgentInputBridge {
 
     static boolean launchApp(String packageName) {
         try {
-            return post(LAUNCH_URL, new JSONObject().put("package", packageName));
+            return postOnWorker(
+                    LAUNCH_URL,
+                    new JSONObject().put("package", packageName)
+            );
         } catch (Exception exc) {
             return false;
         }
+    }
+
+    private static boolean postOnWorker(String url, JSONObject payload) {
+        AtomicBoolean result = new AtomicBoolean(false);
+        Thread worker = new Thread(
+                () -> result.set(post(url, payload)),
+                "echo-adb-input-bridge"
+        );
+        worker.start();
+        try {
+            worker.join(5000);
+        } catch (InterruptedException exc) {
+            Thread.currentThread().interrupt();
+        }
+        return result.get();
     }
 
     private static boolean post(String url, JSONObject payload) {

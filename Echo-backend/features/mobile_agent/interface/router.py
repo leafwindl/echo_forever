@@ -119,6 +119,11 @@ def _validate_command(action: str, arguments: dict[str, Any]) -> dict[str, Any]:
             return {"kind": "tap_text", "text": text[:200]}
         if kind in {"back", "home", "recents"}:
             return {"kind": kind}
+        if kind == "input_text":
+            text = str(arguments.get("text") or "")
+            if not text or len(text) > 2000:
+                raise ValueError("text is required")
+            return {"kind": "input_text", "text": text}
         if kind == "swipe":
             return {
                 "kind": "swipe",
@@ -213,7 +218,11 @@ async def run_skill(
             user_id=current_user.user_id,
             skill=skill,
             action=action,
-            parameters={"query": payload.query, "count": payload.count},
+            parameters={
+                "query": payload.query,
+                "text": payload.text,
+                "count": payload.count,
+            },
             device_id=payload.device_id,
         )
     except AppSkillError as exc:

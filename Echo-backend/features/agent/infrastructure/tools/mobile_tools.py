@@ -59,6 +59,11 @@ class PhonePlayMusicArguments(BaseModel):
     device_id: str = Field(default="", max_length=100)
 
 
+class PhoneWechatSendArguments(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+    device_id: str = Field(default="", max_length=100)
+
+
 class PhoneXiaohongshuArguments(BaseModel):
     action: str = Field(default="feed", pattern="^(feed|search|open|comments)$")
     query: str = Field(default="", max_length=100)
@@ -373,6 +378,35 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
             data={"device_id": result.device_id, **result.data},
         )
 
+    async def wechat_send_handler(
+        context: ToolExecutionContext,
+        arguments: BaseModel,
+    ):
+        parsed = PhoneWechatSendArguments.model_validate(arguments)
+        try:
+            result = await run_app_skill(
+                user_id=context.user_id,
+                skill="wechat",
+                action="send",
+                parameters={"text": parsed.text},
+                device_id=parsed.device_id,
+            )
+        except AppSkillError as exc:
+            return _failed("phone_wechat_send", exc.code, exc.message)
+        except MobileAgentError as exc:
+            return _failed("phone_wechat_send", exc.code, exc.message)
+        if not result.data.get("sent"):
+            return _failed(
+                "phone_wechat_send",
+                "send_unconfirmed",
+                "消息已提交，但没有在微信界面确认到发送成功",
+            )
+        return _completed(
+            "phone_wechat_send",
+            safe_for_model=f"已通过微信给叶子发送消息：{parsed.text[:80]}",
+            data={"device_id": result.device_id, **result.data},
+        )
+
     async def xiaohongshu_handler(
         context: ToolExecutionContext,
         arguments: BaseModel,
@@ -629,6 +663,19 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         arguments_model=PhonePlayMusicArguments,
         handler=play_music_handler,
         risk=ToolRisk.READ,
+        timeout_seconds=60,
+        max_calls=2,
+    )
+    _register(
+        registry,
+        name="phone_wechat_send",
+        description=(
+            "通过专用微信账号给唯一联系人“叶子”发送文本消息。"
+            "不允许任意联系人、群聊、图片或文件。"
+        ),
+        arguments_model=PhoneWechatSendArguments,
+        handler=wechat_send_handler,
+        risk=ToolRisk.SEND,
         timeout_seconds=60,
         max_calls=2,
     )
