@@ -20,6 +20,10 @@ from features.mobile_agent.application.skills import (
     AppSkillError,
     run_app_skill,
 )
+from features.mobile_agent.application.wechat_channel import (
+    WechatChannelError,
+    handle_wechat_inbound,
+)
 from features.mobile_agent.domain.entities import (
     MobileAgentActionError,
     MobileAgentError,
@@ -43,6 +47,8 @@ from features.mobile_agent.interface.schemas import (
     PairingCodeResponse,
     PairMobileAgentRequest,
     PairMobileAgentResponse,
+    WechatInboundRequest,
+    WechatInboundResponse,
 )
 
 router = APIRouter(prefix="/mobile-agent", tags=["mobile-agent"])
@@ -201,6 +207,39 @@ def list_devices(
             for device in service.list_devices(current_user.user_id)
         ]
     )
+
+
+@router.post(
+    "/wechat/inbound",
+    response_model=WechatInboundResponse,
+)
+async def wechat_inbound(
+    payload: WechatInboundRequest,
+    request: Request,
+):
+    authorization = request.headers.get("authorization", "")
+    token = authorization.removeprefix("Bearer ").strip()
+    service = get_mobile_agent_service()
+    device = service.authenticate(token)
+    if device is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid mobile agent token",
+        )
+    try:
+        result = await handle_wechat_inbound(
+            user_id=device.user_id,
+            device_id=device.device_id,
+            contact=payload.contact,
+            text=payload.text,
+            message_id=payload.message_id,
+        )
+    except WechatChannelError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    return WechatInboundResponse(**result)
 
 
 @router.post(

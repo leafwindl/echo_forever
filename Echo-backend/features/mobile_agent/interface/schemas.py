@@ -61,6 +61,20 @@ class MobileAgentAuditResponse(BaseModel):
     items: list[MobileAgentAuditItem]
 
 
+class WechatInboundRequest(BaseModel):
+    contact: str = Field(min_length=1, max_length=100)
+    text: str = Field(min_length=1, max_length=500)
+    message_id: str = Field(min_length=1, max_length=300)
+
+
+class WechatInboundResponse(BaseModel):
+    duplicate: bool
+    replied: bool
+    reason: str = ""
+    reply: str = ""
+    conversation_id: str = ""
+
+
 class AppSkillRequest(BaseModel):
     query: str = Field(default="", max_length=100)
     text: str = Field(default="", max_length=500)

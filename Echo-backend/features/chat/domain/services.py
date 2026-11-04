@@ -15,6 +15,7 @@ class ChatContextProvider(Protocol):
         history_before_message_id: int | None = None,
         speaker_role: str | None = None,
         memory_enabled: bool = True,
+        message_channel: str = "app_chat",
     ) -> ChatContext: ...
 
 

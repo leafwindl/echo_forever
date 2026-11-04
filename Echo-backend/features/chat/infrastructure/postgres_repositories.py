@@ -9,6 +9,7 @@ from shared.config import settings
 from features.agent.domain.entities import ContentPart, SourceReference
 from features.auth.public import ensure_user_identity
 from features.chat.domain.entities import (
+    CHANNEL_LABELS,
     CHAT_CHANNEL_APP,
     CHAT_VISIBILITY_MAIN,
     ChatHistoryMessage,
@@ -534,7 +535,7 @@ def get_history(
                 params.append(limit)
                 cursor.execute(
                     f"""
-                    SELECT message_id, role, content, created_at
+                    SELECT message_id, role, content, created_at, channel
                     FROM chat_messages
                     WHERE user_id = %s
                       AND conversation_id = %s
@@ -559,7 +560,7 @@ def get_history(
                 params.append(limit)
                 cursor.execute(
                     f"""
-                    SELECT message_id, role, content, created_at
+                    SELECT message_id, role, content, created_at, channel
                     FROM chat_messages
                     WHERE user_id = %s
                       AND id > %s
@@ -622,6 +623,9 @@ def _render_timestamped_history(
             str(row["content"]),
             attachments.get(str(row["message_id"] or ""), ()),
         )
+        channel_label = CHANNEL_LABELS.get(str(row.get("channel") or ""))
+        if channel_label:
+            rendered = f"[{channel_label}] {rendered}"
         messages.append(
             {
                 "role": str(row["role"]),

@@ -444,3 +444,37 @@ phone_wechat_send
 ```
 
 本地真机和生产环境都已实际发送测试消息，截图确认消息出现在“叶子”聊天中。
+
+
+## 微信入站与共享内部上下文
+
+微信是独立入口，不是展示同步：
+
+- 主客户端和微信的界面仍各显示各的消息
+- 两边消息写入同一 Echo 内部上下文
+- 上下文带 `[主客户端]` / `[微信端]` 标签
+- 微信消息 visibility=`wechat_history`，主客户端历史不返回
+- 微信回复只发微信，主客户端回复只发主客户端
+
+手机端：
+
+- NotificationListener 监听 `com.tencent.mm`
+- 只接受标题为“叶子”的通知
+- 按通知 key + 文本 + 时间生成消息 ID 去重
+- 通过 `POST /mobile-agent/wechat/inbound` 使用设备令牌上报
+
+后端：
+
+- `handle_wechat_inbound`
+- `generate_chat_reply(..., message_channel="wechat")`
+- 回复通过 `WechatSkill` 发回微信
+- 内存消息 ID 去重 10 分钟
+
+验证：
+
+```text
+微信入站 -> replied=true
+同 message_id 第二次 -> duplicate=true, replied=false
+主客户端 /chat/messages -> 不包含微信消息
+get_history -> 同时包含 [主客户端] 与 [微信端]
+```

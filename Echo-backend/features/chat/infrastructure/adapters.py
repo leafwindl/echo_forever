@@ -266,6 +266,7 @@ class ChatContextProviderAdapter(ChatContextProvider):
         history_before_message_id: int | None = None,
         speaker_role: str | None = None,
         memory_enabled: bool = True,
+        message_channel: str = "app_chat",
     ) -> ChatContext:
         context = await build_chat_context(
             user_id,
@@ -275,6 +276,7 @@ class ChatContextProviderAdapter(ChatContextProvider):
             history_before_message_id=history_before_message_id,
             speaker_role=speaker_role,
             memory_enabled=memory_enabled,
+            message_channel=message_channel,
         )
         return context
 

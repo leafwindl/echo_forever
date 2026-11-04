@@ -7,8 +7,14 @@ from features.agent.domain.entities import ContentPart, SourceReference
 CONVERSATION_MODES = ("chat", "call")
 CHAT_CHANNEL_APP = "app_chat"
 CHAT_CHANNEL_DEVICE = "device_voice"
+CHAT_CHANNEL_WECHAT = "wechat"
 CHAT_VISIBILITY_MAIN = "main_chat"
 CHAT_VISIBILITY_DEVICE_HISTORY = "device_history"
+CHAT_VISIBILITY_WECHAT = "wechat_history"
+CHANNEL_LABELS = {
+    CHAT_CHANNEL_APP: "主客户端",
+    CHAT_CHANNEL_WECHAT: "微信端",
+}
 
 
 class ChatValidationError(ValueError):

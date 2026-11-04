@@ -273,6 +273,7 @@ class GenerateChatReply:
         speaker_confidence: float = 0.0,
         speaker_name: str | None = None,
         memory_enabled: bool = True,
+        message_channel: str = CHAT_CHANNEL_APP,
     ) -> PreparedChatReply:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -311,6 +312,8 @@ class GenerateChatReply:
 
         context_started_at = time.perf_counter()
         context_kwargs = {}
+        if message_channel != CHAT_CHANNEL_APP:
+            context_kwargs["message_channel"] = message_channel
         if speaker_role is not None:
             context_kwargs["speaker_role"] = speaker_role
         if not memory_enabled:
@@ -585,6 +588,7 @@ class GenerateChatReply:
             speaker_confidence=speaker_confidence,
             speaker_name=speaker_name,
             memory_enabled=memory_enabled,
+            message_channel=message_channel,
         )
         logger.info(
             "LLM reply generated for user_id=%s text_length=%s duration_ms=%.1f",
