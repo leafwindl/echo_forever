@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -138,10 +139,8 @@ class NetEaseMusicSkill:
         await runner.wait(0.8)
         await runner.act("action", {"kind": "tap", "x": 953, "y": 164})
         await runner.wait(2.0)
-        try:
+        with contextlib.suppress(MobileAgentError):
             await runner.act("action", {"kind": "tap_text", "text": "单曲"})
-        except MobileAgentError:
-            pass
         await runner.wait(1.2)
         observed = await runner.observe()
         text = str(observed.get("text") or "")
