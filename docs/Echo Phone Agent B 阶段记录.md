@@ -455,6 +455,7 @@ phone_wechat_send
 - 上下文带 `[主客户端]` / `[微信端]` 标签
 - 微信消息 visibility=`wechat_history`，主客户端历史不返回
 - 微信回复只发微信，主客户端回复只发主客户端
+- 微信回复按主客户端的 reply_segments 拆成多条微信消息发送
 
 手机端：
 
