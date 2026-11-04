@@ -21,6 +21,9 @@ final class AgentCommandHandler {
             if ("screenshot".equals(action)) {
                 return screenshot();
             }
+            if ("ocr".equals(action)) {
+                return ocr();
+            }
             if ("notifications".equals(action)) {
                 return notifications();
             }
@@ -78,6 +81,31 @@ final class AgentCommandHandler {
         result.put("ok", true);
         result.put("data", data);
         return result;
+    }
+
+    private static JSONObject ocr() throws Exception {
+        java.util.concurrent.atomic.AtomicReference<JSONObject> result =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        Thread worker = new Thread(
+                () -> {
+                    try {
+                        result.set(AgentScreenOcr.recognize());
+                    } catch (Exception ignored) {
+                        result.set(null);
+                    }
+                },
+                "echo-screen-ocr"
+        );
+        worker.start();
+        worker.join(9000);
+        JSONObject data = result.get();
+        if (data == null) {
+            return error("ocr_unavailable", "OCR 不可用，请确认 PC 截图桥和手机无障碍");
+        }
+        JSONObject response = new JSONObject();
+        response.put("ok", true);
+        response.put("data", data);
+        return response;
     }
 
     private static JSONObject notifications() throws Exception {
@@ -194,7 +222,11 @@ final class AgentCommandHandler {
                 }
                 break;
             case "input_text":
-                success = AgentInputBridge.typeText(arguments.optString("text", ""));
+                String inboundText = arguments.optString("text", "");
+                success = AgentInputBridge.typeText(inboundText);
+                if (success) {
+                    AgentWechatOcrMonitor.rememberOutbound(inboundText);
+                }
                 break;
             case "back":
             case "home":

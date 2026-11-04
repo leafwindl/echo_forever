@@ -92,7 +92,7 @@ def _device_response(device, online: bool) -> MobileAgentDeviceResponse:
 
 def _validate_command(action: str, arguments: dict[str, Any]) -> dict[str, Any]:
     action = action.strip()
-    if action in {"observe", "screenshot", "notifications", "stop"}:
+    if action in {"observe", "screenshot", "ocr", "notifications", "stop"}:
         return {}
     if action == "launch_app":
         package = str(arguments.get("package") or "").strip()

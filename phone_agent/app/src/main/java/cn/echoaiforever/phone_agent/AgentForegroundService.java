@@ -27,6 +27,7 @@ public class AgentForegroundService extends Service {
 
     private final AgentWebSocketClient socket = new AgentWebSocketClient();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private AgentWechatOcrMonitor wechatOcrMonitor;
     private boolean reconnectScheduled;
 
     public static boolean isRunning() {
@@ -39,6 +40,13 @@ public class AgentForegroundService extends Service {
 
     public static String statusText() {
         return status;
+    }
+
+    public static void refreshWechatOcr() {
+        AgentForegroundService current = instance;
+        if (current != null) {
+            current.reconfigureWechatOcr();
+        }
     }
 
     public static String captureScreenshotMime() {
@@ -70,6 +78,7 @@ public class AgentForegroundService extends Service {
         super.onCreate();
         instance = this;
         createChannel();
+        wechatOcrMonitor = new AgentWechatOcrMonitor(this);
     }
 
     @Override
@@ -85,6 +94,9 @@ public class AgentForegroundService extends Service {
             startForeground(NOTIFICATION_ID, buildNotification("正在连接 Echo 后端"));
         }
         connectIfConfigured();
+        if (wechatOcrMonitor != null) {
+            wechatOcrMonitor.start();
+        }
         return START_STICKY;
     }
 
@@ -95,6 +107,10 @@ public class AgentForegroundService extends Service {
         reconnectScheduled = false;
         instance = null;
         mainHandler.removeCallbacksAndMessages(null);
+        if (wechatOcrMonitor != null) {
+            wechatOcrMonitor.stop();
+            wechatOcrMonitor = null;
+        }
         socket.close();
         status = "已停止";
         super.onDestroy();
@@ -103,6 +119,14 @@ public class AgentForegroundService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    private void reconfigureWechatOcr() {
+        if (wechatOcrMonitor != null) {
+            wechatOcrMonitor.stop();
+        }
+        wechatOcrMonitor = new AgentWechatOcrMonitor(this);
+        wechatOcrMonitor.start();
     }
 
     private void connectIfConfigured() {

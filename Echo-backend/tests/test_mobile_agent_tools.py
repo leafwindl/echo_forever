@@ -49,6 +49,7 @@ class MobileAgentToolTests(unittest.TestCase):
         for name in (
             "phone_status",
             "phone_observe",
+            "phone_screen_ocr",
             "phone_screenshot",
             "phone_launch_app",
             "phone_action",

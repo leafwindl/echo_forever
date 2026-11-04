@@ -24,6 +24,7 @@ public class MainActivity extends Activity {
     private EditText serverUrl;
     private EditText pairingCode;
     private EditText deviceName;
+    private Button wechatOcrToggle;
     private SharedPreferences preferences;
 
     @Override
@@ -83,6 +84,8 @@ public class MainActivity extends Activity {
         root.addView(button("读取当前界面", v -> readCurrentUi()));
         root.addView(button("回到桌面", v -> goHome()));
         root.addView(button("打开通知读取设置", v -> openNotificationSettings()));
+        wechatOcrToggle = button("", v -> toggleWechatOcr());
+        root.addView(wechatOcrToggle);
         root.addView(button("解除本机配对", v -> unpair()));
 
         TextView serverLabel = new TextView(this);
@@ -147,6 +150,18 @@ public class MainActivity extends Activity {
         return button;
     }
 
+    private void toggleWechatOcr() {
+        boolean enabled = !AgentConfig.wechatForegroundOcrEnabled(this);
+        preferences.edit().putBoolean(AgentConfig.WECHAT_FOREGROUND_OCR, enabled).apply();
+        AgentForegroundService.refreshWechatOcr();
+        refreshStatus();
+        Toast.makeText(
+                this,
+                enabled ? "微信前台 OCR 已開啟" : "微信前台 OCR 已關閉",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
+
     private void refreshStatus() {
         boolean connected = AgentAccessibilityService.instance() != null;
         boolean enabled = isAccessibilityEnabled();
@@ -154,6 +169,15 @@ public class MainActivity extends Activity {
         statusView.setTextColor(
                 connected ? Color.rgb(32, 120, 72) : Color.rgb(160, 70, 50)
         );
+        if (wechatOcrToggle != null) {
+            wechatOcrToggle.setText(
+                    "微信前台 OCR：" + (
+                            AgentConfig.wechatForegroundOcrEnabled(this)
+                                    ? "已開啟"
+                                    : "已關閉"
+                    )
+            );
+        }
         String deviceId = preferences.getString(AgentConfig.DEVICE_ID, "");
         detailView.setText(
                 "系统开关：" + (enabled ? "已开启" : "未开启")

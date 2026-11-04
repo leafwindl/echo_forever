@@ -34,6 +34,10 @@ class PhoneScreenshotArguments(BaseModel):
     device_id: str = Field(default="", max_length=100)
 
 
+class PhoneScreenOcrArguments(BaseModel):
+    device_id: str = Field(default="", max_length=100)
+
+
 class PhoneLaunchAppArguments(BaseModel):
     device_id: str = Field(default="", max_length=100)
     package: str = Field(min_length=1, max_length=200)
@@ -253,6 +257,28 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         return _completed(
             "phone_screenshot",
             safe_for_model="已完成手机截图。",
+            data=data,
+        )
+
+    async def screen_ocr_handler(context: ToolExecutionContext, arguments: BaseModel):
+        parsed = PhoneScreenOcrArguments.model_validate(arguments)
+        device = _online_device(context.user_id, parsed.device_id)
+        if device is None:
+            return _failed("phone_screen_ocr", "phone_offline", "手机 Agent 当前不在线")
+        try:
+            data = await _execute(
+                context=context,
+                device=device,
+                action="ocr",
+                arguments={},
+                timeout_seconds=25,
+            )
+        except MobileAgentError as exc:
+            return _failed("phone_screen_ocr", exc.code, exc.message)
+        text = str(data.get("text") or "")[:6000]
+        return _completed(
+            "phone_screen_ocr",
+            safe_for_model=f"手机屏幕 OCR 文本：\n{text}",
             data=data,
         )
 
@@ -629,6 +655,19 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         risk=ToolRisk.READ,
         timeout_seconds=25,
         max_calls=2,
+    )
+    _register(
+        registry,
+        name="phone_screen_ocr",
+        description=(
+            "截取手机当前屏幕并做中文 OCR，返回文字和坐标块。"
+            "用于微信聊天页、其他应用界面等无障碍读不到的场景。"
+        ),
+        arguments_model=PhoneScreenOcrArguments,
+        handler=screen_ocr_handler,
+        risk=ToolRisk.READ,
+        timeout_seconds=30,
+        max_calls=3,
     )
     _register(
         registry,

@@ -680,6 +680,26 @@ def get_conversation_messages(
     ]
 
 
+def list_recent_assistant_contents(
+    user_id: str,
+    limit: int = 12,
+) -> tuple[str, ...]:
+    with get_connection() as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT content
+            FROM chat_messages
+            WHERE user_id = %s
+              AND role = 'assistant'
+              AND status = 'active'
+            ORDER BY id DESC
+            LIMIT %s
+            """,
+            (user_id, limit),
+        )
+        return tuple(str(row["content"] or "") for row in cursor.fetchall())
+
+
 def list_recent_chat_user_ids(limit: int = 100) -> tuple[str, ...]:
     """Return users with recent chat activity for the presence heartbeat."""
     with get_connection() as conn, conn.cursor() as cursor:

@@ -10,9 +10,14 @@ final class AgentConfig {
     static final String DEVICE_NAME = "device_name";
     static final String DEVICE_TOKEN = "device_token";
     static final String DEVICE_ID = "device_id";
+    static final String WECHAT_FOREGROUND_OCR = "wechat_foreground_ocr";
     static final String DEFAULT_BASE_URL = BuildConfig.DEFAULT_BASE_URL;
 
     private AgentConfig() {
+    }
+
+    static boolean wechatForegroundOcrEnabled(Context context) {
+        return prefs(context).getBoolean(WECHAT_FOREGROUND_OCR, false);
     }
 
     static SharedPreferences prefs(Context context) {

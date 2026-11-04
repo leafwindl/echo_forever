@@ -48,6 +48,9 @@ public class AgentNotificationListener extends NotificationListenerService {
         if (RECENT.size() > 200) {
             RECENT.entrySet().removeIf(entry -> now - entry.getValue() > DEDUPE_WINDOW_MS);
         }
+        if (!AgentWechatInboundGuard.claim(content)) {
+            return;
+        }
         String baseUrl = AgentConfig.baseUrl(this);
         String token = AgentConfig.prefs(this).getString(AgentConfig.DEVICE_TOKEN, "");
         if (token == null || token.trim().isEmpty()) {

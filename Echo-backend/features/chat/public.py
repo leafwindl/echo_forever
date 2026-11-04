@@ -24,6 +24,7 @@ from features.chat.infrastructure.container import (
 from features.chat.infrastructure.events import ChatEvent, get_chat_event_broker
 from features.chat.infrastructure.postgres_repositories import (
     add_external_assistant_message,
+    list_recent_assistant_contents,
 )
 from features.chat.infrastructure.postgres_repositories import (
     list_recent_chat_user_ids as _list_recent_chat_user_ids,
@@ -53,6 +54,13 @@ def accept_chat_message(
 
 async def process_pending_chat_turn_once() -> bool:
     return await get_process_pending_chat_turns_use_case().run_once()
+
+
+def list_recent_assistant_contents_for_guard(
+    user_id: str,
+    limit: int = 12,
+) -> tuple[str, ...]:
+    return list_recent_assistant_contents(user_id, limit)
 
 
 def list_recent_chat_user_ids(limit: int = 100) -> tuple[str, ...]:
