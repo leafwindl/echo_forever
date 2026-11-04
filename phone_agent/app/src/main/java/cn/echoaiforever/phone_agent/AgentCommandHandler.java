@@ -63,7 +63,7 @@ final class AgentCommandHandler {
         }
         JSONObject data = new JSONObject();
         data.put("image_base64", image);
-        data.put("mime", "image/jpeg");
+        data.put("mime", AgentForegroundService.captureScreenshotMime());
         JSONObject result = new JSONObject();
         result.put("ok", true);
         result.put("data", data);

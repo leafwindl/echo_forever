@@ -208,7 +208,37 @@ Crashed services: {}
    - 已确认系统创建了投影 token，但应用侧没有拿到可用帧
    - 未把失败方案包装成“已支持”
 
-因此 B3 暂不宣称手机远程截图完成。ADB `screencap` 仍可用于开发机本地调试，但不能作为手机独立运行时的远程截图。
+因此 B3 暂不宣称手机独立运行的 MediaProjection 截图完成。
+
+### ADB 截图桥（已接入）
+
+在 PC 运行：
+
+```powershell
+.venv\Scripts\python.exe scripts/adb_screenshot_bridge.py --serial ce7f6baf
+```
+
+桥接服务会：
+
+- 监听 `127.0.0.1:8765`
+- 自动执行 `adb reverse tcp:8765 tcp:8765`
+- 用 `adb exec-out screencap -p` 截全屏
+- 返回 PNG base64
+
+手机端 `screenshot` 在投影和辅助功能截图都不可用时，会尝试请求
+`http://127.0.0.1:8765/screenshot`。
+
+生产验证：
+
+```text
+GET /mobile-agent/.../screenshot -> 200
+mime=image/png
+chars=273348
+saved bridge-shot.png
+```
+
+这解决了开发期“手机能操作但没有截图”的问题，但要求手机连接 PC/ADB；
+它不是手机独立运行方案。
 
 ### B3 还缺
 

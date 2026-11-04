@@ -18,9 +18,21 @@ B 阶段独立安卓执行端。当前是 B0/B1 骨架，不是完整产品。
 - 解除本机配对
 - 默认关闭明文 HTTP，仅允许本地回环测试
 
+## 开发期截图桥
+
+当前 ColorOS 设备上无障碍截图不可用、MediaProjection 授权后取不到帧。
+开发期可以启动 PC 侧 ADB 截图桥：
+
+```powershell
+.venv\Scripts\python.exe scripts/adb_screenshot_bridge.py --serial ce7f6baf
+```
+
+桥会自动 `adb reverse tcp:8765 tcp:8765`，手机 `screenshot` 兜底请求
+`http://127.0.0.1:8765/screenshot`。要求手机连接 PC/ADB。
+
 ## 尚未实现
 
-- 可用的远程截图（无障碍截图和 MediaProjection 在当前 ColorOS 设备上均未打通）
+- 手机独立运行的可用远程截图
 - 长按/滑动/滚动
 - 多步任务状态推送
 - 高风险操作二次确认

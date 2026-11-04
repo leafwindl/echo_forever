@@ -15,6 +15,8 @@ import android.os.Looper;
 
 import org.json.JSONObject;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 public class AgentForegroundService extends Service {
     private static final String CHANNEL_ID = "echo_phone_agent";
     private static final int NOTIFICATION_ID = 2107;
@@ -22,6 +24,7 @@ public class AgentForegroundService extends Service {
     private static volatile String status = "未连接";
     private static volatile boolean connected = false;
     private static volatile AgentForegroundService instance;
+    private static volatile String captureMime = "image/jpeg";
 
     private final AgentWebSocketClient socket = new AgentWebSocketClient();
     private final AgentScreenCapture screenCapture = new AgentScreenCapture(this);
@@ -61,13 +64,40 @@ public class AgentForegroundService extends Service {
         return started;
     }
 
+    public static String captureScreenshotMime() {
+        return captureMime;
+    }
+
     public static String captureScreenshot() {
         AgentForegroundService current = instance;
         if (current != null && current.screenCapture.isReady()) {
+            captureMime = "image/jpeg";
             return current.screenCapture.captureBase64();
         }
         AgentAccessibilityService service = AgentAccessibilityService.instance();
-        return service == null ? "" : service.captureScreenshotBase64();
+        String accessibility = service == null ? "" : service.captureScreenshotBase64();
+        if (!accessibility.isEmpty()) {
+            captureMime = "image/jpeg";
+            return accessibility;
+        }
+
+        AtomicReference<JSONObject> bridge = new AtomicReference<>();
+        Thread worker = new Thread(
+                () -> bridge.set(AgentScreenshotBridge.capture()),
+                "echo-adb-bridge-screenshot"
+        );
+        worker.start();
+        try {
+            worker.join(4500);
+        } catch (InterruptedException exc) {
+            Thread.currentThread().interrupt();
+        }
+        JSONObject payload = bridge.get();
+        if (payload == null) {
+            return "";
+        }
+        captureMime = payload.optString("mime", "image/png");
+        return payload.optString("image_base64", "");
     }
 
     @Override
