@@ -53,6 +53,7 @@ class MobileAgentToolTests(unittest.TestCase):
             "phone_launch_app",
             "phone_action",
             "phone_play_music",
+            "phone_bilibili",
             "phone_notifications",
             "phone_stop",
             "phone_run_task",

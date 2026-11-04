@@ -300,3 +300,40 @@ audit     -> 200, 12 items
 两个包可同时安装，配对令牌、默认后端地址互不影响。本地版通过
 `adb reverse tcp:8000 tcp:8000` 连接本地后端；生产版继续连接
 `https://api.echoaiforever.cn`。截图和中文输入仍共用 PC 的 8765 桥。
+
+
+## B站 App Skill
+
+新增 `bilibili` 技能：
+
+- `bilibili://search?keyword=...` 直接打开搜索结果
+- 选择第一条结果
+- 打开播放页
+- `play`：确认视频页
+- `comments`：切换到评论页
+
+API：
+
+```text
+POST /mobile-agent/skills/bilibili/play
+POST /mobile-agent/skills/bilibili/comments
+```
+
+Agent 工具：
+
+```text
+phone_bilibili
+```
+
+本地真机验证：
+
+```json
+{
+  "skill": "bilibili",
+  "query": "晴天",
+  "playing": true,
+  "comments_visible": true
+}
+```
+
+只读视频和评论，不发评论、不登录账号。

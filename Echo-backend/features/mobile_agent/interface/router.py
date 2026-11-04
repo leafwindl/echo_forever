@@ -99,6 +99,7 @@ def _validate_command(action: str, arguments: dict[str, Any]) -> dict[str, Any]:
             uri.startswith("http://")
             or uri.startswith("https://")
             or uri.startswith("orpheus://")
+            or uri.startswith("bilibili://")
         ):
             raise ValueError("unsupported uri scheme")
         if len(uri) > 2000:

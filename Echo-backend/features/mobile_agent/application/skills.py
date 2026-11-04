@@ -5,6 +5,7 @@ import contextlib
 import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+from urllib.parse import quote
 
 from features.mobile_agent.domain.entities import (
     MobileAgentActionError,
@@ -90,6 +91,31 @@ _RESULT_LINE = re.compile(
 )
 
 
+def _first_clickable_result(text: str) -> tuple[int, int] | None:
+    candidates: list[tuple[int, int, int]] = []
+    skip = {"综合", "番剧", "直播", "用户", "影视", "图文", "搜索", "返回", "评论", "简介"}
+    for line in text.splitlines():
+        match = _RESULT_LINE.match(line)
+        if not match:
+            continue
+        label = match.group("label").strip()
+        y1 = int(match.group("y1"))
+        y2 = int(match.group("y2"))
+        if y1 < 350 or label in skip:
+            continue
+        candidates.append(
+            (
+                (int(match.group("x1")) + int(match.group("x2"))) // 2,
+                (y1 + y2) // 2,
+                y1,
+            )
+        )
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[2])
+    return candidates[0][0], candidates[0][1]
+
+
 def _first_result_for_query(text: str, query: str) -> tuple[int, int] | None:
     candidates: list[tuple[int, int, int]] = []
     for line in text.splitlines():
@@ -110,6 +136,61 @@ def _first_result_for_query(text: str, query: str) -> tuple[int, int] | None:
         return None
     candidates.sort(key=lambda item: item[2])
     return candidates[0][0], candidates[0][1]
+
+
+class BilibiliSkill:
+    name = "bilibili"
+    package = "tv.danmaku.bili"
+    actions = ("play", "comments")
+
+    async def run(
+        self,
+        runner: SkillRunner,
+        action: str,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        if action not in self.actions:
+            raise AppSkillError("unsupported_skill_action", f"不支持：{action}")
+        query = str(parameters.get("query") or "").strip()
+        if not query or len(query) > 100:
+            raise AppSkillError("invalid_query", "搜索关键词不能为空")
+        uri = "bilibili://search?keyword=" + quote(query)
+        await runner.act("open_uri", {"uri": uri})
+        if not await runner.wait_for_package(self.package, 6.0):
+            raise AppSkillError("app_not_foreground", "B站没有回到前台")
+        await runner.wait(1.5)
+        observed = await runner.observe()
+        text = str(observed.get("text") or "")
+        point = _first_result_for_query(text, query) or _first_clickable_result(text)
+        if point is None:
+            raise AppSkillError("video_not_found", f"没有找到“{query}”的搜索结果")
+        await runner.act("action", {"kind": "tap", "x": point[0], "y": point[1]})
+        await runner.wait(3.0)
+        after = await runner.observe()
+        after_text = str(after.get("text") or "")
+        if "video_container" not in after_text and "评论" not in after_text:
+            raise AppSkillError("video_not_open", "没有进入视频播放页")
+        if action == "play":
+            return {
+                "query": query,
+                "package": self.package,
+                "selected": point,
+                "playing": True,
+                "observed": after_text[:3000],
+            }
+        with contextlib.suppress(MobileAgentError):
+            await runner.act("action", {"kind": "tap_text", "text": "评论"})
+        await runner.wait(1.2)
+        comments = await runner.observe()
+        comments_text = str(comments.get("text") or "")
+        return {
+            "query": query,
+            "package": self.package,
+            "selected": point,
+            "playing": True,
+            "comments_visible": "评论" in comments_text,
+            "observed": comments_text[:3000],
+        }
 
 
 class NetEaseMusicSkill:
@@ -184,6 +265,7 @@ class NetEaseMusicSkill:
 
 _SKILLS: dict[str, AppSkill] = {
     "netmusic": NetEaseMusicSkill(),
+    "bilibili": BilibiliSkill(),
 }
 
 
@@ -233,6 +315,7 @@ async def run_app_skill(
 
 __all__ = [
     "AppSkillError",
+    "BilibiliSkill",
     "NetEaseMusicSkill",
     "SkillRunResult",
     "run_app_skill",

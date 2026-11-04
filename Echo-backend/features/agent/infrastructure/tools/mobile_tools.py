@@ -59,6 +59,12 @@ class PhonePlayMusicArguments(BaseModel):
     device_id: str = Field(default="", max_length=100)
 
 
+class PhoneBilibiliArguments(BaseModel):
+    action: str = Field(default="play", pattern="^(play|comments)$")
+    query: str = Field(min_length=1, max_length=100)
+    device_id: str = Field(default="", max_length=100)
+
+
 class PhoneRunTaskArguments(BaseModel):
     task: str = Field(min_length=1, max_length=1000)
     device_id: str = Field(default="", max_length=100)
@@ -301,6 +307,30 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
             data={"device_id": result.device_id, **result.data},
         )
 
+    async def bilibili_handler(context: ToolExecutionContext, arguments: BaseModel):
+        parsed = PhoneBilibiliArguments.model_validate(arguments)
+        try:
+            result = await run_app_skill(
+                user_id=context.user_id,
+                skill="bilibili",
+                action=parsed.action,
+                parameters={"query": parsed.query},
+                device_id=parsed.device_id,
+            )
+        except AppSkillError as exc:
+            return _failed("phone_bilibili", exc.code, exc.message)
+        except MobileAgentError as exc:
+            return _failed("phone_bilibili", exc.code, exc.message)
+        summary = (
+            f"已在B站处理“{parsed.query}”，"
+            f"{'评论页已打开' if parsed.action == 'comments' else '视频已打开'}"
+        )
+        return _completed(
+            "phone_bilibili",
+            safe_for_model=summary,
+            data={"device_id": result.device_id, **result.data},
+        )
+
     async def notifications_handler(context: ToolExecutionContext, arguments: BaseModel):
         parsed = PhoneNotificationsArguments.model_validate(arguments)
         device = _online_device(context.user_id, parsed.device_id)
@@ -527,6 +557,19 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhonePlayMusicArguments,
         handler=play_music_handler,
+        risk=ToolRisk.READ,
+        timeout_seconds=60,
+        max_calls=2,
+    )
+    _register(
+        registry,
+        name="phone_bilibili",
+        description=(
+            "在B站搜索视频并打开播放页，或继续打开评论区。"
+            "只用于浏览视频/评论，不发评论、不登录账号。"
+        ),
+        arguments_model=PhoneBilibiliArguments,
+        handler=bilibili_handler,
         risk=ToolRisk.READ,
         timeout_seconds=60,
         max_calls=2,

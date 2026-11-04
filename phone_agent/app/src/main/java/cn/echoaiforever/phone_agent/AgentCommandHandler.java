@@ -110,8 +110,9 @@ final class AgentCommandHandler {
         String uri = value == null ? "" : value.trim();
         if (!(uri.startsWith("http://")
                 || uri.startsWith("https://")
-                || uri.startsWith("orpheus://"))) {
-            return error("invalid_uri", "只允许 http/https/orpheus URI");
+                || uri.startsWith("orpheus://")
+                || uri.startsWith("bilibili://"))) {
+            return error("invalid_uri", "只允许 http/https/orpheus/bilibili URI");
         }
         if (!AgentInputBridge.openUri(uri)) {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));

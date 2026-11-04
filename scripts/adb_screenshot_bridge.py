@@ -108,6 +108,7 @@ class Bridge:
             uri.startswith("http://")
             or uri.startswith("https://")
             or uri.startswith("orpheus://")
+            or uri.startswith("bilibili://")
         ):
             raise ValueError("unsupported uri scheme")
         subprocess.run(

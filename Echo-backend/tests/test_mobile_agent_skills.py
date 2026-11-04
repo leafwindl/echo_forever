@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import unittest
 
-from features.mobile_agent.application.skills import _first_result_for_query
+from features.mobile_agent.application.skills import (
+    _first_clickable_result,
+    _first_result_for_query,
+)
 
 
 class AppSkillParsingTests(unittest.TestCase):
@@ -17,6 +20,14 @@ class AppSkillParsingTests(unittest.TestCase):
         """
         point = _first_result_for_query(text, "晴天")
         self.assertEqual(point, (540, 920))
+
+    def test_bilibili_clickable_result(self):
+        text = """
+        综合  [84,280][180,354]  CLICK
+        晴天  [486,182][600,240]
+        【晴天】  [540,558][1008,700]  CLICK
+        """
+        self.assertEqual(_first_clickable_result(text), (774, 629))
 
     def test_ignores_search_box_and_tabs(self):
         text = """
