@@ -4,7 +4,6 @@ import logging
 import re
 import threading
 import time
-from collections import deque
 from difflib import SequenceMatcher
 from typing import Any
 
@@ -21,9 +20,6 @@ ALLOWED_WECHAT_CONTACT = "叶子"
 _DEDUPE_TTL_SECONDS = 600
 _dedupe_lock = threading.Lock()
 _recent_message_keys: dict[str, float] = {}
-_INBOUND_WINDOW_SECONDS = 60
-_MAX_INBOUND_PER_WINDOW = 4
-_recent_inbound: dict[str, deque[float]] = {}
 
 
 class WechatChannelError(ValueError):
@@ -81,19 +77,6 @@ def _looks_like_echo_loop(user_id: str, text: str) -> bool:
     return False
 
 
-def _allow_inbound(user_id: str, device_id: str) -> bool:
-    key = f"{user_id}:{device_id}"
-    now = time.monotonic()
-    with _dedupe_lock:
-        window = _recent_inbound.setdefault(key, deque())
-        while window and now - window[0] > _INBOUND_WINDOW_SECONDS:
-            window.popleft()
-        if len(window) >= _MAX_INBOUND_PER_WINDOW:
-            return False
-        window.append(now)
-        return True
-
-
 def _claim_message_key(user_id: str, device_id: str, message_id: str) -> bool:
     key = f"{user_id}:{device_id}:{message_id}"
     now = time.monotonic()
@@ -138,17 +121,6 @@ async def handle_wechat_inbound(
             "duplicate": True,
             "replied": False,
             "reason": "echo_loop",
-        }
-    if not _allow_inbound(user_id, device_id):
-        logger.warning(
-            "WeChat inbound circuit breaker tripped user_id=%s device_id=%s",
-            user_id,
-            device_id,
-        )
-        return {
-            "duplicate": False,
-            "replied": False,
-            "reason": "rate_limited",
         }
     if not _claim_message_key(user_id, device_id, clean_message_id):
         return {"duplicate": True, "replied": False}

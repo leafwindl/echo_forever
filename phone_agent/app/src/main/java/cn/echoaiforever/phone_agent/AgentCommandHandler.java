@@ -1,6 +1,10 @@
 package cn.echoaiforever.phone_agent;
 
 import android.content.Context;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -26,6 +30,9 @@ final class AgentCommandHandler {
             }
             if ("notifications".equals(action)) {
                 return notifications();
+            }
+            if ("notify".equals(action)) {
+                return notifyReply(context, arguments);
             }
             if ("stop".equals(action)) {
                 JSONObject data = new JSONObject();
@@ -106,6 +113,52 @@ final class AgentCommandHandler {
         response.put("ok", true);
         response.put("data", data);
         return response;
+    }
+
+    private static JSONObject notifyReply(Context context, JSONObject arguments) throws Exception {
+        String text = arguments.optString("text", "").trim();
+        if (text.isEmpty()) {
+            return error("invalid_text", "通知内容为空");
+        }
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        String channelId = "echo_wechat_reply";
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    "Echo 微信回复",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            manager.createNotificationChannel(channel);
+        }
+        Intent open = context.getPackageManager().getLaunchIntentForPackage("com.tencent.mm");
+        if (open == null) {
+            open = new Intent(context, MainActivity.class);
+        }
+        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        PendingIntent pending = PendingIntent.getActivity(
+                context,
+                0,
+                open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        Notification.Builder builder = android.os.Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(context, channelId)
+                : new Notification.Builder(context);
+        Notification notification = builder
+                .setContentTitle("Echo")
+                .setContentText(text)
+                .setStyle(new Notification.BigTextStyle().bigText(text))
+                .setSmallIcon(android.R.drawable.ic_menu_send)
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .build();
+        manager.notify(3101, notification);
+        JSONObject data = new JSONObject();
+        data.put("notified", true);
+        JSONObject result = new JSONObject();
+        result.put("ok", true);
+        result.put("data", data);
+        return result;
     }
 
     private static JSONObject notifications() throws Exception {

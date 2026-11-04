@@ -26,14 +26,23 @@ public class AgentNotificationListener extends NotificationListenerService {
 
     @Override
     public void onNotificationPosted(StatusBarNotification notification) {
+        handleNotification(notification, false);
+    }
+
+    private void handleNotification(StatusBarNotification notification, boolean catchup) {
         if (notification == null || !WECHAT_PACKAGE.equals(notification.getPackageName())) {
+            return;
+        }
+        if (catchup && System.currentTimeMillis() - notification.getPostTime() > 600_000L) {
             return;
         }
         String title = text(notification, "android.title").trim();
         if (!ALLOWED_CONTACT.equals(title)) {
             return;
         }
-        String content = inboundText(notification);
+        String content = inboundText(notification)
+                .replaceFirst("^\\[\\d+条\\][^:：]*[:：]\\s*", "")
+                .trim();
         if (content.isEmpty()) {
             return;
         }
@@ -110,6 +119,13 @@ public class AgentNotificationListener extends NotificationListenerService {
     public void onListenerConnected() {
         super.onListenerConnected();
         instance = this;
+        StatusBarNotification[] active = getActiveNotifications();
+        if (active == null) {
+            return;
+        }
+        for (StatusBarNotification notification : active) {
+            handleNotification(notification, true);
+        }
     }
 
     @Override

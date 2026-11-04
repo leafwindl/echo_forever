@@ -455,16 +455,59 @@ class WechatSkill:
         if not await runner.wait_for_package(self.package, 6.0):
             raise AppSkillError("app_not_foreground", "微信没有回到前台")
         await runner.wait(1.0)
-        snapshot = await runner.observe()
-        text = str(snapshot.get("text") or "")
-        if "发送" in text or "按住" in text:
+        await self._open_contact_from_ocr(runner)
+        await runner.wait(1.0)
+
+    async def _open_contact_from_ocr(self, runner: SkillRunner) -> None:
+        # WeChat's accessibility tree is empty, so use the screenshot OCR
+        # command to locate the pinned contact row or the chat header.
+        blocks = await self._ocr_blocks(runner)
+        point = self._contact_point(blocks, header_only=True)
+        if point is not None:
+            return
+        # WeChat may restore Discover or another tab. Switch to chat tab.
+        with contextlib.suppress(MobileAgentError):
+            await runner.act("action", {"kind": "tap", "x": 100, "y": 2280})
+            await runner.wait(0.8)
+        blocks = await self._ocr_blocks(runner)
+        point = self._contact_point(blocks, header_only=False)
+        if point is not None:
+            await runner.act("action", {"kind": "tap", "x": point[0], "y": point[1]})
             return
         with contextlib.suppress(MobileAgentError):
             await runner.act(
                 "action",
                 {"kind": "tap_text", "text": self.allowed_contact},
             )
-        await runner.wait(1.2)
+
+    async def _ocr_blocks(self, runner: SkillRunner) -> list[dict[str, Any]]:
+        try:
+            result = await runner.act("ocr", {})
+        except MobileAgentError:
+            return []
+        data = result.data if isinstance(result, MobileAgentCommandResult) else {}
+        blocks = data.get("blocks")
+        return blocks if isinstance(blocks, list) else []
+
+    def _contact_point(
+        self,
+        blocks: list[dict[str, Any]],
+        *,
+        header_only: bool,
+    ) -> tuple[int, int] | None:
+        for block in blocks:
+            if str(block.get("text") or "").strip() != self.allowed_contact:
+                continue
+            left = int(block.get("left") or 0)
+            right = int(block.get("right") or 0)
+            top = int(block.get("top") or 0)
+            bottom = int(block.get("bottom") or 0)
+            if header_only and top > 320:
+                continue
+            if not header_only and top < 250:
+                continue
+            return (left + right) // 2, (top + bottom) // 2
+        return None
 
     async def run(
         self,
@@ -494,6 +537,8 @@ class WechatSkill:
             if not segments or any(len(item) > 500 for item in segments):
                 raise AppSkillError("invalid_messages", "分段消息为空或超过 500 字")
             await self._send_segments(runner, segments)
+            await self._leave_wechat(runner)
+            await self._notify_reply(runner, "\n".join(segments))
             return {
                 "package": self.package,
                 "contact": self.allowed_contact,
@@ -509,6 +554,8 @@ class WechatSkill:
         await self._send_one(runner, message)
         observed = await runner.observe()
         observed_text = str(observed.get("text") or "")
+        await self._leave_wechat(runner)
+        await self._notify_reply(runner, message)
         return {
             "package": self.package,
             "contact": self.allowed_contact,
@@ -528,6 +575,18 @@ class WechatSkill:
         # The keyboard shifts the send button to this position.
         await runner.act("action", {"kind": "tap", "x": 970, "y": 2180})
         await runner.wait(2.0)
+
+    async def _notify_reply(self, runner: SkillRunner, text: str) -> None:
+        with contextlib.suppress(MobileAgentError):
+            await runner.act("notify", {"text": text})
+
+    async def _leave_wechat(self, runner: SkillRunner) -> None:
+        # The phone is dedicated to Echo. Leaving WeChat in the foreground
+        # suppresses notifications for an open chat, so return home after
+        # every outbound message and let the notification channel receive.
+        with contextlib.suppress(MobileAgentError):
+            await runner.act("action", {"kind": "home"})
+            await runner.wait(0.4)
 
     async def _send_segments(
         self,

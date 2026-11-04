@@ -94,6 +94,11 @@ def _validate_command(action: str, arguments: dict[str, Any]) -> dict[str, Any]:
     action = action.strip()
     if action in {"observe", "screenshot", "ocr", "notifications", "stop"}:
         return {}
+    if action == "notify":
+        text = str(arguments.get("text") or "").strip()
+        if not text or len(text) > 500:
+            raise ValueError("text is required")
+        return {"text": text}
     if action == "launch_app":
         package = str(arguments.get("package") or "").strip()
         if not package or len(package) > 200:

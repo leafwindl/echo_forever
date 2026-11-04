@@ -17,10 +17,8 @@ import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
 
 import org.json.JSONObject;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,9 +32,6 @@ final class AgentWechatOcrMonitor {
     private static final long POLL_INTERVAL_MS = 2500L;
     private static final long OUTBOUND_SUPPRESSION_MS = 120_000L;
     private static final Map<String, Long> RECENT_OUTBOUND = new ConcurrentHashMap<>();
-    private static final long UPLOAD_WINDOW_MS = 60_000L;
-    private static final int MAX_UPLOADS_PER_WINDOW = 4;
-    private final Deque<Long> uploadTimes = new ArrayDeque<>();
 
     private final AgentForegroundService service;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -326,11 +321,6 @@ final class AgentWechatOcrMonitor {
         if (!AgentWechatInboundGuard.claim(text)) {
             return;
         }
-        if (!allowUpload()) {
-            started = false;
-            Log.w(TAG, "OCR upload circuit breaker tripped; monitor stopped");
-            return;
-        }
         String token = AgentConfig.prefs(service).getString(AgentConfig.DEVICE_TOKEN, "");
         if (token == null || token.trim().isEmpty()) {
             return;
@@ -354,20 +344,6 @@ final class AgentWechatOcrMonitor {
                 },
                 "echo-wechat-ocr-upload"
         ).start();
-    }
-
-    private boolean allowUpload() {
-        long now = System.currentTimeMillis();
-        synchronized (uploadTimes) {
-            while (!uploadTimes.isEmpty() && now - uploadTimes.peekFirst() > UPLOAD_WINDOW_MS) {
-                uploadTimes.pollFirst();
-            }
-            if (uploadTimes.size() >= MAX_UPLOADS_PER_WINDOW) {
-                return false;
-            }
-            uploadTimes.addLast(now);
-            return true;
-        }
     }
 
     private static final class IncomingLine {
