@@ -103,6 +103,22 @@ class Bridge:
             capture_output=True,
         )
 
+    def launch_app(self, package: str) -> None:
+        subprocess.run(
+            self._base()
+            + [
+                "shell",
+                "monkey",
+                "-p",
+                package,
+                "-c",
+                "android.intent.category.LAUNCHER",
+                "1",
+            ],
+            check=True,
+            capture_output=True,
+        )
+
     def open_uri(self, uri: str) -> None:
         if not (
             uri.startswith("http://")
@@ -168,7 +184,12 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path.rstrip("/") not in {"/text", "/key", "/open_uri"}:
+        if self.path.rstrip("/") not in {
+            "/text",
+            "/key",
+            "/open_uri",
+            "/launch_app",
+        }:
             self._json(404, {"error": "not_found"})
             return
         try:
@@ -190,6 +211,14 @@ class Handler(BaseHTTPRequestHandler):
                 uri = str(body.get("uri") or "")
                 self.bridge.open_uri(uri)
                 self._json(200, {"ok": True, "uri": uri})
+                return
+            if self.path.rstrip("/") == "/launch_app":
+                package = str(body.get("package") or "")
+                if not package or len(package) > 200:
+                    self._json(400, {"error": "invalid_package"})
+                    return
+                self.bridge.launch_app(package)
+                self._json(200, {"ok": True, "package": package})
                 return
             keycode = int(body.get("keycode") or 0)
             if keycode <= 0:

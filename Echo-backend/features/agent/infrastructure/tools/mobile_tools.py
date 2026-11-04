@@ -59,6 +59,13 @@ class PhonePlayMusicArguments(BaseModel):
     device_id: str = Field(default="", max_length=100)
 
 
+class PhoneXiaohongshuArguments(BaseModel):
+    action: str = Field(default="feed", pattern="^(feed|search|open|comments)$")
+    query: str = Field(default="", max_length=100)
+    count: int = Field(default=2, ge=1, le=10)
+    device_id: str = Field(default="", max_length=100)
+
+
 class PhoneDouyinArguments(BaseModel):
     action: str = Field(default="feed", pattern="^(feed|search|play|comments)$")
     query: str = Field(default="", max_length=100)
@@ -366,6 +373,35 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
             data={"device_id": result.device_id, **result.data},
         )
 
+    async def xiaohongshu_handler(
+        context: ToolExecutionContext,
+        arguments: BaseModel,
+    ):
+        parsed = PhoneXiaohongshuArguments.model_validate(arguments)
+        try:
+            result = await run_app_skill(
+                user_id=context.user_id,
+                skill="xiaohongshu",
+                action=parsed.action,
+                parameters={"query": parsed.query, "count": parsed.count},
+                device_id=parsed.device_id,
+            )
+        except AppSkillError as exc:
+            return _failed("phone_xiaohongshu", exc.code, exc.message)
+        except MobileAgentError as exc:
+            return _failed("phone_xiaohongshu", exc.code, exc.message)
+        labels = {
+            "feed": f"已打开小红书并刷了 {result.data.get('swiped', 0)} 篇笔记。",
+            "search": f"已在小红书搜索“{parsed.query}”。",
+            "open": f"已打开小红书“{parsed.query}”相关笔记。",
+            "comments": f"已打开小红书“{parsed.query}”相关笔记的评论。",
+        }
+        return _completed(
+            "phone_xiaohongshu",
+            safe_for_model=labels[parsed.action],
+            data={"device_id": result.device_id, **result.data},
+        )
+
     async def notifications_handler(context: ToolExecutionContext, arguments: BaseModel):
         parsed = PhoneNotificationsArguments.model_validate(arguments)
         device = _online_device(context.user_id, parsed.device_id)
@@ -592,6 +628,19 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhonePlayMusicArguments,
         handler=play_music_handler,
+        risk=ToolRisk.READ,
+        timeout_seconds=60,
+        max_calls=2,
+    )
+    _register(
+        registry,
+        name="phone_xiaohongshu",
+        description=(
+            "打开小红书刷笔记、搜索笔记、打开搜索结果或查看评论。"
+            "只做浏览，不发评论、不私信、不购物。"
+        ),
+        arguments_model=PhoneXiaohongshuArguments,
+        handler=xiaohongshu_handler,
         risk=ToolRisk.READ,
         timeout_seconds=60,
         max_calls=2,

@@ -379,3 +379,43 @@ phone_douyin
 ```
 
 只做浏览，不发评论、不私信、不购物。
+
+
+## 小红书 App Skill
+
+新增：
+
+- `XiaohongshuSkill`
+- 通过 app 启动器打开小红书
+- 搜索框输入中文，选择搜索
+- 打开第一条笔记
+- 进入评论并下滑评论
+- 手机端新增 `launch_app` 的 PC 桥兜底
+
+API：
+
+```text
+POST /mobile-agent/skills/xiaohongshu/feed
+POST /mobile-agent/skills/xiaohongshu/search
+POST /mobile-agent/skills/xiaohongshu/open
+POST /mobile-agent/skills/xiaohongshu/comments
+```
+
+Agent 工具：
+
+```text
+phone_xiaohongshu
+```
+
+本地真机验证：
+
+```json
+{
+  "feed": {"swiped": 1},
+  "search": {"search_visible": true},
+  "open": {"opened": true},
+  "comments": {"comments_visible": true, "comments_scrolled": 2}
+}
+```
+
+只做浏览，不发评论、不私信、不购物。

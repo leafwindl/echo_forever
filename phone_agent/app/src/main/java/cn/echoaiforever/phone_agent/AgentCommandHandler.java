@@ -1,8 +1,10 @@
 package cn.echoaiforever.phone_agent;
 
 import android.content.Context;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 
 import org.json.JSONObject;
@@ -92,9 +94,36 @@ final class AgentCommandHandler {
             return error("invalid_package", "缺少应用包名");
         }
         PackageManager manager = context.getPackageManager();
-        Intent intent = manager.getLaunchIntentForPackage(packageName.trim());
+        String target = packageName.trim();
+        if (AgentInputBridge.launchApp(target)) {
+            JSONObject data = new JSONObject();
+            data.put("package", target);
+            data.put("source", "adb_bridge");
+            JSONObject result = new JSONObject();
+            result.put("ok", true);
+            result.put("data", data);
+            return result;
+        }
+        Intent intent = manager.getLaunchIntentForPackage(target);
         if (intent == null) {
-            return error("app_not_found", "没有找到可启动的应用：" + packageName);
+            Intent launcher = new Intent(Intent.ACTION_MAIN);
+            launcher.addCategory(Intent.CATEGORY_LAUNCHER);
+            launcher.setPackage(target);
+            ResolveInfo resolved = manager.resolveActivity(
+                    launcher,
+                    PackageManager.MATCH_DEFAULT_ONLY
+            );
+            if (resolved == null || resolved.activityInfo == null) {
+                return error("app_not_found", "没有找到可启动的应用：" + packageName);
+            }
+            intent = new Intent(Intent.ACTION_MAIN);
+            intent.addCategory(Intent.CATEGORY_LAUNCHER);
+            intent.setComponent(
+                    new ComponentName(
+                            resolved.activityInfo.packageName,
+                            resolved.activityInfo.name
+                    )
+            );
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         context.startActivity(intent);

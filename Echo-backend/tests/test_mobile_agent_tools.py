@@ -55,6 +55,7 @@ class MobileAgentToolTests(unittest.TestCase):
             "phone_play_music",
             "phone_bilibili",
             "phone_douyin",
+            "phone_xiaohongshu",
             "phone_notifications",
             "phone_stop",
             "phone_run_task",

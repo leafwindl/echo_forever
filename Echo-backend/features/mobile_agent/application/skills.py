@@ -336,6 +336,114 @@ class DouyinSkill:
         }
 
 
+class XiaohongshuSkill:
+    name = "xiaohongshu"
+    package = "com.xingin.xhs"
+    actions = ("feed", "search", "open", "comments")
+
+    async def _open_search(self, runner: SkillRunner, query: str) -> None:
+        if not query or len(query) > 100:
+            raise AppSkillError("invalid_query", "搜索关键词不能为空")
+        await runner.act("launch_app", {"package": self.package})
+        if not await runner.wait_for_package(self.package, 6.0):
+            raise AppSkillError("app_not_foreground", "小红书没有回到前台")
+        await runner.wait(1.0)
+        # XHS restores either the feed or the last search page. In both cases
+        # the search entry is at the top; open it, then replace the query.
+        with contextlib.suppress(MobileAgentError):
+            await runner.act("action", {"kind": "tap_text", "text": "搜索"})
+        await runner.wait(0.8)
+        await runner.act("action", {"kind": "tap", "x": 600, "y": 185})
+        await runner.wait(0.3)
+        await runner.act("action", {"kind": "text", "text": query})
+        await runner.wait(0.5)
+        await runner.act("action", {"kind": "tap", "x": 948, "y": 185})
+        await runner.wait(2.2)
+
+    async def run(
+        self,
+        runner: SkillRunner,
+        action: str,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        if action not in self.actions:
+            raise AppSkillError("unsupported_skill_action", f"不支持：{action}")
+        query = str(parameters.get("query") or "").strip()
+        if action == "feed":
+            await runner.act("launch_app", {"package": self.package})
+            if not await runner.wait_for_package(self.package, 6.0):
+                raise AppSkillError("app_not_foreground", "小红书没有回到前台")
+            await runner.wait(1.0)
+            for _ in range(2):
+                snapshot = await runner.observe()
+                snapshot_text = str(snapshot.get("text") or "")
+                if "首页" in snapshot_text or "市集" in snapshot_text:
+                    break
+                with contextlib.suppress(MobileAgentError):
+                    await runner.act("action", {"kind": "back"})
+                await runner.wait(0.6)
+            count = max(1, min(int(parameters.get("count") or 3), 10))
+            for _ in range(count):
+                await runner.swipe(540, 1800, 540, 500, 350)
+                await runner.wait(1.5)
+            observed = await runner.observe()
+            return {
+                "query": "",
+                "package": self.package,
+                "swiped": count,
+                "observed": str(observed.get("text") or "")[:2000],
+            }
+        await self._open_search(runner, query)
+        observed = await runner.observe()
+        text = str(observed.get("text") or "")
+        if action == "search":
+            return {
+                "query": query,
+                "package": self.package,
+                "search_visible": query in text,
+                "observed": text[:2000],
+            }
+        point = _first_result_for_query(text, query) or _first_clickable_result(text)
+        if point is None:
+            raise AppSkillError("note_not_found", f"没有找到“{query}”的笔记")
+        await runner.act("action", {"kind": "tap", "x": point[0], "y": point[1]})
+        await runner.wait(2.5)
+        if action == "open":
+            after = await runner.observe()
+            return {
+                "query": query,
+                "package": self.package,
+                "selected": point,
+                "opened": after.get("package") == self.package,
+                "observed": str(after.get("text") or "")[:2000],
+            }
+        # The comment action is in the bottom action bar of the note detail.
+        await runner.act("action", {"kind": "tap", "x": 984, "y": 2280})
+        await runner.wait(1.5)
+        comments = await runner.observe()
+        comments_text = str(comments.get("text") or "")
+        visible = any(
+            marker in comments_text
+            for marker in ("回复", "全部评论", "暂无评论", "展开")
+        )
+        scrolled = 0
+        if visible:
+            for _ in range(max(0, min(int(parameters.get("count") or 2), 5))):
+                await runner.swipe(540, 1900, 540, 1000, 450)
+                await runner.wait(1.0)
+                scrolled += 1
+            comments = await runner.observe()
+            comments_text = str(comments.get("text") or "")
+        return {
+            "query": query,
+            "package": self.package,
+            "opened": True,
+            "comments_visible": visible,
+            "comments_scrolled": scrolled,
+            "observed": comments_text[:2000],
+        }
+
+
 class NetEaseMusicSkill:
     name = "netmusic"
     package = "com.netease.cloudmusic"
@@ -410,6 +518,7 @@ _SKILLS: dict[str, AppSkill] = {
     "netmusic": NetEaseMusicSkill(),
     "bilibili": BilibiliSkill(),
     "douyin": DouyinSkill(),
+    "xiaohongshu": XiaohongshuSkill(),
 }
 
 
@@ -462,6 +571,7 @@ __all__ = [
     "BilibiliSkill",
     "DouyinSkill",
     "NetEaseMusicSkill",
+    "XiaohongshuSkill",
     "SkillRunResult",
     "run_app_skill",
 ]

@@ -6,6 +6,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <queries>
+        <package android:name="com.xingin.xhs" />
+        <package android:name="com.netease.cloudmusic" />
+        <package android:name="tv.danmaku.bili" />
+        <package android:name="com.ss.android.ugc.aweme" />
+        <package android:name="com.tencent.mm" />
+        <package android:name="com.android.settings" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:networkSecurityConfig="@xml/network_security_config"
