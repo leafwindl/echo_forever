@@ -100,6 +100,7 @@ def _validate_command(action: str, arguments: dict[str, Any]) -> dict[str, Any]:
             or uri.startswith("https://")
             or uri.startswith("orpheus://")
             or uri.startswith("bilibili://")
+            or uri.startswith("snssdk1128://")
         ):
             raise ValueError("unsupported uri scheme")
         if len(uri) > 2000:
@@ -118,6 +119,15 @@ def _validate_command(action: str, arguments: dict[str, Any]) -> dict[str, Any]:
             return {"kind": "tap_text", "text": text[:200]}
         if kind in {"back", "home", "recents"}:
             return {"kind": kind}
+        if kind == "swipe":
+            return {
+                "kind": "swipe",
+                "x1": int(arguments.get("x1") or 0),
+                "y1": int(arguments.get("y1") or 0),
+                "x2": int(arguments.get("x2") or 0),
+                "y2": int(arguments.get("y2") or 0),
+                "duration_ms": int(arguments.get("duration_ms") or 300),
+            }
         if kind == "key":
             keycode = int(arguments.get("keycode") or 0)
             if keycode <= 0 or keycode > 300:
@@ -203,7 +213,7 @@ async def run_skill(
             user_id=current_user.user_id,
             skill=skill,
             action=action,
-            parameters={"query": payload.query},
+            parameters={"query": payload.query, "count": payload.count},
             device_id=payload.device_id,
         )
     except AppSkillError as exc:

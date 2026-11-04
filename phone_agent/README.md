@@ -13,7 +13,7 @@ B 阶段独立安卓执行端。当前是 B0/B1 骨架，不是完整产品。
 - App 状态页：无障碍开关、前台服务状态、界面读取、桌面返回
 - 后端配对：地址、配对码、设备名
 - OkHttp WebSocket 长连接
-- 远程命令：observe、launch_app、tap、tap_text、home/back/recents、text、notifications、stop
+- 远程命令：observe、launch_app、tap、tap_text、swipe、home/back/recents、text、notifications、stop
 - 通知读取：NotificationListenerService，只读当前通知
 - 解除本机配对
 - 默认关闭明文 HTTP，仅允许本地回环测试

@@ -75,6 +75,26 @@ class SkillRunner:
     async def wait(self, seconds: float) -> None:
         await asyncio.sleep(seconds)
 
+    async def swipe(
+        self,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        duration_ms: int = 350,
+    ) -> None:
+        await self.act(
+            "action",
+            {
+                "kind": "swipe",
+                "x1": x1,
+                "y1": y1,
+                "x2": x2,
+                "y2": y2,
+                "duration_ms": duration_ms,
+            },
+        )
+
     async def wait_for_package(self, package: str, timeout_seconds: float = 6.0) -> bool:
         deadline = asyncio.get_running_loop().time() + timeout_seconds
         while asyncio.get_running_loop().time() < deadline:
@@ -193,6 +213,84 @@ class BilibiliSkill:
         }
 
 
+class DouyinSkill:
+    name = "douyin"
+    package = "com.ss.android.ugc.aweme"
+    actions = ("feed", "search", "play", "comments")
+
+    async def _open_search(self, runner: SkillRunner, query: str) -> None:
+        if not query or len(query) > 100:
+            raise AppSkillError("invalid_query", "搜索关键词不能为空")
+        uri = "snssdk1128://search?keyword=" + quote(query)
+        await runner.act("open_uri", {"uri": uri})
+        # Douyin often hides its accessibility tree, so do not require package
+        # observation here; the first card is stable on this screen.
+        await runner.wait(2.2)
+
+    async def run(
+        self,
+        runner: SkillRunner,
+        action: str,
+        parameters: dict[str, Any],
+    ) -> dict[str, Any]:
+        if action not in self.actions:
+            raise AppSkillError("unsupported_skill_action", f"不支持：{action}")
+        query = str(parameters.get("query") or "").strip()
+        if action == "feed":
+            await runner.act("open_uri", {"uri": "snssdk1128://feed"})
+            await runner.wait(2.2)
+            count = int(parameters.get("count") or 3)
+            count = max(1, min(count, 10))
+            for _ in range(count):
+                await runner.swipe(540, 1800, 540, 500, 350)
+                await runner.wait(1.8)
+            data = await runner.observe()
+            return {
+                "query": "",
+                "package": self.package,
+                "swiped": count,
+                "observed": str(data.get("text") or "")[:2000],
+            }
+        await self._open_search(runner, query)
+        observed = await runner.observe()
+        text = str(observed.get("text") or "")
+        if action == "search":
+            return {
+                "query": query,
+                "package": self.package,
+                "search_visible": query in text,
+                "observed": text[:2000],
+            }
+        # The first result card is below the search controls on this layout.
+        await runner.act("action", {"kind": "tap", "x": 540, "y": 900})
+        await runner.wait(3.0)
+        if action == "play":
+            after = await runner.observe()
+            after_text = str(after.get("text") or "")
+            return {
+                "query": query,
+                "package": self.package,
+                "playing": after.get("package") == self.package
+                or "评论" in after_text,
+                "observed": after_text[:2000],
+            }
+        with contextlib.suppress(MobileAgentError):
+            await runner.act("action", {"kind": "tap_text", "text": "评论"})
+        await runner.wait(1.5)
+        after = await runner.observe()
+        after_text = str(after.get("text") or "")
+        return {
+            "query": query,
+            "package": self.package,
+            "playing": after.get("package") == self.package,
+            "comments_visible": any(
+                marker in after_text
+                for marker in ("全部评论", "留下你的精彩评论", "暂无评论", "展开更多", "回复")
+            ),
+            "observed": after_text[:2000],
+        }
+
+
 class NetEaseMusicSkill:
     name = "netmusic"
     package = "com.netease.cloudmusic"
@@ -266,6 +364,7 @@ class NetEaseMusicSkill:
 _SKILLS: dict[str, AppSkill] = {
     "netmusic": NetEaseMusicSkill(),
     "bilibili": BilibiliSkill(),
+    "douyin": DouyinSkill(),
 }
 
 
@@ -316,6 +415,7 @@ async def run_app_skill(
 __all__ = [
     "AppSkillError",
     "BilibiliSkill",
+    "DouyinSkill",
     "NetEaseMusicSkill",
     "SkillRunResult",
     "run_app_skill",

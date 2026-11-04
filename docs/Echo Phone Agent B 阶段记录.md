@@ -337,3 +337,45 @@ phone_bilibili
 ```
 
 只读视频和评论，不发评论、不登录账号。
+
+
+## 抖音 App Skill
+
+新增：
+
+- 手机端 `swipe` 手势
+- `snssdk1128://feed`
+- `snssdk1128://search?keyword=...`
+- `DouyinSkill`
+  - `feed`：打开推荐流并连续上滑
+  - `search`：搜索视频
+  - `play`：打开第一条结果
+  - `comments`：打开评论面板
+
+API：
+
+```text
+POST /mobile-agent/skills/douyin/feed
+POST /mobile-agent/skills/douyin/search
+POST /mobile-agent/skills/douyin/play
+POST /mobile-agent/skills/douyin/comments
+```
+
+Agent 工具：
+
+```text
+phone_douyin
+```
+
+本地真机验证：
+
+```json
+{
+  "feed": {"swiped": 2},
+  "search": {"search_visible": true},
+  "play": {"playing": true},
+  "comments": {"comments_visible": true}
+}
+```
+
+只做浏览，不发评论、不私信、不购物。

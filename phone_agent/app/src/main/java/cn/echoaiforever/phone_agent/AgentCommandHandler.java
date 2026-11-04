@@ -111,8 +111,9 @@ final class AgentCommandHandler {
         if (!(uri.startsWith("http://")
                 || uri.startsWith("https://")
                 || uri.startsWith("orpheus://")
-                || uri.startsWith("bilibili://"))) {
-            return error("invalid_uri", "只允许 http/https/orpheus/bilibili URI");
+                || uri.startsWith("bilibili://")
+                || uri.startsWith("snssdk1128://"))) {
+            return error("invalid_uri", "只允许 http/https/orpheus/bilibili/snssdk1128 URI");
         }
         if (!AgentInputBridge.openUri(uri)) {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
@@ -147,6 +148,15 @@ final class AgentCommandHandler {
                 break;
             case "tap_text":
                 success = service.clickByText(arguments.optString("text", ""));
+                break;
+            case "swipe":
+                success = service.swipe(
+                        arguments.optInt("x1", 0),
+                        arguments.optInt("y1", 0),
+                        arguments.optInt("x2", 0),
+                        arguments.optInt("y2", 0),
+                        arguments.optInt("duration_ms", 300)
+                );
                 break;
             case "text":
                 success = service.setFocusedText(arguments.optString("text", ""));

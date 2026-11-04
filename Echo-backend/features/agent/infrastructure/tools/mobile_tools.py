@@ -59,6 +59,13 @@ class PhonePlayMusicArguments(BaseModel):
     device_id: str = Field(default="", max_length=100)
 
 
+class PhoneDouyinArguments(BaseModel):
+    action: str = Field(default="feed", pattern="^(feed|search|play|comments)$")
+    query: str = Field(default="", max_length=100)
+    count: int = Field(default=3, ge=1, le=10)
+    device_id: str = Field(default="", max_length=100)
+
+
 class PhoneBilibiliArguments(BaseModel):
     action: str = Field(default="play", pattern="^(play|comments)$")
     query: str = Field(min_length=1, max_length=100)
@@ -331,6 +338,34 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
             data={"device_id": result.device_id, **result.data},
         )
 
+    async def douyin_handler(context: ToolExecutionContext, arguments: BaseModel):
+        parsed = PhoneDouyinArguments.model_validate(arguments)
+        try:
+            result = await run_app_skill(
+                user_id=context.user_id,
+                skill="douyin",
+                action=parsed.action,
+                parameters={"query": parsed.query, "count": parsed.count},
+                device_id=parsed.device_id,
+            )
+        except AppSkillError as exc:
+            return _failed("phone_douyin", exc.code, exc.message)
+        except MobileAgentError as exc:
+            return _failed("phone_douyin", exc.code, exc.message)
+        if parsed.action == "feed":
+            summary = f"已打开抖音并刷了 {result.data.get('swiped', 0)} 条视频。"
+        elif parsed.action == "search":
+            summary = f"已在抖音搜索“{parsed.query}”。"
+        elif parsed.action == "comments":
+            summary = f"已打开抖音“{parsed.query}”相关视频的评论。"
+        else:
+            summary = f"已打开抖音“{parsed.query}”相关视频。"
+        return _completed(
+            "phone_douyin",
+            safe_for_model=summary,
+            data={"device_id": result.device_id, **result.data},
+        )
+
     async def notifications_handler(context: ToolExecutionContext, arguments: BaseModel):
         parsed = PhoneNotificationsArguments.model_validate(arguments)
         device = _online_device(context.user_id, parsed.device_id)
@@ -557,6 +592,19 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhonePlayMusicArguments,
         handler=play_music_handler,
+        risk=ToolRisk.READ,
+        timeout_seconds=60,
+        max_calls=2,
+    )
+    _register(
+        registry,
+        name="phone_douyin",
+        description=(
+            "打开抖音刷视频、搜索视频、打开搜索结果或查看评论。"
+            "只做浏览，不发评论、不私信、不购物。"
+        ),
+        arguments_model=PhoneDouyinArguments,
+        handler=douyin_handler,
         risk=ToolRisk.READ,
         timeout_seconds=60,
         max_calls=2,

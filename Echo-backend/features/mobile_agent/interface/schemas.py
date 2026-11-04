@@ -62,8 +62,9 @@ class MobileAgentAuditResponse(BaseModel):
 
 
 class AppSkillRequest(BaseModel):
-    query: str = Field(min_length=1, max_length=100)
+    query: str = Field(default="", max_length=100)
     device_id: str = Field(default="", max_length=100)
+    count: int = Field(default=3, ge=1, le=10)
 
 
 class AppSkillResponse(BaseModel):
