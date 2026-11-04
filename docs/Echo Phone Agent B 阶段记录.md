@@ -231,10 +231,10 @@ Crashed services: {}
 生产验证：
 
 ```text
-GET /mobile-agent/.../screenshot -> 200
-mime=image/png
-chars=273348
-saved bridge-shot.png
+observe   -> 200, 1053 chars
+screenshot -> 200, image/png, 273140 chars
+action/home -> 200
+audit     -> 200, 12 items
 ```
 
 这解决了开发期“手机能操作但没有截图”的问题，但要求手机连接 PC/ADB；
