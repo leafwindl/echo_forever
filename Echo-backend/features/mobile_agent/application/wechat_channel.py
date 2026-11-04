@@ -22,7 +22,7 @@ _DEDUPE_TTL_SECONDS = 600
 _dedupe_lock = threading.Lock()
 _recent_message_keys: dict[str, float] = {}
 _INBOUND_WINDOW_SECONDS = 60
-_MAX_INBOUND_PER_WINDOW = 60
+_MAX_INBOUND_PER_WINDOW = 4
 _recent_inbound: dict[str, deque[float]] = {}
 
 

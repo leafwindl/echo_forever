@@ -35,7 +35,7 @@ final class AgentWechatOcrMonitor {
     private static final long OUTBOUND_SUPPRESSION_MS = 120_000L;
     private static final Map<String, Long> RECENT_OUTBOUND = new ConcurrentHashMap<>();
     private static final long UPLOAD_WINDOW_MS = 60_000L;
-    private static final int MAX_UPLOADS_PER_WINDOW = 60;
+    private static final int MAX_UPLOADS_PER_WINDOW = 4;
     private final Deque<Long> uploadTimes = new ArrayDeque<>();
 
     private final AgentForegroundService service;
