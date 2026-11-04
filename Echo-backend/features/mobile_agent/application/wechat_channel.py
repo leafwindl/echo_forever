@@ -68,7 +68,14 @@ async def handle_wechat_inbound(
         message_visibility=CHAT_VISIBILITY_WECHAT,
     )
     reply = turn.reply.strip()
-    if not reply:
+    segments = [
+        segment.strip()
+        for segment in turn.reply_segments
+        if segment and segment.strip()
+    ]
+    if not segments and reply:
+        segments = [reply]
+    if not reply or not segments:
         return {
             "duplicate": False,
             "replied": False,
@@ -79,8 +86,8 @@ async def handle_wechat_inbound(
         sent = await run_app_skill(
             user_id=user_id,
             skill="wechat",
-            action="send",
-            parameters={"text": reply},
+            action="send_segments",
+            parameters={"texts": segments},
             device_id=device_id,
         )
     except Exception:
@@ -94,11 +101,14 @@ async def handle_wechat_inbound(
             "replied": False,
             "reason": "send_failed",
             "reply": reply,
+            "segments": segments,
             "conversation_id": turn.conversation_id,
         }
     return {
         "duplicate": False,
         "replied": bool(sent.data.get("sent")),
         "reply": reply,
+        "segments": segments,
+        "sent_segments": int(sent.data.get("sent_segments") or 0),
         "conversation_id": turn.conversation_id,
     }

@@ -447,7 +447,7 @@ class XiaohongshuSkill:
 class WechatSkill:
     name = "wechat"
     package = "com.tencent.mm"
-    actions = ("open_chat", "send")
+    actions = ("open_chat", "send", "send_segments")
     allowed_contact = "叶子"
 
     async def _open_chat(self, runner: SkillRunner) -> None:
@@ -482,20 +482,31 @@ class WechatSkill:
                 "contact": self.allowed_contact,
                 "opened": observed.get("package") == self.package,
             }
+        if action == "send_segments":
+            raw_segments = parameters.get("texts")
+            if not isinstance(raw_segments, list):
+                raise AppSkillError("invalid_messages", "分段消息格式错误")
+            segments = [
+                str(item).strip()
+                for item in raw_segments[:5]
+                if str(item).strip()
+            ]
+            if not segments or any(len(item) > 500 for item in segments):
+                raise AppSkillError("invalid_messages", "分段消息为空或超过 500 字")
+            await self._send_segments(runner, segments)
+            return {
+                "package": self.package,
+                "contact": self.allowed_contact,
+                "sent": True,
+                "segments": segments,
+                "sent_segments": len(segments),
+            }
         message = str(parameters.get("text") or "").strip()
         if not message or len(message) > 500:
             raise AppSkillError("invalid_message", "消息内容不能为空且不能超过 500 字")
         # This skill is intentionally pinned to the only contact on the
         # dedicated WeChat account; no arbitrary contact can be selected.
-        await runner.act("action", {"kind": "tap", "x": 540, "y": 2280})
-        await runner.wait(0.3)
-        await runner.act("action", {"kind": "input_text", "text": message})
-        await runner.wait(0.5)
-        with contextlib.suppress(MobileAgentError):
-            await runner.act("action", {"kind": "tap_text", "text": "发送"})
-        # The keyboard shifts the send button to this position.
-        await runner.act("action", {"kind": "tap", "x": 970, "y": 2180})
-        await runner.wait(2.0)
+        await self._send_one(runner, message)
         observed = await runner.observe()
         observed_text = str(observed.get("text") or "")
         return {
@@ -506,6 +517,27 @@ class WechatSkill:
             "message": message,
             "observed": observed_text[:2000],
         }
+
+    async def _send_one(self, runner: SkillRunner, message: str) -> None:
+        await runner.act("action", {"kind": "tap", "x": 540, "y": 2280})
+        await runner.wait(0.3)
+        await runner.act("action", {"kind": "input_text", "text": message})
+        await runner.wait(0.5)
+        with contextlib.suppress(MobileAgentError):
+            await runner.act("action", {"kind": "tap_text", "text": "发送"})
+        # The keyboard shifts the send button to this position.
+        await runner.act("action", {"kind": "tap", "x": 970, "y": 2180})
+        await runner.wait(2.0)
+
+    async def _send_segments(
+        self,
+        runner: SkillRunner,
+        segments: list[str],
+    ) -> None:
+        for index, segment in enumerate(segments):
+            await self._send_one(runner, segment)
+            if index < len(segments) - 1:
+                await runner.wait(0.8)
 
 
 class NetEaseMusicSkill:
