@@ -279,14 +279,24 @@ class DouyinSkill:
         await runner.wait(1.5)
         after = await runner.observe()
         after_text = str(after.get("text") or "")
+        visible = any(
+            marker in after_text
+            for marker in ("全部评论", "留下你的精彩评论", "暂无评论", "展开更多", "回复")
+        )
+        scrolled = 0
+        if visible:
+            for _ in range(max(0, min(int(parameters.get("count") or 2), 5))):
+                await runner.swipe(540, 2000, 540, 1200, 450)
+                await runner.wait(1.0)
+                scrolled += 1
+            after = await runner.observe()
+            after_text = str(after.get("text") or "")
         return {
             "query": query,
             "package": self.package,
             "playing": after.get("package") == self.package,
-            "comments_visible": any(
-                marker in after_text
-                for marker in ("全部评论", "留下你的精彩评论", "暂无评论", "展开更多", "回复")
-            ),
+            "comments_visible": visible,
+            "comments_scrolled": scrolled,
             "observed": after_text[:2000],
         }
 

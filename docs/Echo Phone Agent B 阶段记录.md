@@ -350,7 +350,7 @@ phone_bilibili
   - `feed`：打开推荐流并连续上滑
   - `search`：搜索视频
   - `play`：打开第一条结果
-  - `comments`：打开评论面板
+  - `comments`：打开评论面板并可继续下滑
 
 API：
 
