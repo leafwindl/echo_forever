@@ -51,11 +51,28 @@ adb shell ime enable com.android.adbkeyboard/.AdbIME
 
 需要 JDK 17（带 `jlink`）和 Android SDK。
 
+同时构建本地版和生产版：
+
 ```powershell
-$env:JAVA_HOME='D:\develop\JDK'
-.\gradlew.bat assembleDebug
-adb install -r app\build\outputs\apk\debug\app-debug.apk
+.\gradlew.bat assembleProdDebug assembleLocalDebug
 ```
+
+产物：
+
+```text
+app/build/outputs/apk/prod/debug/app-prod-debug.apk
+app/build/outputs/apk/local/debug/app-local-debug.apk
+```
+
+两个 APK 包名不同，可以同时安装：
+
+```text
+生产版：cn.echoaiforever.phone_agent
+本地版：cn.echoaiforever.phone_agent.local
+```
+
+本地版默认后端是 `http://127.0.0.1:8000`，生产版默认是
+`https://api.echoaiforever.cn`；两套配对令牌互不影响。
 
 首次安装可能触发 ColorOS 第三方安装保护，需要手动确认。
 

@@ -280,3 +280,23 @@ audit     -> 200, 12 items
 - 高风险操作二次确认
 - 完整多步任务状态推送和用户中断 UI
 - 令牌加密存储/Keystore
+
+
+## 双 APK（本地/生产）
+
+为了避免切换配对时覆盖生产令牌，手机端提供两个独立包：
+
+```text
+生产版 cn.echoaiforever.phone_agent
+本地版 cn.echoaiforever.phone_agent.local
+```
+
+构建：
+
+```powershell
+.\gradlew.bat assembleProdDebug assembleLocalDebug
+```
+
+两个包可同时安装，配对令牌、默认后端地址互不影响。本地版通过
+`adb reverse tcp:8000 tcp:8000` 连接本地后端；生产版继续连接
+`https://api.echoaiforever.cn`。截图和中文输入仍共用 PC 的 8765 桥。

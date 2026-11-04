@@ -10,7 +10,7 @@ final class AgentConfig {
     static final String DEVICE_NAME = "device_name";
     static final String DEVICE_TOKEN = "device_token";
     static final String DEVICE_ID = "device_id";
-    static final String DEFAULT_BASE_URL = "https://api.echoaiforever.cn";
+    static final String DEFAULT_BASE_URL = BuildConfig.DEFAULT_BASE_URL;
 
     private AgentConfig() {
     }
