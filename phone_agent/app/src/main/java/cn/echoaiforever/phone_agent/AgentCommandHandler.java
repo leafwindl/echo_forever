@@ -113,9 +113,11 @@ final class AgentCommandHandler {
                 || uri.startsWith("orpheus://"))) {
             return error("invalid_uri", "只允许 http/https/orpheus URI");
         }
-        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        context.startActivity(intent);
+        if (!AgentInputBridge.openUri(uri)) {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        }
         JSONObject data = new JSONObject();
         data.put("uri", uri);
         JSONObject result = new JSONObject();

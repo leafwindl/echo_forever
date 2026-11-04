@@ -18,6 +18,7 @@ import okhttp3.Response;
 final class AgentInputBridge {
     private static final String TEXT_URL = "http://127.0.0.1:8765/text";
     private static final String KEY_URL = "http://127.0.0.1:8765/key";
+    private static final String URI_URL = "http://127.0.0.1:8765/open_uri";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final OkHttpClient CLIENT = new OkHttpClient.Builder()
             .connectTimeout(2, TimeUnit.SECONDS)
@@ -38,6 +39,14 @@ final class AgentInputBridge {
     static boolean key(int keycode) {
         try {
             return post(KEY_URL, new JSONObject().put("keycode", keycode));
+        } catch (Exception exc) {
+            return false;
+        }
+    }
+
+    static boolean openUri(String uri) {
+        try {
+            return post(URI_URL, new JSONObject().put("uri", uri));
         } catch (Exception exc) {
             return false;
         }

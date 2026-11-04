@@ -30,6 +30,16 @@ B 阶段独立安卓执行端。当前是 B0/B1 骨架，不是完整产品。
 桥会自动 `adb reverse tcp:8765 tcp:8765`，手机 `screenshot` 兜底请求
 `http://127.0.0.1:8765/screenshot`。要求手机连接 PC/ADB。
 
+中文输入还依赖 [ADBKeyboard](https://github.com/senzhk/ADBKeyBoard)：
+
+```powershell
+adb install keyboardservice-debug.apk
+adb shell ime enable com.android.adbkeyboard/.AdbIME
+```
+
+桥启动时会尝试选中它。它用于搜索框、微信等 Unicode 文本输入；普通键盘可以在
+`adb shell ime reset` 后恢复。
+
 ## 尚未实现
 
 - 长按/滑动/滚动

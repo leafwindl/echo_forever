@@ -103,6 +103,20 @@ class Bridge:
             capture_output=True,
         )
 
+    def open_uri(self, uri: str) -> None:
+        if not (
+            uri.startswith("http://")
+            or uri.startswith("https://")
+            or uri.startswith("orpheus://")
+        ):
+            raise ValueError("unsupported uri scheme")
+        subprocess.run(
+            self._base()
+            + ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", uri],
+            check=True,
+            capture_output=True,
+        )
+
     def ensure_keyboard(self) -> None:
         component = "com.android.adbkeyboard/.AdbIME"
         subprocess.run(
@@ -152,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path.rstrip("/") not in {"/text", "/key"}:
+        if self.path.rstrip("/") not in {"/text", "/key", "/open_uri"}:
             self._json(404, {"error": "not_found"})
             return
         try:
@@ -169,6 +183,11 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.bridge.type_text(text)
                 self._json(200, {"ok": True, "source": "adb_keyboard"})
+                return
+            if self.path.rstrip("/") == "/open_uri":
+                uri = str(body.get("uri") or "")
+                self.bridge.open_uri(uri)
+                self._json(200, {"ok": True, "uri": uri})
                 return
             keycode = int(body.get("keycode") or 0)
             if keycode <= 0:

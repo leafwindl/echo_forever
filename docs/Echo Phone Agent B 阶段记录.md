@@ -239,6 +239,42 @@ audit     -> 200, 12 items
 这解决了开发期“手机能操作但没有截图”的问题，但要求手机连接 PC/ADB；
 它不是手机独立运行方案。
 
+### App Skill 框架与网易云音乐
+
+新增后端 `features/mobile_agent/application/skills.py`：
+
+- `AppSkill` 协议与 `SkillRunner`
+- 统一执行手机 action / observe / wait
+- UI 文本解析选择结果
+- `NetEaseMusicSkill`
+  - 打开 `orpheus://search`
+  - 点击搜索框
+  - 通过 PC 桥输入中文
+  - 提交搜索
+  - 选择单曲
+  - 播放并验证 `播放暂停`
+
+新增：
+
+- `POST /mobile-agent/skills/netmusic/play`
+- Agent 工具 `phone_play_music`
+- PC 桥 `/text`、`/key`、`/open_uri`
+- Android `open_uri`、`key` action
+- 中文输入使用 ADBKeyboard（PC 桥广播，解决 `adb input` 不支持 Unicode）
+
+本地验证：
+
+```json
+{
+  "skill": "netmusic",
+  "query": "晴天",
+  "playing": true,
+  "package": "com.netease.cloudmusic"
+}
+```
+
+`playing=true`，网易云进入播放器并显示“晴天 (原唱 周杰伦)”。
+
 ### B3 还缺
 
 - 高风险操作二次确认
