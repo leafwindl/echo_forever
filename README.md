@@ -58,6 +58,61 @@ Echo 是一个面向个人用户的 AI 陪伴应用，由 Flutter / HarmonyOS �
 - Presence 主动动作：每天最多 3 次、间隔至少 1.5 小时，支持放歌、写记事本和交给 DSH。
 - Presence 状态页：展示当前状态、今日念头预算、内心念头和主动消息回应率。
 - HarmonyOS 客户端：ArkTS 实现聊天、状态页、时间分隔、更新和 USB 覆盖安装流程。
+- Android 手机执行端：通过 PC ADB 桥完成截图、OCR、应用启动和 UI 操作；微信通道固定联系人、通知监听、文字消息和微信原生表情包发送。
+
+## Echo Phone Agent（Android 执行端）
+
+`phone_agent/` 是面向**专用 Android 备用机**的执行端，不是普通用户安装的聊天客户端。
+
+它通过本机 ADB 桥接 PC，完成截图、OCR、应用操作和微信消息发送：
+
+```text
+手机 App
+  -> WebSocket / HTTP
+  -> PC 后端与 ADB 截图桥 127.0.0.1:8765
+  -> adb reverse tcp:8000 / tcp:8765
+  -> 专用手机上的微信、系统页面和应用
+```
+
+### 能做什么
+
+- 截图、屏幕 OCR、读取通知和当前页面
+- 启动应用、点击、滑动、输入文本
+- 微信固定联系人发送文字、连续消息和微信原生表情包
+- 发完消息自动回到桌面，让通知监听继续工作
+- 小红书、抖音、B 站、网易云音乐等有限应用技能
+
+### 明确边界
+
+- 微信只允许固定联系人，不发送给任意联系人、群聊、图片或文件
+- 不读取微信聊天数据库
+- 不执行支付、转账、账号设置等高风险操作
+- 依赖手机无障碍服务、ADB 输入法和 PC 桥；手机重启后需要重新启动前台服务并重新绑定通知监听
+- 生产版和本地测试版使用不同包名，不要混用设备令牌
+
+### 本地编译与连接
+
+```powershell
+cd phone_agent
+.\gradlew.bat assembleLocalDebug
+
+# 手机通过 USB 连接，并允许 USB 调试
+adb -s <serial> reverse tcp:8000 tcp:8000
+adb -s <serial> reverse tcp:8765 tcp:8765
+adb -s <serial> install -r app/build/outputs/apk/local/debug/app-local-debug.apk
+```
+
+PC 端截图桥：
+
+```powershell
+python scripts/adb_screenshot_bridge.py --serial <serial>
+```
+
+手机端需要启用：
+
+- Echo Phone Agent 无障碍服务
+- 通知读取权限
+- ADBKeyboard 输入法
 
 ## 当前边界
 
@@ -161,7 +216,9 @@ copy build-profile.example.json5 build-profile.json5
 ```bash
 python -B scripts/check_architecture.py
 uv run pytest Echo-backend/tests -q
-cd app
+cd phone_agent
+.\gradlew.bat assembleLocalDebug assembleProdDebug
+cd ..\app
 flutter analyze
 flutter test
 node ../harmony_app/tests/platform-features.test.cjs
@@ -182,6 +239,16 @@ node ../harmony_app/tests/startup-regression.test.cjs
 - [`doc/Echo v1.0 业务流程与数据流.md`](doc/Echo%20v1.0%20业务流程与数据流.md)：v1.0 早期业务链路历史基线，仅用于追溯。
 - [`doc/Echo v1.0.7 功能业务与展示站说明.md`](doc/Echo%20v1.0.7%20功能业务与展示站说明.md)：v1.0.7 展示站历史快照，仅用于追溯。
 - [`doc/README.md`](doc/README.md)：文档索引和历史资料边界。
+
+## 公开仓库与密钥
+
+仓库可以公开，但运行时密钥永远不能提交：
+
+- `Echo-backend/.env`、根目录 `.env`、本地数据库、签名文件、keystore 和 APK 构建产物均已被忽略
+- 新环境从 `Echo-backend/.env.example` 和 `.env.compose.example` 复制，不要复用开发环境密钥
+- 不要把 LLM、Embedding、短信、COS、个推、设备或 ADB 凭据写入 README、测试、截图、日志或代码
+- 如果密钥曾经出现在 Git 历史或远端仓库中，即使删除文件也必须轮换；公开仓库前请检查 GitHub 的旧提交和 Secret Scanning
+- 公开前建议执行一次全历史扫描，并确认 `.env`、`*.db`、`*.pem`、`*.jks`、`key.properties` 不在任何提交中
 
 ## 安全原则
 

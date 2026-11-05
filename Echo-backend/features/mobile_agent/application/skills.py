@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import random
 import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -447,14 +448,23 @@ class XiaohongshuSkill:
 class WechatSkill:
     name = "wechat"
     package = "com.tencent.mm"
-    actions = ("open_chat", "send", "send_segments")
+    actions = (
+        "open_chat",
+        "send",
+        "send_segments",
+        "sticker",
+        "send_bundle",
+        "send_conversation",
+    )
     allowed_contact = "叶子"
 
     async def _open_chat(self, runner: SkillRunner) -> None:
         await runner.act("launch_app", {"package": self.package})
         if not await runner.wait_for_package(self.package, 6.0):
-            raise AppSkillError("app_not_foreground", "微信没有回到前台")
-        await runner.wait(1.0)
+            # WeChat's UI tree is mostly empty; the accessibility package can
+            # stay stale even when WeChat is visibly in front. Let the OCR
+            # navigation below decide instead of failing early.
+            await runner.wait(1.0)
         await self._open_contact_from_ocr(runner)
         await runner.wait(1.0)
 
@@ -525,6 +535,95 @@ class WechatSkill:
                 "contact": self.allowed_contact,
                 "opened": observed.get("package") == self.package,
             }
+        if action == "send_conversation":
+            raw_items = parameters.get("items")
+            if not isinstance(raw_items, list) or not raw_items or len(raw_items) > 12:
+                raise AppSkillError("invalid_conversation", "连续消息格式错误")
+            items: list[dict[str, str]] = []
+            for raw in raw_items:
+                if not isinstance(raw, dict):
+                    raise AppSkillError("invalid_conversation", "连续消息格式错误")
+                kind = str(raw.get("type") or "").strip()
+                if kind == "text":
+                    text = str(raw.get("text") or "").strip()
+                    if not text or len(text) > 500:
+                        raise AppSkillError("invalid_conversation", "文字消息为空或超长")
+                    items.append({"type": "text", "text": text})
+                elif kind == "sticker":
+                    keyword = str(raw.get("keyword") or "").strip()
+                    if not keyword or len(keyword) > 5:
+                        raise AppSkillError("invalid_conversation", "表情关键词为空或超长")
+                    items.append({"type": "sticker", "keyword": keyword})
+                else:
+                    raise AppSkillError("invalid_conversation", "不支持的消息类型")
+            for index, item in enumerate(items):
+                if item["type"] == "text":
+                    await self._send_one(runner, item["text"])
+                else:
+                    await self._send_sticker(runner, item["keyword"])
+            await self._leave_wechat(runner)
+            await self._notify_reply(
+                runner,
+                "\n".join(
+                    item["text"] for item in items if item["type"] == "text"
+                ),
+            )
+            return {
+                "package": self.package,
+                "contact": self.allowed_contact,
+                "sent": True,
+                "kind": "conversation",
+                "items": items,
+            }
+        if action == "send_bundle":
+            raw_texts = parameters.get("texts")
+            texts = [
+                str(item).strip()
+                for item in (raw_texts if isinstance(raw_texts, list) else [])
+                if str(item).strip()
+            ]
+            if not texts and str(parameters.get("text") or "").strip():
+                texts = [str(parameters["text"]).strip()]
+            keyword = str(
+                parameters.get("sticker_keyword")
+                or parameters.get("keyword")
+                or ""
+            ).strip()
+            if not texts or not keyword or len(keyword) > 5:
+                raise AppSkillError("invalid_bundle", "文字或表情关键词不能为空")
+            sticker_before = bool(parameters.get("sticker_before", False))
+            if sticker_before:
+                await self._send_sticker(runner, keyword)
+                for text in texts:
+                    await self._send_one(runner, text)
+            else:
+                for text in texts:
+                    await self._send_one(runner, text)
+                await self._send_sticker(runner, keyword)
+            await self._leave_wechat(runner)
+            await self._notify_reply(runner, "\n".join(texts))
+            return {
+                "package": self.package,
+                "contact": self.allowed_contact,
+                "sent": True,
+                "kind": "bundle",
+                "texts": texts,
+                "sticker_keyword": keyword,
+                "sticker_before": sticker_before,
+            }
+        if action == "sticker":
+            keyword = str(parameters.get("keyword") or "").strip()
+            if not keyword or len(keyword) > 5:
+                raise AppSkillError("invalid_keyword", "表情包关键词不能为空且不能超过 5 字")
+            await self._send_sticker(runner, keyword)
+            await self._leave_wechat(runner)
+            return {
+                "package": self.package,
+                "contact": self.allowed_contact,
+                "sent": True,
+                "kind": "sticker",
+                "keyword": keyword,
+            }
         if action == "send_segments":
             raw_segments = parameters.get("texts")
             if not isinstance(raw_segments, list):
@@ -565,16 +664,40 @@ class WechatSkill:
             "observed": observed_text[:2000],
         }
 
+    async def _send_sticker(self, runner: SkillRunner, keyword: str) -> None:
+        # Exact sequence supplied by the user; fixed coordinates only.
+        await runner.act("action", {"kind": "tap", "x": 540, "y": 2164})
+        await runner.wait(0.3)
+        await runner.act("action", {"kind": "input_text", "text": keyword})
+        await runner.wait(0.5)
+        await runner.act("action", {"kind": "tap", "x": 860, "y": 2145})
+        await runner.wait(0.8)
+        await runner.act("action", {"kind": "tap", "x": 87, "y": 1478})
+        await runner.wait(3.0)
+        await runner.act("action", {"kind": "tap", "x": 140, "y": 1130})
+        await runner.wait(1.5)
+        await self._restore_after_sticker(runner)
+
+    async def _restore_after_sticker(self, runner: SkillRunner) -> None:
+        # Always use BACK from the sticker window. It returns to the message
+        # list/chat without needing the old (327,708) tap.
+        with contextlib.suppress(MobileAgentError):
+            await runner.act("action", {"kind": "back"})
+            await runner.wait(0.5)
+            await runner.act("action", {"kind": "tap", "x": 540, "y": 2164})
+            await runner.wait(0.2)
+            for _ in range(8):
+                await runner.act("action", {"kind": "key", "keycode": 67})
+            await runner.wait(0.3)
+
     async def _send_one(self, runner: SkillRunner, message: str) -> None:
+        # Exact sequence supplied by the user; fixed coordinates only.
         await runner.act("action", {"kind": "tap", "x": 540, "y": 2280})
         await runner.wait(0.3)
         await runner.act("action", {"kind": "input_text", "text": message})
         await runner.wait(0.5)
-        with contextlib.suppress(MobileAgentError):
-            await runner.act("action", {"kind": "tap_text", "text": "发送"})
-        # The keyboard shifts the send button to this position.
-        await runner.act("action", {"kind": "tap", "x": 970, "y": 2180})
-        await runner.wait(2.0)
+        await runner.act("action", {"kind": "tap", "x": 970, "y": 2153})
+        await runner.wait(1.5)
 
     async def _notify_reply(self, runner: SkillRunner, text: str) -> None:
         with contextlib.suppress(MobileAgentError):

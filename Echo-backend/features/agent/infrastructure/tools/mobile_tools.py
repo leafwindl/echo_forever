@@ -68,6 +68,11 @@ class PhoneWechatSendArguments(BaseModel):
     device_id: str = Field(default="", max_length=100)
 
 
+class PhoneWechatStickerArguments(BaseModel):
+    keyword: str = Field(min_length=1, max_length=5)
+    device_id: str = Field(default="", max_length=100)
+
+
 class PhoneXiaohongshuArguments(BaseModel):
     action: str = Field(default="feed", pattern="^(feed|search|open|comments)$")
     query: str = Field(default="", max_length=100)
@@ -433,6 +438,29 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
             data={"device_id": result.device_id, **result.data},
         )
 
+    async def wechat_sticker_handler(
+        context: ToolExecutionContext,
+        arguments: BaseModel,
+    ):
+        parsed = PhoneWechatStickerArguments.model_validate(arguments)
+        try:
+            result = await run_app_skill(
+                user_id=context.user_id,
+                skill="wechat",
+                action="sticker",
+                parameters={"keyword": parsed.keyword},
+                device_id=parsed.device_id,
+            )
+        except AppSkillError as exc:
+            return _failed("phone_wechat_sticker", exc.code, exc.message)
+        except MobileAgentError as exc:
+            return _failed("phone_wechat_sticker", exc.code, exc.message)
+        return _completed(
+            "phone_wechat_sticker",
+            safe_for_model=f"已通过微信给叶子发送“{parsed.keyword}”相关表情包。",
+            data={"device_id": result.device_id, **result.data},
+        )
+
     async def xiaohongshu_handler(
         context: ToolExecutionContext,
         arguments: BaseModel,
@@ -714,6 +742,19 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhoneWechatSendArguments,
         handler=wechat_send_handler,
+        risk=ToolRisk.SEND,
+        timeout_seconds=60,
+        max_calls=2,
+    )
+    _register(
+        registry,
+        name="phone_wechat_sticker",
+        description=(
+            "通过专用微信账号给唯一联系人“叶子”发送一张与关键词相关的微信表情包。"
+            "使用微信表情搜索和合成表情，只允许叶子。"
+        ),
+        arguments_model=PhoneWechatStickerArguments,
+        handler=wechat_sticker_handler,
         risk=ToolRisk.SEND,
         timeout_seconds=60,
         max_calls=2,

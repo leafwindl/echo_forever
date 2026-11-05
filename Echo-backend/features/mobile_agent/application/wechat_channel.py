@@ -13,6 +13,7 @@ from features.chat.public import (
     list_recent_assistant_contents_for_guard,
 )
 from features.mobile_agent.application.skills import run_app_skill
+from features.stickers.public import send_sticker
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,41 @@ def _looks_like_echo_loop(user_id: str, text: str) -> bool:
         if _edit_distance(normalized, window) <= max(3, len(normalized) // 5):
             return True
     return False
+
+
+_STICKER_SEARCH_TERMS = (
+    "开心", "好笑", "无语", "生气", "难过", "委屈", "震惊", "可爱",
+    "疑惑", "害羞", "得意", "加油", "晚安", "收到", "谢谢", "离谱",
+    "崩溃", "摸鱼", "吃瓜", "求抱抱",
+)
+
+
+def _short_sticker_keyword(value: str) -> str:
+    clean = re.sub(r"[\s\W_]+", "", value or "")
+    for term in _STICKER_SEARCH_TERMS:
+        if term in clean:
+            return term
+    runs = re.findall(r"[\u4e00-\u9fff]{2,5}", clean)
+    return runs[0] if runs else ""
+
+
+def _sticker_keyword(user_id: str, content_parts) -> str:
+    for part in content_parts:
+        if getattr(part, "type", "") != "sticker":
+            continue
+        sticker = send_sticker(user_id, getattr(part, "sticker_id", ""))
+        if sticker is None:
+            continue
+        candidates = [
+            str(tag).strip()
+            for tag in sticker.semantic_tags
+        ]
+        candidates.append(str(sticker.description or "").strip())
+        for candidate in candidates:
+            keyword = _short_sticker_keyword(candidate)
+            if keyword:
+                return keyword
+    return "开心"
 
 
 def _claim_message_key(user_id: str, device_id: str, message_id: str) -> bool:
@@ -146,12 +182,23 @@ async def handle_wechat_inbound(
             "reason": "empty_reply",
             "conversation_id": turn.conversation_id,
         }
+    keyword = _sticker_keyword(user_id, turn.content_parts)
+    if keyword:
+        action = "send_bundle"
+        parameters = {
+            "texts": segments,
+            "sticker_keyword": keyword,
+            "sticker_before": turn.sticker_placement == "before_text",
+        }
+    else:
+        action = "send_segments"
+        parameters = {"texts": segments}
     try:
         sent = await run_app_skill(
             user_id=user_id,
             skill="wechat",
-            action="send_segments",
-            parameters={"texts": segments},
+            action=action,
+            parameters=parameters,
             device_id=device_id,
         )
     except Exception:
@@ -174,5 +221,7 @@ async def handle_wechat_inbound(
         "reply": reply,
         "segments": segments,
         "sent_segments": int(sent.data.get("sent_segments") or 0),
+        "sticker_keyword": keyword,
+        "kind": action,
         "conversation_id": turn.conversation_id,
     }

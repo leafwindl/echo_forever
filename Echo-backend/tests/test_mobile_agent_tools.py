@@ -58,6 +58,7 @@ class MobileAgentToolTests(unittest.TestCase):
             "phone_douyin",
             "phone_xiaohongshu",
             "phone_wechat_send",
+            "phone_wechat_sticker",
             "phone_notifications",
             "phone_stop",
             "phone_run_task",

@@ -265,6 +265,8 @@ async def run_skill(
             parameters={
                 "query": payload.query,
                 "text": payload.text,
+                "keyword": payload.keyword,
+                "items": payload.items,
                 "count": payload.count,
             },
             device_id=payload.device_id,

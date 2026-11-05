@@ -42,6 +42,14 @@ Echo-backend/static/voices/
 *.tmp
 tmp/
 tmp_getui/
+.dsh-*
+*.bundle
+*.patch
+
+# Android local build outputs
+phone_agent/.gradle/
+phone_agent/**/build/
+phone_agent/local.properties
 
 # HarmonyOS generated files and local signing configuration
 harmony_app/.hvigor/
