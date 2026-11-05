@@ -240,16 +240,3 @@ node ../harmony_app/tests/startup-regression.test.cjs
 - [`doc/Echo v1.0.7 功能业务与展示站说明.md`](doc/Echo%20v1.0.7%20功能业务与展示站说明.md)：v1.0.7 展示站历史快照，仅用于追溯。
 - [`doc/README.md`](doc/README.md)：文档索引和历史资料边界。
 
-## 公开仓库与密钥
-
-仓库可以公开，但运行时密钥永远不能提交：
-
-- `Echo-backend/.env`、根目录 `.env`、本地数据库、签名文件、keystore 和 APK 构建产物均已被忽略
-- 新环境从 `Echo-backend/.env.example` 和 `.env.compose.example` 复制，不要复用开发环境密钥
-- 不要把 LLM、Embedding、短信、COS、个推、设备或 ADB 凭据写入 README、测试、截图、日志或代码
-- 如果密钥曾经出现在 Git 历史或远端仓库中，即使删除文件也必须轮换；公开仓库前请检查 GitHub 的旧提交和 Secret Scanning
-- 公开前建议执行一次全历史扫描，并确认 `.env`、`*.db`、`*.pem`、`*.jks`、`key.properties` 不在任何提交中
-
-## 安全原则
-
-不要在代码、Flutter 构建参数、APK、日志、截图或文档中写入服务端密钥。聊天正文、语音正文、验证码、访问令牌和个推 CID 不进入普通日志。所有新增功能都应先确定数据归属、权限、失败状态和清理策略，再接入 Agent 或前端页面。
