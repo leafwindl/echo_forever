@@ -73,6 +73,14 @@ class DesktopDshTaskArguments(BaseModel):
     )
 
 
+class DesktopSpeakArguments(BaseModel):
+    text: str = Field(
+        min_length=1,
+        max_length=500,
+        description="要在电脑扬声器上朗读的文字。",
+    )
+
+
 class DesktopStatusArguments(BaseModel):
     pass
 
@@ -318,6 +326,23 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
             },
         )
 
+    async def speak_handler(context: ToolExecutionContext, arguments: BaseModel):
+        parsed = DesktopSpeakArguments.model_validate(arguments)
+        try:
+            result = await execute_desktop_action(
+                user_id=context.user_id,
+                action="speak",
+                arguments={"text": parsed.text},
+                timeout_seconds=60,
+            )
+        except DesktopError as exc:
+            return _failed("desktop_speak", exc.code, exc.message)
+        return _completed(
+            "desktop_speak",
+            safe_for_model="电脑扬声器已开始朗读。",
+            data={"node_id": result.node_id, "char_count": len(parsed.text)},
+        )
+
     async def status_handler(context: ToolExecutionContext, arguments: BaseModel):
         DesktopStatusArguments.model_validate(arguments)
         nodes = list_desktop_nodes(context.user_id)
@@ -352,6 +377,20 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
             },
         )
 
+    _register(
+        registry,
+        name="desktop_speak",
+        description=(
+            "在用户已配对的 Windows 电脑扬声器上朗读一段文字。"
+            "当用户明确要求在电脑上说话、朗读或播放语音时使用；"
+            "不要用它代替普通聊天回复。"
+        ),
+        arguments_model=DesktopSpeakArguments,
+        handler=speak_handler,
+        risk=ToolRisk.READ,
+        timeout_seconds=70,
+        max_calls=2,
+    )
     _register(
         registry,
         name="desktop_status",

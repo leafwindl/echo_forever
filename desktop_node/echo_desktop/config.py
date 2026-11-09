@@ -24,6 +24,7 @@ class DesktopConfig:
     node_name: str
     token: str
     auto_approve: bool = True
+    tts_url: str = "http://127.0.0.1:18080"
 
     @property
     def websocket_url(self) -> str:
@@ -46,6 +47,7 @@ def load_config() -> DesktopConfig | None:
         node_name=str(payload["node_name"]),
         token=str(payload["token"]),
         auto_approve=bool(payload.get("auto_approve", True)),
+        tts_url=str(payload.get("tts_url") or "http://127.0.0.1:18080"),
     )
 
 

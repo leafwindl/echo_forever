@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import hashlib
 import json
 import platform
@@ -27,6 +28,7 @@ CAPABILITIES = [
     "dsh_task",
     "music_search_play",
     "notepad_write",
+    "speak",
 ]
 
 
@@ -247,6 +249,14 @@ class NodeRuntime:
             _emit(self.callbacks, "INFO", f"操作完成：{command.action}")
 
     async def _execute(self, command: Command) -> dict:
+        if command.action == "speak":
+            command = dataclasses.replace(
+                command,
+                arguments={
+                    **command.arguments,
+                    "tts_url": self.config.tts_url,
+                },
+            )
         if self.auto_approve:
             self.callbacks.on_action(command.action, "auto_approved", "")
             _emit(self.callbacks, "INFO", f"总是允许：{command.action}")

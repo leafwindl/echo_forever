@@ -44,6 +44,7 @@ def normalize_capabilities(capabilities: tuple[str, ...] | list[str]) -> tuple[s
         "dsh_task",
         "music_search_play",
         "notepad_write",
+        "speak",
     }
     return tuple(dict.fromkeys(item for item in capabilities if item in allowed))
 
@@ -81,4 +82,9 @@ def validate_action_arguments(action: str, arguments: dict) -> dict:
         if not text:
             raise ValueError("text is required")
         return {"text": text[:2000]}
+    if action == "speak":
+        text = str(arguments.get("text") or "").strip()
+        if not text:
+            raise ValueError("text is required")
+        return {"text": text[:500]}
     raise ValueError("unsupported desktop action")

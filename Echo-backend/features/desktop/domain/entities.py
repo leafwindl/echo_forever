@@ -12,6 +12,7 @@ DESKTOP_CAPABILITIES: tuple[str, ...] = (
     "dsh_task",
     "music_search_play",
     "notepad_write",
+    "speak",
 )
 
 ALLOWED_APPS: tuple[str, ...] = (

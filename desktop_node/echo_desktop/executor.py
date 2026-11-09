@@ -10,6 +10,7 @@ from echo_desktop.actions.dsh import run_dsh_task
 from echo_desktop.actions.media import send_media_key
 from echo_desktop.actions.music_search import search_and_play
 from echo_desktop.actions.notepad import write_notepad
+from echo_desktop.actions.voice import speak_text
 from echo_desktop.approvals import ask_windows_approval
 from echo_desktop.protocol import ActionError, Command
 
@@ -28,6 +29,7 @@ _APPROVAL_MESSAGES = {
     "dsh_task": "Echo 想让 DSH 执行一个任务，DSH 可能修改文件或运行命令。\n允许这一次吗？",
     "music_search_play": "Echo 想在网易云搜索并播放：{query}。\n允许这一次吗？",
     "notepad_write": "Echo 想打开记事本并写入一段文字。\n允许这一次吗？",
+    "speak": "Echo 想在电脑上朗读一段话。\n允许这一次吗？",
 }
 
 
@@ -77,6 +79,11 @@ def _execute_action(command: Command) -> dict[str, Any]:
         return search_and_play(str(command.arguments.get("query") or ""))
     if command.action == "notepad_write":
         return write_notepad(str(command.arguments.get("text") or ""))
+    if command.action == "speak":
+        return speak_text(
+            str(command.arguments.get("text") or ""),
+            str(command.arguments.get("tts_url") or "http://127.0.0.1:18080"),
+        )
     raise ActionError("unsupported_action", "这个电脑操作还没有实现。")
 
 

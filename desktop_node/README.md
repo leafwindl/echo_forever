@@ -9,6 +9,7 @@
 - 媒体：播放/暂停、下一首、上一首
 - 看屏幕：截图后由服务端视觉模型描述
 - 看摄像头：单次抓拍后由服务端视觉模型描述，不持续录制
+- 语音：通过本机 TTS 服务在电脑扬声器上朗读 Echo 的话
 
 ## 运行
 
@@ -51,6 +52,54 @@ python -m echo_desktop run
 - 视觉/摄像头操作也会记录，但不保存图片
 
 日志同时写到 `%APPDATA%\EchoDesktop\echo-desktop.log`，超过 1 MB 自动轮转一份旧日志。
+
+## 电脑语音
+
+语音使用独立的本地 TTS HTTP 服务，桌面节点只负责请求和播放，不把模型和密钥放进客户端。
+
+默认地址：
+
+```text
+http://127.0.0.1:18080
+```
+
+当前开发环境在 4090 上运行 CosyVoice3 RL，通过 SSH 本地端口转发到电脑：
+
+```powershell
+ssh -N -L 18080:127.0.0.1:18080 `
+  -i "$env:USERPROFILE\.ssh\echo_tts_rsa" `
+  <user>@<server>
+```
+
+TTS 服务需要提供：
+
+```text
+GET  /health
+POST /tts  {"text": "..."}  -> audio/wav
+```
+
+配对后的配置文件位于：
+
+```text
+%APPDATA%\EchoDesktop\config.json
+```
+
+其中：
+
+```json
+"tts_url": "http://127.0.0.1:18080"
+```
+
+可以手动改成其他本地服务地址。
+
+直接测试电脑扬声器，不经过 Echo 对话：
+
+```powershell
+cd desktop_node
+python -m echo_desktop speak --text "你好，我是 Echo。"
+```
+
+Echo 的 Agent 工具为 `desktop_speak`。当前版本是“按请求朗读”，还没有自动朗读所有回复；自动语音模式需要再接入聊天事件。
 
 ## 扩展点
 

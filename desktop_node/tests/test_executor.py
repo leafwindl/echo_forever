@@ -36,6 +36,24 @@ class ExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data["pid"], 1)
         launch.assert_called_once_with("notepad")
 
+    async def test_approved_speak_dispatches_to_tts(self):
+        command = Command(
+            command_id="c1",
+            action="speak",
+            arguments={"text": "你好", "tts_url": "http://127.0.0.1:18080"},
+        )
+
+        async def allow(*_args, **_kwargs):
+            return True
+
+        with patch(
+            "echo_desktop.executor.speak_text",
+            return_value={"spoken": True},
+        ) as speak:
+            data = await execute_command(command, approval=allow)
+        self.assertTrue(data["spoken"])
+        speak.assert_called_once_with("你好", "http://127.0.0.1:18080")
+
     async def test_unsupported_action_is_rejected_before_approval(self):
         command = Command(command_id="c1", action="shell", arguments={})
         called = False

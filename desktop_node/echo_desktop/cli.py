@@ -23,6 +23,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("client", help="打开桌面客户端窗口")
     subparsers.add_parser("run", help="连接 Echo 并等待电脑操作（无界面）")
+    speak = subparsers.add_parser("speak", help="直接测试电脑扬声器语音")
+    speak.add_argument("--text", required=True, help="要朗读的文字")
     subparsers.add_parser("status", help="查看本机配对状态")
     subparsers.add_parser("logout", help="删除本机保存的节点 token")
     return parser
@@ -58,6 +60,13 @@ def main() -> None:
             asyncio.run(run_node(config))
         except KeyboardInterrupt:
             print("\n已停止 Echo Desktop。")
+        return
+    if args.command == "speak":
+        from echo_desktop.actions.voice import speak_text
+        config = load_config()
+        if config is None:
+            raise SystemExit("还没有配对。先运行 python -m echo_desktop pair --code <配对码>")
+        print(speak_text(args.text, config.tts_url))
         return
     if args.command == "status":
         config = load_config()

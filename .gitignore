@@ -63,3 +63,7 @@ Thumbs.db
 
 # Local Codex/IDE configuration
 .mcp.json
+
+# Personal voice references and generated TTS samples
+assets/character_voice/
+tmp_voice_test/
