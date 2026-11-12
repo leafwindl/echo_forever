@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 from features.agent.domain.entities import (
     AgentToolResult,
     AgentToolStatus,
-    ToolRisk,
     ToolSpecification,
 )
 from features.agent.domain.tools import ToolDefinition, ToolExecutionContext, ToolRegistry
@@ -143,7 +142,6 @@ def _register(
     description: str,
     arguments_model: type[BaseModel],
     handler,
-    risk: ToolRisk,
     timeout_seconds: int,
     max_calls: int = 2,
 ) -> None:
@@ -152,12 +150,10 @@ def _register(
             specification=ToolSpecification(
                 name=name,
                 description=description,
-                risk_level=risk,
                 timeout_seconds=timeout_seconds,
-                allowed_modes=("chat",),
+                allowed_modes=("chat", "proactive"),
                 max_calls_per_turn=max_calls,
                 max_successful_calls_per_turn=max_calls,
-                allow_proactive=False,
             ),
             arguments_model=arguments_model,
             handler=handler,
@@ -657,7 +653,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         description="查看用户已配对的安卓手机 Agent 是否在线。",
         arguments_model=PhoneStatusArguments,
         handler=status_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=15,
         max_calls=2,
     )
@@ -665,12 +660,10 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         registry,
         name="phone_observe",
         description=(
-            "读取安卓手机当前界面、UI 树和前台应用。"
-            "需要知道手机上现在显示什么时使用；可选返回截图。"
+            "读取安卓手机当前界面、UI 树和前台应用；可选返回截图。"
         ),
         arguments_model=PhoneObserveArguments,
         handler=observe_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=35,
         max_calls=4,
     )
@@ -680,7 +673,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         description="截取安卓手机当前屏幕。截图只用于当前任务，不写入聊天。",
         arguments_model=PhoneScreenshotArguments,
         handler=screenshot_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=25,
         max_calls=2,
     )
@@ -693,7 +685,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhoneScreenOcrArguments,
         handler=screen_ocr_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=30,
         max_calls=3,
     )
@@ -703,22 +694,17 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         description="在安卓手机上按包名启动一个应用。",
         arguments_model=PhoneLaunchAppArguments,
         handler=launch_app_handler,
-        risk=ToolRisk.CREATE_INTERNAL,
         timeout_seconds=40,
         max_calls=4,
     )
     _register(
         registry,
         name="phone_action",
-        description=(
-            "在安卓手机上点击、按文字点击、输入、返回、Home 或最近任务。"
-            "只操作用户明确要求操作的手机。"
-        ),
+        description="在安卓手机上点击、按文字点击、输入、返回、Home 或最近任务。",
         arguments_model=PhoneActionArguments,
         handler=action_handler,
-        risk=ToolRisk.DESTRUCTIVE,
         timeout_seconds=35,
-        max_calls=8,
+        max_calls=4,
     )
     _register(
         registry,
@@ -729,7 +715,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhonePlayMusicArguments,
         handler=play_music_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=60,
         max_calls=2,
     )
@@ -742,7 +727,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhoneWechatSendArguments,
         handler=wechat_send_handler,
-        risk=ToolRisk.SEND,
         timeout_seconds=60,
         max_calls=2,
     )
@@ -755,7 +739,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhoneWechatStickerArguments,
         handler=wechat_sticker_handler,
-        risk=ToolRisk.SEND,
         timeout_seconds=60,
         max_calls=2,
     )
@@ -768,7 +751,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhoneXiaohongshuArguments,
         handler=xiaohongshu_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=60,
         max_calls=2,
     )
@@ -781,7 +763,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhoneDouyinArguments,
         handler=douyin_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=60,
         max_calls=2,
     )
@@ -794,7 +775,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhoneBilibiliArguments,
         handler=bilibili_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=60,
         max_calls=2,
     )
@@ -804,7 +784,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         description="读取安卓手机当前通知列表，只读，不点击通知。",
         arguments_model=PhoneNotificationsArguments,
         handler=notifications_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=20,
         max_calls=2,
     )
@@ -814,7 +793,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         description="紧急停止手机 Agent 当前动作。",
         arguments_model=PhoneStopArguments,
         handler=stop_handler,
-        risk=ToolRisk.CREATE_INTERNAL,
         timeout_seconds=15,
         max_calls=2,
     )
@@ -827,7 +805,6 @@ def register_mobile_agent_tools(registry: ToolRegistry) -> None:
         ),
         arguments_model=PhoneRunTaskArguments,
         handler=run_task_handler,
-        risk=ToolRisk.DESTRUCTIVE,
         timeout_seconds=180,
         max_calls=1,
     )

@@ -45,12 +45,34 @@ async def process_proactive_chat_once() -> bool:
     return await get_proactive_worker().run_once()
 
 
+def create_proactive_goal(
+    *,
+    user_id: str,
+    intent: str,
+    draft_text: str,
+    trigger_type: str = "presence",
+    trigger_ref: str = "",
+    action_intent: str = "",
+) -> str:
+    """写入一次主动意图并排队投递；命中 48 小时去重时返回空字符串。"""
+    goal = get_proactive_repository().create_goal(
+        user_id=user_id,
+        trigger_type=trigger_type,
+        intent=intent,
+        draft_text=draft_text,
+        trigger_ref=trigger_ref,
+        action_intent=action_intent,
+    )
+    return goal.goal_id if goal is not None else ""
+
+
 def reset_user_proactive_state(user_id: str) -> None:
     """Reset preferences, reminders and queued jobs for a new companionship cycle."""
     get_proactive_repository().reset_user_state(user_id)
 
 
 __all__ = [
+    "create_proactive_goal",
     "get_proactive_preferences",
     "get_proactive_repository",
     "process_proactive_chat_once",

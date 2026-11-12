@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.agent.application.execute_tool import ToolExecutor
 from features.agent.application.orchestrate_chat import OrchestrateChatWithAgent
+from features.agent.application.turn_fallbacks import TurnFallbacks
 from features.agent.domain.call_routing import CallToolMode, route_call_tools
 from features.agent.domain.entities import (
     AgentModelResponse,
@@ -22,26 +23,20 @@ from features.agent.domain.entities import (
 )
 from features.agent.domain.services import (
     AgentModelTimeoutError,
-    resolve_local_time,
 )
 from features.agent.domain.tools import ToolExecutionContext, ToolRegistry
+from features.agent.domain.turn_policy import TurnPolicy
 from features.agent.infrastructure.container import get_chat_agent
 from features.agent.infrastructure.model import ProviderAgentConversationModel
 from features.agent.infrastructure.tools import (
     register_beat_tools,
     register_schedule_tools,
     register_sticker_tools,
-    register_time_tool,
     register_web_search_tool,
 )
 from features.stickers.domain.entities import Sticker
 from providers.llm_provider import LLMProviderTimeoutError, OpenAICompatibleLLMProvider
 from providers.web_search_provider import WebSearchItem, WebSearchResult
-
-
-class FakeClock:
-    def now(self):
-        return datetime(2026, 7, 29, 8, 0, tzinfo=UTC)
 
 
 class SequenceAgentModel:
@@ -155,7 +150,6 @@ def _build_orchestrator(
     registry = ToolRegistry()
     register_sticker_tools(registry, search=search, send=send)
     register_beat_tools(registry)
-    register_time_tool(registry, FakeClock(), "Asia/Shanghai")
     register_web_search_tool(registry, web_search or FakeWebSearch())
     return (
         OrchestrateChatWithAgent(
@@ -173,11 +167,6 @@ def _build_orchestrator(
 
 
 class AgentDomainTests(unittest.TestCase):
-    def test_time_tool_uses_iana_timezone(self):
-        result = resolve_local_time(FakeClock(), "Asia/Shanghai")
-        self.assertEqual(result["local_datetime"], "2026-07-29T16:00:00+08:00")
-        self.assertEqual(result["timezone"], "Asia/Shanghai")
-
     def test_tool_registry_hides_sticker_tools_in_call_mode(self):
         _, _, registry = _build_orchestrator(SequenceAgentModel([AgentModelResponse(text="你好")]))
 
@@ -236,7 +225,7 @@ class AgentDomainTests(unittest.TestCase):
         self.assertEqual(_tool_names(descriptions), ["search_web"])
 
     def test_sticker_policy_has_no_elapsed_turn_quota(self):
-        messages = OrchestrateChatWithAgent._build_initial_messages(
+        messages = TurnPolicy(max_steps=6, max_tool_calls=4).initial_messages(
             messages=[{"role": "user", "content": "今天心情不错"}],
             conversation_mode="chat",
             sticker_intent="",
@@ -248,7 +237,7 @@ class AgentDomainTests(unittest.TestCase):
         self.assertIn("send_sticker 可发送表情包", instruction)
 
     def test_proactive_mode_forbids_assuming_current_user_activity(self):
-        messages = OrchestrateChatWithAgent._build_initial_messages(
+        messages = TurnPolicy(max_steps=6, max_tool_calls=4).initial_messages(
             messages=[{"role": "system", "content": "internal proactive trigger"}],
             conversation_mode="proactive",
             sticker_intent="",
@@ -369,8 +358,9 @@ class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
         get_chat_agent.cache_clear()
         try:
             agent = get_chat_agent()
-            self.assertEqual(agent.model.max_tokens, 1800)
-            self.assertTrue(agent.model.disable_thinking)
+            model = agent.runtime.loop.model
+            self.assertEqual(model.max_tokens, 1800)
+            self.assertTrue(model.disable_thinking)
         finally:
             get_chat_agent.cache_clear()
 
@@ -544,11 +534,11 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(
-            OrchestrateChatWithAgent._deterministic_tool_confirmation([created]),
+            TurnFallbacks().confirmation_for_completed_tool([created]),
             "好，已经帮你设置好了：十一点半叫我。",
         )
         self.assertEqual(
-            OrchestrateChatWithAgent._deterministic_tool_confirmation([cancelled]),
+            TurnFallbacks().confirmation_for_completed_tool([cancelled]),
             "好，这个提醒已经取消了。",
         )
 
@@ -623,7 +613,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, AgentRunStatus.COMPLETED)
         self.assertEqual(result.reply_text, "今天听起来心情不错。")
         self.assertEqual(result.content_parts, ())
-        self.assertIn("get_current_time", _tool_names(model.calls[0]["tools"]))
+        self.assertIn("emit_chat_beats", _tool_names(model.calls[0]["tools"]))
         self.assertEqual(repository.tool_calls, [])
         self.assertEqual(repository.finishes[0][2], None)
 
@@ -1096,32 +1086,6 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(duplicate.error_code, "duplicate_tool_call")
         self.assertEqual(searches, [("user_a", "开心", 3)])
 
-    async def test_time_tool_result_is_returned_to_same_model(self):
-        model = SequenceAgentModel(
-            [
-                AgentModelResponse(
-                    tool_calls=(
-                        AgentToolCall(
-                            call_id="call_time",
-                            tool_name="get_current_time",
-                            arguments={"timezone": "Asia/Shanghai", "day_offset": 0},
-                        ),
-                    )
-                ),
-                AgentModelResponse(text=_delivery("现在是 2026 年 7 月 29 日 16:00。")),
-            ]
-        )
-        orchestrator, _, _ = _build_orchestrator(model)
-
-        result = await orchestrator.execute(
-            user_id="user_a",
-            message="现在几点",
-            messages=[{"role": "user", "content": "现在几点"}],
-        )
-
-        self.assertEqual(result.reply_text, "现在是 2026 年 7 月 29 日 16:00。")
-        self.assertIn("2026-07-29T16:00:00+08:00", model.calls[-1]["messages"][-1]["content"])
-
     async def test_web_search_sources_are_authoritative_tool_output(self):
         web = FakeWebSearch(
             [
@@ -1350,9 +1314,13 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
                 AgentModelResponse(
                     tool_calls=(
                         AgentToolCall(
-                            call_id="unexpected_time",
-                            tool_name="get_current_time",
-                            arguments={"timezone": "Asia/Shanghai"},
+                            call_id="unexpected_schedule",
+                            tool_name="create_chat_schedule",
+                            arguments={
+                                "intent": "看看新闻",
+                                "local_datetime": "2026-07-29T16:00:00+08:00",
+                                "timezone": "Asia/Shanghai",
+                            },
                         ),
                     )
                 ),
@@ -1377,7 +1345,8 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(progress, [])
         self.assertEqual(result.tool_results[0].error_code, "tool_not_allowed_for_route")
-        self.assertEqual(result.reply_text, "这次没有执行额外操作。")
+        # 通话模式下失败的工具调用会走确定性兜底，不采用模型原文。
+        self.assertEqual(result.reply_text, "这个提醒这次没有设置成功，我们再确认一下时间吧。")
 
     async def test_model_failure_never_uses_a_separate_reply_model(self):
         model = SequenceAgentModel([ValueError("model unavailable")])

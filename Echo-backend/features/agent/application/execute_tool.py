@@ -117,4 +117,6 @@ class ToolExecutor:
             content_parts=result.content_parts,
             sources=result.sources,
             error_code=result.error_code,
+            published_segments=result.published_segments,
+            sticker_placement=result.sticker_placement,
         )

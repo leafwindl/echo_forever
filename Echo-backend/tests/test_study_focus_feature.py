@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.chat.domain.entities import ChatHistoryMessage, ExternalAssistantDelivery
 from features.letters.application.assemble_context import LetterContextAssembler
 from features.study_focus.domain.entities import StudyFocusSession
 from features.study_focus.infrastructure import postgres_repository as repository_module
@@ -80,27 +79,14 @@ class StudyFocusDomainTests(unittest.TestCase):
 
 
 class CompletionDeliveryTests(unittest.TestCase):
-    def test_completed_session_delivers_one_idempotent_congratulation(self):
+    def test_completed_session_creates_one_idempotent_goal(self):
         current = _session()
         repository = _FakeRouterRepository(current)
-        deliveries = []
-        message = ChatHistoryMessage(
-            message_id=77,
-            stable_message_id="msg-77",
-            client_message_id="focus_completion:focus-1",
-            role="assistant",
-            message_type="text",
-            content="这一轮完成了，先休息一下吧。",
-            content_parts=(),
-            created_at=current.ended_at,
-        )
+        goals = []
 
-        async def deliver(**kwargs):
-            deliveries.append(kwargs)
-            return ExternalAssistantDelivery(
-                conversation_id="conversation-1",
-                message=message,
-            )
+        def create_goal(**kwargs):
+            goals.append(kwargs)
+            return "goal_focus_1"
 
         request = StudyFocusUpdateRequest(
             status="completed",
@@ -109,7 +95,7 @@ class CompletionDeliveryTests(unittest.TestCase):
         )
         with (
             patch.object(router_module, "repository", repository),
-            patch.object(router_module, "deliver_external_assistant_message", deliver),
+            patch("features.proactive_chat.public.create_proactive_goal", create_goal),
         ):
             first = asyncio.run(
                 router_module.update_session("focus-1", request, CurrentUser("user-a"))
@@ -118,32 +104,20 @@ class CompletionDeliveryTests(unittest.TestCase):
                 router_module.update_session("focus-1", request, CurrentUser("user-a"))
             )
 
-        self.assertEqual(len(deliveries), 1)
-        self.assertEqual(repository.marked_message_ids, [77])
-        self.assertEqual(first.completion_message_id, 77)
-        self.assertEqual(second.completion_message_id, 77)
+        self.assertEqual(len(goals), 1)
+        self.assertEqual(goals[0]["trigger_type"], "focus")
+        self.assertEqual(goals[0]["trigger_ref"], "focus-1")
+        self.assertEqual(repository.session.completion_goal_id, "goal_focus_1")
+        self.assertEqual(first.completion_message_id, second.completion_message_id)
 
-    def test_early_ended_session_delivers_a_gentle_check_in_once(self):
+    def test_early_ended_session_creates_a_gentle_check_in_once(self):
         current = _session(status="ended_early")
         repository = _FakeRouterRepository(current)
-        deliveries = []
-        message = ChatHistoryMessage(
-            message_id=78,
-            stable_message_id="msg-78",
-            client_message_id="focus_ended_early:focus-1",
-            role="assistant",
-            message_type="text",
-            content="你刚刚学习了 25 分钟。是有其他事情要忙吗？",
-            content_parts=(),
-            created_at=current.ended_at,
-        )
+        goals = []
 
-        async def deliver(**kwargs):
-            deliveries.append(kwargs)
-            return ExternalAssistantDelivery(
-                conversation_id="conversation-1",
-                message=message,
-            )
+        def create_goal(**kwargs):
+            goals.append(kwargs)
+            return "goal_focus_2"
 
         request = StudyFocusUpdateRequest(
             status="ended_early",
@@ -152,16 +126,15 @@ class CompletionDeliveryTests(unittest.TestCase):
         )
         with (
             patch.object(router_module, "repository", repository),
-            patch.object(router_module, "deliver_external_assistant_message", deliver),
+            patch("features.proactive_chat.public.create_proactive_goal", create_goal),
         ):
-            result = asyncio.run(
+            asyncio.run(
                 router_module.update_session("focus-1", request, CurrentUser("user-a"))
             )
 
-        self.assertEqual(len(deliveries), 1)
-        self.assertEqual(deliveries[0]["source"], "focus_ended_early")
-        self.assertIn("有其他事情要忙吗", deliveries[0]["content"])
-        self.assertEqual(result.completion_message_id, 78)
+        self.assertEqual(len(goals), 1)
+        self.assertEqual(repository.session.completion_goal_id, "goal_focus_2")
+        self.assertIn("有其他事情要忙吗", goals[0]["draft_text"])
 
 
 class DailyLetterEvidenceTests(unittest.TestCase):
@@ -198,15 +171,14 @@ class DailyLetterEvidenceTests(unittest.TestCase):
 class _FakeRouterRepository:
     def __init__(self, session):
         self.session = session
-        self.marked_message_ids = []
 
     def update_session(self, **_kwargs):
         return self.session
 
-    def mark_completion_message(self, *, message_id, **_kwargs):
-        self.marked_message_ids.append(message_id)
+    def mark_completion_goal(self, *, user_id, session_id, goal_id):
+        del user_id, session_id
         self.session = StudyFocusSession(
-            **{**self.session.__dict__, "completion_message_id": message_id}
+            **{**self.session.__dict__, "completion_goal_id": goal_id}
         )
         return self.session
 

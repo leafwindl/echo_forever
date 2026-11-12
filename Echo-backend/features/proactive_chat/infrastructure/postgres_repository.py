@@ -16,6 +16,7 @@ from features.proactive_chat.domain.entities import (
     ChatSchedule,
     ProactiveChatJob,
     ProactiveChatPreferences,
+    ProactiveGoal,
 )
 
 _SLOT_SECONDS = 30 * 60
@@ -81,6 +82,7 @@ def _preference(row) -> ProactiveChatPreferences:
         pause_indefinite=bool(row["pause_indefinite"]),
         last_proactive_at=row["last_proactive_at"],
         consecutive_unanswered=int(row["consecutive_unanswered"]),
+        proactivity_level=str(row["proactivity_level"] or "standard"),
     )
 
 
@@ -105,6 +107,23 @@ def _schedule(row) -> ChatSchedule:
         last_run_at=row["last_run_at"],
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
+    )
+
+
+def _goal(row) -> ProactiveGoal:
+    return ProactiveGoal(
+        goal_id=str(row["goal_id"]),
+        user_id=str(row["user_id"]),
+        trigger_type=str(row["trigger_type"]),
+        intent=str(row["intent"] or ""),
+        draft_text=str(row["draft_text"] or ""),
+        status=str(row["status"]),
+        trigger_ref=str(row["trigger_ref"] or ""),
+        action_intent=str(row["action_intent"] or ""),
+        result_status=str(row["result_status"] or ""),
+        result_summary=str(row["result_summary"] or ""),
+        created_at=row.get("created_at"),
+        reported_at=row.get("reported_at"),
     )
 
 
@@ -510,7 +529,123 @@ class PostgresProactiveChatRepository:
             status=str(claimed["status"]),
             attempt_count=int(claimed["attempt_count"]),
             max_attempts=int(claimed["max_attempts"]),
+            goal_id=str(claimed["goal_id"]) if claimed.get("goal_id") else None,
         )
+
+    def create_goal(
+        self,
+        *,
+        user_id: str,
+        trigger_type: str,
+        intent: str,
+        draft_text: str,
+        trigger_ref: str = "",
+        action_intent: str = "",
+        scheduled_for: datetime | None = None,
+    ) -> ProactiveGoal | None:
+        """写入一次主动意图，并立刻创建一个只属于它的投递 job。
+
+        同一用户在 48 小时内已有相同意图时返回 None，避免重复打扰。
+        """
+        goal_id = f"goal_{uuid.uuid4().hex}"
+        now = datetime.now(UTC)
+        conversation_id = postgres_repositories.get_or_create_active_conversation(user_id)
+        with transaction() as conn, conn.cursor() as cursor:
+            ensure_user_identity(user_id=user_id, conn=conn)
+            cursor.execute(
+                """
+                SELECT 1 FROM proactive_goals
+                WHERE user_id = %s
+                  AND created_at > NOW() - INTERVAL '48 hours'
+                  AND (
+                        (trigger_ref <> '' AND trigger_type = %s AND trigger_ref = %s)
+                     OR (trigger_ref = '' AND intent = %s)
+                  )
+                LIMIT 1
+                """,
+                (user_id, trigger_type, trigger_ref[:200], intent[:500]),
+            )
+            if cursor.fetchone() is not None:
+                return None
+            cursor.execute(
+                """
+                INSERT INTO proactive_goals (
+                    goal_id, user_id, trigger_type, trigger_ref, intent,
+                    action_intent, draft_text
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING *
+                """,
+                (
+                    goal_id,
+                    user_id,
+                    trigger_type,
+                    trigger_ref[:200],
+                    intent[:500],
+                    action_intent[:2000],
+                    draft_text[:2000],
+                ),
+            )
+            row = cursor.fetchone()
+            self._insert_job(
+                cursor,
+                None,
+                user_id,
+                conversation_id,
+                scheduled_for or now,
+                goal_id=goal_id,
+            )
+        return _goal(row)
+
+    def get_goal(self, goal_id: str) -> ProactiveGoal | None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM proactive_goals WHERE goal_id = %s",
+                (goal_id,),
+            )
+            row = cursor.fetchone()
+        return _goal(row) if row is not None else None
+
+    def count_goals_reported_today(self, user_id: str) -> int:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT count(*) AS goal_count FROM proactive_goals
+                WHERE user_id = %s AND status = 'reported'
+                  AND created_at >= CURRENT_DATE
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+        return int(row["goal_count"]) if row is not None else 0
+
+    def mark_goal_reported(
+        self,
+        goal_id: str,
+        *,
+        result_status: str = "success",
+        result_summary: str = "",
+    ) -> None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE proactive_goals
+                SET status = 'reported', reported_at = NOW(),
+                    result_status = %s, result_summary = %s
+                WHERE goal_id = %s
+                """,
+                (result_status, result_summary[:2000], goal_id),
+            )
+
+    def mark_goal_failed(self, goal_id: str, *, result_summary: str = "") -> None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE proactive_goals
+                SET status = 'failed', result_status = 'failed', result_summary = %s
+                WHERE goal_id = %s
+                """,
+                (result_summary[:2000], goal_id),
+            )
 
     def create_spontaneous_job_if_due(self) -> bool:
         now = datetime.now(UTC)
@@ -950,12 +1085,13 @@ class PostgresProactiveChatRepository:
         user_id: str,
         conversation_id: str | None,
         scheduled_for: datetime,
+        goal_id: str | None = None,
     ) -> None:
         cursor.execute(
             """
             INSERT INTO proactive_chat_jobs (
-                job_id, schedule_id, user_id, conversation_id, scheduled_for
-            ) VALUES (%s, %s, %s, %s, %s)
+                job_id, schedule_id, goal_id, user_id, conversation_id, scheduled_for
+            ) VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (schedule_id, scheduled_for) DO UPDATE SET
                 status = 'pending',
                 error_code = NULL,
@@ -965,6 +1101,7 @@ class PostgresProactiveChatRepository:
             (
                 f"proactive_job_{uuid.uuid4().hex}",
                 schedule_id,
+                goal_id,
                 user_id,
                 conversation_id,
                 scheduled_for,

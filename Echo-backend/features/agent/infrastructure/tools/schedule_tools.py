@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field
 from features.agent.domain.entities import (
     AgentToolResult,
     AgentToolStatus,
-    ToolRisk,
     ToolSpecification,
 )
 from features.agent.domain.tools import ToolDefinition, ToolExecutionContext, ToolRegistry
@@ -162,15 +161,11 @@ def register_schedule_tools(
             specification=ToolSpecification(
                 name="create_chat_schedule",
                 description=(
-                    "Create a persistent user-visible chat reminder or one-time later "
-                    "check-in. Resolve relative time from trusted current-time context; "
-                    "when get_current_time is available, use it before creating. "
-                    "Use only when a time is clear; ask a concise question when a time "
-                    "is ambiguous."
+                    "创建用户可见的持久提醒或一次性回访。相对时间用本轮注入的"
+                    "当前时间上下文解析；只有时间明确时才创建，时间含糊时先"
+                    "简短问清。"
                 ),
-                risk_level=ToolRisk.CREATE_INTERNAL,
                 timeout_seconds=5,
-                is_idempotent=False,
                 allowed_modes=("chat", "call"),
                 max_calls_per_turn=1,
                 max_successful_calls_per_turn=1,
@@ -183,10 +178,7 @@ def register_schedule_tools(
         ToolDefinition(
             specification=ToolSpecification(
                 name="list_chat_schedules",
-                description=(
-                    "List the current user's visible scheduled Echo reminders and follow-ups."
-                ),
-                risk_level=ToolRisk.READ,
+                description="列出用户可见的定时提醒和回访。",
                 timeout_seconds=5,
                 allowed_modes=("chat", "call"),
                 max_calls_per_turn=1,
@@ -199,13 +191,8 @@ def register_schedule_tools(
         ToolDefinition(
             specification=ToolSpecification(
                 name="cancel_chat_schedule",
-                description=(
-                    "Cancel one visible scheduled Echo reminder by schedule_id returned "
-                    "from list_chat_schedules."
-                ),
-                risk_level=ToolRisk.DESTRUCTIVE,
+                description="按 list_chat_schedules 返回的 schedule_id 取消一条提醒。",
                 timeout_seconds=5,
-                is_idempotent=True,
                 allowed_modes=("chat", "call"),
                 max_calls_per_turn=1,
             ),

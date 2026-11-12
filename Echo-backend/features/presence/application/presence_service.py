@@ -14,10 +14,9 @@ from features.presence.domain.entities import (
 from features.presence.domain.ports import (
     PresenceActionExecutor,
     PresenceContextSource,
+    PresenceGoalCreator,
     PresenceMemorySource,
     PresenceMemoryWriter,
-    PresenceMessageComposer,
-    PresenceMessageDelivery,
     PresenceQuietHours,
     PresenceRepository,
     PresenceThoughtGenerator,
@@ -49,8 +48,7 @@ class PresenceService:
         context_source: PresenceContextSource,
         memory_source: PresenceMemorySource,
         thought_generator: PresenceThoughtGenerator,
-        message_composer: PresenceMessageComposer,
-        message_delivery: PresenceMessageDelivery,
+        goal_creator: PresenceGoalCreator,
         memory_writer: PresenceMemoryWriter,
         action_executor: PresenceActionExecutor,
         quiet_hours: PresenceQuietHours,
@@ -71,8 +69,7 @@ class PresenceService:
         self.context_source = context_source
         self.memory_source = memory_source
         self.thought_generator = thought_generator
-        self.message_composer = message_composer
-        self.message_delivery = message_delivery
+        self.goal_creator = goal_creator
         self.memory_writer = memory_writer
         self.action_executor = action_executor
         self.quiet_hours = quiet_hours
@@ -183,6 +180,7 @@ class PresenceService:
             action_intent=_compact(draft.action_intent, 2000),
             source_memory_id=memory.memory_id if memory else "",
             source_memory_text=_compact(memory.content, 500) if memory else "",
+            draft_text=_compact(draft.draft_text, 500),
             created_at=current,
         )
         self.repository.add_thought(thought)
@@ -257,7 +255,7 @@ class PresenceService:
             )
         message_text = ""
         if thought.shareable or thought.salience >= self.message_min_salience:
-            message_text = await self._maybe_deliver_message(
+            message_text = await self._maybe_create_goal(
                 state=state,
                 thought=thought,
                 context=context,
@@ -350,7 +348,7 @@ class PresenceService:
         )
         return result
 
-    async def _maybe_deliver_message(
+    async def _maybe_create_goal(
         self,
         *,
         state: PresenceState,
@@ -383,51 +381,49 @@ class PresenceService:
             and now - context.last_assistant_at < self.proactive_message_interval
         ):
             return ""
+        text = thought.draft_text.strip()
+        if not text:
+            # 这次念头只想自己待着，不打扰用户。
+            return ""
         try:
-            text = await self.message_composer.compose(
-                thought=thought,
-                context=context,
-                now=now,
+            goal_id = self.goal_creator.create_goal(
+                user_id=state.user_id,
+                intent=thought.text,
+                draft_text=text,
+                trigger_type="memory" if thought.source_memory_id else "presence",
+                trigger_ref=thought.source_memory_id,
+                action_intent=thought.action_intent,
             )
         except Exception:
             logger.warning(
-                "Presence message compose failed user_id=%s",
+                "Presence goal creation failed user_id=%s",
                 state.user_id,
                 exc_info=True,
             )
             self.repository.record_event(
                 user_id=state.user_id,
-                event_type="message_compose_failed",
+                event_type="goal_creation_failed",
                 detail={"thought_id": thought.thought_id},
                 now=now,
             )
             return ""
-        if not text.strip():
-            return ""
-        try:
-            awaited = self.message_delivery.deliver(
-                user_id=state.user_id,
-                thought_id=thought.thought_id,
-                text=text,
-            )
-            await awaited
-        except Exception:
-            logger.warning(
-                "Presence message delivery failed user_id=%s",
-                state.user_id,
-                exc_info=True,
-            )
+        if not goal_id:
+            # 48 小时去重命中：念头已经表达过，不再重复打扰。
             self.repository.record_event(
                 user_id=state.user_id,
-                event_type="message_delivery_failed",
+                event_type="goal_deduplicated",
                 detail={"thought_id": thought.thought_id},
                 now=now,
             )
             return ""
         self.repository.record_event(
             user_id=state.user_id,
-            event_type="message_delivered",
-            detail={"thought_id": thought.thought_id, "text": text[:160]},
+            event_type="goal_created",
+            detail={
+                "thought_id": thought.thought_id,
+                "goal_id": goal_id,
+                "text": text[:160],
+            },
             now=now,
         )
         return text

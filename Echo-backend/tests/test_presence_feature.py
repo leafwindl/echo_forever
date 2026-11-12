@@ -70,7 +70,10 @@ class FakeMemory:
 
 class FakeGenerator:
     def __init__(self, draft: ThoughtDraft | None = None):
-        self.draft = draft or ThoughtDraft(text="也许她今天只是需要安静一会儿", salience=0.7)
+        self.draft = draft or ThoughtDraft(
+            text="也许她今天只是需要安静一会儿",
+            salience=0.7,
+        )
         self.calls = 0
 
     async def generate(self, **kwargs):
@@ -89,21 +92,22 @@ class FakeQuiet:
         return not self.quiet
 
 
-class FakeComposer:
-    def __init__(self, text=""):
-        self.text = text
-
-    async def compose(self, **kwargs):
-        return self.text
-
-
-class FakeDelivery:
+class FakeGoalCreator:
     def __init__(self):
-        self.delivered: list[tuple[str, str]] = []
+        self.goals: list[tuple[str, str]] = []
 
-    async def deliver(self, *, user_id, thought_id, text):
-        self.delivered.append((user_id, text))
-        return True
+    def create_goal(
+        self,
+        *,
+        user_id,
+        intent,
+        draft_text,
+        trigger_type="presence",
+        trigger_ref="",
+        action_intent="",
+    ):
+        self.goals.append((user_id, draft_text))
+        return f"goal_{len(self.goals)}"
 
 
 class FakeMemoryWriter:
@@ -129,8 +133,7 @@ def _service(
     context,
     generator=None,
     quiet=None,
-    composer=None,
-    delivery=None,
+    goal_creator=None,
     **overrides,
 ):
     values = {
@@ -153,8 +156,7 @@ def _service(
         context_source=context,
         memory_source=FakeMemory(),
         thought_generator=generator or FakeGenerator(),
-        message_composer=composer or FakeComposer(),
-        message_delivery=delivery or FakeDelivery(),
+        goal_creator=goal_creator or FakeGoalCreator(),
         memory_writer=FakeMemoryWriter(),
         action_executor=FakeActionExecutor(),
         quiet_hours=quiet or FakeQuiet(),
@@ -258,7 +260,7 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         now = datetime.now(UTC)
         repository = FakeRepository()
         action_executor = FakeActionExecutor()
-        delivery = FakeDelivery()
+        creator = FakeGoalCreator()
         generator = FakeGenerator(
             ThoughtDraft(
                 text="外面在放歌，想给他放一首晴天",
@@ -271,13 +273,13 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
             repository,
             FakeContext(now - timedelta(hours=2)),
             generator=generator,
-            delivery=delivery,
+            goal_creator=creator,
         )
         service.action_executor = action_executor
         result = await service.tick("user-1", now=now)
         self.assertEqual(result.decision, "action")
         self.assertEqual(action_executor.calls, ["music:晴天"])
-        self.assertEqual(delivery.delivered, [])
+        self.assertEqual(creator.goals, [])
         self.assertEqual(repository.state.proactive_actions_used, 1)
 
     async def test_high_salience_thought_is_written_to_memory(self):
@@ -299,21 +301,25 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_shareable_thought_delivers_one_message(self):
         now = datetime.now(UTC)
         repository = FakeRepository()
-        delivery = FakeDelivery()
+        creator = FakeGoalCreator()
         generator = FakeGenerator(
-            ThoughtDraft(text="想起上次说的事", salience=0.7, shareable=True)
+            ThoughtDraft(
+                text="想起上次说的事",
+                salience=0.7,
+                shareable=True,
+                draft_text="上次说的事后来怎么样了？",
+            )
         )
         service = _service(
             repository,
             FakeContext(now - timedelta(hours=2)),
             generator=generator,
-            composer=FakeComposer("上次说的事后来怎么样了？"),
-            delivery=delivery,
+            goal_creator=creator,
         )
         result = await service.tick("user-1", now=now)
         self.assertEqual(result.decision, "message")
         self.assertEqual(result.message_text, "上次说的事后来怎么样了？")
-        self.assertEqual(len(delivery.delivered), 1)
+        self.assertEqual(len(creator.goals), 1)
         self.assertEqual(repository.state.proactive_messages_used, 1)
         self.assertEqual(repository.state.last_decision, "message")
 
@@ -327,20 +333,24 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
                 thought_budget_date=now.date(),
             )
         )
-        delivery = FakeDelivery()
+        creator = FakeGoalCreator()
         generator = FakeGenerator(
-            ThoughtDraft(text="又想起一件事", salience=0.7, shareable=True)
+            ThoughtDraft(
+                text="又想起一件事",
+                salience=0.7,
+                shareable=True,
+                draft_text="又想起一件事。",
+            )
         )
         service = _service(
             repository,
             FakeContext(now - timedelta(hours=2)),
             generator=generator,
-            composer=FakeComposer("想跟你说件事"),
-            delivery=delivery,
+            goal_creator=creator,
         )
         result = await service.tick("user-1", now=now)
         self.assertEqual(result.decision, "thought")
-        self.assertEqual(delivery.delivered, [])
+        self.assertEqual(creator.goals, [])
 
     async def test_duplicate_thought_is_not_stored(self):
         now = datetime.now(UTC)

@@ -118,17 +118,29 @@ class MemoryPresenceWriter:
         )
 
 
-class ChatPresenceMessageDelivery:
-    async def deliver(self, *, user_id: str, thought_id: str, text: str) -> bool:
-        from features.chat.public import deliver_external_assistant_message
+class ProactivePresenceGoalCreator:
+    """把念头交给统一投递通道：投递本身由 proactive job worker 负责。"""
 
-        await deliver_external_assistant_message(
+    def create_goal(
+        self,
+        *,
+        user_id: str,
+        intent: str,
+        draft_text: str,
+        trigger_type: str = "presence",
+        trigger_ref: str = "",
+        action_intent: str = "",
+    ) -> str:
+        from features.proactive_chat.public import create_proactive_goal
+
+        return create_proactive_goal(
             user_id=user_id,
-            content=text,
-            idempotency_key=f"presence:{thought_id}",
-            source="presence",
+            intent=intent,
+            draft_text=draft_text,
+            trigger_type=trigger_type,
+            trigger_ref=trigger_ref,
+            action_intent=action_intent,
         )
-        return True
 
 
 class ProactiveQuietHours:

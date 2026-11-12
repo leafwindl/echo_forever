@@ -48,6 +48,7 @@ class PresenceThought:
     action_intent: str = ""
     source_memory_id: str = ""
     source_memory_text: str = ""
+    draft_text: str = ""
     created_at: datetime | None = None
 
 
@@ -81,6 +82,7 @@ class ThoughtDraft:
     salience: float
     shareable: bool = False
     action_intent: str = ""
+    draft_text: str = ""
 
 
 @dataclass(frozen=True)

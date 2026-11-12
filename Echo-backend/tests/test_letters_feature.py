@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from features.agent.application.orchestrate_chat import OrchestrateChatWithAgent
 from features.agent.domain.entities import AgentRunStatus, AgentTurnResult
+from features.agent.domain.turn_policy import TurnPolicy
 from features.letters.application.assemble_context import LetterContext
 from features.letters.application.generate_image import (
     GenerateLetterImage,
@@ -263,7 +263,7 @@ class LetterOutputTests(unittest.TestCase):
         self.assertNotIn("https://private.example/path", brief_text)
 
     def test_daily_letter_agent_policy_has_no_chat_sticker_instructions(self):
-        messages = OrchestrateChatWithAgent._build_initial_messages(
+        messages = TurnPolicy(max_steps=2, max_tool_calls=1).initial_messages(
             messages=[],
             conversation_mode="daily_letter",
             sticker_intent="",

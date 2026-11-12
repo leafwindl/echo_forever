@@ -5,7 +5,6 @@ from shared.config import settings
 
 from features.agent.application.execute_tool import ToolExecutor
 from features.agent.application.orchestrate_chat import OrchestrateChatWithAgent
-from features.agent.domain.services import SystemClock
 from features.agent.domain.tools import ToolRegistry
 from features.agent.infrastructure.model import ProviderAgentConversationModel
 from features.agent.infrastructure.postgres_repository import PostgresAgentRunRepository
@@ -18,9 +17,17 @@ from features.agent.infrastructure.tools import (
     register_relationship_tools,
     register_schedule_tools,
     register_sticker_tools,
-    register_time_tool,
     register_web_search_tool,
 )
+
+
+def _register_web_search_if_configured(registry: ToolRegistry) -> None:
+    """未配置联网搜索时不要注册工具：宣布一个必然失败的能力比没有更糟。"""
+    if not settings.web_search_enabled:
+        return
+    if not settings.web_search_api_key.strip():
+        return
+    register_web_search_tool(registry, TavilyWebSearchProvider())
 
 
 @lru_cache(maxsize=1)
@@ -33,8 +40,7 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
     register_relationship_tools(registry)
     register_proactive_tools(registry)
     register_schedule_tools(registry)
-    register_time_tool(registry, SystemClock(), settings.default_user_timezone)
-    register_web_search_tool(registry, TavilyWebSearchProvider())
+    _register_web_search_if_configured(registry)
     chat_model = ProviderAgentConversationModel(
         max_tokens=settings.chat_max_tokens,
         disable_thinking=True,
@@ -47,6 +53,7 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
         max_steps=settings.agent_max_steps,
         max_tool_calls=settings.agent_max_tool_calls,
         run_timeout_seconds=settings.agent_run_timeout_seconds,
+        proactive_max_tool_calls=settings.proactive_agent_max_tool_calls,
     )
 
 
@@ -54,7 +61,7 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
 def get_call_agent() -> OrchestrateChatWithAgent:
     registry = ToolRegistry()
     register_schedule_tools(registry)
-    register_web_search_tool(registry, TavilyWebSearchProvider())
+    _register_web_search_if_configured(registry)
     return OrchestrateChatWithAgent(
         repository=PostgresAgentRunRepository(),
         model=ProviderAgentConversationModel(

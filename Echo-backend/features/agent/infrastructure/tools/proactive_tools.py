@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from features.agent.domain.entities import (
     AgentToolResult,
     AgentToolStatus,
-    ToolRisk,
     ToolSpecification,
 )
 from features.agent.domain.tools import ToolDefinition, ToolExecutionContext, ToolRegistry
@@ -83,9 +82,7 @@ def register_proactive_tools(registry: ToolRegistry) -> None:
                     "用户说“这两天别主动找我”用 days；说“以后别主动发消息”用 indefinite。"
                     "明确提醒任务不受影响。"
                 ),
-                risk_level=ToolRisk.CREATE_INTERNAL,
                 timeout_seconds=5,
-                is_idempotent=True,
                 allowed_modes=("chat",),
             ),
             arguments_model=PauseProactiveArguments,
@@ -100,9 +97,7 @@ def register_proactive_tools(registry: ToolRegistry) -> None:
                     "用户明确要求恢复 Echo 的自然主动联系时调用。"
                     "不要因为用户只是聊得开心就自动恢复。"
                 ),
-                risk_level=ToolRisk.CREATE_INTERNAL,
                 timeout_seconds=5,
-                is_idempotent=True,
                 allowed_modes=("chat",),
             ),
             arguments_model=ResumeProactiveArguments,

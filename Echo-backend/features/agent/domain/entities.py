@@ -5,13 +5,6 @@ from enum import StrEnum
 from typing import Any
 
 
-class ToolRisk(StrEnum):
-    READ = "read"
-    CREATE_INTERNAL = "create_internal"
-    SEND = "send"
-    DESTRUCTIVE = "destructive"
-
-
 class AgentToolStatus(StrEnum):
     COMPLETED = "completed"
     NO_RESULT = "no_result"
@@ -75,6 +68,9 @@ class AgentToolResult:
     content_parts: tuple[ContentPart, ...] = field(default_factory=tuple)
     sources: tuple[SourceReference, ...] = field(default_factory=tuple)
     error_code: str | None = None
+    # 工具自己声明交付形态，运行时不认具体工具名。
+    published_segments: tuple[str, ...] = field(default_factory=tuple)
+    sticker_placement: str | None = None
 
 
 @dataclass(frozen=True)
@@ -103,10 +99,7 @@ class AgentTurnResult:
 class ToolSpecification:
     name: str
     description: str
-    risk_level: ToolRisk
     timeout_seconds: int
-    is_idempotent: bool = True
     allowed_modes: tuple[str, ...] = ("chat", "call")
     max_calls_per_turn: int = 4
     max_successful_calls_per_turn: int | None = None
-    allow_proactive: bool = False

@@ -11,13 +11,11 @@ from features.agent.domain.entities import (
     AgentToolResult,
     AgentToolStatus,
     ContentPart,
-    ToolRisk,
     ToolSpecification,
 )
 from features.agent.domain.tools import ToolDefinition, ToolExecutionContext, ToolRegistry
 from features.stickers.domain.entities import Sticker
 from features.stickers.public import search_stickers, send_sticker
-
 
 _STICKER_FALLBACK_KEYWORDS = (
     "开心",
@@ -149,6 +147,7 @@ def register_sticker_tools(
                     ),
                 ),
             ),
+            sticker_placement=parsed.placement,
         )
 
     registry.register(
@@ -156,18 +155,12 @@ def register_sticker_tools(
             specification=ToolSpecification(
                 name="send_sticker",
                 description=(
-                    "根据想表达的情绪或语境，发送一张可用表情包；未找到则不发送。"
-                    "如果本轮用 emit_chat_beats 发了多条文字，先判断表情回应的是哪一句，"
-                    "再用 after_text_index 指定夹在第几条（从 0 开始）之后；不要默认固定放 0。"
-                    "开场图可放 0，吐槽图放在对应调侃句后，安慰图放在接住情绪那句后，"
-                    "收尾图放最后一条后。如果同时要发文字气泡，先调用本工具，再调用 "
-                    "emit_chat_beats。"
+                    "按语境发送一张可用表情包，未找到则不发送。用 after_text_index "
+                    "指定夹在第几条文字之后（从 0 开始）；同轮还有多条文字时，"
+                    "先调本工具再调 emit_chat_beats。"
                 ),
-                risk_level=ToolRisk.SEND,
                 timeout_seconds=5,
-                is_idempotent=True,
                 allowed_modes=("chat", "proactive"),
-                allow_proactive=True,
             ),
             arguments_model=SendStickerArguments,
             handler=send_handler,

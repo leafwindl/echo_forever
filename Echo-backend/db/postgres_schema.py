@@ -739,6 +739,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             id BIGSERIAL PRIMARY KEY,
             job_id TEXT NOT NULL UNIQUE,
             schedule_id TEXT,
+            goal_id TEXT,
             user_id TEXT NOT NULL,
             conversation_id TEXT,
             scheduled_for TIMESTAMPTZ NOT NULL,
@@ -752,6 +753,24 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE(schedule_id, scheduled_for)
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS proactive_goals (
+            id BIGSERIAL PRIMARY KEY,
+            goal_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            trigger_type VARCHAR(32) NOT NULL,
+            trigger_ref TEXT NOT NULL DEFAULT '',
+            intent TEXT NOT NULL DEFAULT '',
+            action_intent TEXT NOT NULL DEFAULT '',
+            draft_text TEXT NOT NULL DEFAULT '',
+            status VARCHAR(16) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'reported', 'failed', 'expired', 'cancelled')),
+            result_status VARCHAR(16),
+            result_summary TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            reported_at TIMESTAMPTZ
         )
         """,
         """
@@ -942,6 +961,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             action_intent TEXT NOT NULL DEFAULT '',
             source_memory_id TEXT NOT NULL DEFAULT '',
             source_memory_text TEXT NOT NULL DEFAULT '',
+            draft_text TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
@@ -990,6 +1010,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             ended_at TIMESTAMPTZ,
             timezone VARCHAR(80) NOT NULL DEFAULT 'UTC',
             completion_message_id BIGINT,
+            completion_goal_id TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
@@ -1079,6 +1100,15 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "CREATE INDEX IF NOT EXISTS idx_chat_schedules_user_status_next ON chat_schedules(user_id, status, next_run_at)",
         "CREATE INDEX IF NOT EXISTS idx_proactive_jobs_due ON proactive_chat_jobs(status, scheduled_for, id)",
         "CREATE INDEX IF NOT EXISTS idx_proactive_jobs_user ON proactive_chat_jobs(user_id, created_at DESC)",
+        "ALTER TABLE proactive_chat_jobs ADD COLUMN IF NOT EXISTS goal_id TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_proactive_jobs_goal ON proactive_chat_jobs(goal_id)",
+        "CREATE INDEX IF NOT EXISTS idx_proactive_goals_user_created ON proactive_goals(user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_proactive_goals_status ON proactive_goals(status, created_at)",
+        "ALTER TABLE proactive_goals ADD COLUMN IF NOT EXISTS action_intent TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE proactive_goals ADD COLUMN IF NOT EXISTS result_status VARCHAR(16)",
+        "ALTER TABLE proactive_goals ADD COLUMN IF NOT EXISTS result_summary TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE study_focus_sessions ADD COLUMN IF NOT EXISTS completion_goal_id TEXT",
+        "ALTER TABLE presence_thoughts ADD COLUMN IF NOT EXISTS draft_text TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS cycle_started_at TIMESTAMPTZ",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS allowed_contact_seconds INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS last_accounted_at TIMESTAMPTZ",
@@ -1086,7 +1116,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS last_slot_result VARCHAR(16)",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS paused_until TIMESTAMPTZ",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS pause_indefinite BOOLEAN NOT NULL DEFAULT FALSE",
-        "ALTER TABLE proactive_chat_preferences DROP COLUMN IF EXISTS proactivity_level",
+        "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS proactivity_level VARCHAR(16) NOT NULL DEFAULT 'standard'",
         "ALTER TABLE proactive_chat_preferences DROP COLUMN IF EXISTS proactive_count",
         "ALTER TABLE proactive_chat_preferences DROP COLUMN IF EXISTS window_started_at",
         "ALTER TABLE push_targets ALTER COLUMN provider SET DEFAULT 'getui'",

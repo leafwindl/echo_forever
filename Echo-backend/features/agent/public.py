@@ -2,8 +2,14 @@ from collections.abc import Awaitable, Callable
 
 from shared.config import settings
 
+from features.agent.application.tool_availability import load_tool_availability
 from features.agent.domain.call_routing import route_call_tools
 from features.agent.domain.entities import AgentTurnResult, ProactiveDecision
+from features.agent.domain.tool_selection import (
+    ToolSelectionContext,
+    select_chat_tool_names,
+    select_proactive_tool_names,
+)
 from features.agent.infrastructure.container import (
     get_call_agent,
     get_chat_agent,
@@ -50,6 +56,19 @@ async def run_chat_agent(
         tool_call_limit = route.maximum_tool_calls
         call_route_instruction = route.instruction
         effective_tools_enabled = bool(route.allowed_tool_names)
+    elif conversation_mode in {"chat", "proactive"} and effective_tools_enabled:
+        # 设备离线时不宣布对应操作能力，避免模型调用注定失败的设备工具。
+        availability = await load_tool_availability(user_id)
+        selection_context = ToolSelectionContext(
+            conversation_mode=conversation_mode,
+            trigger_message=message,
+            desktop_online=availability.desktop_online,
+            phone_online=availability.phone_online,
+        )
+        if conversation_mode == "chat":
+            allowed_tool_names = select_chat_tool_names(selection_context)
+        else:
+            allowed_tool_names = select_proactive_tool_names(selection_context)
     return await agent.execute(
         user_id,
         message,

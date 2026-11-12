@@ -7,14 +7,11 @@ from shared.config import settings
 from features.presence.application.presence_service import PresenceService
 from features.presence.infrastructure.adapters import (
     ChatPresenceContextSource,
-    ChatPresenceMessageDelivery,
     DesktopPresenceActionExecutor,
     MemoryPresenceSource,
     MemoryPresenceWriter,
+    ProactivePresenceGoalCreator,
     ProactiveQuietHours,
-)
-from features.presence.infrastructure.message_composer import (
-    ProviderPresenceMessageComposer,
 )
 from features.presence.infrastructure.postgres_repository import (
     PostgresPresenceRepository,
@@ -34,11 +31,7 @@ def get_presence_service() -> PresenceService:
             max_tokens=settings.presence_thought_max_tokens,
             temperature=settings.presence_thought_temperature,
         ),
-        message_composer=ProviderPresenceMessageComposer(
-            max_tokens=settings.presence_message_max_tokens,
-            temperature=settings.presence_message_temperature,
-        ),
-        message_delivery=ChatPresenceMessageDelivery(),
+        goal_creator=ProactivePresenceGoalCreator(),
         memory_writer=MemoryPresenceWriter(),
         action_executor=DesktopPresenceActionExecutor(),
         quiet_hours=ProactiveQuietHours(),

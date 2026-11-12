@@ -296,3 +296,56 @@ def _fit_segment_limit(segments: list[str]) -> list[str]:
     head = segments[: _NATURAL_MAX_TEXT_SEGMENTS - 1]
     tail = "\n\n".join(segments[_NATURAL_MAX_TEXT_SEGMENTS - 1 :]).strip()
     return [*head, tail]
+
+
+_MESSAGE_TIME_PREFIX = re.compile(
+    r"^\s*[\[\uff3b]\s*\u6d88\u606f\u65f6\u95f4[^\]\uff3d\r\n]*[\]\uff3d]\s*(?:\r?\n)?"
+)
+_SESSION_BOUNDARY_PREFIX = re.compile(
+    r"^\s*[\[\uff3b]\s*\u4f1a\u8bdd\u65f6\u95f4\u8fb9\u754c[\]\uff3d]"
+)
+_SESSION_BOUNDARY_LINE = re.compile(
+    r"^\s*[\[\uff3b]\s*\u4f1a\u8bdd\u65f6\u95f4\u8fb9\u754c[\]\uff3d][^\r\n]*(?:\r?\n)?"
+)
+
+
+def sanitize_time_metadata(messages: list[dict]) -> list[dict]:
+    """去掉历史消息里的服务端时间标记，避免模型把它们当成正文复述。"""
+    sanitized: list[dict] = []
+    for message in messages:
+        content = message.get("content")
+        if not isinstance(content, str):
+            sanitized.append(dict(message))
+            continue
+        if message.get("role") == "system" and _SESSION_BOUNDARY_PREFIX.match(content):
+            continue
+        sanitized.append(
+            {
+                **message,
+                "content": _MESSAGE_TIME_PREFIX.sub("", content, count=1),
+            }
+        )
+    return sanitized
+
+
+def strip_time_metadata(text: str) -> tuple[str, bool]:
+    """剥掉文本开头的服务端时间标记，返回 (清理后文本, 是否清理过)。"""
+    candidate = text.strip()
+    removed = False
+    while candidate:
+        without_message_time = _MESSAGE_TIME_PREFIX.sub("", candidate, count=1)
+        if without_message_time != candidate:
+            candidate = without_message_time.strip()
+            removed = True
+            continue
+        without_boundary = _SESSION_BOUNDARY_LINE.sub("", candidate, count=1)
+        if without_boundary != candidate:
+            candidate = without_boundary.strip()
+            removed = True
+            continue
+        break
+    return candidate, removed
+
+
+def prefix_codepoints(text: str, limit: int = 8) -> str:
+    return ",".join(f"U+{ord(character):04X}" for character in text[:limit])

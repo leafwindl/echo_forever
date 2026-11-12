@@ -6,7 +6,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from shared.interface.dependencies import CurrentUser, get_current_user
 
-from features.chat.public import deliver_external_assistant_message
 from features.study_focus.domain.entities import StudyFocusSession
 from features.study_focus.infrastructure.postgres_repository import (
     PostgresStudyFocusRepository,
@@ -65,27 +64,27 @@ async def update_session(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if session is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="session not found")
-    if session.status in {"completed", "ended_early"} and session.completion_message_id is None:
+    if session.status in {"completed", "ended_early"} and session.completion_goal_id is None:
         try:
-            source = (
-                "focus_completion"
-                if session.status == "completed"
-                else "focus_ended_early"
-            )
-            delivery = await deliver_external_assistant_message(
+            from features.proactive_chat.public import create_proactive_goal
+
+            message = _completion_message(session)
+            goal_id = create_proactive_goal(
                 user_id=current_user.user_id,
-                content=_completion_message(session),
-                idempotency_key=f"{source}:{session.session_id}",
-                source=source,
+                intent=message[:200],
+                draft_text=message,
+                trigger_type="focus",
+                trigger_ref=session.session_id,
             )
-            session = repository.mark_completion_message(
-                user_id=current_user.user_id,
-                session_id=session.session_id,
-                message_id=delivery.message.message_id,
-            ) or session
+            if goal_id:
+                session = repository.mark_completion_goal(
+                    user_id=current_user.user_id,
+                    session_id=session.session_id,
+                    goal_id=goal_id,
+                ) or session
         except Exception:
             logger.warning(
-                "Study focus completion message failed session_id=%s",
+                "Study focus completion goal failed session_id=%s",
                 session.session_id,
                 exc_info=True,
             )

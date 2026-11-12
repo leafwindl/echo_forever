@@ -151,7 +151,7 @@ class Settings(BaseSettings):
         validation_alias="PRESENCE_ENABLED",
     )
     presence_tick_interval_seconds: int = Field(
-        default=900,
+        default=1800,
         validation_alias="PRESENCE_TICK_INTERVAL_SECONDS",
         ge=60,
         le=3600,
@@ -227,18 +227,6 @@ class Settings(BaseSettings):
         validation_alias="PRESENCE_PROACTIVE_ACTION_INTERVAL_MINUTES",
         ge=30,
         le=1440,
-    )
-    presence_message_max_tokens: int = Field(
-        default=180,
-        validation_alias="PRESENCE_MESSAGE_MAX_TOKENS",
-        ge=80,
-        le=600,
-    )
-    presence_message_temperature: float = Field(
-        default=0.8,
-        validation_alias="PRESENCE_MESSAGE_TEMPERATURE",
-        ge=0.0,
-        le=2.0,
     )
     presence_message_min_salience: float = Field(
         default=0.3,
@@ -905,6 +893,12 @@ class Settings(BaseSettings):
     agent_max_steps: int = Field(default=6, validation_alias="AGENT_MAX_STEPS", ge=1, le=12)
     agent_max_tool_calls: int = Field(
         default=4, validation_alias="AGENT_MAX_TOOL_CALLS", ge=1, le=10
+    )
+    proactive_agent_max_tool_calls: int = Field(
+        default=5,
+        validation_alias="PROACTIVE_AGENT_MAX_TOOL_CALLS",
+        ge=1,
+        le=10,
     )
     agent_run_timeout_seconds: int = Field(
         default=45, validation_alias="AGENT_RUN_TIMEOUT_SECONDS", ge=5, le=180

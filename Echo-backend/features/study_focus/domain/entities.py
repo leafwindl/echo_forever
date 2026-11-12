@@ -15,5 +15,6 @@ class StudyFocusSession:
     timezone: str
     ended_at: datetime | None = None
     completion_message_id: int | None = None
+    completion_goal_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

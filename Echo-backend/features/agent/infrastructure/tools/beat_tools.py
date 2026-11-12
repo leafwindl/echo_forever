@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 from features.agent.domain.entities import (
     AgentToolResult,
     AgentToolStatus,
-    ToolRisk,
     ToolSpecification,
 )
 from features.agent.domain.tools import ToolDefinition, ToolExecutionContext, ToolRegistry
@@ -42,6 +41,7 @@ def register_beat_tools(registry: ToolRegistry) -> None:
         context: ToolExecutionContext,
         arguments: BaseModel,
     ) -> AgentToolResult:
+        del context
         parsed = EmitChatBeatsArguments.model_validate(arguments)
         try:
             beats = _clean_beats(parsed.beats)
@@ -66,6 +66,7 @@ def register_beat_tools(registry: ToolRegistry) -> None:
             status=AgentToolStatus.COMPLETED,
             data=payload,
             safe_for_model=json.dumps(payload, ensure_ascii=False),
+            published_segments=beats,
         )
 
     registry.register(
@@ -73,15 +74,10 @@ def register_beat_tools(registry: ToolRegistry) -> None:
             specification=ToolSpecification(
                 name="emit_chat_beats",
                 description=(
-                    "文字聊天打算发两条以上消息时，优先调用本工具，一次给出 1-10 条；"
-                    "不要用换行直接写多段。每条是一个自然气泡；普通闲聊 2-5 条，"
-                    "斗嘴/情绪强时可以 6-10 条，允许“哈哈”这类独立短反应。"
-                    "谈心、解释、长回答只给 1 条长文本，不要为了凑气泡把内容拆碎。"
-                    "表情包另用 send_sticker，并用 after_text_index 指定夹在第几条文字之后。"
+                    "打算连发多条短消息时调用，一次给出 1-10 条气泡；"
+                    "深谈和长回答不要用它拆碎。"
                 ),
-                risk_level=ToolRisk.CREATE_INTERNAL,
                 timeout_seconds=5,
-                is_idempotent=True,
                 allowed_modes=("chat", "proactive"),
             ),
             arguments_model=EmitChatBeatsArguments,

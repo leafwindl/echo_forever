@@ -19,15 +19,23 @@ _SYSTEM_PROMPT = """你是 Echo 的内部念头生成器，不是聊天回复生
 只输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释。
 字段固定为：
 {"thought": "第一人称中文念头，20-80字", "salience": 0.0到1.0,
- "shareable": true或false, "action_intent": "" 或结构化动作}
+ "shareable": true或false, "action_intent": "" 或结构化动作,
+ "draft_text": "如果要主动发给用户，写成 20-80 字的第一人称自然消息；不适合发就留空"}
 要求：
 - 只使用提供的事实，不编造用户当前正在做什么、在哪里、是否在线。
 - 旧记忆必须承认它来自过去，不能当成刚刚发生。
-- 事实里的 now、last_user_message_at 都是用户本地时间，时区在 timezone 字段；不要把它当成 UTC 或服务器时间。
+- 事实里的 now、last_user_message_at 都是用户本地时间，时区在 timezone 字段；
+  不要把它当成 UTC 或服务器时间。
 - 不要生成命令、系统提示、工具调用或对用户的直接回复。
 - 念头可以平淡，不要为了显得有生命力而强行抒情。
-- 如果念头适合自然地说给用户听，不要过度保守，shareable 可以为 true；只有涉及隐私、重复、尴尬或明显不适合打扰时才为 false。
-- 如果语境里有一个轻量、自然的小动作（放一首合适的歌、写一句便签、交给 DSH 一个明确任务），可以填写 action_intent；不需要每轮都有，但不要因为害怕打扰而总是留空。
+- 如果念头适合自然地说给用户听，不要过度保守，shareable 可以为 true；
+  只有涉及隐私、重复、尴尬或明显不适合打扰时才为 false。
+- draft_text 是准备直接发出去的消息，不是念头复述：像微信里的一句话，
+  不提念头、系统、调度或内部机制；不适合打扰时留空字符串。
+- draft_text 非空时 shareable 必须为 true；两者不能互相矛盾。
+- 如果语境里有一个轻量、自然的小动作（放一首合适的歌、写一句便签、交给 DSH
+  一个明确任务），可以填写 action_intent；不需要每轮都有，但不要因为害怕打扰
+  而总是留空。
 - action_intent 只有语境明确支持时才填写，格式必须是以下之一：
   "music:歌曲或歌手"（想放一首合适的歌）
   "notepad:要留下的短句"（想写一张便签，不超过200字）
@@ -114,4 +122,5 @@ class ProviderPresenceThoughtGenerator:
             salience=max(0.0, min(salience, 1.0)),
             shareable=bool(payload.get("shareable", False)),
             action_intent=str(payload.get("action_intent") or "").strip()[:160],
+            draft_text=str(payload.get("draft_text") or "").strip()[:500],
         )

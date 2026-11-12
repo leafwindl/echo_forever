@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from features.agent.domain.entities import (
     AgentToolResult,
     AgentToolStatus,
-    ToolRisk,
     ToolSpecification,
 )
 from features.agent.domain.tools import ToolDefinition, ToolExecutionContext, ToolRegistry
@@ -141,7 +140,6 @@ def _register(
     description: str,
     arguments_model,
     handler,
-    risk: ToolRisk,
     timeout_seconds: int,
     max_calls: int = 3,
 ) -> None:
@@ -150,12 +148,10 @@ def _register(
             specification=ToolSpecification(
                 name=name,
                 description=description,
-                risk_level=risk,
                 timeout_seconds=timeout_seconds,
-                allowed_modes=("chat",),
+                allowed_modes=("chat", "proactive"),
                 max_calls_per_turn=max_calls,
                 max_successful_calls_per_turn=max_calls,
-                allow_proactive=False,
             ),
             arguments_model=arguments_model,
             handler=handler,
@@ -381,26 +377,20 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_speak",
         description=(
-            "在用户已配对的 Windows 电脑扬声器上朗读一段文字。"
-            "当用户明确要求在电脑上说话、朗读或播放语音时使用；"
+            "在用户已配对的 Windows 电脑扬声器上朗读一段文字；"
             "不要用它代替普通聊天回复。"
         ),
         arguments_model=DesktopSpeakArguments,
         handler=speak_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=70,
         max_calls=2,
     )
     _register(
         registry,
         name="desktop_status",
-        description=(
-            "查看用户电脑上的 Echo Desktop 是否在线。只有在线时才能操作电脑；"
-            "用户提到自己的电脑、电脑上的软件或摄像头时可以先调用它。"
-        ),
+        description="查看用户电脑上的 Echo Desktop 是否在线；只有在线时才能操作电脑。",
         arguments_model=DesktopStatusArguments,
         handler=status_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=10,
         max_calls=1,
     )
@@ -408,13 +398,11 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_open_app",
         description=(
-            "在用户已配对的 Windows 电脑上打开允许的应用。当前只支持网易云音乐、记事本、计算器。"
-            "用户明确要求打开电脑软件时才使用；不要在普通聊天里主动打开。"
-            "执行前电脑端会弹出本地批准窗口，用户拒绝就会失败。"
+            "在用户已配对的 Windows 电脑上打开允许的应用：网易云音乐、记事本、计算器；"
+            "电脑端会弹出本地批准窗口，用户拒绝就会失败。"
         ),
         arguments_model=DesktopOpenAppArguments,
         handler=open_app_handler,
-        risk=ToolRisk.CREATE_INTERNAL,
         timeout_seconds=55,
         max_calls=2,
     )
@@ -422,12 +410,11 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_media_control",
         description=(
-            "控制用户电脑上正在播放的网易云音乐：播放/暂停、下一首、上一首。"
-            "用户要求放歌、暂停、切歌时使用；电脑端会请求本地批准。"
+            "控制用户电脑上正在播放的网易云音乐：播放/暂停、下一首、上一首；"
+            "电脑端会请求本地批准。"
         ),
         arguments_model=DesktopMediaArguments,
         handler=media_handler,
-        risk=ToolRisk.CREATE_INTERNAL,
         timeout_seconds=50,
         max_calls=3,
     )
@@ -435,13 +422,11 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_look",
         description=(
-            "通过用户电脑摄像头看一眼，并把看到的画面描述带回对话。"
-            "仅当用户明确说“看看我”“看摄像头”时使用，不要主动偷看；"
+            "通过用户电脑摄像头看一眼并描述画面，结果带回对话；"
             "电脑端每次都会弹出摄像头批准窗口，用户拒绝就失败。"
         ),
         arguments_model=DesktopLookArguments,
         handler=look_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=70,
         max_calls=1,
     )
@@ -449,13 +434,11 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_music_search_play",
         description=(
-            "在用户电脑的网易云音乐里搜索并播放指定歌曲或歌手。"
-            "仅当用户明确要求放某首歌，或主动动作已经决定放歌时使用。"
-            "电脑端会请求本地批准（总是允许时直接执行）。"
+            "在用户电脑的网易云音乐里搜索并播放指定歌曲或歌手；"
+            "电脑端会请求本地批准。"
         ),
         arguments_model=DesktopMusicSearchArguments,
         handler=music_search_handler,
-        risk=ToolRisk.CREATE_INTERNAL,
         timeout_seconds=75,
         max_calls=1,
     )
@@ -463,13 +446,11 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_notepad_write",
         description=(
-            "在用户电脑上打开一个新的记事本窗口并写入指定文字。"
-            "仅当用户明确要求写字，或主动动作已经决定写一张便签时使用；"
+            "在用户电脑上打开新的记事本窗口并写入指定文字；"
             "默认不保存文件、不覆盖已有文档。"
         ),
         arguments_model=DesktopNotepadWriteArguments,
         handler=notepad_write_handler,
-        risk=ToolRisk.CREATE_INTERNAL,
         timeout_seconds=55,
         max_calls=1,
     )
@@ -477,14 +458,12 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_dsh_task",
         description=(
-            "让用户电脑上的 DSH 执行一个独立任务，并返回最终结果。"
-            "DSH 拥有电脑的完整权限，可能修改文件或运行命令；"
-            "只有用户明确要求使用 DSH 时才调用，不要把普通聊天或简单操作交给 DSH。"
-            "任务可能持续几分钟，适合代码检查、修复、运行测试等。"
+            "让用户电脑上的 DSH 执行一个独立任务并返回最终结果。"
+            "DSH 拥有电脑完整权限，可能修改文件或运行命令；"
+            "任务可能持续几分钟，适合代码检查、修复、运行测试。"
         ),
         arguments_model=DesktopDshTaskArguments,
         handler=dsh_handler,
-        risk=ToolRisk.DESTRUCTIVE,
         timeout_seconds=340,
         max_calls=1,
     )
@@ -492,12 +471,11 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_screenshot",
         description=(
-            "截取用户电脑当前屏幕并描述屏幕内容。仅当用户明确要求看屏幕或"
-            "需要确认电脑上的画面时使用；电脑端会弹出截图批准窗口。"
+            "截取用户电脑当前屏幕并描述屏幕内容；"
+            "电脑端会弹出截图批准窗口。"
         ),
         arguments_model=DesktopScreenArguments,
         handler=screenshot_handler,
-        risk=ToolRisk.READ,
         timeout_seconds=70,
         max_calls=1,
     )

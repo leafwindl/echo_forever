@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from features.agent.domain.entities import (
     AgentToolResult,
     AgentToolStatus,
-    ToolRisk,
     ToolSpecification,
 )
 from features.agent.domain.tools import ToolDefinition, ToolExecutionContext, ToolRegistry
@@ -145,9 +144,7 @@ def register_relationship_tools(registry: ToolRegistry) -> None:
                     "在用户已经明确表达愿意把关系更进一步后，创建一个关系确认窗口。"
                     "不要替用户决定关系，也不要声称关系已经改变；用户点击确认后才会改变。"
                 ),
-                risk_level=ToolRisk.CREATE_INTERNAL,
                 timeout_seconds=5,
-                is_idempotent=True,
                 allowed_modes=("chat",),
             ),
             arguments_model=ProposeRelationshipArguments,
@@ -162,9 +159,7 @@ def register_relationship_tools(registry: ToolRegistry) -> None:
                     "当用户明确拒绝或想暂缓一段关系推进时，记录这次回应。"
                     "只有用户真的明确表达时才调用；不要为了结束话题而伪造拒绝。"
                 ),
-                risk_level=ToolRisk.CREATE_INTERNAL,
                 timeout_seconds=5,
-                is_idempotent=True,
                 allowed_modes=("chat",),
             ),
             arguments_model=RespondRelationshipArguments,

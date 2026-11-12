@@ -24,6 +24,7 @@ class ProactiveChatPreferences:
     pause_indefinite: bool = False
     last_proactive_at: datetime | None = None
     consecutive_unanswered: int = 0
+    proactivity_level: str = "standard"
 
 
 @dataclass(frozen=True)
@@ -56,3 +57,22 @@ class ProactiveChatJob:
     status: str
     attempt_count: int
     max_attempts: int
+    goal_id: str | None = None
+
+
+@dataclass(frozen=True)
+class ProactiveGoal:
+    """一次主动意图：先落库，再由 worker 执行与回传。"""
+
+    goal_id: str
+    user_id: str
+    trigger_type: str
+    intent: str
+    draft_text: str
+    status: str
+    trigger_ref: str = ""
+    action_intent: str = ""
+    result_status: str = ""
+    result_summary: str = ""
+    created_at: datetime | None = None
+    reported_at: datetime | None = None

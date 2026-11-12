@@ -131,6 +131,27 @@ class PostgresStudyFocusRepository:
             row = cursor.fetchone()
         return _session(row) if row else None
 
+    def mark_completion_goal(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        goal_id: str,
+    ) -> StudyFocusSession | None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                    UPDATE study_focus_sessions
+                    SET completion_goal_id = COALESCE(completion_goal_id, %s),
+                        updated_at = NOW()
+                    WHERE user_id = %s AND session_id = %s
+                    RETURNING *
+                    """,
+                (goal_id, user_id, session_id),
+            )
+            row = cursor.fetchone()
+        return _session(row) if row else None
+
     def list_sessions(self, user_id: str, limit: int = 30) -> list[StudyFocusSession]:
         with get_connection() as conn, conn.cursor() as cursor:
             cursor.execute(
@@ -193,6 +214,7 @@ def _session(row) -> StudyFocusSession:
             if row["completion_message_id"] is not None
             else None
         ),
+        completion_goal_id=row.get("completion_goal_id"),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
