@@ -77,7 +77,7 @@
   <div class="stat"><div class="n">31</div><div class="k">messages 总条数</div></div>
   <div class="stat"><div class="n">10</div><div class="k">system 消息</div></div>
   <div class="stat"><div class="n">21</div><div class="k">历史消息</div></div>
-  <div class="stat"><div class="n">≈3105</div><div class="k">messages 估算 token</div></div>
+  <div class="stat"><div class="n">≈2963</div><div class="k">messages 估算 token</div></div>
   <div class="stat"><div class="n">9</div><div class="k">工具描述</div></div>
   <div class="stat"><div class="n">≈1127</div><div class="k">工具描述 token</div></div>
 </div>
@@ -235,12 +235,12 @@
     <span class="idx">09</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
-    <span class="tokens">337 tok · 807 字</span>
+    <span class="tokens">195 tok · 601 字</span>
   </div>
   <div class="source">context_builder temporal_context</div>
-  <div class="first">以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经</div>
-  <details open><summary>完整内容（807 字）</summary><pre>以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经发生或完成；relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。conversation_gap 的 active/recent 表示持续对话，不提离开；returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，事实问题、任务指令、报错和严肃话题不要插入。recent_messages 是最近消息的本地时间顺序，只用于理解对话节奏；历史正文不带时间戳，不要补写或复述时间。
-temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:38:12+08:00&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}], &quot;conversation_gap&quot;: {&quot;gap_seconds&quot;: 9568, &quot;state&quot;: &quot;returned&quot;, &quot;should_acknowledge_gap&quot;: true, &quot;current_message_at&quot;: &quot;2026-11-16T23:38:12+08:00&quot;, &quot;previous_user_at&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, &quot;last_message_at&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}</pre></details>
+  <div class="first">以下是服务端计算的时间上下文。不要机械报时；resolved_expressions 只确定时间范围，不代表事情已经发生；conversation_gap 表示</div>
+  <details open><summary>完整内容（601 字）</summary><pre>以下是服务端计算的时间上下文。不要机械报时；resolved_expressions 只确定时间范围，不代表事情已经发生；conversation_gap 表示对话是否连续，last_message_at 是上一条消息时间。
+时间上下文={&quot;local_datetime&quot;: &quot;2026-11-16T23:39:15+08:00&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}], &quot;conversation_gap&quot;: {&quot;gap_seconds&quot;: 9631, &quot;state&quot;: &quot;returned&quot;, &quot;should_acknowledge_gap&quot;: true, &quot;current_message_at&quot;: &quot;2026-11-16T23:39:15+08:00&quot;, &quot;previous_user_at&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, &quot;last_message_at&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
     <span class="idx">10</span>
