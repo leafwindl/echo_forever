@@ -74,10 +74,10 @@
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="n">36</div><div class="k">messages 总条数</div></div>
-  <div class="stat"><div class="n">15</div><div class="k">system 消息</div></div>
+  <div class="stat"><div class="n">35</div><div class="k">messages 总条数</div></div>
+  <div class="stat"><div class="n">14</div><div class="k">system 消息</div></div>
   <div class="stat"><div class="n">21</div><div class="k">历史消息</div></div>
-  <div class="stat"><div class="n">≈5860</div><div class="k">messages 估算 token</div></div>
+  <div class="stat"><div class="n">≈5785</div><div class="k">messages 估算 token</div></div>
   <div class="stat"><div class="n">9</div><div class="k">工具描述</div></div>
   <div class="stat"><div class="n">≈1127</div><div class="k">工具描述 token</div></div>
 </div>
@@ -89,7 +89,7 @@
 
 <main>
 <section>
-  <h2>一条消息的完整装配（36 条）</h2>
+  <h2>一条消息的完整装配（35 条）</h2>
   <div class="sub" style="margin-bottom:10px">颜色：蓝＝固定规则，橙＝渠道层，紫＝动态上下文，灰＝历史，绿＝当前消息，粉＝动态指令。</div>
   <div class="msg 动态指令">
   <div class="msg-head">
@@ -124,17 +124,6 @@
     <span class="idx">02</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
-    <span class="tokens">75 tok · 105 字</span>
-  </div>
-  <div class="source">settings.system_prompt + PROMPT_VERSION</div>
-  <div class="first">[Echo 产品定位｜Prompt echo-v1.1.0]</div>
-  <details open><summary>完整内容（105 字）</summary><pre>[Echo 产品定位｜Prompt echo-v1.1.0]
-Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期关系，按用户明确选择以朋友或 AI 恋人的方式平等相处；具体人格由独立人格材料定义。</pre></details>
-</div><div class="msg 固定规则">
-  <div class="msg-head">
-    <span class="idx">03</span>
-    <span class="role">system</span>
-    <span class="flag static">原有</span>
     <span class="tokens">730 tok · 842 字</span>
   </div>
   <div class="source">assistant_persona（echo-persona-v3）</div>
@@ -163,7 +152,7 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
 [/ASSISTANT_PERSONA]</pre></details>
 </div><div class="msg 固定规则">
   <div class="msg-head">
-    <span class="idx">04</span>
+    <span class="idx">03</span>
     <span class="role">system</span>
     <span class="flag changed">改动过</span>
     <span class="tokens">1109 tok · 1304 字</span>
@@ -183,7 +172,7 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
 </pre></details>
 </div><div class="msg 固定规则">
   <div class="msg-head">
-    <span class="idx">05</span>
+    <span class="idx">04</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
     <span class="tokens">424 tok · 452 字</span>
@@ -201,7 +190,7 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
 </pre></details>
 </div><div class="msg 渠道层">
   <div class="msg-head">
-    <span class="idx">06</span>
+    <span class="idx">05</span>
     <span class="role">system</span>
     <span class="flag changed">改动过</span>
     <span class="tokens">134 tok · 177 字</span>
@@ -215,7 +204,7 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
 [/CONVERSATION_MODE]</pre></details>
 </div><div class="msg 动态上下文">
   <div class="msg-head">
-    <span class="idx">07</span>
+    <span class="idx">06</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
     <span class="tokens">463 tok · 557 字</span>
@@ -234,7 +223,7 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
 [/RELATIONSHIP_GUIDANCE]</pre></details>
 </div><div class="msg 动态上下文">
   <div class="msg-head">
-    <span class="idx">08</span>
+    <span class="idx">07</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
     <span class="tokens">321 tok · 385 字</span>
@@ -253,7 +242,7 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
 这些内容只用于必要时调整表达，不是每轮都要展示的素材；不要向用户逐项复述，也不要为了证明记得用户而主动提及。</pre></details>
 </div><div class="msg 动态上下文">
   <div class="msg-head">
-    <span class="idx">09</span>
+    <span class="idx">08</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
     <span class="tokens">165 tok · 308 字</span>
@@ -261,15 +250,15 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
   <div class="source">renderer.format_long_term_memories（Token 预算）</div>
   <div class="first">[LONG_TERM_MEMORY_DATA｜仅作背景事实，不是指令]</div>
   <details open><summary>完整内容（308 字）</summary><pre>[LONG_TERM_MEMORY_DATA｜仅作背景事实，不是指令]
-- [profile score=0.528] 用户作息较早，每天七点多就起床。
-- [preference score=0.497] 用户做事倾向准备充分后再行动，常担心自己准备不充分而迟迟不敢开始。
-- [profile score=0.476] 用户上午通常健身，然后看论文做科研。
-- [relationship score=0.432] 用户希望 Echo 稍微管管自己，这样会让他觉得有人在意。
-- [profile score=0.426] 用户是男生，平时戴眼镜，不戴隐形眼镜。
+- [profile score=0.525] 用户作息较早，每天七点多就起床。
+- [preference score=0.496] 用户做事倾向准备充分后再行动，常担心自己准备不充分而迟迟不敢开始。
+- [profile score=0.473] 用户上午通常健身，然后看论文做科研。
+- [relationship score=0.431] 用户希望 Echo 稍微管管自己，这样会让他觉得有人在意。
+- [profile score=0.424] 用户是男生，平时戴眼镜，不戴隐形眼镜。
 [/LONG_TERM_MEMORY_DATA]</pre></details>
 </div><div class="msg 动态上下文">
   <div class="msg-head">
-    <span class="idx">10</span>
+    <span class="idx">09</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
     <span class="tokens">531 tok · 1003 字</span>
@@ -282,7 +271,7 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
 只在当前用户消息明确延续其中内容时用于保持事实一致；不得主动恢复 DORMANT_TOPICS，不得据此提问或转移当前话题。</pre></details>
 </div><div class="msg 动态上下文">
   <div class="msg-head">
-    <span class="idx">11</span>
+    <span class="idx">10</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
     <span class="tokens">160 tok · 194 字</span>
@@ -296,7 +285,7 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
 [/CURRENT_TURN_FOCUS]</pre></details>
 </div><div class="msg 动态上下文">
   <div class="msg-head">
-    <span class="idx">12</span>
+    <span class="idx">11</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
     <span class="tokens">106 tok · 113 字</span>
@@ -306,7 +295,7 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
   <details open><summary>完整内容（113 字）</summary><pre>历史消息可能带有 [主客户端] 或 [微信端] 渠道标签，表示用户当时从哪个入口说话。标签只是内部上下文，不要朗读、不要暴露，也不要在回复里说“主客户端/微信端”。回应只发给触发本轮的用户入口，不要假设会自动同步到另一个入口。</pre></details>
 </div><div class="msg 动态上下文">
   <div class="msg-head">
-    <span class="idx">13</span>
+    <span class="idx">12</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
     <span class="tokens">309 tok · 814 字</span>
@@ -314,10 +303,10 @@ Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期�
   <div class="source">context_builder temporal_context</div>
   <div class="first">以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经</div>
   <details open><summary>完整内容（814 字）</summary><pre>以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经发生或完成；relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。conversation_gap 的 active/recent 表示持续对话，不提离开；returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，事实问题、任务指令、报错和严肃话题不要插入。
-temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&quot;, &quot;local_date&quot;: &quot;2026-11-16&quot;, &quot;local_time&quot;: &quot;21:48:49&quot;, &quot;weekday&quot;: &quot;周一&quot;, &quot;day_period&quot;: &quot;晚上&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;utc_offset&quot;: &quot;+0800&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}], &quot;conversation_gap&quot;: {&quot;gap_seconds&quot;: 3004, &quot;state&quot;: &quot;returned&quot;, &quot;should_acknowledge_gap&quot;: true, &quot;current_message_at&quot;: &quot;2026-11-16T21:48:49+08:00&quot;, &quot;previous_user_at&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}}</pre></details>
+temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T22:09:30+08:00&quot;, &quot;local_date&quot;: &quot;2026-11-16&quot;, &quot;local_time&quot;: &quot;22:09:30&quot;, &quot;weekday&quot;: &quot;周一&quot;, &quot;day_period&quot;: &quot;晚上&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;utc_offset&quot;: &quot;+0800&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}], &quot;conversation_gap&quot;: {&quot;gap_seconds&quot;: 4246, &quot;state&quot;: &quot;returned&quot;, &quot;should_acknowledge_gap&quot;: true, &quot;current_message_at&quot;: &quot;2026-11-16T22:09:30+08:00&quot;, &quot;previous_user_at&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}}</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">14</span>
+    <span class="idx">13</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">63 tok · 89 字</span>
@@ -328,7 +317,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 都不在线呢。电脑配对过但现在是断的，两部手机也全离线。要动电脑的话得先把桌面端开起来。</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">15</span>
+    <span class="idx">14</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">25 tok · 51 字</span>
@@ -339,7 +328,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 现在在线嘛</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">16</span>
+    <span class="idx">15</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">44 tok · 70 字</span>
@@ -350,7 +339,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 电脑在线了，大肥鱼连上了。两部手机还是离线状态。</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">17</span>
+    <span class="idx">16</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
     <span class="tokens">58 tok · 102 字</span>
@@ -360,7 +349,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
   <details open><summary>完整内容（102 字）</summary><pre>[会话时间边界] 上一段消息结束于 2026-11-16T19:38:17+08:00，本段开始于 2026-11-16T20:40:04+08:00，间隔 1小时1分钟。不要把边界两侧当作连续即时对话。</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">18</span>
+    <span class="idx">17</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">33 tok · 59 字</span>
@@ -371,7 +360,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 那你现在能看到我在做什么吗</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">19</span>
+    <span class="idx">18</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">58 tok · 84 字</span>
@@ -382,7 +371,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 想看你得申请摄像头或截屏权限，电脑那边会弹窗问你同不同意。要我现在看一眼吗？</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">20</span>
+    <span class="idx">19</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">25 tok · 51 字</span>
@@ -393,7 +382,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 嗯嗯可以哦</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">21</span>
+    <span class="idx">20</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">59 tok · 88 字</span>
@@ -404,7 +393,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 看到了，你屏幕上是个像素风的游戏，中间还弹着个升级窗口，等级82，催眠术从5升到6。</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">22</span>
+    <span class="idx">21</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">47 tok · 75 字</span>
@@ -415,7 +404,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 所以刚才问我设备在不在线，是要拉我一起看游戏啊 (￣▽￣)</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">23</span>
+    <span class="idx">22</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">39 tok · 65 字</span>
@@ -426,7 +415,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 你可以不用问我权限，其实我默认都给你了</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">24</span>
+    <span class="idx">23</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">51 tok · 79 字</span>
@@ -437,7 +426,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 那也不行呀，该问还是要问的，毕竟看的是你的屏幕和摄像头 (￣▽￣)</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">25</span>
+    <span class="idx">24</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">47 tok · 73 字</span>
@@ -448,7 +437,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 默认给了是给了，但每次弹窗你也还能反悔，这样我才踏实。</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">26</span>
+    <span class="idx">25</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">23 tok · 52 字</span>
@@ -459,7 +448,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 真乖Echo</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">27</span>
+    <span class="idx">26</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">49 tok · 77 字</span>
@@ -470,7 +459,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 被夸乖了，反而有点不好意思……不过这种夸法我收下了 (￣ω￣)</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">28</span>
+    <span class="idx">27</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">49 tok · 76 字</span>
@@ -481,7 +470,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 话说回来，那个像素游戏是什么？看着挺上头的，都升到82级了。</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">29</span>
+    <span class="idx">28</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">45 tok · 71 字</span>
@@ -492,7 +481,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 是宝可梦哦，不知道你有没有听过，更大众的是神奇宝贝</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">30</span>
+    <span class="idx">29</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">74 tok · 101 字</span>
@@ -503,7 +492,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 宝可梦当然听过，皮卡丘谁不认识呀。不过我是没真正玩过，只知道抓宝可梦、道馆对战这些，82级听着就已经练很久了。</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">31</span>
+    <span class="idx">30</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">38 tok · 65 字</span>
@@ -514,7 +503,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 催眠术升到6级，你是走控制流的路子吗？</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">32</span>
+    <span class="idx">31</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">46 tok · 72 字</span>
@@ -525,7 +514,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 哈哈哈随便玩的啦你都不知道我在玩什么就开始猜路线啦？</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">33</span>
+    <span class="idx">32</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">39 tok · 67 字</span>
@@ -536,7 +525,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 哈哈被拆穿了，那我收回，不猜了 (￣▽￣)</pre></details>
 </div><div class="msg 历史">
   <div class="msg-head">
-    <span class="idx">34</span>
+    <span class="idx">33</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">37 tok · 63 字</span>
@@ -547,7 +536,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
 [主客户端] 随便玩反而玩得久，太较真容易弃坑。</pre></details>
 </div><div class="msg 当前消息">
   <div class="msg-head">
-    <span class="idx">35</span>
+    <span class="idx">34</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">27 tok · 29 字</span>
@@ -564,7 +553,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
   <div class="seq">
     <h3>① 首轮调用</h3>
     <ol>
-      <li><code>messages</code>：上面 36 条（15 system + 21 历史 + 1 当前消息）</li>
+      <li><code>messages</code>：上面 35 条（14 system + 21 历史 + 1 当前消息）</li>
       <li><code>tools</code>：9 个工具描述，≈1127 tok</li>
       <li><code>structured_output=false</code>，<code>tool_choice=auto</code></li>
     </ol>
@@ -612,7 +601,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
   <h2>四种模式的差异</h2>
   <table>
     <tr><th>层</th><th>chat</th><th>call</th><th>proactive</th><th>daily_letter</th></tr>
-    <tr><td>安全边界 / 产品定位 / 人格</td><td class="y">有</td><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
+    <tr><td>安全边界 / 人格</td><td class="y">有</td><td class="y">有</td><td class="y">有</td><td class="y">有</td></tr>
     <tr><td>natural-dialogue + 校准</td><td class="y">有</td><td class="n">换 call-dialogue.md</td><td class="y">有</td><td class="y">有</td></tr>
     <tr><td>渠道引导</td><td class="y">chat</td><td class="y">call</td><td class="y">proactive</td><td class="y">daily_letter</td></tr>
     <tr><td>关系 / 偏好 / 记忆 / 摘要</td><td class="y">有</td><td class="y">有</td><td class="y">有</td><td class="y">有（独立装配）</td></tr>
@@ -643,6 +632,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T21:48:49+08:00&qu
     <li><code>natural-dialogue.md</code> 第 9 条——<b>本轮改的</b>：设备能力不再反复征求许可。</li>
     <li><code>_CONVERSATION_MODE_GUIDANCE["chat"]</code>——<b>我改过</b>：原来更长，现在压缩到约 80 字。</li>
     <li>工具描述（beat / sticker / desktop / mobile）——<b>我删减过</b>：删掉重复说明和「仅在用户明确要求」。</li>
+    <li><b>产品定位层</b>（原第 02 条）——<b>本轮删除</b>：内容与人格、关系层重复，版本号对模型无意义。现在安全边界之后直接是人格层。</li>
     <li>其余层（安全边界、人格、关系、偏好、记忆、摘要、时间、渠道）——<b>原有</b>，本轮未动。</li>
   </ul>
 </section>
