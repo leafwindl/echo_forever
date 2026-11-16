@@ -116,6 +116,7 @@
     <button id="p-timeout" class="danger">模型超时</button>
     <button id="p-gatere" class="danger">交付重试</button>
     <button id="p-proactive">🌙 主动流程</button>
+    <button id="p-prompt">🔤 提示词拼接</button>
     <button id="reset">重置</button>
   </div>
 </header>
@@ -540,6 +541,9 @@ bind('p-toolfail','toolfail');
 bind('p-timeout','timeout');
 bind('p-gatere','gatere');
 bind('p-proactive','proactive');
+document.getElementById('p-prompt').addEventListener('click',()=>{
+  location.href='prompt-assembly-visual.html';
+});
 document.getElementById('reset').addEventListener('click',()=>{
   for(const b of document.querySelectorAll('.toolbar button')) b.classList.remove('active');
   clearAll();
