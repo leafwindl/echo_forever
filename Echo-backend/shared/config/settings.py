@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     timeout: int = Field(default=30, validation_alias="TIMEOUT")
     prompt_version: str = Field(default="echo-v1.1.0", validation_alias="PROMPT_VERSION")
     assistant_persona_version: str = Field(
-        default="echo-persona-v3",
+        default="echo-persona-v4",
         validation_alias="ASSISTANT_PERSONA_VERSION",
     )
     persona_prompt_max_tokens: int = Field(

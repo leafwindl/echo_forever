@@ -156,7 +156,6 @@ class PromptRendererTests(unittest.TestCase):
         relationship_text = render_relationship_guidance(self.relationship)
 
         self.assertIn("傲娇甜软", persona_text)
-        self.assertIn("简短不等于冷淡", persona_text)
         self.assertIn("共同经历、学习和复盘", persona_text)
         self.assertIn("关系阶段: familiar", relationship_text)
         self.assertIn("本轮是轻松或正向语境", relationship_text)
