@@ -77,7 +77,7 @@
   <div class="stat"><div class="n">32</div><div class="k">messages 总条数</div></div>
   <div class="stat"><div class="n">11</div><div class="k">system 消息</div></div>
   <div class="stat"><div class="n">21</div><div class="k">历史消息</div></div>
-  <div class="stat"><div class="n">≈3744</div><div class="k">messages 估算 token</div></div>
+  <div class="stat"><div class="n">≈3679</div><div class="k">messages 估算 token</div></div>
   <div class="stat"><div class="n">9</div><div class="k">工具描述</div></div>
   <div class="stat"><div class="n">≈1127</div><div class="k">工具描述 token</div></div>
 </div>
@@ -181,13 +181,12 @@
     <span class="idx">05</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
-    <span class="tokens">84 tok · 143 字</span>
+    <span class="tokens">19 tok · 57 字</span>
   </div>
   <div class="source">renderer.render_relationship_guidance</div>
   <div class="first">[RELATIONSHIP_GUIDANCE]</div>
-  <details open><summary>完整内容（143 字）</summary><pre>[RELATIONSHIP_GUIDANCE]
+  <details open><summary>完整内容（57 字）</summary><pre>[RELATIONSHIP_GUIDANCE]
 当前关系: 朋友
-关系推进: 关系可以继续发展，方向: 暧昧。只有用户明确同意关系推进时，才调用 propose_relationship 创建确认窗口；不要在文字里自行宣布关系已经改变。
 [/RELATIONSHIP_GUIDANCE]</pre></details>
 </div><div class="msg 动态上下文">
   <div class="msg-head">
@@ -261,7 +260,7 @@
   <div class="source">context_builder temporal_context</div>
   <div class="first">以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经</div>
   <details open><summary>完整内容（1666 字）</summary><pre>以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经发生或完成；relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。conversation_gap 的 active/recent 表示持续对话，不提离开；returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，事实问题、任务指令、报错和严肃话题不要插入。recent_messages 是最近消息的本地时间顺序，只用于理解对话节奏；历史正文不带时间戳，不要补写或复述时间。
-temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:24:34+08:00&quot;, &quot;local_date&quot;: &quot;2026-11-16&quot;, &quot;local_time&quot;: &quot;23:24:34&quot;, &quot;weekday&quot;: &quot;周一&quot;, &quot;day_period&quot;: &quot;深夜&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;utc_offset&quot;: &quot;+0800&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}], &quot;conversation_gap&quot;: {&quot;gap_seconds&quot;: 8749, &quot;state&quot;: &quot;returned&quot;, &quot;should_acknowledge_gap&quot;: true, &quot;current_message_at&quot;: &quot;2026-11-16T23:24:34+08:00&quot;, &quot;previous_user_at&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, &quot;recent_messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:20+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:25+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:25+08:00&quot;}, {&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:46+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:50+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:50+08:00&quot;}, {&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:12+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:17+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:17+08:00&quot;}, {&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}]}</pre></details>
+temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&quot;, &quot;local_date&quot;: &quot;2026-11-16&quot;, &quot;local_time&quot;: &quot;23:30:05&quot;, &quot;weekday&quot;: &quot;周一&quot;, &quot;day_period&quot;: &quot;深夜&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;utc_offset&quot;: &quot;+0800&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}], &quot;conversation_gap&quot;: {&quot;gap_seconds&quot;: 9080, &quot;state&quot;: &quot;returned&quot;, &quot;should_acknowledge_gap&quot;: true, &quot;current_message_at&quot;: &quot;2026-11-16T23:30:05+08:00&quot;, &quot;previous_user_at&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, &quot;recent_messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:20+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:25+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:25+08:00&quot;}, {&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:46+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:50+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:50+08:00&quot;}, {&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:12+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:17+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:17+08:00&quot;}, {&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}]}</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
     <span class="idx">11</span>
