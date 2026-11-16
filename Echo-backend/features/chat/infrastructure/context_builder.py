@@ -444,14 +444,10 @@ async def build_chat_context(
         "resolved_expressions 只表示时间范围，不代表事情已经完成。\ncall_time_context="
         if is_call
         else (
-            "以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。"
-            "resolved_expressions 只确定时间范围，不代表对应事情已经发生或完成；"
-            "relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。"
-            "conversation_gap 的 active/recent 表示持续对话，不提离开；"
-            "returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，"
-            "事实问题、任务指令、报错和严肃话题不要插入。"
-            "recent_messages 是最近消息的本地时间顺序，只用于理解对话节奏；"
-            "历史正文不带时间戳，不要补写或复述时间。\ntemporal_context="
+            "以下是服务端计算的时间上下文。不要机械报时；"
+            "resolved_expressions 只确定时间范围，不代表事情已经发生；"
+            "conversation_gap 表示对话是否连续，last_message_at 是上一条消息时间。\n"
+            "时间上下文="
         )
     )
     messages.append(
