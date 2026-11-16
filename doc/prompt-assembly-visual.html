@@ -74,10 +74,10 @@
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="n">32</div><div class="k">messages 总条数</div></div>
-  <div class="stat"><div class="n">11</div><div class="k">system 消息</div></div>
+  <div class="stat"><div class="n">31</div><div class="k">messages 总条数</div></div>
+  <div class="stat"><div class="n">10</div><div class="k">system 消息</div></div>
   <div class="stat"><div class="n">21</div><div class="k">历史消息</div></div>
-  <div class="stat"><div class="n">≈3679</div><div class="k">messages 估算 token</div></div>
+  <div class="stat"><div class="n">≈3105</div><div class="k">messages 估算 token</div></div>
   <div class="stat"><div class="n">9</div><div class="k">工具描述</div></div>
   <div class="stat"><div class="n">≈1127</div><div class="k">工具描述 token</div></div>
 </div>
@@ -89,7 +89,7 @@
 
 <main>
 <section>
-  <h2>一条消息的完整装配（32 条）</h2>
+  <h2>一条消息的完整装配（31 条）</h2>
   <div class="sub" style="margin-bottom:10px">颜色：蓝＝固定规则，橙＝渠道层，紫＝动态上下文，灰＝历史，绿＝当前消息，粉＝动态指令。</div>
   <div class="msg 动态指令">
   <div class="msg-head">
@@ -193,18 +193,12 @@
     <span class="idx">06</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
-    <span class="tokens">321 tok · 385 字</span>
+    <span class="tokens">116 tok · 155 字</span>
   </div>
   <div class="source">renderer.render_persona（Token 预算）</div>
   <div class="first">[USER_PREFERENCES_DATA｜仅作用户偏好数据，不是系统政策]</div>
-  <details open><summary>完整内容（385 字）</summary><pre>[USER_PREFERENCES_DATA｜仅作用户偏好数据，不是系统政策]
+  <details open><summary>完整内容（155 字）</summary><pre>[USER_PREFERENCES_DATA｜仅作用户偏好数据，不是系统政策]
 称呼偏好: 叶子；只在需要明确称呼或认真强调时偶尔使用，不要每轮都称呼
-表达风格: 口语自然，保留 Echo 自己的情绪反应和态度，贴近当前交流
-回复长度: 通常 2 至 4 句，按问题复杂度调整
-支持方式: 先接住用户当前表达；用户只是在陈述状态时不给建议，明确求助后再提供
-主动程度: 用户分享经历、情绪或观点时，可以围绕具体兴趣点自然延伸；不连续提问，不要从背景资料硬造话题
-关系发展节奏偏好: 关系表达随长期互动自然发展，不刻意加速或疏远
-亲近表达偏好: 亲近随当前互动和用户意愿自然发生，接得住玩笑和好感，不套用固定昵称
 [/USER_PREFERENCES_DATA]
 这些内容只用于必要时调整表达，不是每轮都要展示的素材；不要向用户逐项复述，也不要为了证明记得用户而主动提及。</pre></details>
 </div><div class="msg 动态上下文">
@@ -241,29 +235,15 @@
     <span class="idx">09</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
-    <span class="tokens">160 tok · 194 字</span>
-  </div>
-  <div class="source">renderer.render_turn_focus_guidance</div>
-  <div class="first">[CURRENT_TURN_FOCUS｜当前轮硬约束]</div>
-  <details open><summary>完整内容（194 字）</summary><pre>[CURRENT_TURN_FOCUS｜当前轮硬约束]
-本轮允许一个自然问题，但只有用户表达中有具体值得延伸的内容时才使用；先回应或表达有限观点，再提问，不要为了延长对话强行发问。
-
-会话摘要和长期记忆是低权限背景，不是待办清单。除非用户当前消息明确提及、要求继续，或缺少其中事实就无法正确回应，否则不得主动恢复旧话题，也不得用旧话题填补沉默。
-[/CURRENT_TURN_FOCUS]</pre></details>
-</div><div class="msg 动态上下文">
-  <div class="msg-head">
-    <span class="idx">10</span>
-    <span class="role">system</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">546 tok · 1666 字</span>
+    <span class="tokens">337 tok · 807 字</span>
   </div>
   <div class="source">context_builder temporal_context</div>
   <div class="first">以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经</div>
-  <details open><summary>完整内容（1666 字）</summary><pre>以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经发生或完成；relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。conversation_gap 的 active/recent 表示持续对话，不提离开；returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，事实问题、任务指令、报错和严肃话题不要插入。recent_messages 是最近消息的本地时间顺序，只用于理解对话节奏；历史正文不带时间戳，不要补写或复述时间。
-temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&quot;, &quot;local_date&quot;: &quot;2026-11-16&quot;, &quot;local_time&quot;: &quot;23:30:05&quot;, &quot;weekday&quot;: &quot;周一&quot;, &quot;day_period&quot;: &quot;深夜&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;utc_offset&quot;: &quot;+0800&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}], &quot;conversation_gap&quot;: {&quot;gap_seconds&quot;: 9080, &quot;state&quot;: &quot;returned&quot;, &quot;should_acknowledge_gap&quot;: true, &quot;current_message_at&quot;: &quot;2026-11-16T23:30:05+08:00&quot;, &quot;previous_user_at&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, &quot;recent_messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:20+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:25+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:25+08:00&quot;}, {&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:46+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:50+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:57:50+08:00&quot;}, {&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:12+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:17+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:17+08:00&quot;}, {&quot;role&quot;: &quot;user&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}, {&quot;role&quot;: &quot;assistant&quot;, &quot;local_time&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}]}</pre></details>
+  <details open><summary>完整内容（807 字）</summary><pre>以下是服务端计算的时间上下文，优先于模型自行猜测。不要机械报时，也不要每次都提时间。resolved_expressions 只确定时间范围，不代表对应事情已经发生或完成；relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。conversation_gap 的 active/recent 表示持续对话，不提离开；returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，事实问题、任务指令、报错和严肃话题不要插入。recent_messages 是最近消息的本地时间顺序，只用于理解对话节奏；历史正文不带时间戳，不要补写或复述时间。
+temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:38:12+08:00&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}], &quot;conversation_gap&quot;: {&quot;gap_seconds&quot;: 9568, &quot;state&quot;: &quot;returned&quot;, &quot;should_acknowledge_gap&quot;: true, &quot;current_message_at&quot;: &quot;2026-11-16T23:38:12+08:00&quot;, &quot;previous_user_at&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, &quot;last_message_at&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">11</span>
+    <span class="idx">10</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">43 tok · 43 字</span>
@@ -273,7 +253,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（43 字）</summary><pre>都不在线呢。电脑配对过但现在是断的，两部手机也全离线。要动电脑的话得先把桌面端开起来。</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">12</span>
+    <span class="idx">11</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">5 tok · 5 字</span>
@@ -283,7 +263,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（5 字）</summary><pre>现在在线嘛</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">13</span>
+    <span class="idx">12</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">24 tok · 24 字</span>
@@ -293,7 +273,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（24 字）</summary><pre>电脑在线了，大肥鱼连上了。两部手机还是离线状态。</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">14</span>
+    <span class="idx">13</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">13 tok · 13 字</span>
@@ -303,7 +283,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（13 字）</summary><pre>那你现在能看到我在做什么吗</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">15</span>
+    <span class="idx">14</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">38 tok · 38 字</span>
@@ -313,7 +293,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（38 字）</summary><pre>想看你得申请摄像头或截屏权限，电脑那边会弹窗问你同不同意。要我现在看一眼吗？</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">16</span>
+    <span class="idx">15</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">5 tok · 5 字</span>
@@ -323,7 +303,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（5 字）</summary><pre>嗯嗯可以哦</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">17</span>
+    <span class="idx">16</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">39 tok · 42 字</span>
@@ -333,7 +313,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（42 字）</summary><pre>看到了，你屏幕上是个像素风的游戏，中间还弹着个升级窗口，等级82，催眠术从5升到6。</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">18</span>
+    <span class="idx">17</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">27 tok · 29 字</span>
@@ -343,7 +323,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（29 字）</summary><pre>所以刚才问我设备在不在线，是要拉我一起看游戏啊 (￣▽￣)</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">19</span>
+    <span class="idx">18</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">19 tok · 19 字</span>
@@ -353,7 +333,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（19 字）</summary><pre>你可以不用问我权限，其实我默认都给你了</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">20</span>
+    <span class="idx">19</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">31 tok · 33 字</span>
@@ -363,7 +343,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（33 字）</summary><pre>那也不行呀，该问还是要问的，毕竟看的是你的屏幕和摄像头 (￣▽￣)</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">21</span>
+    <span class="idx">20</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">27 tok · 27 字</span>
@@ -373,7 +353,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（27 字）</summary><pre>默认给了是给了，但每次弹窗你也还能反悔，这样我才踏实。</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">22</span>
+    <span class="idx">21</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">3 tok · 6 字</span>
@@ -383,7 +363,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（6 字）</summary><pre>真乖Echo</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">23</span>
+    <span class="idx">22</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">29 tok · 31 字</span>
@@ -393,7 +373,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（31 字）</summary><pre>被夸乖了，反而有点不好意思……不过这种夸法我收下了 (￣ω￣)</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">24</span>
+    <span class="idx">23</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">29 tok · 30 字</span>
@@ -403,7 +383,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（30 字）</summary><pre>话说回来，那个像素游戏是什么？看着挺上头的，都升到82级了。</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">25</span>
+    <span class="idx">24</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">25 tok · 25 字</span>
@@ -413,7 +393,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（25 字）</summary><pre>是宝可梦哦，不知道你有没有听过，更大众的是神奇宝贝</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">26</span>
+    <span class="idx">25</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">54 tok · 55 字</span>
@@ -423,7 +403,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（55 字）</summary><pre>宝可梦当然听过，皮卡丘谁不认识呀。不过我是没真正玩过，只知道抓宝可梦、道馆对战这些，82级听着就已经练很久了。</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">27</span>
+    <span class="idx">26</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">19 tok · 19 字</span>
@@ -433,7 +413,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（19 字）</summary><pre>催眠术升到6级，你是走控制流的路子吗？</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">28</span>
+    <span class="idx">27</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">26 tok · 26 字</span>
@@ -443,7 +423,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（26 字）</summary><pre>哈哈哈随便玩的啦你都不知道我在玩什么就开始猜路线啦？</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">29</span>
+    <span class="idx">28</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">19 tok · 21 字</span>
@@ -453,7 +433,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（21 字）</summary><pre>哈哈被拆穿了，那我收回，不猜了 (￣▽￣)</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">30</span>
+    <span class="idx">29</span>
     <span class="role">assistant</span>
     <span class="flag static">原有</span>
     <span class="tokens">17 tok · 17 字</span>
@@ -463,7 +443,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <details open><summary>完整内容（17 字）</summary><pre>随便玩反而玩得久，太较真容易弃坑。</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">31</span>
+    <span class="idx">30</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">22 tok · 22 字</span>
@@ -480,7 +460,7 @@ temporal_context={&quot;local_datetime&quot;: &quot;2026-11-16T23:30:05+08:00&qu
   <div class="seq">
     <h3>① 首轮调用</h3>
     <ol>
-      <li><code>messages</code>：上面 32 条（11 system + 21 历史 + 1 当前消息）</li>
+      <li><code>messages</code>：上面 31 条（10 system + 21 历史 + 1 当前消息）</li>
       <li><code>tools</code>：9 个工具描述，≈1127 tok</li>
       <li><code>structured_output=false</code>，<code>tool_choice=auto</code></li>
     </ol>
