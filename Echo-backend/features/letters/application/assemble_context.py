@@ -7,8 +7,9 @@ from datetime import UTC, date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from features.assistant_persona.public import get_assistant_persona
 from shared.prompting.renderer import render_prompt_layers
+
+from features.assistant_persona.public import get_assistant_persona
 from features.letters.domain.repositories import LetterRepository
 from features.memory.public import list_memories, retrieve_relevant_memories
 from features.persona.public import get_persona
@@ -20,8 +21,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class LetterContextConfig:
-    product_identity: str
-    prompt_version: str
     assistant_persona_version: str
     persona_maximum_tokens: int
     memory_maximum_tokens: int
@@ -101,11 +100,9 @@ class LetterContextAssembler:
         )
         snapshot["study_focus"] = self._focus_snapshot(focus_sessions)
         messages = render_prompt_layers(
-            product_identity=self.config.product_identity,
             persona=persona,
             long_term_memories=memories,
             conversation_summary="",
-            prompt_version=self.config.prompt_version,
             persona_maximum_tokens=self.config.persona_maximum_tokens,
             memory_maximum_tokens=self.config.memory_maximum_tokens,
             summary_maximum_tokens=self.config.summary_maximum_tokens,

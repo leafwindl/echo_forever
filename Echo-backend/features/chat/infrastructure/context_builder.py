@@ -393,11 +393,9 @@ async def build_chat_context(
         relationship = None
 
     messages: list[dict[str, str]] = render_prompt_layers(
-        product_identity=settings.system_prompt,
         persona=persona,
         long_term_memories=long_term_memories,
         conversation_summary=summary_text,
-        prompt_version=settings.prompt_version,
         persona_maximum_tokens=settings.persona_prompt_max_tokens,
         memory_maximum_tokens=settings.memory_prompt_max_tokens,
         summary_maximum_tokens=settings.summary_prompt_max_tokens,
@@ -465,11 +463,9 @@ async def build_chat_context(
     proactive_planner_input: dict[str, object] = {}
     if conversation_mode == "proactive":
         writer_base_messages = render_prompt_layers(
-            product_identity=settings.system_prompt,
             persona=persona,
             long_term_memories=[],
             conversation_summary="",
-            prompt_version=settings.prompt_version,
             persona_maximum_tokens=settings.persona_prompt_max_tokens,
             memory_maximum_tokens=settings.memory_prompt_max_tokens,
             summary_maximum_tokens=settings.summary_prompt_max_tokens,

@@ -80,8 +80,6 @@ def get_letter_image_generator() -> GenerateLetterImage:
 def get_letter_generator() -> GenerateDueLetters:
     repository = get_letter_repository()
     context_config = LetterContextConfig(
-        product_identity=settings.system_prompt,
-        prompt_version=settings.prompt_version,
         assistant_persona_version=settings.assistant_persona_version,
         persona_maximum_tokens=settings.persona_prompt_max_tokens,
         memory_maximum_tokens=settings.memory_prompt_max_tokens,

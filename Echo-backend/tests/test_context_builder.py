@@ -162,11 +162,9 @@ class ContextBuilderTests(unittest.TestCase):
 
     def test_call_prompt_uses_compact_dialogue_policy(self):
         messages = render_prompt_layers(
-            product_identity="Echo",
             persona=None,
             long_term_memories=[],
             conversation_summary="",
-            prompt_version="test",
             persona_maximum_tokens=400,
             memory_maximum_tokens=800,
             summary_maximum_tokens=800,

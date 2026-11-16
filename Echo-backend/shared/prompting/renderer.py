@@ -341,11 +341,9 @@ def render_turn_focus_guidance(
 
 def render_prompt_layers(
     *,
-    product_identity: str,
     persona: UserPreferences | None,
     long_term_memories: Sequence[dict[str, object]],
     conversation_summary: str,
-    prompt_version: str,
     persona_maximum_tokens: int,
     memory_maximum_tokens: int,
     summary_maximum_tokens: int,
@@ -356,10 +354,6 @@ def render_prompt_layers(
     """按固定优先级装配系统消息；历史和当前消息由 Context Builder 追加。"""
     messages = [
         {"role": "system", "content": BASELINE_SAFETY_POLICY},
-        {
-            "role": "system",
-            "content": f"[Echo 产品定位｜Prompt {prompt_version}]\n{product_identity.strip()}",
-        },
     ]
     if assistant_persona is not None:
         messages.append({"role": "system", "content": render_assistant_persona(assistant_persona)})

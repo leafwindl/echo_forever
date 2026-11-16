@@ -46,11 +46,9 @@ class PromptRendererTests(unittest.TestCase):
 
     def test_layers_keep_safety_first_and_data_separated(self):
         messages = render_prompt_layers(
-            product_identity="Echo 是 AI 陪伴伙伴。",
             persona=self.persona,
             long_term_memories=[{"memory_type": "preference", "content": "用户喜欢散步"}],
             conversation_summary="用户最近在准备考试",
-            prompt_version="echo-v0.3.0",
             persona_maximum_tokens=400,
             memory_maximum_tokens=800,
             summary_maximum_tokens=800,
@@ -59,15 +57,14 @@ class PromptRendererTests(unittest.TestCase):
         )
 
         self.assertEqual(BASELINE_SAFETY_POLICY, messages[0]["content"])
-        self.assertIn("Echo 产品定位", messages[1]["content"])
-        self.assertIn("ASSISTANT_PERSONA", messages[2]["content"])
-        self.assertEqual(NATURAL_DIALOGUE_POLICY, messages[3]["content"])
-        self.assertEqual(RESPONSE_CALIBRATION_POLICY, messages[4]["content"])
-        self.assertIn("模式: chat", messages[5]["content"])
-        self.assertIn("RELATIONSHIP_GUIDANCE", messages[6]["content"])
-        self.assertIn("USER_PREFERENCES_DATA", messages[7]["content"])
-        self.assertIn("LONG_TERM_MEMORY_DATA", messages[8]["content"])
-        self.assertIn("CONVERSATION_SUMMARY_DATA", messages[9]["content"])
+        self.assertIn("ASSISTANT_PERSONA", messages[1]["content"])
+        self.assertEqual(NATURAL_DIALOGUE_POLICY, messages[2]["content"])
+        self.assertEqual(RESPONSE_CALIBRATION_POLICY, messages[3]["content"])
+        self.assertIn("模式: chat", messages[4]["content"])
+        self.assertIn("RELATIONSHIP_GUIDANCE", messages[5]["content"])
+        self.assertIn("USER_PREFERENCES_DATA", messages[6]["content"])
+        self.assertIn("LONG_TERM_MEMORY_DATA", messages[7]["content"])
+        self.assertIn("CONVERSATION_SUMMARY_DATA", messages[8]["content"])
 
     def test_call_mode_is_oral_without_changing_persona_layers(self):
         rendered = render_conversation_mode_guidance("call")
@@ -206,11 +203,9 @@ class PromptRendererTests(unittest.TestCase):
 
     def test_memory_and_summary_are_truncated_to_their_data_budgets(self):
         messages = render_prompt_layers(
-            product_identity="Echo",
             persona=None,
             long_term_memories=[{"memory_type": "event", "content": "记" * 1000}],
             conversation_summary="摘" * 1000,
-            prompt_version="echo-v0.3.0",
             persona_maximum_tokens=400,
             memory_maximum_tokens=100,
             summary_maximum_tokens=100,

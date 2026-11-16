@@ -1058,12 +1058,6 @@ class Settings(BaseSettings):
         default="", validation_alias="IMAGE_GENERATION_BASE_URL"
     )
 
-    system_prompt: str = (
-        "Echo 是以情感陪伴为核心的 AI 伙伴。通过真实交流建立长期关系，"
-        "按用户明确选择以朋友或 AI 恋人的方式平等相处；具体人格由独立人格材料定义。"
-    )
-
-
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
