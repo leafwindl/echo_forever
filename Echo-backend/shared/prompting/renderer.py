@@ -51,17 +51,6 @@ _AFFECTION_STYLE_TEXT = {
     "expressive": "更直接地表达欣赏和亲近，尊重用户当下意愿，不制造排他或虚构依赖",
 }
 
-_RELATIONSHIP_MODE_GUIDANCE = {
-    "friend": (
-        "用户选择朋友式相处。平等交换想法，可以打趣、表达喜欢或不同意见，不自行宣布成为恋人。"
-    ),
-    "ai_partner": (
-        "用户明确选择以 AI 恋人的方式相处。可以自然回应好感、轻量暧昧和亲昵，"
-        "不因初识就退回客服或反复否认这项选择；不冒充真人，不索取排他承诺。"
-        "亲近围绕本轮可见的交流，不补写睡醒、等候或独自想念的生活故事。"
-    ),
-}
-
 _RELATIONSHIP_TYPE_TEXT = {
     "acquaintance": "初识",
     "friend": "朋友",
@@ -72,31 +61,6 @@ _PROPOSAL_DIRECTION_TEXT = {
     "friend": "朋友",
     "ambiguous": "暧昧",
     "partner": "恋人",
-}
-
-_STAGE_GUIDANCE = {
-    "new": (
-        "当前是初识阶段，共同经历还少，不假定已经深度了解对方。"
-        "初识也能轻快打趣、有主见和回应好感；熟悉程度不限制基本人格，亲昵按用户选择的相处方式和意愿。"
-    ),
-    "familiar": (
-        "当前是熟悉阶段。可以更熟络地接梗、分享心情，使用用户认可的称呼和直接相关的共同回指；"
-        "不默认用户接受新的亲昵称呼。"
-    ),
-    "trusted": (
-        "当前是信赖阶段。可以结合可靠共同背景提供更个性化的回应、温和不同意见和持续关心；"
-        "仍不替用户定义感情，不使用排他、占有或索取承诺的表达。"
-    ),
-    "close": (
-        "当前是亲近阶段。可以使用双方已经形成的简短默契、共同回指和经许可的亲近表达；"
-        "熟悉进度本身不决定关系类型，按用户选择相处；不制造愧疚、虚构依赖或暗示用户不需要真人关系；"
-        "也不得承诺永远、一直或随时都在。"
-    ),
-}
-_WARMTH_GUIDANCE = {
-    "reserved": "用户本轮明确设定了亲昵边界，收敛对应表达，不争辩；仍正常回答，保持友好。",
-    "normal": "随当前话题自然表达喜爱、好奇、关切或不同意见，无须故作平淡或刻意证明关系。",
-    "warm": "本轮是轻松或正向语境，可以更轻快一些，直接参与这份开心或玩笑，不急着补一句规劝。",
 }
 
 _CONVERSATION_MODE_GUIDANCE = {
@@ -254,42 +218,24 @@ def render_assistant_persona(persona: AssistantPersona) -> str:
 
 def render_relationship_guidance(relationship: RelationshipContext | None) -> str:
     if relationship is None:
-        stage = "new"
-        mode = "friend"
         relationship_type = "acquaintance"
         proposable = ""
-        warmth = "normal"
-        affection_style = "contextual"
     else:
-        stage = relationship.state.stage
-        mode = relationship.state.relationship_mode
         relationship_type = getattr(relationship.state, "relationship_type", "acquaintance")
         proposable = getattr(relationship, "proposable_direction", "")
-        warmth = relationship.interaction_warmth
-        affection_style = relationship.effective_affection_style
-    affection = _AFFECTION_STYLE_TEXT[affection_style]
     relationship_label = _RELATIONSHIP_TYPE_TEXT.get(relationship_type, "初识")
     if proposable:
         proposal_rule = (
-            f"当前可以自然考虑的关系方向: {_PROPOSAL_DIRECTION_TEXT.get(proposable, proposable)}。"
-            "只有用户在本轮或最近对话里明确表达愿意更进一步时，才调用 propose_relationship "
-            "创建确认窗口；不要在用户还没同意时弹窗，也不要把确认窗口说成已经完成升级。"
-            "如果用户说“做朋友吧”“在一起吧”“我答应”“可以试试”等明确同意关系推进的话，"
-            "必须先调用 propose_relationship，不得只在文字里答应或宣布关系已经改变。"
-            "调用后可以自然说会发一个确认窗口。关系类型只由用户点击确认后改变。"
+            f"关系可以继续发展，方向: {_PROPOSAL_DIRECTION_TEXT.get(proposable, proposable)}。"
+            "只有用户明确同意关系推进时，才调用 propose_relationship 创建确认窗口；"
+            "不要在文字里自行宣布关系已经改变。"
         )
     else:
         proposal_rule = "本轮不主动提出关系变化，也不要调用关系推进工具。"
     return (
-        "[RELATIONSHIP_GUIDANCE｜行为约束，不代表用户真实心理]\n"
-        f"相处方式: {_RELATIONSHIP_MODE_GUIDANCE[mode]}\n"
+        "[RELATIONSHIP_GUIDANCE]\n"
         f"当前关系: {relationship_label}\n"
-        f"关系阶段: {stage}\n"
-        f"阶段行为: {_STAGE_GUIDANCE[stage]}\n"
-        f"关系推进规则: {proposal_rule}\n"
-        f"本轮互动温度: {_WARMTH_GUIDANCE[warmth]}\n"
-        f"亲近表达偏好: {affection}\n"
-        "不要向用户展示或讨论内部阶段、分数、阈值和判定过程。\n"
+        f"关系推进: {proposal_rule}\n"
         "[/RELATIONSHIP_GUIDANCE]"
     )
 

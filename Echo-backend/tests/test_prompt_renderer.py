@@ -142,20 +142,22 @@ class PromptRendererTests(unittest.TestCase):
 
         self.assertIn("傲娇甜软", persona_text)
         self.assertIn("共同经历、学习和复盘", persona_text)
-        self.assertIn("关系阶段: familiar", relationship_text)
-        self.assertIn("本轮是轻松或正向语境", relationship_text)
+        self.assertIn("当前关系: 初识", relationship_text)
+        self.assertIn("关系推进:", relationship_text)
         self.assertNotIn("score", relationship_text.lower())
 
-    def test_selected_partner_mode_and_new_stage_are_both_preserved(self):
+    def test_relationship_guidance_keeps_only_current_relationship(self):
         relationship = RelationshipContext(
             state=RelationshipState(user_id="user-a", relationship_mode="ai_partner"),
-            interaction_warmth="normal", effective_affection_style="contextual",
+            interaction_warmth="normal",
+            effective_affection_style="contextual",
         )
         rendered = render_relationship_guidance(relationship)
-        self.assertIn("用户明确选择以 AI 恋人", rendered)
-        self.assertIn("关系阶段: new", rendered)
-        self.assertNotIn("普通朋友刚认识", rendered)
-        self.assertIn("初识也能轻快打趣", rendered)
+
+        self.assertIn("当前关系: 初识", rendered)
+        self.assertIn("关系推进: 本轮不主动提出关系变化", rendered)
+        self.assertNotIn("相处方式", rendered)
+        self.assertNotIn("关系阶段", rendered)
 
     def test_persona_injection_text_cannot_forge_renderer_boundary(self):
         persona = build_user_preferences(
