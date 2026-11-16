@@ -73,7 +73,7 @@ class ContextBuilderTests(unittest.TestCase):
             "2026-08-10T11:02:03+08:00",
         )
 
-    def test_history_keeps_local_timestamps_and_inserts_session_boundary(self):
+    def test_history_is_plain_text_and_times_move_to_temporal_context(self):
         rows = [
             {
                 "message_id": "msg_1",
@@ -97,11 +97,11 @@ class ContextBuilderTests(unittest.TestCase):
 
         messages = _render_timestamped_history(rows, {}, "Asia/Shanghai")
 
-        self.assertEqual(len(messages), 4)
-        self.assertIn("2026-08-10T11:02:03+08:00 周一 上午", messages[0]["content"])
-        self.assertEqual(messages[2]["role"], "system")
-        self.assertIn("间隔 3小时35分钟", messages[2]["content"])
-        self.assertIn("2026-08-10T14:37:36+08:00 周一 下午", messages[3]["content"])
+        self.assertEqual(len(messages), 3)
+        self.assertNotIn("消息时间", messages[0]["content"])
+        self.assertNotIn("会话时间边界", str(messages))
+        self.assertEqual(messages[0]["local_time"], "2026-08-10T11:02:03+08:00")
+        self.assertEqual(messages[2]["local_time"], "2026-08-10T14:37:36+08:00")
 
     def test_call_history_keeps_only_plain_recent_dialogue(self):
         history = [

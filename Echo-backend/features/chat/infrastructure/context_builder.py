@@ -330,6 +330,16 @@ async def build_chat_context(
             timezone_name=timezone_name,
         )
     )
+    history_times: list[dict[str, str]] = []
+    cleaned_history: list[dict[str, str]] = []
+    for message in history:
+        local_time = message.pop("local_time", None)
+        cleaned_history.append(message)
+        if local_time:
+            history_times.append(
+                {"role": str(message.get("role") or ""), "local_time": str(local_time)}
+            )
+    history = cleaned_history
     if is_call:
         history = _build_call_history(history)
     pause_followup_questions = should_pause_followup_questions(history, user_message)
@@ -348,6 +358,8 @@ async def build_chat_context(
         user_message=user_message,
         conversation_timing=conversation_timing,
     )
+    if history_times:
+        temporal_context["recent_messages"] = history_times[-12:]
     prompt_temporal_context = (
         _build_call_temporal_context(temporal_context) if is_call else temporal_context
     )
@@ -445,7 +457,9 @@ async def build_chat_context(
             "relation_to_now=current/future 时尤其不能用已经完成的口吻追问结果。"
             "conversation_gap 的 active/recent 表示持续对话，不提离开；"
             "returned/long_absence 只在轻松闲聊、问候或分享近况时允许自然问候一次，"
-            "事实问题、任务指令、报错和严肃话题不要插入。\ntemporal_context="
+            "事实问题、任务指令、报错和严肃话题不要插入。"
+            "recent_messages 是最近消息的本地时间顺序，只用于理解对话节奏；"
+            "历史正文不带时间戳，不要补写或复述时间。\ntemporal_context="
         )
     )
     messages.append(

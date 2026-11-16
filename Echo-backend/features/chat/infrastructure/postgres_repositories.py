@@ -15,7 +15,6 @@ from features.chat.domain.entities import (
     ChatHistoryMessage,
     ExternalAssistantDelivery,
 )
-from features.chat.domain.temporal_context import day_period, format_gap_seconds, weekday_name
 from features.stickers.public import resolve_sticker_asset_url
 
 
@@ -598,27 +597,11 @@ def _render_timestamped_history(
         zone = ZoneInfo("UTC")
 
     messages: list[dict[str, str]] = []
-    previous_at: datetime | None = None
     for row in rows:
         created_at = row["created_at"]
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
         local_created_at = created_at.astimezone(zone)
-        if previous_at is not None:
-            gap_seconds = max(int((created_at - previous_at).total_seconds()), 0)
-            if gap_seconds >= settings.conversation_returned_min_seconds:
-                previous_local = previous_at.astimezone(zone)
-                messages.append(
-                    {
-                        "role": "system",
-                        "content": (
-                            "[会话时间边界] 上一段消息结束于 "
-                            f"{previous_local.isoformat(timespec='seconds')}，本段开始于 "
-                            f"{local_created_at.isoformat(timespec='seconds')}，间隔 "
-                            f"{format_gap_seconds(gap_seconds)}。不要把边界两侧当作连续即时对话。"
-                        ),
-                    }
-                )
         rendered = _render_message_content(
             str(row["content"]),
             attachments.get(str(row["message_id"] or ""), ()),
@@ -629,14 +612,10 @@ def _render_timestamped_history(
         messages.append(
             {
                 "role": str(row["role"]),
-                "content": (
-                    f"[消息时间 {local_created_at.isoformat(timespec='seconds')} "
-                    f"{weekday_name(local_created_at)} {day_period(local_created_at)}]\n"
-                    f"{rendered}"
-                ),
+                "content": rendered,
+                "local_time": local_created_at.isoformat(timespec="seconds"),
             }
         )
-        previous_at = created_at
     return messages
 
 
