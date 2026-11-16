@@ -57,11 +57,6 @@ _RELATIONSHIP_TYPE_TEXT = {
     "ambiguous": "暧昧",
     "partner": "恋人",
 }
-_PROPOSAL_DIRECTION_TEXT = {
-    "friend": "朋友",
-    "ambiguous": "暧昧",
-    "partner": "恋人",
-}
 
 _CONVERSATION_MODE_GUIDANCE = {
     "chat": (
@@ -217,25 +212,15 @@ def render_assistant_persona(persona: AssistantPersona) -> str:
 
 
 def render_relationship_guidance(relationship: RelationshipContext | None) -> str:
-    if relationship is None:
-        relationship_type = "acquaintance"
-        proposable = ""
-    else:
-        relationship_type = getattr(relationship.state, "relationship_type", "acquaintance")
-        proposable = getattr(relationship, "proposable_direction", "")
+    relationship_type = (
+        "acquaintance"
+        if relationship is None
+        else getattr(relationship.state, "relationship_type", "acquaintance")
+    )
     relationship_label = _RELATIONSHIP_TYPE_TEXT.get(relationship_type, "初识")
-    if proposable:
-        proposal_rule = (
-            f"关系可以继续发展，方向: {_PROPOSAL_DIRECTION_TEXT.get(proposable, proposable)}。"
-            "只有用户明确同意关系推进时，才调用 propose_relationship 创建确认窗口；"
-            "不要在文字里自行宣布关系已经改变。"
-        )
-    else:
-        proposal_rule = "本轮不主动提出关系变化，也不要调用关系推进工具。"
     return (
         "[RELATIONSHIP_GUIDANCE]\n"
         f"当前关系: {relationship_label}\n"
-        f"关系推进: {proposal_rule}\n"
         "[/RELATIONSHIP_GUIDANCE]"
     )
 
