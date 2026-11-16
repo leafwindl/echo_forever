@@ -6,20 +6,10 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from features.agent.domain.delivery import sanitize_time_metadata
 from features.agent.domain.entities import AgentToolResult, AgentToolStatus
-
-CHAT_DEEP_TALK_INSTRUCTION = (
-    "这一轮用户在认真谈心或求助：用 1 条完整长文本（约 300-600 字）回复，"
-    "先接住感受，再给具体、不说教的陪伴和建议。"
-)
-
-_DEEP_TALK_PATTERN = re.compile(
-    r"压力|难过|焦虑|失眠|睡不着|孤独|委屈|崩溃|心事|难受|抑郁|想聊聊|认真聊|陪我聊"
-)
 
 _CALL_TERMINAL_TOOLS = frozenset(
     {"search_web", "create_chat_schedule", "cancel_chat_schedule"}
@@ -128,6 +118,7 @@ class TurnPolicy:
         sticker_intent: str = "",
         call_route_instruction: str = "",
     ) -> list[dict]:
+        del message  # 触发语只用于路由，不再影响提示词内容
         if conversation_mode == "call":
             sticker_rule = "当前为语音通话，不发送图片。"
         elif conversation_mode == "daily_letter":
@@ -196,8 +187,6 @@ class TurnPolicy:
                     ),
                 },
             )
-        if conversation_mode == "chat" and _DEEP_TALK_PATTERN.search(message or ""):
-            result.append({"role": "system", "content": CHAT_DEEP_TALK_INSTRUCTION})
         return result
 
     @staticmethod
