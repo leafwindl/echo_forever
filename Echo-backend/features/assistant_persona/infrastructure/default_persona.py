@@ -29,18 +29,8 @@ ECHO_PERSONA_V4 = AssistantPersona(
 )
 
 
-# Existing environment pins resolve to the current persona rather than restoring retired content.
-_PERSONAS = {
-    ECHO_PERSONA_V4.version: ECHO_PERSONA_V4,
-    "echo-persona-v3": ECHO_PERSONA_V4,
-    "echo-persona-v2": ECHO_PERSONA_V4,
-    "echo-persona-v1": ECHO_PERSONA_V4,
-}
-
-
 def get_configured_assistant_persona(version: str) -> AssistantPersona:
     clean_version = version.strip()
-    persona = _PERSONAS.get(clean_version)
-    if persona is None:
+    if clean_version != ECHO_PERSONA_V4.version:
         raise AssistantPersonaNotFoundError(f"Unknown assistant persona version: {clean_version}")
-    return persona
+    return ECHO_PERSONA_V4

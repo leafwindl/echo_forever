@@ -37,7 +37,7 @@ class PromptRendererTests(unittest.TestCase):
             is_customized=True,
             onboarding_completed=True,
         )
-        self.assistant_persona = get_assistant_persona("echo-persona-v1")
+        self.assistant_persona = get_assistant_persona("echo-persona-v4")
         self.relationship = RelationshipContext(
             state=RelationshipState(user_id="user-a", stage="familiar"),
             interaction_warmth="warm",

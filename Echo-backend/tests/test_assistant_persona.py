@@ -25,19 +25,10 @@ class AssistantPersonaTests(unittest.TestCase):
         self.assertTrue(any("人类生活史" in item for item in persona.forbidden_claims))
         self.assertEqual(persona.dialogue_examples, ())
 
-    def test_existing_environment_pin_cannot_restore_the_old_identity(self):
-        self.assertEqual(
-            get_assistant_persona("echo-persona-v2"),
-            get_assistant_persona("echo-persona-v1"),
-        )
-        self.assertEqual(
-            get_assistant_persona("echo-persona-v3"),
-            get_assistant_persona("echo-persona-v4"),
-        )
-
     def test_unknown_persona_version_is_rejected(self):
-        with self.assertRaises(AssistantPersonaNotFoundError):
-            get_assistant_persona("missing-persona")
+        for version in ("missing-persona", "echo-persona-v3", "echo-persona-v2"):
+            with self.assertRaises(AssistantPersonaNotFoundError):
+                get_assistant_persona(version)
 
 
 if __name__ == "__main__":
