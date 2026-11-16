@@ -26,7 +26,7 @@ cd desktop_node
 python -m echo_desktop pair --code 123456 --server https://api.echoaiforever.cn
 ```
 
-之后双击 `desktop_node/start.cmd` 打开客户端，或：
+之后双击 `desktop_node/start-client.cmd` 打开**可视化客户端**（推荐），或：
 
 ```powershell
 python -m echo_desktop client
@@ -39,6 +39,46 @@ python -m echo_desktop run
 ```
 
 本地开发时把 `--server` 换成 `http://127.0.0.1:8000`。
+
+## 可视化客户端
+
+`start-client.cmd` 用 `pythonw` 打开，没有控制台窗口。客户端有两个页：
+
+- **运行状态**：连接状态、节点 ID、能力、最近操作、实时日志、启动/停止连接
+- **设置**：
+  - 服务器地址（生产 / 本地）
+  - 电脑名称（显示在 App 里）
+  - 语音服务地址（本机 TTS，可留空）
+  - 总是允许（不弹本机批准窗口）
+  - **开机自启动**（写入当前用户启动项，勾选即生效，取消即删除）
+  - 配对码（新电脑配对）
+  - 保存设置 / 重新连接
+
+### 托盘
+
+关闭窗口或最小化时，客户端会缩到系统托盘继续保持连接；不会断开电脑节点。
+
+托盘菜单（右键图标）：
+
+- 显示窗口（双击图标等效）
+- 隐藏到托盘
+- 启动连接 / 停止连接
+- 开机自启动（勾选状态与设置页同步）
+- 退出 Echo Desktop（真正退出，断开连接）
+
+Windows 11 默认会把托盘图标收进“^”折叠区，可以拖出来常驻。
+
+切换服务器也可以走命令：
+
+```powershell
+cd desktop_node
+.\switch-server.cmd status    # 当前连哪台
+.\switch-server.cmd prod      # 切生产并打开客户端
+.\switch-server.cmd local     # 切本地并打开客户端
+.\switch-server.cmd stop      # 停掉客户端
+```
+
+配置文件仍是 `%APPDATA%\EchoDesktop\config.json`，客户端里改动会直接写回。
 
 ## 批准与日志
 

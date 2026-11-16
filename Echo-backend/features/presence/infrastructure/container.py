@@ -39,10 +39,6 @@ def get_presence_service() -> PresenceService:
         silence_minutes=settings.presence_silence_minutes,
         min_thought_interval_minutes=settings.presence_min_thought_interval_minutes,
         daily_thought_budget=settings.presence_daily_thought_budget,
-        proactive_message_budget=settings.presence_proactive_message_budget,
-        proactive_message_interval_minutes=(
-            settings.presence_proactive_message_interval_minutes
-        ),
         proactive_action_budget=settings.presence_proactive_action_budget,
         proactive_action_interval_minutes=(
             settings.presence_proactive_action_interval_minutes

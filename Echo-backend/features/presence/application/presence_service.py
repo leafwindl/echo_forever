@@ -56,8 +56,6 @@ class PresenceService:
         silence_minutes: int,
         min_thought_interval_minutes: int,
         daily_thought_budget: int,
-        proactive_message_budget: int,
-        proactive_message_interval_minutes: int,
         proactive_action_budget: int,
         proactive_action_interval_minutes: int,
         message_min_salience: float,
@@ -77,10 +75,6 @@ class PresenceService:
         self.silence_window = timedelta(minutes=silence_minutes)
         self.thought_interval = timedelta(minutes=min_thought_interval_minutes)
         self.daily_thought_budget = daily_thought_budget
-        self.proactive_message_budget = proactive_message_budget
-        self.proactive_message_interval = timedelta(
-            minutes=proactive_message_interval_minutes
-        )
         self.proactive_action_budget = proactive_action_budget
         self.proactive_action_interval = timedelta(
             minutes=proactive_action_interval_minutes
@@ -258,7 +252,6 @@ class PresenceService:
             message_text = await self._maybe_create_goal(
                 state=state,
                 thought=thought,
-                context=context,
                 now=current,
             )
             if message_text:
@@ -353,34 +346,8 @@ class PresenceService:
         *,
         state: PresenceState,
         thought: PresenceThought,
-        context,
         now: datetime,
     ) -> str:
-        used = (
-            state.proactive_messages_used
-            if state.proactive_budget_date == now.date()
-            else 0
-        )
-        downshifted = (
-            state.outreach_downshift_until is not None
-            and now < state.outreach_downshift_until
-        )
-        budget = 1 if downshifted else self.proactive_message_budget
-        interval = timedelta(hours=4) if downshifted else self.proactive_message_interval
-        if used >= budget:
-            return ""
-        if not self.quiet_hours.can_send_spontaneous(state.user_id, now):
-            return ""
-        if (
-            state.last_proactive_message_at is not None
-            and now - state.last_proactive_message_at < interval
-        ):
-            return ""
-        if (
-            context.last_assistant_at is not None
-            and now - context.last_assistant_at < self.proactive_message_interval
-        ):
-            return ""
         text = thought.draft_text.strip()
         if not text:
             # 这次念头只想自己待着，不打扰用户。

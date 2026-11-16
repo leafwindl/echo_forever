@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Echo Agent Runtime · 数据流与分支</title>
+<style>
+  :root {
+    --bg:#070b14; --panel:#0d1424; --line:#1e2d4a; --text:#dbe7ff; --muted:#7d90b5;
+    --cyan:#35e0d0; --blue:#5b9dff; --purple:#a98bff; --green:#4ade80; --red:#ff6b7a; --amber:#ffc857;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:radial-gradient(1200px 800px at 20% 0%,#101a30 0%,var(--bg) 55%);
+    color:var(--text);font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  header{
+    padding:12px 20px 8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(13,20,36,.92),rgba(7,11,20,.6));
+  }
+  header h1{font-size:16px;margin:0;font-weight:600}
+  header h1 span{color:var(--cyan)}
+  .subtitle{color:var(--muted);font-size:11.5px}
+  .toolbar{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap}
+  button{
+    background:#111c31;color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:6px 11px;font-size:12px;cursor:pointer;transition:all .18s ease;
+  }
+  button:hover{border-color:var(--cyan);color:#fff;box-shadow:0 0 12px rgba(53,224,208,.16)}
+  button.active{background:rgba(53,224,208,.14);border-color:var(--cyan);color:#fff}
+  button.danger:hover{border-color:var(--red);box-shadow:0 0 12px rgba(255,107,122,.2)}
+  main{flex:1;display:flex;min-height:0}
+  #stage{flex:1;position:relative;min-width:0}
+  #canvas{width:100%;height:100%;display:block}
+  #legend{
+    position:absolute;left:16px;bottom:10px;display:flex;gap:12px;flex-wrap:wrap;
+    font-size:11px;color:var(--muted);background:rgba(9,15,27,.75);
+    border:1px solid var(--line);border-radius:9px;padding:7px 11px;backdrop-filter:blur(6px);
+  }
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
+  aside{
+    width:390px;border-left:1px solid var(--line);background:rgba(10,16,29,.88);
+    padding:16px 18px;overflow-y:auto;flex-shrink:0;
+  }
+  aside h2{font-size:14.5px;margin:0 0 3px}
+  aside .kind{display:inline-block;font-size:10px;letter-spacing:.6px;padding:2px 8px;border-radius:20px;margin-bottom:10px;border:1px solid currentColor}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:10.5px;letter-spacing:1px;color:var(--muted);margin-bottom:3px;text-transform:uppercase}
+  .field p{margin:0;font-size:12.5px;line-height:1.6;color:#c9d8f5}
+  .field.error p{color:#ffb3bb}
+  .data-box{
+    background:#0a1222;border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;font-family:Consolas,"Courier New",monospace;
+    font-size:11px;line-height:1.55;color:#9fd6ff;white-space:pre-wrap;word-break:break-word;
+  }
+  .data-box.out{color:#8fe3c8}
+  #flow-panel{
+    height:176px;border-top:1px solid var(--line);background:rgba(8,13,24,.92);
+    padding:8px 16px 10px;display:flex;flex-direction:column;
+  }
+  .flow-title{font-size:11px;color:var(--muted);letter-spacing:1px;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+  .flow-title b{color:var(--cyan);font-weight:600;letter-spacing:0}
+  #flow-cards{display:flex;gap:9px;overflow-x:auto;overflow-y:hidden;height:132px;padding-bottom:4px}
+  .flow-empty{
+    color:#5b6f94;font-size:12px;border:1px dashed #1e2d4a;border-radius:9px;
+    padding:14px 18px;height:56px;display:flex;align-items:center;
+  }
+  .flow-card{
+    min-width:286px;max-width:320px;background:#0c1526;border:1px solid var(--line);
+    border-radius:9px;padding:8px 10px;flex-shrink:0;
+    animation:cardIn .28s ease both;
+  }
+  @keyframes cardIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .flow-card.error{border-color:#5c2430;background:#150c11}
+  .fc-head{font-size:11.5px;font-weight:600;color:#dff1ff;margin-bottom:5px;display:flex;gap:6px}
+  .fc-head i{font-style:normal;color:var(--muted);font-weight:400}
+  .fc-row{font-family:Consolas,"Courier New",monospace;font-size:10.5px;line-height:1.5;color:#8fa8cf;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fc-row span{color:var(--cyan);margin-right:5px;font-size:9.5px;letter-spacing:.5px}
+  .fc-row.out{color:#8fe3c8}
+  .fc-row.out span{color:var(--green)}
+  #statusbar{
+    border-top:1px solid var(--line);padding:8px 20px;font-size:12px;color:var(--muted);
+    background:rgba(9,15,27,.8);min-height:36px;display:flex;align-items:center;gap:9px;
+  }
+  #statusbar .pulse{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 9px var(--cyan);animation:blink 1.1s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  .node{cursor:pointer}
+  .node rect{transition:stroke .2s,filter .2s}
+  .node:hover rect{stroke-width:2.4}
+  .node text{pointer-events:none;user-select:none}
+  .node.active rect{stroke-width:3}
+  .node.active{filter:drop-shadow(0 0 11px rgba(53,224,208,.5))}
+  .node.error-active rect{stroke:var(--red)!important}
+  .node.error-active{filter:drop-shadow(0 0 11px rgba(255,107,122,.55))}
+  .edge{fill:none;stroke:var(--line);stroke-width:1.5;transition:stroke .2s,stroke-width .2s}
+  .edge.active{stroke:var(--cyan);stroke-width:2.5}
+  .edge.error{stroke:#5c2430;stroke-dasharray:6 5}
+  .edge.error.active{stroke:var(--red);stroke-width:2.3}
+  .edge-label{font-size:10px;fill:var(--muted)}
+  .edge-label.active{fill:var(--cyan)}
+  .edge-label.error{fill:#b05763}
+  .edge-label.error.active{fill:var(--red)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Echo Agent Runtime <span>数据流 · 分支 · 异常</span></h1>
+  <span class="subtitle">点节点看细节 · 播放看每一步的输入输出</span>
+  <div class="toolbar">
+    <button id="p-chat">▶ 正常对话</button>
+    <button id="p-toolfail" class="danger">工具失败</button>
+    <button id="p-timeout" class="danger">模型超时</button>
+    <button id="p-gatere" class="danger">交付重试</button>
+    <button id="p-proactive">🌙 主动流程</button>
+    <button id="reset">重置</button>
+  </div>
+</header>
+
+<main>
+  <div id="stage">
+    <svg id="canvas" viewBox="0 0 1240 880" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#2c3f63"/>
+        </marker>
+        <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#35e0d0"/>
+        </marker>
+        <marker id="arrow-error" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff6b7a"/>
+        </marker>
+        <linearGradient id="g-start" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#12434a"/><stop offset="100%" stop-color="#0c2b31"/></linearGradient>
+        <linearGradient id="g-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1b2f55"/><stop offset="100%" stop-color="#12203a"/></linearGradient>
+        <linearGradient id="g-purple" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2a2350"/><stop offset="100%" stop-color="#1b1736"/></linearGradient>
+        <linearGradient id="g-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#163c2b"/><stop offset="100%" stop-color="#0f2a1f"/></linearGradient>
+        <linearGradient id="g-red" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4a1a24"/><stop offset="100%" stop-color="#2d1119"/></linearGradient>
+      </defs>
+      <g id="edges-layer"></g>
+      <g id="nodes-layer"></g>
+    </svg>
+    <div id="legend">
+      <span><i class="dot" style="background:#35e0d0"></i>入口/出口</span>
+      <span><i class="dot" style="background:#5b9dff"></i>执行</span>
+      <span><i class="dot" style="background:#a98bff"></i>决策</span>
+      <span><i class="dot" style="background:#4ade80"></i>主动</span>
+      <span><i class="dot" style="background:#ff6b7a"></i>异常</span>
+    </div>
+  </div>
+  <aside id="panel">
+    <h2 id="panel-title">运行时全景</h2>
+    <span class="kind" id="panel-kind" style="color:#7d90b5">OVERVIEW</span>
+    <div class="field"><label>职责</label><p id="p-duty">点节点看它的职责；点播放按钮看每一步真实的输入输出怎么流动。</p></div>
+    <div class="field"><label>本步输入</label><div class="data-box" id="p-in">—</div></div>
+    <div class="field"><label>本步输出（会成为下一步输入）</label><div class="data-box out" id="p-out">—</div></div>
+    <div class="field error"><label>异常边界</label><p id="p-error">每一层都有兜底：重试预算、工具错误回填、交付重试、最终兜底回复。</p></div>
+  </aside>
+</main>
+
+<div id="flow-panel">
+  <div class="flow-title"><b>数据流</b> 上一步的 OUT 就是下一步的 IN</div>
+  <div id="flow-cards"></div>
+</div>
+<div id="statusbar"><span class="pulse"></span><span id="status-text">就绪。选一条路径开始。</span></div>
+
+<script>
+const NODES = [
+  // 主动链路
+  {id:'presence', x:80, y:64, w:170, h:50, kind:'green', tag:'主动 · 定时', title:'presence 心跳',
+   duty:'每 30 分钟评估一次，决定要不要产生念头。',
+   sample:{in:'{ timer: "30min", last_user: "4h ago", budget_left: 3 }', out:'{ should_think: true, reason: "silence 4h" }'},
+   error:'模型或数据失败：记录事件，跳过本轮，不影响下轮。'},
+  {id:'thought', x:80, y:142, w:170, h:50, kind:'green', tag:'主动 · 一次调用', title:'念头生成',
+   duty:'一次模型调用同时产出念头、是否可说、动作倾向、草稿。',
+   sample:{in:'{ 最近对话, memory: "他说想听安静的歌" }', out:'{ thought: "他昨晚想听歌…", shareable: true, draft: "昨晚你说想听首安静的…", action: "music: 夜的钢琴曲" }'},
+   error:'JSON 解析失败/空念头：丢弃本轮，不重试。'},
+  {id:'goal', x:80, y:220, w:170, h:50, kind:'green', tag:'主动 · 落库', title:'目标 goal',
+   duty:'把意图写成目标：触发源、草稿、动作。48 小时同源不重复。',
+   sample:{in:'{ draft: "昨晚你说想听首安静的…", trigger: "presence" }', out:'{ goal_id: "goal_a1b2", status: "pending" }'},
+   error:'重复目标返回空；写库失败记事件并放弃本轮。'},
+  {id:'job', x:80, y:298, w:170, h:50, kind:'green', tag:'主动 · 队列', title:'job 队列',
+   duty:'把目标变成可重试、可延迟的投递任务。',
+   sample:{in:'{ goal_id: "goal_a1b2", scheduled_for: "now" }', out:'{ job_id: "proactive_job_9x", status: "pending" }'},
+   error:'静默时段推迟到明早；预算用尽则放弃并标记失败。'},
+  {id:'worker', x:80, y:376, w:170, h:50, kind:'green', tag:'主动 · 执行', title:'worker 执行',
+   duty:'认领任务、过门禁、跑主动 turn，最后回传结果。',
+   sample:{in:'{ job_id, preference: { level: "standard", quiet: "23:00-07:00" } }', out:'门禁通过：预算 3/6，非静默'},
+   error:'执行失败也回传「没做成」，绝不静默消失。'},
+
+  // 主链路
+  {id:'user', x:520, y:36, w:200, h:50, kind:'start', tag:'入口', title:'用户消息',
+   duty:'一条消息进入系统，可以来自 App、语音转写或按钮。',
+   sample:{in:'{ user: "phone_3de5…", text: "帮我在电脑上放首歌" }', out:'{ message_id: 512, client_id: "0c9f…" }'},
+   error:'401 鉴权失败；429 限流；重复消息按客户端 ID 幂等返回。'},
+  {id:'api', x:520, y:114, w:200, h:50, kind:'blue', tag:'接口层', title:'接口层',
+   duty:'校验登录态、落库用户消息、交后台生成，立刻返回。',
+   sample:{in:'POST /chat/messages + Bearer token', out:'202 已受理；生成任务入队'},
+   error:'写库失败 5xx；生成失败不影响已落库的用户消息。'},
+  {id:'app', x:520, y:192, w:200, h:50, kind:'blue', tag:'应用层', title:'生成回复',
+   duty:'判断模式，拉人格、关系、记忆和最近历史。',
+   sample:{in:'{ user, conversation }', out:'{ mode: "chat", persona: "v3", memory: 2, history: 12 }'},
+   error:'上下文超时：降级为最小上下文继续。'},
+  {id:'policy', x:520, y:270, w:200, h:50, kind:'purple', tag:'决策', title:'TurnPolicy 定策略',
+   duty:'按模式定预算：步数、工具调用上限、重试次数。',
+   sample:{in:'mode = chat', out:'{ max_steps: 6, max_tool_calls: 4, retries: 2 }'},
+   error:'纯内存计算，无外部依赖。'},
+  {id:'mode', x:880, y:270, w:190, h:50, kind:'purple', tag:'分支', title:'三种模式',
+   duty:'聊天 / 通话 / 主动各自有不同的预算和交付规则。',
+   sample:{in:'policy.profile(mode)', out:'chat：自然多气泡 · call：结构化 · proactive：最多 5 次工具'},
+   error:'未知模式回落到聊天模式，不会没有策略。'},
+  {id:'context', x:520, y:348, w:200, h:50, kind:'blue', tag:'装配', title:'上下文装配',
+   duty:'拼系统提示、历史、用户消息和本轮可用工具。',
+   sample:{in:'{ policy, 上下文, 设备在线状态 }', out:'{ system: "3.8k tok", history: 12, tools: 17 }'},
+   error:'记忆失败跳过；设备离线不暴露对应工具。'},
+  {id:'loop', x:520, y:426, w:200, h:50, kind:'blue', tag:'核心循环', title:'ModelToolLoop',
+   duty:'调模型 → 有工具调用就执行回填 → 再调；直到最终回复或步数上限。',
+   sample:{in:'{ messages, tools, max_steps: 6 }', out:'{ step: 1, action: "tool_call" }'},
+   error:'步数耗尽强制收尾；模型连续失败进入降级。'},
+  {id:'model', x:290, y:520, w:190, h:50, kind:'blue', tag:'循环内', title:'模型调用',
+   duty:'请求模型（流式），解析是否调用工具、调哪个、参数。',
+   sample:{in:'{ messages: 14, tools: 17 }', out:'{ tool_call: "desktop_music_search_play", args: { query: "安静 钢琴曲" } }'},
+   error:'超时/5xx：按重试预算重试；耗尽进入兜底。'},
+  {id:'tool', x:720, y:520, w:190, h:50, kind:'blue', tag:'循环内', title:'工具执行',
+   duty:'校验参数、次数、超时，执行，返回结构化结果。',
+   sample:{in:'{ tool: "desktop_music_search_play", args: { query: "安静 钢琴曲" } }', out:'{ status: "completed", node: "dnode_ade0", took: "4.1s" }'},
+   error:'未知工具/重复/参数错/超时：标记失败回填，模型换策略。'},
+  {id:'toolfail', x:980, y:520, w:180, h:50, kind:'red', tag:'分支 · 失败', title:'工具失败',
+   duty:'工具出错时，错误本身会作为结果交回模型，而不是抛给用户。',
+   sample:{in:'{ tool: "desktop_music_search_play" }', out:'{ status: "failed", error: "desktop_offline" }'},
+   error:'模型看到错误后会改成说明现状，而不是假装成功。'},
+  {id:'merge', x:520, y:612, w:200, h:50, kind:'blue', tag:'循环出口', title:'结果回填',
+   duty:'把工具结果写回对话继续循环，或结束循环。',
+   sample:{in:'{ status: "completed", node: "dnode_ade0" }', out:'追加 1 条 tool 消息，进入第 2 步'},
+   error:'结果过大截断；空回复进入交付重试。'},
+  {id:'gate', x:520, y:694, w:200, h:50, kind:'purple', tag:'边界', title:'DeliveryGate',
+   duty:'检查气泡格式、贴纸是否真交付、时间元数据是否干净。',
+   sample:{in:'{ segments: ["放上了，网易云那边应该已经在响"], sticker: null }', out:'通过：1 段文本，无贴纸声明'},
+   error:'格式非法→重写；贴纸谎报→重试；仍失败→兜底。'},
+  {id:'fallback', x:760, y:694, w:190, h:50, kind:'red', tag:'兜底', title:'TurnFallbacks',
+   duty:'把失败翻译成用户能看懂的一句话，不是报错也不是沉默。',
+   sample:{in:'{ error: "llm_timeout", retries: 0 }', out:'"这次没接上，等会儿再试一次"'},
+   error:'兜底也失败：返回固定最小回复，保证有输出。'},
+  {id:'persist', x:520, y:776, w:200, h:50, kind:'start', tag:'出口', title:'落库 + 推送',
+   duty:'写消息、发实时事件、推送；主动消息记录结果状态。',
+   sample:{in:'{ content: "放上了，网易云那边应该已经在响" }', out:'msg 513 落库 · SSE 已发 · 推送 sent'},
+   error:'推送失败不影响消息；写库失败重试一次。'},
+  {id:'retry', x:290, y:694, w:190, h:50, kind:'red', tag:'分支 · 重试', title:'重试预算',
+   duty:'模型超时或连续 5xx 时按预算重试，期间不打扰用户。',
+   sample:{in:'{ error: "timeout", retries_left: 1 }', out:'重试 #1'},
+   error:'重试耗尽不再等待，直接兜底。'},
+];
+
+const EDGES = [
+  {from:'presence', to:'thought'}, {from:'thought', to:'goal'},
+  {from:'goal', to:'job'}, {from:'job', to:'worker'},
+  {from:'worker', to:'policy', label:'进入主动 turn', horizontal:true},
+  {from:'user', to:'api'}, {from:'api', to:'app'}, {from:'app', to:'policy'},
+  {from:'policy', to:'mode', label:'模式分支', horizontal:true},
+  {from:'policy', to:'context'}, {from:'context', to:'loop'},
+  {from:'loop', to:'model', label:'每步'}, {from:'model', to:'tool', label:'有工具调用', horizontal:true},
+  {from:'tool', to:'toolfail', label:'执行失败', error:true, horizontal:true},
+  {from:'toolfail', to:'fallback', label:'错误回填后仍失败', error:true},
+  {from:'tool', to:'merge', label:'结果回填'}, {from:'merge', to:'loop', label:'继续', curve:-1},
+  {from:'merge', to:'gate', label:'最终回复'},
+  {from:'gate', to:'persist'}, {from:'persist', to:'user', dash:true, label:'下一轮'},
+  {from:'model', to:'retry', label:'超时 / 5xx', error:true},
+  {from:'retry', to:'fallback', label:'重试耗尽', error:true},
+  {from:'gate', to:'fallback', label:'重写仍失败', error:true},
+  {from:'fallback', to:'persist', label:'兜底输出', error:true},
+];
+
+const NODE_KIND_STYLE = {
+  start:{fill:'url(#g-start)',stroke:'#35e0d0'},
+  blue:{fill:'url(#g-blue)',stroke:'#3d6bb3'},
+  purple:{fill:'url(#g-purple)',stroke:'#7a63d8'},
+  green:{fill:'url(#g-green)',stroke:'#3f9d6b'},
+  red:{fill:'url(#g-red)',stroke:'#a33f4d'},
+};
+const KIND_BADGE = {start:'入口/出口',blue:'执行层',purple:'决策/边界',green:'主动链路',red:'异常/降级'};
+
+const SVG_NS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('canvas');
+const edgesLayer=document.getElementById('edges-layer');
+const nodesLayer=document.getElementById('nodes-layer');
+const nodeMap=Object.fromEntries(NODES.map(n=>[n.id,n]));
+let timer=null;
+
+function el(name,attrs,parent){
+  const node=document.createElementNS(SVG_NS,name);
+  for(const [k,v] of Object.entries(attrs)) node.setAttribute(k,v);
+  if(parent) parent.appendChild(node);
+  return node;
+}
+function edgePath(from,to,curve=0,horizontal=false){
+  const a=nodeMap[from],b=nodeMap[to];
+  if(!a||!b) return '';
+  if(horizontal){
+    const sx=a.x+a.w, sy=a.y+a.h/2, ex=b.x, ey=b.y+b.h/2;
+    const bulge=Math.max(60,Math.abs(ex-sx)*0.4);
+    return `M ${sx} ${sy} C ${sx+bulge} ${sy}, ${ex-bulge} ${ey}, ${ex} ${ey}`;
+  }
+  const startX=a.x+a.w/2,startY=a.y+a.h,endX=b.x+b.w/2,endY=b.y;
+  if(endY<startY){
+    const sx=a.x+a.w/2,sy=a.y,ex=b.x+b.w/2,ey=b.y+b.h,dx=90+Math.abs(curve)*60;
+    return `M ${sx} ${sy} C ${sx-dx} ${sy-40}, ${ex-dx} ${ey+40}, ${ex} ${ey}`;
+  }
+  const midY=(startY+endY)/2;
+  if(curve){
+    const cx=startX+curve*70;
+    return `M ${startX} ${startY} C ${cx} ${midY}, ${cx} ${midY}, ${endX} ${endY}`;
+  }
+  return `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+}
+
+function render(){
+  edgesLayer.innerHTML='';
+  nodesLayer.innerHTML='';
+  for(const edge of EDGES){
+    const path=el('path',{
+      d:edgePath(edge.from,edge.to,edge.curve||0,edge.horizontal||false),
+      class:'edge'+(edge.error?' error':''),
+      'marker-end':edge.error?'url(#arrow-error)':'url(#arrow)',
+      'data-edge':`${edge.from}->${edge.to}`,
+    },edgesLayer);
+    if(edge.dash) path.setAttribute('stroke-dasharray','4 4');
+    if(edge.label){
+      const mid=pointOnPath(path);
+      const label=el('text',{
+        x:mid.x+5,y:mid.y-4,
+        class:'edge-label'+(edge.error?' error':''),
+        'data-label':`${edge.from}->${edge.to}`,
+      },edgesLayer);
+      label.textContent=edge.label;
+    }
+  }
+  for(const node of NODES){
+    const style=NODE_KIND_STYLE[node.kind]||NODE_KIND_STYLE.blue;
+    const g=el('g',{class:'node',transform:`translate(${node.x},${node.y})`,'data-id':node.id},nodesLayer);
+    el('rect',{width:node.w,height:node.h,rx:9,fill:style.fill,stroke:style.stroke,'stroke-width':1.2},g);
+    const title=el('text',{x:node.w/2,y:node.h/2+5,'text-anchor':'middle',fill:'#e6efff','font-size':13,'font-weight':600},g);
+    title.textContent=node.title;
+    const badge=el('text',{x:9,y:-6,fill:style.stroke,'font-size':9.5,'letter-spacing':'.4px'},g);
+    badge.textContent=node.tag;
+    g.addEventListener('click',()=>showNode(node));
+  }
+}
+function pointOnPath(path){
+  const len=path.getTotalLength();
+  return path.getPointAtLength(len*0.5);
+}
+
+function showNode(node){
+  document.getElementById('panel-title').textContent=node.title||'—';
+  const kind=document.getElementById('panel-kind');
+  kind.textContent=KIND_BADGE[node.kind]||node.kind||'';
+  kind.style.color=(NODE_KIND_STYLE[node.kind]||NODE_KIND_STYLE.blue).stroke;
+  document.getElementById('p-duty').textContent=node.duty||'';
+  document.getElementById('p-in').textContent=(node.sample&&node.sample.in)||'—';
+  document.getElementById('p-out').textContent=(node.sample&&node.sample.out)||'—';
+  document.getElementById('p-error').textContent=node.error||'';
+  highlightNode(node.id);
+}
+function highlightNode(id){
+  document.querySelectorAll('.node').forEach(n=>n.classList.toggle('active',n.dataset.id===id));
+}
+function setStatus(text){document.getElementById('status-text').textContent=text;}
+
+function clearAll(){
+  if(timer){clearTimeout(timer);timer=null;}
+  document.querySelectorAll('.node').forEach(n=>n.classList.remove('active','error-active'));
+  document.querySelectorAll('.edge').forEach(e=>{
+    e.classList.remove('active');
+    e.setAttribute('marker-end',e.classList.contains('error')?'url(#arrow-error)':'url(#arrow)');
+  });
+  document.querySelectorAll('.edge-label').forEach(l=>l.classList.remove('active'));
+  document.getElementById('flow-cards').innerHTML='<div class="flow-empty">点上方任意按钮，播放一条完整数据流；每张卡片是一个节点，OUT 会成为下一张的 IN。</div>';
+  setStatus('就绪。选一条路径开始。');
+  showNode(nodeMap['user']);
+}
+
+// ── 数据流路径 ──
+const PATHS = {
+  chat:{
+    label:'正常对话',
+    steps:[
+      {id:'user',text:'用户发来一条消息。',in:'{ user: "phone_3de5…", text: "帮我在电脑上放首歌" }',out:'{ message_id: 512, client_id: "0c9f…" }'},
+      {id:'api',text:'接口层受理：落库、入队、立刻返回。',in:'{ message_id: 512, user, conversation }',out:'202 已受理 · 生成任务入队'},
+      {id:'app',text:'应用层判断模式，拉上下文。',in:'{ user, conversation }',out:'{ mode: "chat", persona: "v3", memory: 2, history: 12 }'},
+      {id:'policy',text:'定下本轮预算。',in:'mode = chat',out:'{ max_steps: 6, max_tool_calls: 4, retries: 2 }'},
+      {id:'context',text:'装配系统提示、历史和工具面。',in:'{ policy, 上下文, 设备在线: true }',out:'{ system: "3.8k tok", history: 12, tools: 17 }'},
+      {id:'loop',text:'进入循环，第 1 步调模型。',in:'{ messages: 14, tools: 17 }',out:'{ step: 1 }'},
+      {id:'model',text:'模型决定先调工具，而不是直接回答。',in:'{ messages: 14, tools: 17 }',out:'{ tool_call: "desktop_music_search_play", args: { query: "安静 钢琴曲" } }'},
+      {id:'tool',text:'执行器校验参数、次数、超时，然后执行。',in:'{ tool: "desktop_music_search_play", args: { query: "安静 钢琴曲" } }',out:'{ status: "completed", node: "dnode_ade0", took: "4.1s" }'},
+      {id:'merge',text:'结果回填，继续第 2 步。',in:'{ status: "completed", node: "dnode_ade0" }',out:'追加 1 条 tool 消息 → 第 2 步'},
+      {id:'model',text:'模型给出最终回复。',in:'{ tool 结果: 成功 }',out:'{ text: "放上了，网易云那边应该已经在响" }'},
+      {id:'gate',text:'交付检查：格式、贴纸、元数据。',in:'{ segments: ["放上了，网易云那边应该已经在响"], sticker: null }',out:'通过：1 段文本，无贴纸声明'},
+      {id:'persist',text:'落库、发实时事件、推送。',in:'{ content: "放上了，网易云那边应该已经在响" }',out:'msg 513 落库 · SSE 已发 · 推送 sent'},
+    ],
+  },
+  toolfail:{
+    label:'工具失败',
+    steps:[
+      {id:'user',text:'用户请求在电脑上放歌。',in:'{ text: "帮我在电脑上放首歌" }',out:'{ message_id: 512 }'},
+      {id:'api',text:'接口层受理。',in:'{ message_id: 512 }',out:'202 已受理'},
+      {id:'app',text:'应用层判断聊天模式。',in:'{ user, conversation }',out:'{ mode: "chat" }'},
+      {id:'policy',text:'预算：4 次工具调用。',in:'mode = chat',out:'{ max_tool_calls: 4 }'},
+      {id:'context',text:'装配上下文；桌面在线。',in:'{ 设备在线: true }',out:'{ tools: 17 }'},
+      {id:'loop',text:'循环第 1 步。',in:'{ step: 1 }',out:'请求模型'},
+      {id:'model',text:'模型调用放歌工具。',in:'{ messages: 14 }',out:'{ tool_call: "desktop_music_search_play" }'},
+      {id:'tool',text:'执行时发现电脑突然离线。',in:'{ tool: "desktop_music_search_play" }',out:'{ status: "failed", error: "desktop_offline" }',error:true},
+      {id:'toolfail',text:'失败结果被包装成工具结果，交回模型。',in:'{ status: "failed", error: "desktop_offline" }',out:'模型看到错误，决定如实说明',error:true},
+      {id:'merge',text:'回填失败结果，继续循环。',in:'{ error: "desktop_offline" }',out:'追加 1 条错误 tool 消息'},
+      {id:'model',text:'模型换了策略：不假装成功。',in:'{ tool 结果: 失败 }',out:'{ text: "电脑那边现在没连上，放歌这事我做不了" }'},
+      {id:'gate',text:'交付检查：这是正常的说明性回复。',in:'{ segments: ["电脑那边现在没连上…"] }',out:'通过'},
+      {id:'persist',text:'照常落库推送。',in:'{ content: "电脑那边现在没连上…" }',out:'msg 514 · 推送 sent'},
+    ],
+  },
+  timeout:{
+    label:'模型超时',
+    steps:[
+      {id:'user',text:'用户发来消息。',in:'{ text: "帮我在电脑上放首歌" }',out:'{ message_id: 512 }'},
+      {id:'api',text:'接口层受理。',in:'{ message_id: 512 }',out:'202 已受理'},
+      {id:'app',text:'应用层拉上下文。',in:'{ user }',out:'{ mode: "chat" }'},
+      {id:'policy',text:'预算里包含 2 次重试。',in:'mode = chat',out:'{ retries: 2 }'},
+      {id:'context',text:'装配上下文。',in:'{ 设备在线: true }',out:'{ tools: 17 }'},
+      {id:'loop',text:'循环第 1 步。',in:'{ step: 1 }',out:'请求模型'},
+      {id:'model',text:'第一次请求超时。',in:'{ messages: 14 }',out:'{ error: "timeout", after: "30s" }',error:true},
+      {id:'retry',text:'按预算重试，期间不给用户任何进度噪音。',in:'{ error: "timeout", retries_left: 1 }',out:'重试 #1',error:true},
+      {id:'model',text:'第二次仍然超时。',in:'{ messages: 14 }',out:'{ error: "timeout", retries_left: 0 }',error:true},
+      {id:'fallback',text:'不再让用户干等，走兜底。',in:'{ error: "llm_timeout", retries_left: 0 }',out:'{ text: "这次没接上，等会儿再试一次" }',error:true},
+      {id:'gate',text:'兜底回复也要过交付检查。',in:'{ segments: ["这次没接上…"] }',out:'通过'},
+      {id:'persist',text:'兜底回复照样落库推送。',in:'{ content: "这次没接上…" }',out:'msg 515 · 推送 sent'},
+    ],
+  },
+  gatere:{
+    label:'交付重试',
+    steps:[
+      {id:'user',text:'用户发来消息。',in:'{ text: "帮我在电脑上放首歌" }',out:'{ message_id: 512 }'},
+      {id:'api',text:'接口层受理。',in:'{ message_id: 512 }',out:'202 已受理'},
+      {id:'app',text:'应用层拉上下文。',in:'{ user }',out:'{ mode: "chat" }'},
+      {id:'policy',text:'预算确定。',in:'mode = chat',out:'{ max_steps: 6 }'},
+      {id:'context',text:'装配上下文。',in:'{ 设备在线: true }',out:'{ tools: 17 }'},
+      {id:'loop',text:'循环第 1 步。',in:'{ step: 1 }',out:'请求模型'},
+      {id:'model',text:'模型调了放歌工具。',in:'{ messages: 14 }',out:'{ tool_call: "desktop_music_search_play" }'},
+      {id:'tool',text:'工具执行成功。',in:'{ tool: "desktop_music_search_play" }',out:'{ status: "completed" }'},
+      {id:'merge',text:'回填结果，继续。',in:'{ status: "completed" }',out:'第 2 步'},
+      {id:'model',text:'模型输出了带未闭合标记的气泡。',in:'{ tool 结果: 成功 }',out:'{ raw: "放上了 [bubble]…" }',error:true},
+      {id:'gate',text:'交付检查发现格式非法，要求重写。',in:'{ raw: "放上了 [bubble]…" }',out:'{ retry: true, reason: "unclosed_bubble" }',error:true},
+      {id:'model',text:'模型按重写指令修正。',in:'{ retry: true, reason: "unclosed_bubble" }',out:'{ text: "放上了，网易云那边应该已经在响" }'},
+      {id:'gate',text:'第二次交付检查通过。',in:'{ segments: ["放上了…"] }',out:'通过'},
+      {id:'persist',text:'落库推送。',in:'{ content: "放上了…" }',out:'msg 516 · 推送 sent'},
+    ],
+  },
+  proactive:{
+    label:'主动流程',
+    steps:[
+      {id:'presence',text:'心跳到了一个评估点。',in:'{ timer: "30min", last_user: "4h ago", budget_left: 3 }',out:'{ should_think: true, reason: "silence 4h" }'},
+      {id:'thought',text:'一次调用产出念头与草稿。',in:'{ 最近对话, memory: "他说想听安静的歌" }',out:'{ thought: "他昨晚想听歌…", shareable: true, draft: "昨晚你说想听首安静的…", action: "music: 夜的钢琴曲" }'},
+      {id:'goal',text:'意图写成目标。',in:'{ draft, trigger: "presence" }',out:'{ goal_id: "goal_a1b2" }'},
+      {id:'job',text:'目标变成投递任务。',in:'{ goal_id: "goal_a1b2" }',out:'{ job_id: "proactive_job_9x" }'},
+      {id:'worker',text:'worker 过门禁：预算、静默、去重。',in:'{ job_id, preference }',out:'门禁通过：预算 3/6，非静默'},
+      {id:'policy',text:'主动 turn 有独立预算。',in:'mode = proactive',out:'{ max_tool_calls: 5 }'},
+      {id:'context',text:'设备在线，工具面展开。',in:'{ 桌面在线: true }',out:'{ tools: 9 }'},
+      {id:'loop',text:'主动 turn 开始，模型可自由决定做什么。',in:'{ step: 1 }',out:'请求模型'},
+      {id:'model',text:'模型没照念头放歌，而是先看了眼屏幕。',in:'{ messages: 6, tools: 9 }',out:'{ tool_call: "desktop_look" }'},
+      {id:'tool',text:'摄像头抓拍成功。',in:'{ tool: "desktop_look" }',out:'{ status: "completed", 描述: "三个窗口，服务器监控/IDE/浏览器" }'},
+      {id:'merge',text:'模型根据看到的内容写回传。',in:'{ 描述: "三个窗口…" }',out:'{ text: "看到你开着一堆窗口…要不要放首歌松松脑子？" }'},
+      {id:'gate',text:'交付检查通过。',in:'{ segments: ["看到你开着一堆窗口…"] }',out:'通过'},
+      {id:'persist',text:'投递 + 推送 + 记录结果状态。',in:'{ content: "看到你开着一堆窗口…" }',out:'msg 517 · 推送 sent · goal: success'},
+    ],
+  },
+};
+
+function addCard(index, step){
+  const title=(nodeMap[step.id]&&nodeMap[step.id].title)||step.id;
+  const card=document.createElement('div');
+  card.className='flow-card'+(step.error?' error':'');
+  card.innerHTML=
+    `<div class="fc-head">#${index} <i>${title}</i></div>`+
+    `<div class="fc-row"><span>IN</span>${escapeHtml(step.in)}</div>`+
+    `<div class="fc-row out"><span>OUT</span>${escapeHtml(step.out)}</div>`;
+  const cards=document.getElementById('flow-cards');
+  cards.appendChild(card);
+  cards.scrollLeft=cards.scrollWidth;
+}
+function escapeHtml(text){
+  return String(text).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function play(pathKey){
+  clearAll();
+  const steps=PATHS[pathKey].steps;
+  let index=0;
+  const tick=()=>{
+    if(index>=steps.length){timer=null;return;}
+    const step=steps[index];
+    const node=nodeMap[step.id];
+    if(node){
+      const nodeEl=document.querySelector(`.node[data-id="${step.id}"]`);
+      if(nodeEl){
+        nodeEl.classList.add(step.error?'error-active':'active');
+        if(step.error) nodeEl.classList.add('active');
+      }
+      clearHighlight();
+      highlightNode(step.id);
+      showNode({...node,sample:{in:step.in,out:step.out}});
+      if(index>0){
+        const prev=steps[index-1].id;
+        const edgeEl=document.querySelector(`.edge[data-edge="${prev}->${step.id}"]`);
+        if(edgeEl){
+          edgeEl.classList.add('active');
+          edgeEl.setAttribute('marker-end',step.error?'url(#arrow-error)':'url(#arrow-active)');
+          const labelEl=document.querySelector(`.edge-label[data-label="${prev}->${step.id}"]`);
+          if(labelEl) labelEl.classList.add('active');
+        }
+      }
+    }
+    addCard(index+1,step);
+    setStatus(step.text);
+    index+=1;
+    timer=setTimeout(tick,1600);
+  };
+  tick();
+}
+function clearHighlight(){
+  document.querySelectorAll('.node').forEach(n=>n.classList.remove('active','error-active'));
+}
+function bind(id,pathKey){
+  document.getElementById(id).addEventListener('click',()=>{
+    for(const b of document.querySelectorAll('.toolbar button')) b.classList.remove('active');
+    document.getElementById(id).classList.add('active');
+    play(pathKey);
+  });
+}
+bind('p-chat','chat');
+bind('p-toolfail','toolfail');
+bind('p-timeout','timeout');
+bind('p-gatere','gatere');
+bind('p-proactive','proactive');
+document.getElementById('reset').addEventListener('click',()=>{
+  for(const b of document.querySelectorAll('.toolbar button')) b.classList.remove('active');
+  clearAll();
+});
+
+render();
+
+// 支持 ?play=chat / ?play=timeout 直接播放，便于分享某条路径
+const autoPlay = new URLSearchParams(location.search).get('play');
+if (autoPlay && PATHS[autoPlay]) {
+  const autoButton = {
+    chat:'p-chat', toolfail:'p-toolfail', timeout:'p-timeout',
+    gatere:'p-gatere', proactive:'p-proactive',
+  }[autoPlay];
+  if (autoButton) document.getElementById(autoButton).classList.add('active');
+  setTimeout(() => play(autoPlay), 300);
+}
+</script>
+</body>
+</html>

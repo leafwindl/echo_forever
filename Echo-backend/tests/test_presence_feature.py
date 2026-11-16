@@ -141,8 +141,6 @@ def _service(
         "silence_minutes": 30,
         "min_thought_interval_minutes": 45,
         "daily_thought_budget": 8,
-        "proactive_message_budget": 3,
-        "proactive_message_interval_minutes": 120,
         "proactive_action_budget": 1,
         "proactive_action_interval_minutes": 240,
         "message_min_salience": 0.3,
@@ -322,35 +320,6 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(creator.goals), 1)
         self.assertEqual(repository.state.proactive_messages_used, 1)
         self.assertEqual(repository.state.last_decision, "message")
-
-    async def test_proactive_message_budget_blocks_extra_messages(self):
-        now = datetime.now(UTC)
-        repository = FakeRepository(
-            PresenceState(
-                user_id="user-1",
-                proactive_messages_used=3,
-                proactive_budget_date=now.date(),
-                thought_budget_date=now.date(),
-            )
-        )
-        creator = FakeGoalCreator()
-        generator = FakeGenerator(
-            ThoughtDraft(
-                text="又想起一件事",
-                salience=0.7,
-                shareable=True,
-                draft_text="又想起一件事。",
-            )
-        )
-        service = _service(
-            repository,
-            FakeContext(now - timedelta(hours=2)),
-            generator=generator,
-            goal_creator=creator,
-        )
-        result = await service.tick("user-1", now=now)
-        self.assertEqual(result.decision, "thought")
-        self.assertEqual(creator.goals, [])
 
     async def test_duplicate_thought_is_not_stored(self):
         now = datetime.now(UTC)

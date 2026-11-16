@@ -204,18 +204,6 @@ class Settings(BaseSettings):
         ge=0.0,
         le=2.0,
     )
-    presence_proactive_message_budget: int = Field(
-        default=6,
-        validation_alias="PRESENCE_PROACTIVE_MESSAGE_BUDGET",
-        ge=0,
-        le=12,
-    )
-    presence_proactive_message_interval_minutes: int = Field(
-        default=60,
-        validation_alias="PRESENCE_PROACTIVE_MESSAGE_INTERVAL_MINUTES",
-        ge=30,
-        le=720,
-    )
     presence_proactive_action_budget: int = Field(
         default=3,
         validation_alias="PRESENCE_PROACTIVE_ACTION_BUDGET",

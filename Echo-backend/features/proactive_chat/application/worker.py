@@ -374,7 +374,7 @@ class ProcessProactiveChatJobs:
         """
         from features.agent.public import run_chat_agent
 
-        fallback = f"本来想{goal.intent[:40]}，这次没做成。"
+        fallback = goal.draft_text.strip() or f"本来想{goal.intent[:40]}，这次没做成。"
         instruction = (
             f"这是你自己的主动念头，不是用户发来的新消息：{goal.intent}\n"
             f"你原本倾向做的事：{goal.action_intent or '只是想说句话'}\n"
