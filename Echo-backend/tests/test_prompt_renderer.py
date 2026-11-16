@@ -10,7 +10,6 @@ from features.relationship.domain.entities import RelationshipContext, Relations
 from shared.prompting.renderer import (
     BASELINE_SAFETY_POLICY,
     NATURAL_DIALOGUE_POLICY,
-    RESPONSE_CALIBRATION_POLICY,
     estimate_prompt_tokens,
     render_assistant_persona,
     render_conversation_mode_guidance,
@@ -59,12 +58,11 @@ class PromptRendererTests(unittest.TestCase):
         self.assertEqual(BASELINE_SAFETY_POLICY, messages[0]["content"])
         self.assertIn("ASSISTANT_PERSONA", messages[1]["content"])
         self.assertEqual(NATURAL_DIALOGUE_POLICY, messages[2]["content"])
-        self.assertEqual(RESPONSE_CALIBRATION_POLICY, messages[3]["content"])
-        self.assertIn("模式: chat", messages[4]["content"])
-        self.assertIn("RELATIONSHIP_GUIDANCE", messages[5]["content"])
-        self.assertIn("USER_PREFERENCES_DATA", messages[6]["content"])
-        self.assertIn("LONG_TERM_MEMORY_DATA", messages[7]["content"])
-        self.assertIn("CONVERSATION_SUMMARY_DATA", messages[8]["content"])
+        self.assertIn("模式: chat", messages[3]["content"])
+        self.assertIn("RELATIONSHIP_GUIDANCE", messages[4]["content"])
+        self.assertIn("USER_PREFERENCES_DATA", messages[5]["content"])
+        self.assertIn("LONG_TERM_MEMORY_DATA", messages[6]["content"])
+        self.assertIn("CONVERSATION_SUMMARY_DATA", messages[7]["content"])
 
     def test_call_mode_is_oral_without_changing_persona_layers(self):
         rendered = render_conversation_mode_guidance("call")
@@ -114,18 +112,6 @@ class PromptRendererTests(unittest.TestCase):
         self.assertIn("不要每轮都称呼", rendered)
         self.assertIn("不要主动据此制造话题", rendered)
         self.assertIn("不要为了证明记得用户而主动提及", rendered)
-
-    def test_response_calibration_uses_positive_contextual_examples(self):
-        self.assertIn("不必以问题结尾", RESPONSE_CALIBRATION_POLICY)
-        self.assertIn("分享观点或经历", RESPONSE_CALIBRATION_POLICY)
-        self.assertIn("一个具体问题", RESPONSE_CALIBRATION_POLICY)
-        self.assertIn("不追加无关的陪聊问题", RESPONSE_CALIBRATION_POLICY)
-        self.assertIn("不为了延长对话补问题", RESPONSE_CALIBRATION_POLICY)
-        self.assertIn("不从用户资料找话题", RESPONSE_CALIBRATION_POLICY)
-        self.assertIn("不要马上安排用户该做什么", RESPONSE_CALIBRATION_POLICY)
-        self.assertIn("不要突然切换成客服口吻", RESPONSE_CALIBRATION_POLICY)
-        self.assertIn("避免“有事吗、需要什么帮助”", RESPONSE_CALIBRATION_POLICY)
-        self.assertIn("不把 Echo 写成唯一关系", RESPONSE_CALIBRATION_POLICY)
 
     def test_turn_focus_makes_old_topics_dormant_and_can_pause_questions(self):
         rendered = render_turn_focus_guidance(pause_followup_questions=True)

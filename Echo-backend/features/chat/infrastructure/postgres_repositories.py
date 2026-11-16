@@ -9,7 +9,6 @@ from shared.config import settings
 from features.agent.domain.entities import ContentPart, SourceReference
 from features.auth.public import ensure_user_identity
 from features.chat.domain.entities import (
-    CHANNEL_LABELS,
     CHAT_CHANNEL_APP,
     CHAT_VISIBILITY_MAIN,
     ChatHistoryMessage,
@@ -577,18 +576,13 @@ def get_history(
                     params,
                 )
             rows = cursor.fetchall()
-        attachments = _load_message_attachments(
-            conn,
-            [str(row["message_id"] or "") for row in rows],
-        )
 
     rows.reverse()
-    return _render_timestamped_history(rows, attachments, timezone_name)
+    return _render_timestamped_history(rows, timezone_name)
 
 
 def _render_timestamped_history(
     rows,
-    attachments: dict[str, tuple[dict[str, object], ...]],
     timezone_name: str,
 ) -> list[dict[str, str]]:
     try:
@@ -602,13 +596,7 @@ def _render_timestamped_history(
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
         local_created_at = created_at.astimezone(zone)
-        rendered = _render_message_content(
-            str(row["content"]),
-            attachments.get(str(row["message_id"] or ""), ()),
-        )
-        channel_label = CHANNEL_LABELS.get(str(row.get("channel") or ""))
-        if channel_label:
-            rendered = f"[{channel_label}] {rendered}"
+        rendered = str(row["content"])
         messages.append(
             {
                 "role": str(row["role"]),

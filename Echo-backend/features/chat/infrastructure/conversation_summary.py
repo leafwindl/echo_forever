@@ -1,5 +1,4 @@
 import logging
-from typing import Dict, List
 
 from providers.llm_provider import get_llm_provider
 from shared.config import settings
@@ -9,7 +8,7 @@ from features.chat.infrastructure import postgres_repositories
 logger = logging.getLogger(__name__)
 
 
-def _format_messages_for_summary(messages: List[Dict[str, object]]) -> str:
+def _format_messages_for_summary(messages: list[dict[str, object]]) -> str:
     lines = []
     for message in messages:
         role = message.get("role", "")
@@ -21,7 +20,7 @@ def _format_messages_for_summary(messages: List[Dict[str, object]]) -> str:
 
 
 def _build_summary_messages(
-    existing_summary: str, messages_to_summarize: List[Dict[str, object]]
+    existing_summary: str, messages_to_summarize: list[dict[str, object]]
 ) -> list[dict]:
     conversation_text = _format_messages_for_summary(messages_to_summarize)
     prompt = (

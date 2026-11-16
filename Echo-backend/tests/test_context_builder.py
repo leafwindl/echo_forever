@@ -26,7 +26,6 @@ from shared.prompting.renderer import (
     BASELINE_SAFETY_POLICY,
     CALL_DIALOGUE_POLICY,
     NATURAL_DIALOGUE_POLICY,
-    RESPONSE_CALIBRATION_POLICY,
     format_long_term_memories,
     render_prompt_layers,
 )
@@ -95,7 +94,7 @@ class ContextBuilderTests(unittest.TestCase):
             },
         ]
 
-        messages = _render_timestamped_history(rows, {}, "Asia/Shanghai")
+        messages = _render_timestamped_history(rows, "Asia/Shanghai")
 
         self.assertEqual(len(messages), 3)
         self.assertNotIn("消息时间", messages[0]["content"])
@@ -174,7 +173,6 @@ class ContextBuilderTests(unittest.TestCase):
 
         self.assertIn(CALL_DIALOGUE_POLICY, content)
         self.assertNotIn(NATURAL_DIALOGUE_POLICY, content)
-        self.assertNotIn(RESPONSE_CALIBRATION_POLICY, content)
 
     def test_formats_memory_type_content_and_score(self):
         text = format_long_term_memories(

@@ -13,8 +13,6 @@ BASELINE_SAFETY_POLICY = _load_rule("baseline-safety.md")
 
 NATURAL_DIALOGUE_POLICY = _load_rule("natural-dialogue.md")
 
-RESPONSE_CALIBRATION_POLICY = _load_rule("response-calibration.md")
-
 CALL_DIALOGUE_POLICY = _load_rule("call-dialogue.md")
 
 _REPLY_STYLE_TEXT = {
@@ -360,12 +358,7 @@ def render_prompt_layers(
     if conversation_mode == "call":
         messages.append({"role": "system", "content": CALL_DIALOGUE_POLICY})
     else:
-        messages.extend(
-            [
-                {"role": "system", "content": NATURAL_DIALOGUE_POLICY},
-                {"role": "system", "content": RESPONSE_CALIBRATION_POLICY},
-            ]
-        )
+        messages.append({"role": "system", "content": NATURAL_DIALOGUE_POLICY})
     messages.extend(
         [
             {

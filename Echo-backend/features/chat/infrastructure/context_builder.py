@@ -14,7 +14,7 @@ from features.chat.domain.dialogue_style import (
     should_pause_followup_questions,
     should_suppress_repeated_greeting,
 )
-from features.chat.domain.entities import CHANNEL_LABELS, ChatContext
+from features.chat.domain.entities import ChatContext
 from features.chat.domain.temporal_context import build_temporal_context, format_gap_seconds
 from features.chat.infrastructure import postgres_repositories
 from features.memory.public import (
@@ -149,17 +149,10 @@ def _build_call_temporal_context(
 def _turn_input_message(
     user_message: str,
     conversation_mode: str,
-    message_channel: str = "app_chat",
 ) -> dict[str, str]:
     # A proactive trigger is internal orchestration context, not evidence of user activity.
     role = "system" if conversation_mode == "proactive" else "user"
-    channel_label = CHANNEL_LABELS.get(message_channel)
-    content = (
-        f"[{channel_label}] {user_message}"
-        if role == "user" and channel_label
-        else user_message
-    )
-    return {"role": role, "content": content}
+    return {"role": role, "content": user_message}
 
 
 def _clean_proactive_history_content(content: str) -> str:
@@ -287,6 +280,8 @@ async def build_chat_context(
     memory_enabled: bool = True,
     message_channel: str = "app_chat",
 ) -> ChatContext:
+    # 渠道标签已从正文移除；参数保留给调用方协议。
+    del message_channel
     is_call = conversation_mode == "call"
     use_extended_call_context = is_call and _call_requires_extended_context(user_message)
     clean_speaker_role = (speaker_role or "").strip().lower()
@@ -436,16 +431,6 @@ async def build_chat_context(
             ),
         }
     )
-    messages.append(
-        {
-            "role": "system",
-            "content": (
-                "历史消息可能带有 [主客户端] 或 [微信端] 渠道标签，表示用户当时从哪个入口说话。"
-                "标签只是内部上下文，不要朗读、不要暴露，也不要在回复里说“主客户端/微信端”。"
-                "回应只发给触发本轮的用户入口，不要假设会自动同步到另一个入口。"
-            ),
-        }
-    )
     temporal_guidance = (
         "以下是通话内部时间事实。仅在用户提到时间或理解上下文确有必要时使用，"
         "不要朗读字段、日期协议或机械报时。conversation_gap 只表示对话是否连续；"
@@ -470,7 +455,7 @@ async def build_chat_context(
         }
     )
     messages.extend(history)
-    messages.append(_turn_input_message(user_message, conversation_mode, message_channel))
+    messages.append(_turn_input_message(user_message, conversation_mode))
 
     proactive_safe_facts: dict[str, str] = {}
     proactive_writer_messages: list[dict[str, str]] = []
