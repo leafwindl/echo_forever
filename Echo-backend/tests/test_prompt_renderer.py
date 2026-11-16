@@ -16,7 +16,6 @@ from shared.prompting.renderer import (
     render_persona,
     render_prompt_layers,
     render_relationship_guidance,
-    render_turn_focus_guidance,
 )
 
 
@@ -112,29 +111,6 @@ class PromptRendererTests(unittest.TestCase):
         self.assertIn("不要每轮都称呼", rendered)
         self.assertIn("不要主动据此制造话题", rendered)
         self.assertIn("不要为了证明记得用户而主动提及", rendered)
-
-    def test_turn_focus_makes_old_topics_dormant_and_can_pause_questions(self):
-        rendered = render_turn_focus_guidance(pause_followup_questions=True)
-
-        self.assertIn("本轮禁止使用问句", rendered)
-        self.assertIn("不得主动恢复旧话题", rendered)
-        self.assertIn("不得用旧话题填补沉默", rendered)
-
-    def test_turn_focus_allows_grounded_exploration_without_forcing_questions(self):
-        rendered = render_turn_focus_guidance(pause_followup_questions=False)
-
-        self.assertIn("允许一个自然问题", rendered)
-        self.assertIn("具体值得延伸", rendered)
-        self.assertIn("不要为了延长对话强行发问", rendered)
-
-    def test_turn_focus_suppresses_repeated_live_session_greeting(self):
-        rendered = render_turn_focus_guidance(
-            pause_followup_questions=False,
-            suppress_repeated_greeting=True,
-        )
-
-        self.assertIn("已经完成过问候", rendered)
-        self.assertIn("直接回应用户当前内容", rendered)
 
     def test_assistant_persona_and_relationship_are_independent_layers(self):
         persona_text = render_assistant_persona(self.assistant_persona)

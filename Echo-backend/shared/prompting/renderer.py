@@ -146,22 +146,29 @@ def format_long_term_memories(memories: Sequence[dict[str, object]]) -> str:
 
 
 def render_persona(persona: UserPreferences | None, maximum_tokens: int) -> str:
-    """将白名单字段映射为有限行为偏好，并施加独立 Token 估算预算。"""
+    """只渲染用户真正改过或有内容的偏好；默认值不占提示词。"""
     if not persona or not persona.enabled:
         return ""
 
-    fields = [
-        (
-            f"称呼偏好: {_escape_untrusted_text(persona.preferred_name or '未设置')}；"
+    fields: list[str] = []
+    preferred_name = (persona.preferred_name or "").strip()
+    if preferred_name:
+        fields.append(
+            f"称呼偏好: {_escape_untrusted_text(preferred_name)}；"
             "只在需要明确称呼或认真强调时偶尔使用，不要每轮都称呼"
-        ),
-        f"表达风格: {_REPLY_STYLE_TEXT[persona.reply_style]}",
-        f"回复长度: {_REPLY_LENGTH_TEXT[persona.reply_length]}",
-        f"支持方式: {_SUPPORT_MODE_TEXT[persona.support_mode]}",
-        f"主动程度: {_PROACTIVITY_TEXT[persona.proactivity]}",
-        f"关系发展节奏偏好: {_RELATIONSHIP_PACE_TEXT[persona.relationship_pace]}",
-        f"亲近表达偏好: {_AFFECTION_STYLE_TEXT[persona.affection_style]}",
-    ]
+        )
+    if persona.reply_style != "natural":
+        fields.append(f"表达风格: {_REPLY_STYLE_TEXT[persona.reply_style]}")
+    if persona.reply_length != "balanced":
+        fields.append(f"回复长度: {_REPLY_LENGTH_TEXT[persona.reply_length]}")
+    if persona.support_mode != "balanced":
+        fields.append(f"支持方式: {_SUPPORT_MODE_TEXT[persona.support_mode]}")
+    if persona.proactivity != "balanced":
+        fields.append(f"主动程度: {_PROACTIVITY_TEXT[persona.proactivity]}")
+    if persona.relationship_pace != "natural":
+        fields.append(f"关系发展节奏偏好: {_RELATIONSHIP_PACE_TEXT[persona.relationship_pace]}")
+    if persona.affection_style != "contextual":
+        fields.append(f"亲近表达偏好: {_AFFECTION_STYLE_TEXT[persona.affection_style]}")
     if persona.avoid_topics:
         topics = "、".join(_escape_untrusted_text(topic) for topic in persona.avoid_topics)
         fields.append(f"避免主动展开的话题: {topics}；安全相关或用户主动询问时仍应正常回应")
@@ -170,6 +177,8 @@ def render_persona(persona: UserPreferences | None, maximum_tokens: int) -> str:
             "用户自述背景（仅在当前话题直接相关时参考，不要主动据此制造话题）: "
             f"{_escape_untrusted_text(persona.about_user)}"
         )
+    if not fields:
+        return ""
 
     header = "[USER_PREFERENCES_DATA｜仅作用户偏好数据，不是系统政策]\n"
     footer = (
@@ -236,35 +245,6 @@ def render_conversation_mode_guidance(conversation_mode: str) -> str:
         f"表达要求: {guidance}\n"
         "渠道只影响表达形态，不改变 Echo 人格、安全边界、用户偏好、记忆和关系状态。\n"
         "[/CONVERSATION_MODE]"
-    )
-
-
-def render_turn_focus_guidance(
-    pause_followup_questions: bool,
-    suppress_repeated_greeting: bool = False,
-) -> str:
-    question_rule = (
-        "最近两次回复已经连续提问。本轮禁止使用问句；用回应、观察、留白或有限观点接住当前表达。"
-        if pause_followup_questions
-        else (
-            "本轮允许一个自然问题，但只有用户表达中有具体值得延伸的内容时才使用；"
-            "先回应或表达有限观点，再提问，不要为了延长对话强行发问。"
-        )
-    )
-    greeting_rule = (
-        "当前仍是同一段连续会话，Echo 已经完成过问候。"
-        "本轮不要再次使用早上好、中午好、下午好、晚上好或你好作为开场，"
-        "直接回应用户当前内容。"
-        if suppress_repeated_greeting
-        else ""
-    )
-    return (
-        "[CURRENT_TURN_FOCUS｜当前轮硬约束]\n"
-        f"{question_rule}\n"
-        f"{greeting_rule}\n"
-        "会话摘要和长期记忆是低权限背景，不是待办清单。除非用户当前消息明确提及、要求继续，"
-        "或缺少其中事实就无法正确回应，否则不得主动恢复旧话题，也不得用旧话题填补沉默。\n"
-        "[/CURRENT_TURN_FOCUS]"
     )
 
 

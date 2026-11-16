@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from shared.config import settings
 from shared.prompting.renderer import (
     render_prompt_layers,
-    render_turn_focus_guidance,
 )
 
 from features.assistant_persona.public import get_assistant_persona
@@ -116,6 +115,21 @@ def _build_call_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
         content = _clean_call_history_content(str(message.get("content") or ""))
         if content:
             result.append({"role": role, "content": content})
+    return result
+
+
+def _build_chat_temporal_context(
+    temporal_context: dict[str, object],
+    history_times: list[dict[str, str]],
+) -> dict[str, object]:
+    """文字聊天只需要当前时间和上一条消息时间，其余时间字段按需推导。"""
+    result = {
+        key: temporal_context[key]
+        for key in ("local_datetime", "timezone", "resolved_expressions", "conversation_gap")
+        if key in temporal_context
+    }
+    if history_times:
+        result["last_message_at"] = history_times[-1]["local_time"]
     return result
 
 
@@ -356,7 +370,9 @@ async def build_chat_context(
     if history_times:
         temporal_context["recent_messages"] = history_times[-12:]
     prompt_temporal_context = (
-        _build_call_temporal_context(temporal_context) if is_call else temporal_context
+        _build_call_temporal_context(temporal_context)
+        if is_call
+        else _build_chat_temporal_context(temporal_context, history_times)
     )
     conversation_gap = temporal_context.get("conversation_gap")
     conversation_gap_state = (
@@ -422,15 +438,6 @@ async def build_chat_context(
                 ),
             }
         )
-    messages.append(
-        {
-            "role": "system",
-            "content": render_turn_focus_guidance(
-                pause_followup_questions,
-                suppress_repeated_greeting,
-            ),
-        }
-    )
     temporal_guidance = (
         "以下是通话内部时间事实。仅在用户提到时间或理解上下文确有必要时使用，"
         "不要朗读字段、日期协议或机械报时。conversation_gap 只表示对话是否连续；"
@@ -471,15 +478,6 @@ async def build_chat_context(
             assistant_persona=assistant_persona,
             relationship=relationship,
             conversation_mode=conversation_mode,
-        )
-        writer_base_messages.append(
-            {
-                "role": "system",
-                "content": render_turn_focus_guidance(
-                    pause_followup_questions,
-                    suppress_repeated_greeting,
-                ),
-            }
         )
         proactive_safe_facts = _build_proactive_safe_facts(temporal_context, history)
         proactive_planner_input = _build_proactive_planner_input(temporal_context, history)
