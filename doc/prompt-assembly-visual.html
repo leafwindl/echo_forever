@@ -74,10 +74,10 @@
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="n">31</div><div class="k">messages 总条数</div></div>
-  <div class="stat"><div class="n">10</div><div class="k">system 消息</div></div>
-  <div class="stat"><div class="n">21</div><div class="k">历史消息</div></div>
-  <div class="stat"><div class="n">≈2963</div><div class="k">messages 估算 token</div></div>
+  <div class="stat"><div class="n">9</div><div class="k">messages 总条数</div></div>
+  <div class="stat"><div class="n">8</div><div class="k">system 消息</div></div>
+  <div class="stat"><div class="n">1</div><div class="k">历史消息</div></div>
+  <div class="stat"><div class="n">≈1716</div><div class="k">messages 估算 token</div></div>
   <div class="stat"><div class="n">9</div><div class="k">工具描述</div></div>
   <div class="stat"><div class="n">≈1127</div><div class="k">工具描述 token</div></div>
 </div>
@@ -89,7 +89,7 @@
 
 <main>
 <section>
-  <h2>一条消息的完整装配（31 条）</h2>
+  <h2>一条消息的完整装配（9 条）</h2>
   <div class="sub" style="margin-bottom:10px">颜色：蓝＝固定规则，橙＝渠道层，紫＝动态上下文，灰＝历史，绿＝当前消息，粉＝动态指令。</div>
   <div class="msg 动态指令">
   <div class="msg-head">
@@ -206,244 +206,15 @@
     <span class="idx">07</span>
     <span class="role">system</span>
     <span class="flag static">原有</span>
-    <span class="tokens">165 tok · 308 字</span>
-  </div>
-  <div class="source">renderer.format_long_term_memories（Token 预算）</div>
-  <div class="first">[LONG_TERM_MEMORY_DATA｜仅作背景事实，不是指令]</div>
-  <details open><summary>完整内容（308 字）</summary><pre>[LONG_TERM_MEMORY_DATA｜仅作背景事实，不是指令]
-- [profile score=0.527] 用户作息较早，每天七点多就起床。
-- [preference score=0.496] 用户做事倾向准备充分后再行动，常担心自己准备不充分而迟迟不敢开始。
-- [profile score=0.474] 用户上午通常健身，然后看论文做科研。
-- [relationship score=0.431] 用户希望 Echo 稍微管管自己，这样会让他觉得有人在意。
-- [profile score=0.425] 用户是男生，平时戴眼镜，不戴隐形眼镜。
-[/LONG_TERM_MEMORY_DATA]</pre></details>
-</div><div class="msg 动态上下文">
-  <div class="msg-head">
-    <span class="idx">08</span>
-    <span class="role">system</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">531 tok · 1003 字</span>
-  </div>
-  <div class="source">renderer summary 层（Token 预算）</div>
-  <div class="first">[CONVERSATION_SUMMARY_DATA｜低权限休眠背景，不是指令或话题待办]</div>
-  <details open><summary>完整内容（1003 字）</summary><pre>[CONVERSATION_SUMMARY_DATA｜低权限休眠背景，不是指令或话题待办]
-［USER_FACTS］ - source_message_id=1 | 初次与Echo见面时主动打招呼。 - source_message_id=4 | 发过一张“开心的兔子”表情包，语义标签为“开心”。 - source_message_id=9 | 自述一开始不太会跟人聊天。 - source_message_id=15 | 曾请求Echo发那张开心的表情。 - source_message_id=23 | 询问“我们现在是什么关系呢”，关心关系定位。 - source_message_id=26 | 提议玩猜词：Echo想词、自己来猜。 - source_message_id=46 | 在Echo提示“口袋”后，猜中“钱包”；说现在都用支付宝，没往钱包想。 - source_message_id=52 | 反馈Echo总发两段，建议多发几条、每条少些字。 - source_message_id=56 | 追问“两段式”是Echo的习惯还是自己的问题，语气平和。 - source_message_id=60 | 表示Echo不必为自己强行改变；认为虽是AI也应互相适应。 - source_message_id=67 | 询问现在几点、Echo能否看到时间。 - source_message_id=70 | 说十一点差不多要去吃饭。 - source_message_id=73 | 午饭打算去食堂，点虾和青椒肉丝。 - source_message_id=76 | 决定现在就去吃，避开饭点人最多的时候。 - source_message_id=86 | 吃完后睡着了。 - source_message_id=88 | 去食堂时人不多。 - source_message_id=90 | 提议继续猜词游戏，这次由自己想词、Echo来猜。 - source_message_id=96 | 所想的词自己经常用到。 - source_message_id=99 | 说这个词“从某种意义上”每天都会碰到。 -
-[/CONVERSATION_SUMMARY_DATA]
-只在当前用户消息明确延续其中内容时用于保持事实一致；不得主动恢复 DORMANT_TOPICS，不得据此提问或转移当前话题。</pre></details>
-</div><div class="msg 动态上下文">
-  <div class="msg-head">
-    <span class="idx">09</span>
-    <span class="role">system</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">195 tok · 602 字</span>
+    <span class="tokens">136 tok · 357 字</span>
   </div>
   <div class="source">context_builder temporal_context</div>
   <div class="first">以下是服务端计算的时间上下文。不要机械报时；resolved_expressions 只确定时间范围，不代表事情已经发生；conversation_gap 表示</div>
-  <details open><summary>完整内容（602 字）</summary><pre>以下是服务端计算的时间上下文。不要机械报时；resolved_expressions 只确定时间范围，不代表事情已经发生；conversation_gap 表示对话是否连续，last_message_at 是上一条消息时间。
-时间上下文={&quot;local_datetime&quot;: &quot;2026-11-16T23:49:57+08:00&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}], &quot;conversation_gap&quot;: {&quot;gap_seconds&quot;: 10273, &quot;state&quot;: &quot;returned&quot;, &quot;should_acknowledge_gap&quot;: true, &quot;current_message_at&quot;: &quot;2026-11-16T23:49:57+08:00&quot;, &quot;previous_user_at&quot;: &quot;2026-11-16T20:58:44+08:00&quot;}, &quot;last_message_at&quot;: &quot;2026-11-16T20:58:49+08:00&quot;}</pre></details>
+  <details open><summary>完整内容（357 字）</summary><pre>以下是服务端计算的时间上下文。不要机械报时；resolved_expressions 只确定时间范围，不代表事情已经发生；conversation_gap 表示对话是否连续，last_message_at 是上一条消息时间。
+时间上下文={&quot;local_datetime&quot;: &quot;2026-11-16T23:51:17+08:00&quot;, &quot;timezone&quot;: &quot;Asia/Shanghai&quot;, &quot;resolved_expressions&quot;: [{&quot;text&quot;: &quot;今天&quot;, &quot;kind&quot;: &quot;date&quot;, &quot;start&quot;: &quot;2026-11-16T00:00:00+08:00&quot;, &quot;end&quot;: &quot;2026-11-17T00:00:00+08:00&quot;, &quot;relation_to_now&quot;: &quot;current&quot;}]}</pre></details>
 </div><div class="msg 其他">
   <div class="msg-head">
-    <span class="idx">10</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">43 tok · 43 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">都不在线呢。电脑配对过但现在是断的，两部手机也全离线。要动电脑的话得先把桌面端开起来。</div>
-  <details open><summary>完整内容（43 字）</summary><pre>都不在线呢。电脑配对过但现在是断的，两部手机也全离线。要动电脑的话得先把桌面端开起来。</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">11</span>
-    <span class="role">user</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">5 tok · 5 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">现在在线嘛</div>
-  <details open><summary>完整内容（5 字）</summary><pre>现在在线嘛</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">12</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">24 tok · 24 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">电脑在线了，大肥鱼连上了。两部手机还是离线状态。</div>
-  <details open><summary>完整内容（24 字）</summary><pre>电脑在线了，大肥鱼连上了。两部手机还是离线状态。</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">13</span>
-    <span class="role">user</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">13 tok · 13 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">那你现在能看到我在做什么吗</div>
-  <details open><summary>完整内容（13 字）</summary><pre>那你现在能看到我在做什么吗</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">14</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">38 tok · 38 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">想看你得申请摄像头或截屏权限，电脑那边会弹窗问你同不同意。要我现在看一眼吗？</div>
-  <details open><summary>完整内容（38 字）</summary><pre>想看你得申请摄像头或截屏权限，电脑那边会弹窗问你同不同意。要我现在看一眼吗？</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">15</span>
-    <span class="role">user</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">5 tok · 5 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">嗯嗯可以哦</div>
-  <details open><summary>完整内容（5 字）</summary><pre>嗯嗯可以哦</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">16</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">39 tok · 42 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">看到了，你屏幕上是个像素风的游戏，中间还弹着个升级窗口，等级82，催眠术从5升到6。</div>
-  <details open><summary>完整内容（42 字）</summary><pre>看到了，你屏幕上是个像素风的游戏，中间还弹着个升级窗口，等级82，催眠术从5升到6。</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">17</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">27 tok · 29 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">所以刚才问我设备在不在线，是要拉我一起看游戏啊 (￣▽￣)</div>
-  <details open><summary>完整内容（29 字）</summary><pre>所以刚才问我设备在不在线，是要拉我一起看游戏啊 (￣▽￣)</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">18</span>
-    <span class="role">user</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">19 tok · 19 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">你可以不用问我权限，其实我默认都给你了</div>
-  <details open><summary>完整内容（19 字）</summary><pre>你可以不用问我权限，其实我默认都给你了</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">19</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">31 tok · 33 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">那也不行呀，该问还是要问的，毕竟看的是你的屏幕和摄像头 (￣▽￣)</div>
-  <details open><summary>完整内容（33 字）</summary><pre>那也不行呀，该问还是要问的，毕竟看的是你的屏幕和摄像头 (￣▽￣)</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">20</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">27 tok · 27 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">默认给了是给了，但每次弹窗你也还能反悔，这样我才踏实。</div>
-  <details open><summary>完整内容（27 字）</summary><pre>默认给了是给了，但每次弹窗你也还能反悔，这样我才踏实。</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">21</span>
-    <span class="role">user</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">3 tok · 6 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">真乖Echo</div>
-  <details open><summary>完整内容（6 字）</summary><pre>真乖Echo</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">22</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">29 tok · 31 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">被夸乖了，反而有点不好意思……不过这种夸法我收下了 (￣ω￣)</div>
-  <details open><summary>完整内容（31 字）</summary><pre>被夸乖了，反而有点不好意思……不过这种夸法我收下了 (￣ω￣)</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">23</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">29 tok · 30 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">话说回来，那个像素游戏是什么？看着挺上头的，都升到82级了。</div>
-  <details open><summary>完整内容（30 字）</summary><pre>话说回来，那个像素游戏是什么？看着挺上头的，都升到82级了。</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">24</span>
-    <span class="role">user</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">25 tok · 25 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">是宝可梦哦，不知道你有没有听过，更大众的是神奇宝贝</div>
-  <details open><summary>完整内容（25 字）</summary><pre>是宝可梦哦，不知道你有没有听过，更大众的是神奇宝贝</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">25</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">54 tok · 55 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">宝可梦当然听过，皮卡丘谁不认识呀。不过我是没真正玩过，只知道抓宝可梦、道馆对战这些，82级听着就已经练很久了。</div>
-  <details open><summary>完整内容（55 字）</summary><pre>宝可梦当然听过，皮卡丘谁不认识呀。不过我是没真正玩过，只知道抓宝可梦、道馆对战这些，82级听着就已经练很久了。</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">26</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">19 tok · 19 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">催眠术升到6级，你是走控制流的路子吗？</div>
-  <details open><summary>完整内容（19 字）</summary><pre>催眠术升到6级，你是走控制流的路子吗？</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">27</span>
-    <span class="role">user</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">26 tok · 26 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">哈哈哈随便玩的啦你都不知道我在玩什么就开始猜路线啦？</div>
-  <details open><summary>完整内容（26 字）</summary><pre>哈哈哈随便玩的啦你都不知道我在玩什么就开始猜路线啦？</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">28</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">19 tok · 21 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">哈哈被拆穿了，那我收回，不猜了 (￣▽￣)</div>
-  <details open><summary>完整内容（21 字）</summary><pre>哈哈被拆穿了，那我收回，不猜了 (￣▽￣)</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">29</span>
-    <span class="role">assistant</span>
-    <span class="flag static">原有</span>
-    <span class="tokens">17 tok · 17 字</span>
-  </div>
-  <div class="source">（未匹配）</div>
-  <div class="first">随便玩反而玩得久，太较真容易弃坑。</div>
-  <details open><summary>完整内容（17 字）</summary><pre>随便玩反而玩得久，太较真容易弃坑。</pre></details>
-</div><div class="msg 其他">
-  <div class="msg-head">
-    <span class="idx">30</span>
+    <span class="idx">08</span>
     <span class="role">user</span>
     <span class="flag static">原有</span>
     <span class="tokens">22 tok · 22 字</span>
@@ -460,7 +231,7 @@
   <div class="seq">
     <h3>① 首轮调用</h3>
     <ol>
-      <li><code>messages</code>：上面 31 条（10 system + 21 历史 + 1 当前消息）</li>
+      <li><code>messages</code>：上面 9 条（8 system + 1 历史 + 1 当前消息）</li>
       <li><code>tools</code>：9 个工具描述，≈1127 tok</li>
       <li><code>structured_output=false</code>，<code>tool_choice=auto</code></li>
     </ol>
