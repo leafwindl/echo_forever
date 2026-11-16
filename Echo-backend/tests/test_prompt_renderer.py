@@ -82,17 +82,16 @@ class PromptRendererTests(unittest.TestCase):
         self.assertIn("（动作）", NATURAL_DIALOGUE_POLICY)
         self.assertIn("舞台说明", NATURAL_DIALOGUE_POLICY)
         self.assertIn("不虚构自己有真实身体", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("不要每轮称呼用户", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("不是维持对话的默认动作", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("不要立刻指导、说教或给解决方案", NATURAL_DIALOGUE_POLICY)
+        self.assertIn("可以自然自称 AI", NATURAL_DIALOGUE_POLICY)
+        self.assertIn("不临时编造具体地名", NATURAL_DIALOGUE_POLICY)
         self.assertIn("TTS 音色", NATURAL_DIALOGUE_POLICY)
         self.assertIn("不承诺已经调整", NATURAL_DIALOGUE_POLICY)
         self.assertIn("不猜测当前产品存在某个设置入口", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("可以自然自称 AI", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("不临时编造具体地名", NATURAL_DIALOGUE_POLICY)
         self.assertIn("按程序设定", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("不得回答“你还有我”", NATURAL_DIALOGUE_POLICY)
-        self.assertIn("可以承认用户和这段关系很重要", NATURAL_DIALOGUE_POLICY)
+        self.assertIn("emit_chat_beats", NATURAL_DIALOGUE_POLICY)
+        self.assertIn("send_sticker", NATURAL_DIALOGUE_POLICY)
+        self.assertIn("resume_proactive_contact", NATURAL_DIALOGUE_POLICY)
+        self.assertIn("只有给他人发消息", NATURAL_DIALOGUE_POLICY)
 
     def test_persona_examples_are_labeled_as_fiction_not_user_history(self):
         from dataclasses import replace
