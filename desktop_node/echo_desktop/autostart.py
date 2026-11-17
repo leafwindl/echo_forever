@@ -9,8 +9,10 @@ _APP_NAME = "EchoDesktop"
 
 
 def autostart_command() -> str:
-    """登录后启动的命令：用当前 Python 直接打开客户端窗口。"""
-    python = Path(sys.executable)
+    """登录后启动的命令：优先用 pythonw，避免出现控制台窗口。"""
+    executable = Path(sys.executable)
+    windowless = executable.with_name("pythonw.exe")
+    python = windowless if windowless.is_file() else executable
     launcher = Path(__file__).resolve().parent.parent / "launch_client.py"
     return f'"{python}" "{launcher}"'
 

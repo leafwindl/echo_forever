@@ -104,14 +104,17 @@ function Start-Client {
 
     if ($NoGui -or -not $hasGui) {
         $mode = "run"
+        $launchPython = $python
         if (-not $hasGui -and -not $NoGui) {
             Write-Host "未安装 PySide6，自动使用无界面模式（run）" -ForegroundColor Yellow
         }
     } else {
         $mode = "client"
+        $windowless = Join-Path (Split-Path $python) "pythonw.exe"
+        $launchPython = if (Test-Path $windowless) { $windowless } else { $python }
     }
 
-    Start-Process -FilePath $python `
+    Start-Process -FilePath $launchPython `
         -ArgumentList @("-B", "-m", "echo_desktop", $mode) `
         -WorkingDirectory $desktopDir
     Write-Host ("客户端已启动（{0} 模式）" -f $mode) -ForegroundColor Green
