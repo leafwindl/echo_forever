@@ -19,6 +19,7 @@ def _node(row: dict[str, Any]) -> DesktopNode:
         user_id=str(row["user_id"]),
         name=str(row["name"]),
         capabilities=tuple(str(item) for item in capabilities),
+        owner_type=str(row.get("owner_type") or "user"),
         status=str(row["status"]),
         last_seen_at=row.get("last_seen_at"),
         created_at=row.get("created_at"),
@@ -110,18 +111,70 @@ class PostgresDesktopRepository:
             row = cursor.fetchone()
             return _node(row) if row else None
 
-    def list_nodes(self, user_id: str) -> list[DesktopNode]:
+    def list_nodes(self, user_id: str, owner_type: str | None = None) -> list[DesktopNode]:
         with get_connection() as conn, conn.cursor() as cursor:
+            if owner_type is None:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM desktop_nodes
+                    WHERE user_id = %s AND status <> 'revoked'
+                    ORDER BY last_seen_at DESC NULLS LAST, created_at DESC
+                    """,
+                    (user_id,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM desktop_nodes
+                    WHERE user_id = %s AND owner_type = %s AND status <> 'revoked'
+                    ORDER BY last_seen_at DESC NULLS LAST, created_at DESC
+                    """,
+                    (user_id, owner_type),
+                )
+            return [_node(row) for row in cursor.fetchall()]
+
+    def create_owned_node(
+        self,
+        *,
+        user_id: str,
+        node_name: str,
+        token_hash: str,
+        node_id: str,
+        capabilities: tuple[str, ...],
+        owner_type: str,
+        now: datetime,
+    ) -> DesktopNode:
+        """Echo 自有设备（虚拟机）直接落库，不需要配对码。"""
+        with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT *
-                FROM desktop_nodes
-                WHERE user_id = %s AND status <> 'revoked'
-                ORDER BY last_seen_at DESC NULLS LAST, created_at DESC
+                INSERT INTO desktop_nodes (
+                    node_id, user_id, name, fingerprint, token_hash,
+                    capabilities, owner_type, status, last_seen_at
+                ) VALUES (%s, %s, %s, '', %s, %s, %s, 'offline', %s)
+                ON CONFLICT (node_id) DO UPDATE
+                SET name = EXCLUDED.name,
+                    token_hash = EXCLUDED.token_hash,
+                    capabilities = EXCLUDED.capabilities,
+                    owner_type = EXCLUDED.owner_type,
+                    status = 'offline',
+                    updated_at = NOW()
+                RETURNING *
                 """,
-                (user_id,),
+                (
+                    node_id,
+                    user_id,
+                    node_name,
+                    token_hash,
+                    Jsonb(list(capabilities)),
+                    owner_type,
+                    now,
+                ),
             )
-            return [_node(row) for row in cursor.fetchall()]
+            row = cursor.fetchone()
+        return _node(row)
 
     def revoke_node(self, user_id: str, node_id: str) -> bool:
         with transaction() as conn, conn.cursor() as cursor:

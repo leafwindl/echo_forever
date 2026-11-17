@@ -73,8 +73,28 @@ class DesktopNodeManagement:
             raise DesktopPairingError()
         return PairedNode(node=node, token=token)
 
-    def list_nodes(self, user_id: str) -> list[DesktopNode]:
-        return self.repository.list_nodes(user_id)
+    def create_echo_computer(
+        self,
+        *,
+        user_id: str,
+        node_name: str,
+        capabilities: tuple[str, ...],
+    ) -> PairedNode:
+        """创建 Echo 自有设备（虚拟机），不走配对码。"""
+        token = generate_node_token()
+        node = self.repository.create_owned_node(
+            user_id=user_id,
+            node_name=node_name.strip()[:80] or "EchoComputer",
+            token_hash=node_token_hash(token),
+            node_id=f"dnode_{uuid.uuid4().hex}",
+            capabilities=capabilities,
+            owner_type="echo",
+            now=datetime.now(UTC),
+        )
+        return PairedNode(node=node, token=token)
+
+    def list_nodes(self, user_id: str, owner_type: str | None = None) -> list[DesktopNode]:
+        return self.repository.list_nodes(user_id, owner_type)
 
     def revoke_node(self, user_id: str, node_id: str) -> bool:
         return self.repository.revoke_node(user_id, node_id)

@@ -77,15 +77,26 @@ class DesktopNodeHub:
             if key.startswith(user_id + ":")
         )
 
-    def select_node(self, user_id: str, node_id: str | None = None) -> DesktopNode:
-        return self._select(user_id, node_id).node
+    def select_node(
+        self,
+        user_id: str,
+        node_id: str | None = None,
+        owner_type: str | None = None,
+    ) -> DesktopNode:
+        return self._select(user_id, node_id, owner_type).node
 
-    def _select(self, user_id: str, node_id: str | None = None) -> _Connection:
+    def _select(
+        self,
+        user_id: str,
+        node_id: str | None = None,
+        owner_type: str | None = None,
+    ) -> _Connection:
         candidates = [
             connection
             for key, connection in self._connections.items()
             if key.startswith(user_id + ":")
             and (node_id is None or connection.node.node_id == node_id)
+            and (owner_type is None or connection.node.owner_type == owner_type)
         ]
         if not candidates:
             raise DesktopOfflineError()

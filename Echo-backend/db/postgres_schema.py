@@ -844,6 +844,8 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             fingerprint TEXT NOT NULL DEFAULT '',
             token_hash CHAR(64) NOT NULL UNIQUE,
             capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
+            owner_type VARCHAR(16) NOT NULL DEFAULT 'user'
+                CHECK (owner_type IN ('user', 'echo')),
             status VARCHAR(16) NOT NULL DEFAULT 'offline'
                 CHECK (status IN ('online', 'offline', 'revoked')),
             last_seen_at TIMESTAMPTZ,
@@ -1109,6 +1111,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ALTER TABLE proactive_goals ADD COLUMN IF NOT EXISTS result_summary TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE study_focus_sessions ADD COLUMN IF NOT EXISTS completion_goal_id TEXT",
         "ALTER TABLE presence_thoughts ADD COLUMN IF NOT EXISTS draft_text TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE desktop_nodes ADD COLUMN IF NOT EXISTS owner_type VARCHAR(16) NOT NULL DEFAULT 'user'",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS cycle_started_at TIMESTAMPTZ",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS allowed_contact_seconds INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS last_accounted_at TIMESTAMPTZ",

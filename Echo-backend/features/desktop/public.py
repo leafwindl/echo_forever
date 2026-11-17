@@ -37,8 +37,21 @@ def pair_desktop_node(
     )
 
 
-def list_desktop_nodes(user_id: str) -> list[DesktopNodeStatus]:
-    return get_desktop_service().status(user_id)
+def list_desktop_nodes(user_id: str, owner_type: str | None = None) -> list[DesktopNodeStatus]:
+    return get_desktop_service().status(user_id, owner_type)
+
+
+def create_echo_computer(
+    *,
+    user_id: str,
+    node_name: str,
+    capabilities: tuple[str, ...],
+) -> PairedNode:
+    return get_desktop_node_management().create_echo_computer(
+        user_id=user_id,
+        node_name=node_name,
+        capabilities=capabilities,
+    )
 
 
 def revoke_desktop_node(user_id: str, node_id: str) -> bool:
@@ -63,12 +76,14 @@ async def execute_desktop_action(
     action: str,
     arguments: dict[str, Any],
     timeout_seconds: int | None = None,
+    owner_type: str = "user",
 ) -> DesktopCommandResult:
     return await get_desktop_service().execute(
         user_id=user_id,
         action=action,
         arguments=arguments,
         timeout_seconds=timeout_seconds,
+        owner_type=owner_type,
     )
 
 
@@ -82,6 +97,7 @@ __all__ = [
     "PairedNode",
     "authenticate_desktop_node",
     "create_desktop_pairing_code",
+    "create_echo_computer",
     "execute_desktop_action",
     "list_desktop_nodes",
     "pair_desktop_node",

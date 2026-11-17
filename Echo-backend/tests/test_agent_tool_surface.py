@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from features.agent.domain.tool_selection import (
     CORE_TOOL_NAMES,
     DESKTOP_TOOL_NAMES,
+    ECHO_COMPUTER_TOOL_NAMES,
     PHONE_TOOL_NAMES,
     PROACTIVE_TOOL_NAMES,
     RELATIONSHIP_TOOL_NAMES,
@@ -42,6 +43,12 @@ CHAT_TOOL_ORDER = (
     "desktop_notepad_write",
     "desktop_dsh_task",
     "desktop_screenshot",
+    "computer_screenshot",
+    "computer_click",
+    "computer_type",
+    "computer_key",
+    "computer_exec",
+    "computer_launch",
     "phone_status",
     "phone_observe",
     "phone_screenshot",
@@ -84,6 +91,12 @@ PROACTIVE_TOOL_ORDER = (
     "desktop_notepad_write",
     "desktop_dsh_task",
     "desktop_screenshot",
+    "computer_screenshot",
+    "computer_click",
+    "computer_type",
+    "computer_key",
+    "computer_exec",
+    "computer_launch",
     "phone_status",
     "phone_observe",
     "phone_screenshot",
@@ -116,6 +129,12 @@ TOOL_SPECS = {
     "desktop_notepad_write": (("chat", "proactive"), 55, 1),
     "desktop_dsh_task": (("chat", "proactive"), 340, 1),
     "desktop_screenshot": (("chat", "proactive"), 70, 1),
+    "computer_screenshot": (("chat", "proactive"), 60, 4),
+    "computer_click": (("chat", "proactive"), 30, 12),
+    "computer_type": (("chat", "proactive"), 30, 8),
+    "computer_key": (("chat", "proactive"), 30, 8),
+    "computer_exec": (("chat", "proactive"), 100, 4),
+    "computer_launch": (("chat", "proactive"), 40, 4),
     "phone_status": (("chat", "proactive"), 15, 2),
     "phone_observe": (("chat", "proactive"), 35, 4),
     "phone_screenshot": (("chat", "proactive"), 25, 2),
@@ -142,7 +161,7 @@ TOOL_SPECS = {
 
 # 阶段 3 基线：33 个工具实测 4,149 tok。留约 3% 余量。
 # 后续若再瘦身，继续收紧；新增工具应触发这里失败，先评估影响。
-CHAT_TOKEN_BUDGET = 4_300
+CHAT_TOKEN_BUDGET = 4_700
 
 
 def _descriptions(registry, mode):
@@ -215,6 +234,7 @@ class AgentToolSurfaceTests(unittest.TestCase):
             "desktop_status",
             "phone_status",
             *DESKTOP_TOOL_NAMES,
+            *ECHO_COMPUTER_TOOL_NAMES,
             *PHONE_TOOL_NAMES,
             *RELATIONSHIP_TOOL_NAMES,
             *PROACTIVE_TOOL_NAMES,

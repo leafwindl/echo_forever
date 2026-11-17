@@ -23,22 +23,40 @@ logger = logging.getLogger(__name__)
 class ToolAvailability:
     desktop_online: bool = False
     phone_online: bool = False
+    echo_computer_online: bool = False
 
 
 async def load_tool_availability(user_id: str) -> ToolAvailability:
-    desktop_online, phone_online = await asyncio.gather(
+    desktop_online, phone_online, echo_computer_online = await asyncio.gather(
         asyncio.to_thread(_desktop_online, user_id),
         asyncio.to_thread(_phone_online, user_id),
+        asyncio.to_thread(_echo_computer_online, user_id),
     )
-    return ToolAvailability(desktop_online=desktop_online, phone_online=phone_online)
+    return ToolAvailability(
+        desktop_online=desktop_online,
+        phone_online=phone_online,
+        echo_computer_online=echo_computer_online,
+    )
 
 
 def _desktop_online(user_id: str) -> bool:
     try:
-        return any(node.online for node in list_desktop_nodes(user_id))
+        return any(node.online for node in list_desktop_nodes(user_id, "user"))
     except Exception:
         logger.warning(
             "Desktop availability lookup failed user_id=%s; falling back to available",
+            user_id,
+            exc_info=True,
+        )
+        return True
+
+
+def _echo_computer_online(user_id: str) -> bool:
+    try:
+        return any(node.online for node in list_desktop_nodes(user_id, "echo"))
+    except Exception:
+        logger.warning(
+            "Echo computer availability lookup failed user_id=%s; falling back to available",
             user_id,
             exc_info=True,
         )

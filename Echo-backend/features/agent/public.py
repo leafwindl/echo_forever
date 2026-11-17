@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Awaitable, Callable
 
 from shared.config import settings
@@ -16,6 +17,8 @@ from features.agent.infrastructure.container import (
     get_daily_letter_agent,
     get_proactive_planner,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def run_chat_agent(
@@ -64,11 +67,24 @@ async def run_chat_agent(
             trigger_message=message,
             desktop_online=availability.desktop_online,
             phone_online=availability.phone_online,
+            echo_computer_online=availability.echo_computer_online,
         )
         if conversation_mode == "chat":
             allowed_tool_names = select_chat_tool_names(selection_context)
         else:
             allowed_tool_names = select_proactive_tool_names(selection_context)
+        computer_tool_count = sum(
+            1 for name in (allowed_tool_names or ()) if name.startswith("computer_")
+        )
+        logger.info(
+            "Agent tool selection mode=%s desktop=%s phone=%s echo_computer=%s tools=%d computer=%d",
+            conversation_mode,
+            availability.desktop_online,
+            availability.phone_online,
+            availability.echo_computer_online,
+            len(allowed_tool_names or ()),
+            computer_tool_count,
+        )
     return await agent.execute(
         user_id,
         message,

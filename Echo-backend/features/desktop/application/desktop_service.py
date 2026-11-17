@@ -49,11 +49,11 @@ class DesktopService:
     def revoke_node(self, user_id: str, node_id: str) -> bool:
         return self.management.revoke_node(user_id, node_id)
 
-    def status(self, user_id: str) -> list[DesktopNodeStatus]:
+    def status(self, user_id: str, owner_type: str | None = None) -> list[DesktopNodeStatus]:
         online_ids = set(self.hub.online_node_ids(user_id))
         return [
             DesktopNodeStatus(node=node, online=node.node_id in online_ids)
-            for node in self.repository.list_nodes(user_id)
+            for node in self.repository.list_nodes(user_id, owner_type)
         ]
 
     async def execute(
@@ -64,10 +64,11 @@ class DesktopService:
         arguments: dict[str, Any],
         timeout_seconds: int | None = None,
         node_id: str | None = None,
+        owner_type: str = "user",
     ) -> DesktopCommandResult:
         cleaned = validate_action_arguments(action, arguments)
         timeout = timeout_seconds or self.command_timeout_seconds
-        target = self.hub.select_node(user_id, node_id)
+        target = self.hub.select_node(user_id, node_id, owner_type)
         action_id = f"dact_{uuid.uuid4().hex}"
         started = time.monotonic()
         self.repository.record_action_start(

@@ -45,6 +45,11 @@ def normalize_capabilities(capabilities: tuple[str, ...] | list[str]) -> tuple[s
         "music_search_play",
         "notepad_write",
         "speak",
+        "click",
+        "type",
+        "key",
+        "exec",
+        "launch",
     }
     return tuple(dict.fromkeys(item for item in capabilities if item in allowed))
 
@@ -87,4 +92,33 @@ def validate_action_arguments(action: str, arguments: dict) -> dict:
         if not text:
             raise ValueError("text is required")
         return {"text": text[:500]}
+    if action == "click":
+        try:
+            x = int(arguments.get("x"))
+            y = int(arguments.get("y"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("x and y are required") from exc
+        if x < 0 or y < 0:
+            raise ValueError("x and y must be positive")
+        return {"x": x, "y": y, "right": bool(arguments.get("right"))}
+    if action == "type":
+        text = str(arguments.get("text") or "")
+        if not text:
+            raise ValueError("text is required")
+        return {"text": text[:2000]}
+    if action == "key":
+        keys = str(arguments.get("keys") or "").strip()
+        if not keys:
+            raise ValueError("keys is required")
+        return {"keys": keys[:100]}
+    if action == "exec":
+        command = str(arguments.get("command") or "").strip()
+        if not command:
+            raise ValueError("command is required")
+        return {"command": command[:4000]}
+    if action == "launch":
+        path = str(arguments.get("path") or "").strip()
+        if not path:
+            raise ValueError("path is required")
+        return {"path": path[:500]}
     raise ValueError("unsupported desktop action")

@@ -27,9 +27,21 @@ class DesktopRepository(Protocol):
         now: datetime,
     ) -> DesktopNode | None: ...
 
+    def create_owned_node(
+        self,
+        *,
+        user_id: str,
+        node_name: str,
+        token_hash: str,
+        node_id: str,
+        capabilities: tuple[str, ...],
+        owner_type: str,
+        now: datetime,
+    ) -> DesktopNode: ...
+
     def find_node_by_token_hash(self, token_hash: str) -> DesktopNode | None: ...
 
-    def list_nodes(self, user_id: str) -> list[DesktopNode]: ...
+    def list_nodes(self, user_id: str, owner_type: str | None = None) -> list[DesktopNode]: ...
 
     def revoke_node(self, user_id: str, node_id: str) -> bool: ...
 

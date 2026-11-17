@@ -70,6 +70,17 @@ PROACTIVE_TOOL_NAMES = (
     "resume_proactive_contact",
 )
 
+# Echo 自己的虚拟机（owner_type=echo）。这些能力不需要用户授权，
+# 与 desktop_* 的区别只在目标机器属于自己的电脑。
+ECHO_COMPUTER_TOOL_NAMES = (
+    "computer_screenshot",
+    "computer_click",
+    "computer_type",
+    "computer_key",
+    "computer_exec",
+    "computer_launch",
+)
+
 _PROACTIVE_CONTACT_KEYWORDS = (
     "主动",
     "别找我",
@@ -103,6 +114,7 @@ class ToolSelectionContext:
     trigger_message: str = ""
     desktop_online: bool = False
     phone_online: bool = False
+    echo_computer_online: bool = False
 
 
 def mentions_proactive_contact(message: str) -> bool:
@@ -125,6 +137,8 @@ def select_chat_tool_names(context: ToolSelectionContext) -> tuple[str, ...] | N
         names.extend(DESKTOP_TOOL_NAMES)
     if context.phone_online:
         names.extend(PHONE_TOOL_NAMES)
+    if context.echo_computer_online:
+        names.extend(ECHO_COMPUTER_TOOL_NAMES)
     if mentions_proactive_contact(context.trigger_message):
         names.extend(PROACTIVE_TOOL_NAMES)
     return tuple(dict.fromkeys(names))
@@ -137,4 +151,6 @@ def select_proactive_tool_names(context: ToolSelectionContext) -> tuple[str, ...
         names.extend(PROACTIVE_DESKTOP_TOOL_NAMES)
     if context.phone_online:
         names.extend(PROACTIVE_PHONE_TOOL_NAMES)
+    if context.echo_computer_online:
+        names.extend(ECHO_COMPUTER_TOOL_NAMES)
     return tuple(dict.fromkeys(names))

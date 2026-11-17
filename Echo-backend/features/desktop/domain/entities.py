@@ -30,6 +30,7 @@ class DesktopNode:
     user_id: str
     name: str
     capabilities: tuple[str, ...] = field(default_factory=tuple)
+    owner_type: str = "user"
     status: str = "offline"
     last_seen_at: datetime | None = None
     created_at: datetime | None = None
