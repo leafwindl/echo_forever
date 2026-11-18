@@ -7,7 +7,9 @@ from typing import Annotated
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
+    Header,
     HTTPException,
     Request,
     WebSocket,
@@ -17,6 +19,7 @@ from fastapi import (
 from shared.interface.dependencies import CurrentUser, get_current_user
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
+from features.desktop.application.wechat_events import handle_wechat_message
 from features.desktop.domain.entities import DesktopNode, DesktopPairingError
 from features.desktop.domain.rules import normalize_capabilities
 from features.desktop.infrastructure.container import get_desktop_node_hub, get_desktop_service
@@ -176,3 +179,32 @@ async def desktop_node_ws(websocket: WebSocket):
             service.mark_offline(node)
         except Exception:
             logger.warning("Failed to mark desktop node offline node_id=%s", node.node_id)
+
+
+@router.post("/wechat/events", status_code=status.HTTP_202_ACCEPTED)
+async def wechat_event(
+    payload: dict,
+    background: BackgroundTasks,
+    authorization: Annotated[str, Header()] = "",
+) -> dict:
+    """微信桥推送的新消息事件：交给 Echo 回复后再发回微信。"""
+    token = authorization.removeprefix("Bearer ").strip()
+    node = authenticate_desktop_node(token)
+    if node is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid node token")
+    chat = str(payload.get("chat") or "").strip()
+    content = str(payload.get("content") or "").strip()
+    if not chat or not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="chat and content are required",
+        )
+    local_id = int(payload.get("local_id") or 0)
+    background.add_task(
+        handle_wechat_message,
+        user_id=node.user_id,
+        chat=chat,
+        content=content[:2000],
+        local_id=local_id,
+    )
+    return {"ok": True}
