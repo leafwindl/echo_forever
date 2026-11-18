@@ -7,7 +7,7 @@ import json
 import logging
 
 from features.chat.public import send_chat_message
-from features.desktop.application.desktop_service import get_desktop_service
+from features.desktop.application.desktop_service import DesktopService
 from features.desktop.domain.entities import DesktopError
 
 logger = logging.getLogger(__name__)
@@ -30,11 +30,11 @@ def _bridge_send_command(chat: str, text: str) -> str:
 
 async def _run_remote_command(
     *,
+    service: DesktopService,
     user_id: str,
     command: str,
     timeout_seconds: int = BRIDGE_SEND_TIMEOUT_SECONDS,
 ) -> tuple[bool, str]:
-    service = get_desktop_service()
     try:
         start = await service.execute(
             user_id=user_id,
@@ -71,6 +71,7 @@ async def _run_remote_command(
 
 async def handle_wechat_message(
     *,
+    service: DesktopService,
     user_id: str,
     chat: str,
     content: str,
@@ -89,6 +90,7 @@ async def handle_wechat_message(
             logger.info("wechat event produced empty reply local_id=%s", local_id)
             return
         ok, detail = await _run_remote_command(
+            service=service,
             user_id=user_id,
             command=_bridge_send_command(chat, reply),
         )

@@ -19,7 +19,6 @@ from fastapi import (
 from shared.interface.dependencies import CurrentUser, get_current_user
 from shared.security import RateLimitExceeded, RateLimitRule, request_limiter
 
-from features.desktop.application.wechat_events import handle_wechat_message
 from features.desktop.domain.entities import DesktopNode, DesktopPairingError
 from features.desktop.domain.rules import normalize_capabilities
 from features.desktop.infrastructure.container import get_desktop_node_hub, get_desktop_service
@@ -33,6 +32,7 @@ from features.desktop.public import (
     authenticate_desktop_node,
     list_desktop_nodes,
     pair_desktop_node,
+    relay_wechat_message,
     revoke_desktop_node,
 )
 
@@ -201,7 +201,7 @@ async def wechat_event(
         )
     local_id = int(payload.get("local_id") or 0)
     background.add_task(
-        handle_wechat_message,
+        relay_wechat_message,
         user_id=node.user_id,
         chat=chat,
         content=content[:2000],

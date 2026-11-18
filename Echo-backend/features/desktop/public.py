@@ -4,6 +4,7 @@ from typing import Any
 
 from features.desktop.application.desktop_service import DesktopNodeStatus
 from features.desktop.application.manage_nodes import PairedNode, PairingCode
+from features.desktop.application.wechat_events import handle_wechat_message
 from features.desktop.domain.entities import (
     DesktopCommandResult,
     DesktopError,
@@ -16,6 +17,23 @@ from features.desktop.infrastructure.container import (
     get_desktop_node_management,
     get_desktop_service,
 )
+
+
+async def relay_wechat_message(
+    *,
+    user_id: str,
+    chat: str,
+    content: str,
+    local_id: int,
+) -> None:
+    """微信桥事件入口：Echo 回复后把结果发回微信。"""
+    await handle_wechat_message(
+        service=get_desktop_service(),
+        user_id=user_id,
+        chat=chat,
+        content=content,
+        local_id=local_id,
+    )
 
 
 def create_desktop_pairing_code(user_id: str) -> PairingCode:
