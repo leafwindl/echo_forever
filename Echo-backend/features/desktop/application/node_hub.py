@@ -56,7 +56,7 @@ class DesktopNodeHub:
         current = self._connections.get(key)
         if current is None:
             return
-        # 鑺傜偣閲嶈繛鏃舵棫杩炴帴鐨勬竻鐞嗕笉鑳藉垹鎺夊垰娉ㄥ唽鐨勬柊杩炴帴
+        # 节点重连时旧连接的清理不能删掉刚注册的新连接
         if channel is not None and current.channel is not channel:
             return
         self._connections.pop(key, None)
@@ -150,7 +150,7 @@ class DesktopNodeHub:
             except Exception as exc:
                 raise DesktopActionError(
                     "desktop_send_failed",
-                    "鐢佃剳鑺傜偣杩炴帴寮傚父锛屾搷浣滄病鏈夐€佽揪銆?,
+                    "电脑节点连接异常，操作没有送达。",
                 ) from exc
             response = await asyncio.wait_for(future, timeout=timeout_seconds)
         except TimeoutError as exc:
