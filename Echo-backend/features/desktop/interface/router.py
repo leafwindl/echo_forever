@@ -167,7 +167,7 @@ async def desktop_node_ws(websocket: WebSocket):
     except Exception:
         logger.warning("Desktop node websocket failed node_id=%s", node.node_id, exc_info=True)
     finally:
-        hub.unregister(node)
+        hub.unregister(node, channel)
         try:
             service.mark_offline(node)
         except Exception:

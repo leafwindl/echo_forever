@@ -44,11 +44,19 @@ class DesktopNodeHub:
             channel=channel,
         )
 
-    def unregister(self, node: DesktopNode) -> None:
+    def unregister(
+        self,
+        node: DesktopNode,
+        channel: DesktopNodeChannel | None = None,
+    ) -> None:
         key = node.user_id + ":" + node.node_id
-        connection = self._connections.pop(key, None)
-        if connection is None:
+        current = self._connections.get(key)
+        if current is None:
             return
+        # 节点重连时旧连接的清理不能删掉刚注册的新连接
+        if channel is not None and current.channel is not channel:
+            return
+        self._connections.pop(key, None)
         for command_id, future in list(self._pending.items()):
             if command_id.startswith(node.node_id + ":"):
                 self._pending.pop(command_id, None)

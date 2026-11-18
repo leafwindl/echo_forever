@@ -183,6 +183,22 @@ class DesktopHubTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
+    def test_unregister_old_connection_keeps_new_one(self):
+        node = self._node()
+        old_channel = FakeChannel(node)
+        new_channel = FakeChannel(node)
+        hub = DesktopNodeHub()
+        hub.register(node, old_channel)
+        # 节点重连：新连接覆盖旧连接
+        hub.register(node, new_channel)
+        # 旧连接关闭时的清理不能把新连接删掉
+        hub.unregister(node, old_channel)
+        self.assertTrue(hub.is_online("user-1", node.node_id))
+        self.assertEqual(hub.select_node("user-1").node_id, node.node_id)
+
+        hub.unregister(node, new_channel)
+        self.assertFalse(hub.is_online("user-1", node.node_id))
+
     def test_execute_raises_offline_without_node(self):
         async def scenario():
             hub = DesktopNodeHub()
