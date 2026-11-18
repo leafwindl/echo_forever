@@ -116,6 +116,12 @@ def validate_action_arguments(action: str, arguments: dict) -> dict:
         if not command:
             raise ValueError("command is required")
         return {"command": command[:4000]}
+    if action == "job_result":
+        try:
+            job_id = int(arguments.get("job_id"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("job_id is required") from exc
+        return {"job_id": job_id}
     if action == "launch":
         path = str(arguments.get("path") or "").strip()
         if not path:

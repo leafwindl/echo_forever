@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import time
+
 from providers.vision_provider import VisionUnavailableError, describe_desktop_image
 from pydantic import BaseModel, Field
 
@@ -201,30 +204,73 @@ def register_computer_tools(registry: ToolRegistry) -> None:
     async def exec_handler(context: ToolExecutionContext, arguments: BaseModel):
         parsed = ComputerExecArguments.model_validate(arguments)
         try:
-            result = await execute_desktop_action(
+            start = await execute_desktop_action(
                 user_id=context.user_id,
                 action="exec",
                 arguments={"command": parsed.command},
-                timeout_seconds=90,
+                timeout_seconds=30,
                 owner_type="echo",
             )
         except DesktopError as exc:
             return _failed("computer_exec", exc.code, exc.message)
-        output = str(result.data.get("output") or "").strip()
-        exit_code = result.data.get("exit_code")
-        return _completed(
-            "computer_exec",
-            safe_for_model=(
-                f"命令已执行（exit={exit_code}）：\n{output[:3000]}"
-                if output
-                else f"命令已执行（exit={exit_code}），没有输出。"
-            ),
-            data={
-                "node_id": result.node_id,
-                "exit_code": exit_code,
-                "output": output[:8000],
-            },
-        )
+
+        # 旧版 agent 会同步返回输出；新版返回 job_id，需要轮询结果
+        job_id = start.data.get("job_id")
+        if job_id is None:
+            output = str(start.data.get("output") or "").strip()
+            exit_code = start.data.get("exit_code")
+            return _completed(
+                "computer_exec",
+                safe_for_model=(
+                    f"命令已执行（exit={exit_code}）：\n{output[:3000]}"
+                    if output
+                    else f"命令已执行（exit={exit_code}），没有输出。"
+                ),
+                data={
+                    "node_id": start.node_id,
+                    "exit_code": exit_code,
+                    "output": output[:8000],
+                },
+            )
+
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            await asyncio.sleep(2)
+            try:
+                result = await execute_desktop_action(
+                    user_id=context.user_id,
+                    action="job_result",
+                    arguments={"job_id": job_id},
+                    timeout_seconds=20,
+                    owner_type="echo",
+                )
+            except DesktopError as exc:
+                return _failed("computer_exec", exc.code, exc.message)
+            status = str(result.data.get("status") or "")
+            if status == "done":
+                output = str(result.data.get("output") or "").strip()
+                exit_code = result.data.get("exit_code")
+                return _completed(
+                    "computer_exec",
+                    safe_for_model=(
+                        f"命令已执行（exit={exit_code}）：\n{output[:3000]}"
+                        if output
+                        else f"命令已执行（exit={exit_code}），没有输出。"
+                    ),
+                    data={
+                        "node_id": result.node_id,
+                        "exit_code": exit_code,
+                        "output": output[:8000],
+                    },
+                )
+            if status in {"failed", "missing"}:
+                detail = str(result.data.get("output") or "").strip()
+                return _failed(
+                    "computer_exec",
+                    f"exec_{status}",
+                    f"命令执行失败：{detail[:500] or status}",
+                )
+        return _failed("computer_exec", "exec_timeout", "命令执行超过 90 秒仍未完成。")
 
     async def launch_handler(context: ToolExecutionContext, arguments: BaseModel):
         parsed = ComputerLaunchArguments.model_validate(arguments)
