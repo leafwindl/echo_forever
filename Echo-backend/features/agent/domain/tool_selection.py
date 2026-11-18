@@ -79,6 +79,9 @@ ECHO_COMPUTER_TOOL_NAMES = (
     "computer_key",
     "computer_exec",
     "computer_launch",
+    "wechat_send",
+    "wechat_messages",
+    "wechat_sessions",
 )
 
 _PROACTIVE_CONTACT_KEYWORDS = (

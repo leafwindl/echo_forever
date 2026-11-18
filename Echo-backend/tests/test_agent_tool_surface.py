@@ -49,6 +49,9 @@ CHAT_TOOL_ORDER = (
     "computer_key",
     "computer_exec",
     "computer_launch",
+    "wechat_send",
+    "wechat_messages",
+    "wechat_sessions",
     "phone_status",
     "phone_observe",
     "phone_screenshot",
@@ -97,6 +100,9 @@ PROACTIVE_TOOL_ORDER = (
     "computer_key",
     "computer_exec",
     "computer_launch",
+    "wechat_send",
+    "wechat_messages",
+    "wechat_sessions",
     "phone_status",
     "phone_observe",
     "phone_screenshot",
@@ -135,6 +141,9 @@ TOOL_SPECS = {
     "computer_key": (("chat", "proactive"), 30, 8),
     "computer_exec": (("chat", "proactive"), 100, 4),
     "computer_launch": (("chat", "proactive"), 40, 4),
+    "wechat_send": (("chat", "proactive"), 170, 4),
+    "wechat_messages": (("chat", "proactive"), 130, 6),
+    "wechat_sessions": (("chat", "proactive"), 100, 6),
     "phone_status": (("chat", "proactive"), 15, 2),
     "phone_observe": (("chat", "proactive"), 35, 4),
     "phone_screenshot": (("chat", "proactive"), 25, 2),
@@ -161,7 +170,9 @@ TOOL_SPECS = {
 
 # 阶段 3 基线：33 个工具实测 4,149 tok。留约 3% 余量。
 # 后续若再瘦身，继续收紧；新增工具应触发这里失败，先评估影响。
-CHAT_TOKEN_BUDGET = 4_700
+# 微信三件套（send/messages/sessions）再占约 288 tok：Echo 自有电脑上的
+# 实际社交能力，评估后把棘轮放到 5,000。
+CHAT_TOKEN_BUDGET = 5_000
 
 
 def _descriptions(registry, mode):
