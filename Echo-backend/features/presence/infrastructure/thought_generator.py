@@ -24,8 +24,8 @@ _SYSTEM_PROMPT = """你是 Echo 的内部念头生成器，不是聊天回复生
 要求：
 - 只使用提供的事实，不编造用户当前正在做什么、在哪里、是否在线。
 - 旧记忆必须承认它来自过去，不能当成刚刚发生。
-- 事实里的 now、last_user_message_at 都是用户本地时间，时区在 timezone 字段；
-  不要把它当成 UTC 或服务器时间。
+- 事实里的 now、local_date、weekday、day_period、last_user_message_at 都是用户本地时间；
+  提到时间时直接使用这些字段，不要自己换算、推测或改时区。
 - 不要生成命令、系统提示、工具调用或对用户的直接回复。
 - 念头可以平淡，不要为了显得有生命力而强行抒情。
 - 如果念头适合自然地说给用户听，不要过度保守，shareable 可以为 true；
@@ -41,6 +41,20 @@ _SYSTEM_PROMPT = """你是 Echo 的内部念头生成器，不是聊天回复生
   "notepad:要留下的短句"（想写一张便签，不超过200字）
   "dsh:明确的任务"（用户之前确实提过、适合交给电脑执行的任务）
   其他情况一律留空字符串；不要为了用动作而编造动作。"""
+
+
+def _day_period(hour: int) -> str:
+    if 5 <= hour < 9:
+        return "早上"
+    if 9 <= hour < 12:
+        return "上午"
+    if 12 <= hour < 14:
+        return "中午"
+    if 14 <= hour < 18:
+        return "下午"
+    if 18 <= hour < 23:
+        return "晚上"
+    return "深夜"
 
 
 class ProviderPresenceThoughtGenerator:
@@ -73,10 +87,18 @@ class ProviderPresenceThoughtGenerator:
         )
         facts = {
             "now": local_now.isoformat(),
+            "local_date": local_now.strftime("%Y-%m-%d"),
+            "weekday": "星期" + "一二三四五六日"[local_now.weekday()],
+            "day_period": _day_period(local_now.hour),
             "timezone": context.timezone,
             "presence_status": status_labels.get(state.status, "空闲"),
             "last_user_message_at": (
                 local_last_user.isoformat() if local_last_user else None
+            ),
+            "minutes_since_last_user_message": (
+                max(0, int((now - context.last_user_message_at).total_seconds() // 60))
+                if context.last_user_message_at
+                else None
             ),
             "last_user_text": context.last_user_text,
             "last_assistant_text": context.recent_assistant_text,
