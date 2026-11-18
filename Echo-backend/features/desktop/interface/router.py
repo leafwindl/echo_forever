@@ -161,6 +161,10 @@ async def desktop_node_ws(websocket: WebSocket):
                 service.update_capabilities(node.node_id, capabilities)
                 channel.capabilities = capabilities
                 continue
+            if payload.get("type") == "ping":
+                # 应用层保活：节点空闲时靠它确认连接仍然可用
+                await websocket.send_json({"type": "pong"})
+                continue
             hub.handle_message(node, payload)
     except WebSocketDisconnect:
         pass
