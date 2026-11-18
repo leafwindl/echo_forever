@@ -6,13 +6,14 @@ import asyncio
 import json
 import logging
 
-from features.chat.public import send_chat_message
+from features.chat.public import generate_chat_reply
 from features.desktop.application.desktop_service import DesktopService
 from features.desktop.domain.entities import DesktopError
 
 logger = logging.getLogger(__name__)
 
 BRIDGE_SEND_TIMEOUT_SECONDS = 120
+SEGMENT_INTERVAL_SECONDS = 0.8
 
 
 def _ps_quote(value: str) -> str:
@@ -77,31 +78,43 @@ async def handle_wechat_message(
     content: str,
     local_id: int,
 ) -> None:
-    """把微信新消息交给 Echo，回复再发回微信。"""
+    """把微信新消息交给 Echo，回复按回复分段逐条发回微信。"""
     try:
-        result = await send_chat_message(
+        result = await generate_chat_reply(
             user_id,
             message=f"（微信）{chat} 对你说：{content}",
             conversation_mode="chat",
-            synthesize_voice=False,
         )
-        reply = (result.reply or "").strip()
-        if not reply:
+        segments = tuple(
+            segment.strip() for segment in result.reply_segments if segment.strip()
+        )
+        if not segments:
+            fallback = (result.reply or "").strip()
+            segments = (fallback,) if fallback else ()
+        if not segments:
             logger.info("wechat event produced empty reply local_id=%s", local_id)
             return
-        ok, detail = await _run_remote_command(
-            service=service,
-            user_id=user_id,
-            command=_bridge_send_command(chat, reply),
-        )
-        if ok:
-            logger.info("wechat reply delivered local_id=%s", local_id)
-        else:
-            logger.warning(
-                "wechat reply delivery failed local_id=%s detail=%s",
-                local_id,
-                detail[:200],
+        for index, segment in enumerate(segments):
+            ok, detail = await _run_remote_command(
+                service=service,
+                user_id=user_id,
+                command=_bridge_send_command(chat, segment),
             )
+            if not ok:
+                logger.warning(
+                    "wechat reply delivery failed local_id=%s segment=%s detail=%s",
+                    local_id,
+                    index,
+                    detail[:200],
+                )
+                break
+            if index < len(segments) - 1:
+                await asyncio.sleep(SEGMENT_INTERVAL_SECONDS)
+        logger.info(
+            "wechat reply delivered local_id=%s segments=%s",
+            local_id,
+            len(segments),
+        )
     except Exception:
         logger.warning("wechat event handling failed local_id=%s", local_id, exc_info=True)
 
