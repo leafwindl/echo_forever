@@ -38,6 +38,18 @@ async def relay_wechat_message(
     )
 
 
+async def send_wechat_message(*, user_id: str, chat: str, text: str) -> bool:
+    """主动消息投递到微信（Echo 自己的电脑）。"""
+    from features.desktop.application.wechat_events import send_wechat_text
+
+    return await send_wechat_text(
+        service=get_desktop_service(),
+        user_id=user_id,
+        chat=chat,
+        text=text,
+    )
+
+
 def create_desktop_pairing_code(user_id: str) -> PairingCode:
     return get_desktop_node_management().create_pairing_code(user_id)
 

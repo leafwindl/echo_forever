@@ -20,6 +20,9 @@ from features.proactive_chat.infrastructure.postgres_repository import (
 
 logger = logging.getLogger(__name__)
 
+# Echo 在虚拟机小号上看到的主号联系人名
+_WECHAT_NOTIFY_TARGET = "叶子"
+
 
 class ProcessProactiveChatJobs:
     def __init__(
@@ -213,6 +216,22 @@ class ProcessProactiveChatJobs:
             )
             if not messages:
                 return True
+            # 主动消息优先走微信：App 侧照常记录，微信是主要触达渠道
+            from features.desktop.public import send_wechat_message
+
+            for segment in prepared.reply_segments:
+                try:
+                    await send_wechat_message(
+                        user_id=job.user_id,
+                        chat=_WECHAT_NOTIFY_TARGET,
+                        text=segment,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Proactive WeChat delivery failed job_id=%s",
+                        job.job_id,
+                        exc_info=True,
+                    )
             await self.event_broker.publish(
                 job.user_id,
                 ChatEvent(

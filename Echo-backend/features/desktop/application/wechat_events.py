@@ -73,6 +73,22 @@ async def _run_remote_command(
     return False, "timeout"
 
 
+async def send_wechat_text(
+    *,
+    service: DesktopService,
+    user_id: str,
+    chat: str,
+    text: str,
+) -> bool:
+    """把一段文本通过微信桥发出去（Echo 主动发消息用）。"""
+    ok, _detail = await _run_remote_command(
+        service=service,
+        user_id=user_id,
+        command=_bridge_send_command(chat, text),
+    )
+    return ok
+
+
 async def handle_wechat_message(
     *,
     service: DesktopService,
