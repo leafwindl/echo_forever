@@ -4,7 +4,6 @@ from typing import Any
 
 from features.desktop.application.desktop_service import DesktopNodeStatus
 from features.desktop.application.manage_nodes import PairedNode, PairingCode
-from features.desktop.application.wechat_events import handle_wechat_message
 from features.desktop.domain.entities import (
     DesktopCommandResult,
     DesktopError,
@@ -27,6 +26,9 @@ async def relay_wechat_message(
     local_id: int,
 ) -> None:
     """微信桥事件入口：Echo 回复后把结果发回微信。"""
+    # 延迟导入：wechat_events 依赖 chat.public，而 chat 侧也可能导入 desktop
+    from features.desktop.application.wechat_events import handle_wechat_message
+
     await handle_wechat_message(
         service=get_desktop_service(),
         user_id=user_id,
