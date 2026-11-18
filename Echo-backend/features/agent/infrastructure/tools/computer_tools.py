@@ -304,11 +304,22 @@ def register_computer_tools(registry: ToolRegistry) -> None:
         command = _bridge_command("/send", {"to": parsed.contact, "text": parsed.text})
         ok, output, _ = await _run_remote_command(context, command, timeout_seconds=150)
         if not ok:
+            # wechatauto 的 --verify 走数据库回读，微信持续写 WAL 时可能读不到刚发的消息，
+            # 此时它报“已操作发送，但数据库未确认”——界面操作已经完成，算发送成功。
+            if "已操作发送" in output:
+                return _completed(
+                    "wechat_send",
+                    safe_for_model=(
+                        "消息已经通过微信界面发出（数据库回读未确认，可能是微信 WAL "
+                        f"读取限制）：{output[:400]}"
+                    ),
+                    data={"output": output[:4000], "confirmed": False},
+                )
             return _failed("wechat_send", "wechat_send_failed", output[:800])
         return _completed(
             "wechat_send",
             safe_for_model=f"微信发送结果：{output[:1200]}",
-            data={"output": output[:4000]},
+            data={"output": output[:4000], "confirmed": True},
         )
 
     async def wechat_messages_handler(context: ToolExecutionContext, arguments: BaseModel):
@@ -327,7 +338,7 @@ def register_computer_tools(registry: ToolRegistry) -> None:
         )
 
     async def wechat_sessions_handler(context: ToolExecutionContext, arguments: BaseModel):
-        parsed = WechatSessionsArguments.model_validate(arguments)
+        WechatSessionsArguments.model_validate(arguments)
         ok, output, _ = await _run_remote_command(
             context,
             _bridge_command("/sessions"),
