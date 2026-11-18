@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 BRIDGE_SEND_TIMEOUT_SECONDS = 120
 SEGMENT_INTERVAL_SECONDS = 0.8
 
+# 微信消息必须按顺序处理：并发会让多条回复交错、乱序
+_WECHAT_TURN_LOCK = asyncio.Lock()
+
 
 def _ps_quote(value: str) -> str:
     return value.replace("'", "''")
@@ -78,7 +81,28 @@ async def handle_wechat_message(
     content: str,
     local_id: int,
 ) -> None:
-    """把微信新消息交给 Echo，回复按回复分段逐条发回微信。"""
+    """把微信新消息交给 Echo，回复按回复分段逐条发回微信。
+
+    全局串行：同一时间只处理一条微信消息，避免回复交错乱序。
+    """
+    async with _WECHAT_TURN_LOCK:
+        await _handle_wechat_message_locked(
+            service=service,
+            user_id=user_id,
+            chat=chat,
+            content=content,
+            local_id=local_id,
+        )
+
+
+async def _handle_wechat_message_locked(
+    *,
+    service: DesktopService,
+    user_id: str,
+    chat: str,
+    content: str,
+    local_id: int,
+) -> None:
     try:
         result = await generate_chat_reply(
             user_id,
