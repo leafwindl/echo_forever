@@ -293,7 +293,7 @@ class PresenceService:
     ) -> str:
         intent = thought.action_intent.strip()
         kind = intent.split(":", 1)[0].lower() if ":" in intent else ""
-        if kind not in {"music", "notepad", "dsh"}:
+        if kind not in {"music", "notepad", "dsh", "wechat"}:
             return ""
         used = (
             state.proactive_actions_used

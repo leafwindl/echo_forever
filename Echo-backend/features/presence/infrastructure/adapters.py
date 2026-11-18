@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -9,6 +10,9 @@ from features.presence.domain.entities import (
     PresenceMemory,
     PresenceMessage,
 )
+
+# Echo 在虚拟机小号上看到的主号联系人名
+_WECHAT_NOTIFY_TARGET = "叶子"
 
 
 class ChatPresenceContextSource:
@@ -93,14 +97,30 @@ class DesktopPresenceActionExecutor:
             action = "dsh_task"
             arguments = {"instruction": argument[:2000], "workspace": ""}
             timeout = 300
+        elif kind == "wechat":
+            body = json.dumps(
+                {"to": _WECHAT_NOTIFY_TARGET, "text": argument[:2000]},
+                ensure_ascii=False,
+            ).replace("'", "''")
+            action = "exec"
+            arguments = {
+                "command": (
+                    "Invoke-RestMethod -Uri 'http://127.0.0.1:8765/send' -Method Post "
+                    "-ContentType 'application/json; charset=utf-8' "
+                    f"-Body '{body}' -TimeoutSec 180 | ConvertTo-Json -Compress -Depth 6"
+                )
+            }
+            timeout = 200
         else:
             return ""
+        owner_type = "echo" if kind == "wechat" else "user"
         try:
             result = await execute_desktop_action(
                 user_id=user_id,
                 action=action,
                 arguments=arguments,
                 timeout_seconds=timeout,
+                owner_type=owner_type,
             )
         except DesktopError:
             return ""
