@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from shared.config import settings
 from shared.interface.dependencies import CurrentUser, get_current_user
 
@@ -54,3 +54,14 @@ def get_my_presence(
             if item.created_at is not None
         ],
     )
+
+
+@router.post("/bili/share")
+async def trigger_bili_share(
+    background: BackgroundTasks,
+    _current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    from features.presence.infrastructure.bili_share_worker import process_bili_share_once
+
+    background.add_task(process_bili_share_once)
+    return {"ok": True}
