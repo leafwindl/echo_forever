@@ -301,13 +301,17 @@ def register_computer_tools(registry: ToolRegistry) -> None:
         parsed = WechatSendArguments.model_validate(arguments)
         command = _bridge_command("/send", {"to": parsed.contact, "text": parsed.text})
         if parsed.image_path:
-            command = _bridge_command("/send_image", {"path": parsed.image_path})
+            command = _bridge_command(
+                "/send_image",
+                {"path": parsed.image_path, "text": parsed.text},
+            )
         elif parsed.image_base64:
             command = _bridge_command(
                 "/send_image",
                 {
                     "image_base64": parsed.image_base64,
                     "filename": f"echo_{int(time.time())}.png",
+                    "text": parsed.text,
                 },
             )
         ok, output, _ = await _run_remote_command(context, command, timeout_seconds=150)
