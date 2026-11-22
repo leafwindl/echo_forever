@@ -77,7 +77,8 @@ async def run_chat_agent(
             1 for name in (allowed_tool_names or ()) if name.startswith("computer_")
         )
         logger.info(
-            "Agent tool selection mode=%s desktop=%s phone=%s echo_computer=%s tools=%d computer=%d",
+            "Agent tool selection mode=%s desktop=%s phone=%s echo_computer=%s "
+            "tools=%d computer=%d",
             conversation_mode,
             availability.desktop_online,
             availability.phone_online,
