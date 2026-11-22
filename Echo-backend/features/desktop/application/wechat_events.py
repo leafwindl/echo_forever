@@ -32,6 +32,18 @@ def _bridge_send_command(chat: str, text: str) -> str:
     )
 
 
+def _bridge_send_many_command(chat: str, texts: list[str]) -> str:
+    body = json.dumps(
+        {"chat": chat, "texts": texts},
+        ensure_ascii=False,
+    ).replace("'", "''")
+    return (
+        "Invoke-RestMethod -Uri 'http://127.0.0.1:8765/send_many' -Method Post "
+        "-ContentType 'application/json; charset=utf-8' "
+        f"-Body '{body}' -TimeoutSec 180 | ConvertTo-Json -Compress -Depth 6"
+    )
+
+
 async def _run_remote_command(
     *,
     service: DesktopService,
@@ -149,22 +161,20 @@ async def _handle_wechat_message_locked(
         if not segments:
             logger.info("wechat event produced empty reply local_id=%s", local_id)
             return
-        for index, segment in enumerate(segments):
-            ok, detail = await _run_remote_command(
-                service=service,
-                user_id=user_id,
-                command=_bridge_send_command(chat, segment),
+        # 一次批量发送：bridge 复用常驻 WeChat 实例，避免每条消息都起新进程
+        ok, detail = await _run_remote_command(
+            service=service,
+            user_id=user_id,
+            command=_bridge_send_many_command(chat, list(segments)),
+            timeout_seconds=BRIDGE_SEND_TIMEOUT_SECONDS,
+        )
+        if not ok:
+            logger.warning(
+                "wechat reply delivery failed local_id=%s detail=%s",
+                local_id,
+                detail[:200],
             )
-            if not ok:
-                logger.warning(
-                    "wechat reply delivery failed local_id=%s segment=%s detail=%s",
-                    local_id,
-                    index,
-                    detail[:200],
-                )
-                break
-            if index < len(segments) - 1:
-                await asyncio.sleep(SEGMENT_INTERVAL_SECONDS)
+            return
         logger.info(
             "wechat reply delivered local_id=%s segments=%s",
             local_id,
