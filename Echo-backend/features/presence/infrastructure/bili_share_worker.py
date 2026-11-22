@@ -28,17 +28,54 @@ def _owner_user_id() -> str:
     return settings.bili_share_user_id.strip()
 
 
-async def _scan_videos() -> list[dict]:
+async def _run_remote_command(
+    command: str,
+    *,
+    timeout_seconds: int = 480,
+) -> tuple[bool, str]:
+    """走 agent 的异步 exec：提交后轮询 job_result，避免 30 秒同步超时。"""
+    from features.desktop.domain.entities import DesktopError
     from features.desktop.public import execute_desktop_action
 
-    result = await execute_desktop_action(
-        user_id=_owner_user_id(),
-        action="exec",
-        arguments={"command": BRIDGE_SCAN_COMMAND},
-        timeout_seconds=480,
-        owner_type="echo",
-    )
-    output = str(result.data.get("output") or "")
+    user_id = _owner_user_id()
+    try:
+        start = await execute_desktop_action(
+            user_id=user_id,
+            action="exec",
+            arguments={"command": command},
+            timeout_seconds=30,
+            owner_type="echo",
+        )
+    except DesktopError as exc:
+        return False, exc.message
+    job_id = start.data.get("job_id")
+    if job_id is None:
+        return True, str(start.data.get("output") or "")
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+    while asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(3)
+        try:
+            result = await execute_desktop_action(
+                user_id=user_id,
+                action="job_result",
+                arguments={"job_id": job_id},
+                timeout_seconds=30,
+                owner_type="echo",
+            )
+        except DesktopError as exc:
+            return False, exc.message
+        status = str(result.data.get("status") or "")
+        if status in {"completed", "failed", "canceled"}:
+            output = str(result.data.get("output") or result.data.get("error") or "")
+            return status == "completed", output
+    return False, "timeout"
+
+
+async def _scan_videos() -> list[dict]:
+    ok, output = await _run_remote_command(BRIDGE_SCAN_COMMAND, timeout_seconds=480)
+    if not ok:
+        logger.warning("bili scan command failed: %s", output[:300])
+        return []
     try:
         payload = json.loads(output)
     except json.JSONDecodeError:
