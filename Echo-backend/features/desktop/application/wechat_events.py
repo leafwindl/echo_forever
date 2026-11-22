@@ -13,7 +13,6 @@ from features.desktop.domain.entities import DesktopError
 logger = logging.getLogger(__name__)
 
 BRIDGE_SEND_TIMEOUT_SECONDS = 120
-SEGMENT_INTERVAL_SECONDS = 0.8
 
 # 微信消息必须按顺序处理：并发会让多条回复交错、乱序
 _WECHAT_TURN_LOCK = asyncio.Lock()
