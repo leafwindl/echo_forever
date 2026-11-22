@@ -204,6 +204,10 @@ class Settings(BaseSettings):
         ge=0.0,
         le=2.0,
     )
+    bili_share_user_id: str = Field(
+        default="",
+        validation_alias="BILI_SHARE_USER_ID",
+    )
     presence_proactive_action_budget: int = Field(
         default=3,
         validation_alias="PRESENCE_PROACTIVE_ACTION_BUDGET",

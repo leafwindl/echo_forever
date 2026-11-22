@@ -21,6 +21,7 @@ from features.memory.interface.router import router as memory_router
 from features.memory.public import resume_pending_memory_extraction_jobs
 from features.mobile_agent.interface.router import router as mobile_agent_router
 from features.persona.interface.router import router as persona_router
+from features.presence.infrastructure.bili_share_worker import run_bili_share_loop
 from features.presence.interface.router import router as presence_router
 from features.presence.public import process_presence_once
 from features.proactive_chat.interface.router import router as proactive_chat_router
@@ -176,6 +177,7 @@ async def lifespan(_app: FastAPI):
     chat_turn_task: asyncio.Task[None] | None = None
     proactive_chat_task: asyncio.Task[None] | None = None
     presence_task: asyncio.Task[None] | None = None
+    bili_share_task: asyncio.Task[None] | None = None
     push_notification_task: asyncio.Task[None] | None = None
     sticker_embedding_backfill_task = asyncio.create_task(
         run_sticker_embedding_backfill_once()
@@ -192,6 +194,8 @@ async def lifespan(_app: FastAPI):
         proactive_chat_task = asyncio.create_task(run_proactive_chat_loop())
     if settings.presence_enabled:
         presence_task = asyncio.create_task(run_presence_loop())
+    if settings.bili_share_user_id:
+        bili_share_task = asyncio.create_task(run_bili_share_loop())
     if settings.push_enabled:
         push_notification_task = asyncio.create_task(run_push_notification_loop())
 
@@ -222,6 +226,10 @@ async def lifespan(_app: FastAPI):
             presence_task.cancel()
             with suppress(asyncio.CancelledError):
                 await presence_task
+        if bili_share_task:
+            bili_share_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await bili_share_task
         if push_notification_task:
             push_notification_task.cancel()
             with suppress(asyncio.CancelledError):
