@@ -8,7 +8,7 @@ import logging
 
 from features.chat.public import generate_chat_reply
 from features.desktop.application.desktop_service import DesktopService
-from features.desktop.domain.entities import DesktopError
+from features.desktop.application.remote_command import run_remote_command
 
 logger = logging.getLogger(__name__)
 
@@ -50,38 +50,14 @@ async def _run_remote_command(
     command: str,
     timeout_seconds: int = BRIDGE_SEND_TIMEOUT_SECONDS,
 ) -> tuple[bool, str]:
-    try:
-        start = await service.execute(
-            user_id=user_id,
-            action="exec",
-            arguments={"command": command},
-            timeout_seconds=30,
-            owner_type="echo",
-        )
-    except DesktopError as exc:
-        return False, exc.message
-    job_id = start.data.get("job_id")
-    if job_id is None:
-        return True, str(start.data.get("output") or "")
-    deadline = asyncio.get_running_loop().time() + timeout_seconds
-    while asyncio.get_running_loop().time() < deadline:
-        await asyncio.sleep(2)
-        try:
-            result = await service.execute(
-                user_id=user_id,
-                action="job_result",
-                arguments={"job_id": job_id},
-                timeout_seconds=20,
-                owner_type="echo",
-            )
-        except DesktopError as exc:
-            return False, exc.message
-        status = str(result.data.get("status") or "")
-        if status == "done":
-            return True, str(result.data.get("output") or "")
-        if status in {"failed", "missing"}:
-            return False, str(result.data.get("output") or status)
-    return False, "timeout"
+    result = await run_remote_command(
+        service,
+        user_id=user_id,
+        command=command,
+        owner_type="echo",
+        timeout_seconds=timeout_seconds,
+    )
+    return result.ok, result.output
 
 
 async def send_wechat_text(

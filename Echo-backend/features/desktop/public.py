@@ -5,6 +5,10 @@ from typing import Any
 
 from features.desktop.application.desktop_service import DesktopNodeStatus
 from features.desktop.application.manage_nodes import PairedNode, PairingCode
+from features.desktop.application.remote_command import (
+    RemoteCommandResult,
+    run_remote_command,
+)
 from features.desktop.domain.entities import (
     DesktopCommandResult,
     DesktopError,
@@ -124,6 +128,29 @@ async def execute_desktop_action(
     )
 
 
+async def run_desktop_command(
+    *,
+    user_id: str,
+    command: str,
+    owner_type: str = "echo",
+    timeout_seconds: int = 120,
+    submit_timeout_seconds: int = 30,
+    poll_interval_seconds: float = 2.0,
+    poll_timeout_seconds: int = 20,
+) -> RemoteCommandResult:
+    """在电脑节点执行命令并等结果（异步 job 会自动轮询）。"""
+    return await run_remote_command(
+        get_desktop_service(),
+        user_id=user_id,
+        command=command,
+        owner_type=owner_type,
+        timeout_seconds=timeout_seconds,
+        submit_timeout_seconds=submit_timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+        poll_timeout_seconds=poll_timeout_seconds,
+    )
+
+
 __all__ = [
     "DesktopError",
     "DesktopNode",
@@ -132,6 +159,7 @@ __all__ = [
     "DesktopTimeoutError",
     "PairingCode",
     "PairedNode",
+    "RemoteCommandResult",
     "authenticate_desktop_node",
     "create_desktop_pairing_code",
     "create_echo_computer",
@@ -139,4 +167,5 @@ __all__ = [
     "list_desktop_nodes",
     "pair_desktop_node",
     "revoke_desktop_node",
+    "run_desktop_command",
 ]

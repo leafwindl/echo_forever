@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import asyncio
 import json
-import time
 
 from providers.vision_provider import VisionUnavailableError, describe_desktop_image
 from pydantic import BaseModel, Field
@@ -10,7 +8,7 @@ from pydantic import BaseModel, Field
 from features.agent.domain.entities import AgentToolResult, AgentToolStatus, ToolSpecification
 from features.agent.domain.tools import ToolDefinition, ToolExecutionContext, ToolRegistry
 from features.desktop.domain.entities import DesktopError
-from features.desktop.public import execute_desktop_action
+from features.desktop.public import execute_desktop_action, run_desktop_command
 
 # Echo 自有计算机（虚拟机）的工具面：完全自由，不需要用户授权。
 # 与 desktop_* 的区别只在于目标节点是 owner_type="echo"，不是用户的电脑。
@@ -223,53 +221,22 @@ def register_computer_tools(registry: ToolRegistry) -> None:
         timeout_seconds: int = 120,
     ) -> tuple[bool, str, int | None]:
         """通过 agent 执行命令并等待结果，返回 (ok, output, exit_code)。"""
-        try:
-            start = await execute_desktop_action(
-                user_id=context.user_id,
-                action="exec",
-                arguments={"command": command},
-                timeout_seconds=30,
-                owner_type="echo",
-            )
-        except DesktopError as exc:
-            return False, exc.message, None
-
-        # 旧版 agent 会同步返回输出；新版返回 job_id，需要轮询结果
-        job_id = start.data.get("job_id")
-        if job_id is None:
-            return (
-                True,
-                str(start.data.get("output") or "").strip(),
-                start.data.get("exit_code"),
-            )
-
-        deadline = time.monotonic() + timeout_seconds
-        while time.monotonic() < deadline:
-            await asyncio.sleep(2)
-            try:
-                result = await execute_desktop_action(
-                    user_id=context.user_id,
-                    action="job_result",
-                    arguments={"job_id": job_id},
-                    timeout_seconds=20,
-                    owner_type="echo",
-                )
-            except DesktopError as exc:
-                return False, exc.message, None
-            status = str(result.data.get("status") or "")
-            if status == "done":
-                return (
-                    True,
-                    str(result.data.get("output") or "").strip(),
-                    result.data.get("exit_code"),
-                )
-            if status in {"failed", "missing"}:
-                return False, str(result.data.get("output") or status).strip(), None
-        return False, "命令执行超过时限仍未完成。", None
+        result = await run_desktop_command(
+            user_id=context.user_id,
+            command=command,
+            owner_type="echo",
+            timeout_seconds=timeout_seconds,
+        )
+        return result.ok, result.output, result.exit_code
 
     async def exec_handler(context: ToolExecutionContext, arguments: BaseModel):
         parsed = ComputerExecArguments.model_validate(arguments)
-        ok, output, exit_code = await _run_remote_command(context, parsed.command)
+        # 内部等待必须短于工具注册的 100 秒，否则会被工具层先取消
+        ok, output, exit_code = await _run_remote_command(
+            context,
+            parsed.command,
+            timeout_seconds=90,
+        )
         if not ok:
             return _failed("computer_exec", "exec_failed", output)
         return _completed(
