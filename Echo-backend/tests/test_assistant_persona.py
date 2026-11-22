@@ -23,8 +23,8 @@ class AssistantPersonaTests(unittest.TestCase):
         self.assertTrue(any("颜文字" in item for item in persona.conversation_principles))
         self.assertTrue(any("共同进步" in item for item in persona.conversation_principles))
         self.assertTrue(any("人类生活史" in item for item in persona.forbidden_claims))
-        self.assertGreaterEqual(len(persona.dialogue_examples), 6)
-        self.assertEqual(persona.dialogue_examples[0], ("在干嘛呢", "刷手机，你呢"))
+        self.assertEqual(persona.dialogue_examples, ())
+        self.assertTrue(any("嘴硬" in item for item in persona.traits))
 
     def test_unknown_persona_version_is_rejected(self):
         for version in ("missing-persona", "echo-persona-v3", "echo-persona-v2"):

@@ -100,10 +100,10 @@ class PromptRendererTests(unittest.TestCase):
         self.assertIn("虚构示范，不是真实聊天历史，不得写入用户记忆", rendered)
         self.assertIn("不逐字复用", rendered)
 
-    def test_default_chat_persona_injects_labeled_examples(self):
+    def test_default_chat_persona_does_not_inject_few_shot(self):
         rendered = render_assistant_persona(self.assistant_persona)
-        self.assertIn("虚构示范，不是真实聊天历史，不得写入用户记忆", rendered)
-        self.assertGreaterEqual(len(self.assistant_persona.dialogue_examples), 6)
+        self.assertNotIn("虚构示范", rendered)
+        self.assertEqual(self.assistant_persona.dialogue_examples, ())
 
     def test_persona_usage_is_rendered_as_optional_and_contextual(self):
         rendered = render_persona(self.persona, 400)

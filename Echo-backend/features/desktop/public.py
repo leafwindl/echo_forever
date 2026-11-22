@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from features.desktop.application.desktop_service import DesktopNodeStatus
@@ -17,6 +18,8 @@ from features.desktop.infrastructure.container import (
     get_desktop_service,
 )
 
+logger = logging.getLogger(__name__)
+
 
 async def relay_wechat_message(
     *,
@@ -24,8 +27,24 @@ async def relay_wechat_message(
     chat: str,
     content: str,
     local_id: int,
+    image_base64: str = "",
+    image_hash: str = "",
 ) -> None:
     """微信桥事件入口：Echo 回复后把结果发回微信。"""
+    image_description = ""
+    if image_base64:
+        # 视觉识别放在 feature 入口层，application 只接收识别结果
+        try:
+            from providers.vision_provider import describe_desktop_image
+
+            image_description = await describe_desktop_image(
+                image_base64=image_base64,
+                mime_type="image/png",
+                question="这是微信聊天里收到的一张图片，请用中文简短描述图片内容。",
+            )
+        except Exception:
+            logger.warning("wechat image vision failed", exc_info=True)
+
     # 延迟导入：wechat_events 依赖 chat.public，而 chat 侧也可能导入 desktop
     from features.desktop.application.wechat_events import handle_wechat_message
 
@@ -35,6 +54,9 @@ async def relay_wechat_message(
         chat=chat,
         content=content,
         local_id=local_id,
+        image_base64=image_base64,
+        image_hash=image_hash,
+        image_description=image_description,
     )
 
 

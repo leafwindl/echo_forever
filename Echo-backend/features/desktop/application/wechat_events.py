@@ -96,6 +96,9 @@ async def handle_wechat_message(
     chat: str,
     content: str,
     local_id: int,
+    image_base64: str = "",
+    image_hash: str = "",
+    image_description: str = "",
 ) -> None:
     """把微信新消息交给 Echo，回复按回复分段逐条发回微信。
 
@@ -108,6 +111,9 @@ async def handle_wechat_message(
             chat=chat,
             content=content,
             local_id=local_id,
+            image_base64=image_base64,
+            image_hash=image_hash,
+            image_description=image_description,
         )
 
 
@@ -118,11 +124,28 @@ async def _handle_wechat_message_locked(
     chat: str,
     content: str,
     local_id: int,
+    image_base64: str = "",
+    image_hash: str = "",
+    image_description: str = "",
 ) -> None:
     try:
+        message_text = f"（微信）{chat} 对你说：{content}"
+        if image_base64:
+            if image_description:
+                message_text = (
+                    f"（微信）{chat} 给你发了一张图片，图片内容是：{image_description}"
+                )
+            else:
+                message_text = f"（微信）{chat} 给你发了一张图片（识别失败）。"
+            logger.info(
+                "wechat image received local_id=%s hash=%s desc_len=%s",
+                local_id,
+                image_hash,
+                len(image_description),
+            )
         result = await generate_chat_reply(
             user_id,
-            message=f"（微信）{chat} 对你说：{content}",
+            message=message_text,
             conversation_mode="chat",
         )
         segments = tuple(
