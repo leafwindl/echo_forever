@@ -47,13 +47,10 @@ class ComputerLaunchArguments(BaseModel):
 
 
 class WechatSendArguments(BaseModel):
-    contact: str = Field(
-        min_length=1,
-        max_length=80,
-        description="微信联系人昵称、备注或群名。",
-    )
+    contact: str = Field(min_length=1, max_length=80)
     text: str = Field(default="", max_length=2000)
-    image_base64: str = Field(default="", max_length=8_000_000)
+    image_base64: str = ""
+    image_path: str = ""
 
 
 class WechatMessagesArguments(BaseModel):
@@ -303,7 +300,9 @@ def register_computer_tools(registry: ToolRegistry) -> None:
     async def wechat_send_handler(context: ToolExecutionContext, arguments: BaseModel):
         parsed = WechatSendArguments.model_validate(arguments)
         command = _bridge_command("/send", {"to": parsed.contact, "text": parsed.text})
-        if parsed.image_base64:
+        if parsed.image_path:
+            command = _bridge_command("/send_image", {"path": parsed.image_path})
+        elif parsed.image_base64:
             command = _bridge_command(
                 "/send_image",
                 {
