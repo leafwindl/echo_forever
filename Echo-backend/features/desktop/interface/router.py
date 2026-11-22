@@ -200,15 +200,13 @@ async def wechat_event(
             detail="chat and content are required",
         )
     local_id = int(payload.get("local_id") or 0)
-    image_base64 = str(payload.get("image_base64") or "")
-    image_hash = str(payload.get("image_hash") or "")
+    images = payload.get("images") or []
     background.add_task(
         relay_wechat_message,
         user_id=node.user_id,
         chat=chat,
         content=content[:2000],
         local_id=local_id,
-        image_base64=image_base64,
-        image_hash=image_hash,
+        images=tuple(str(item) for item in images),
     )
     return {"ok": True}

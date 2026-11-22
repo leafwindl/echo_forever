@@ -274,6 +274,7 @@ class GenerateChatReply:
         speaker_name: str | None = None,
         memory_enabled: bool = True,
         message_channel: str = CHAT_CHANNEL_APP,
+        user_images: tuple[str, ...] = (),
     ) -> PreparedChatReply:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -318,6 +319,8 @@ class GenerateChatReply:
             context_kwargs["speaker_role"] = speaker_role
         if not memory_enabled:
             context_kwargs["memory_enabled"] = False
+        if user_images:
+            context_kwargs["images"] = user_images
         if history_before_message_id is None:
             context = await self.context_provider.build_context(
                 clean_user_id,
@@ -550,6 +553,7 @@ class GenerateChatReply:
         conversation_mode: str = "chat",
         sticker_intent: str = "",
         user_content_parts: tuple[ContentPart, ...] = (),
+        user_images: tuple[str, ...] = (),
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         tools_enabled: bool | None = None,
@@ -581,6 +585,7 @@ class GenerateChatReply:
             conversation_id=resolved_conversation_id,
             conversation_mode=conversation_mode,
             sticker_intent=sticker_intent,
+            user_images=user_images,
             on_text_delta=on_text_delta,
             on_progress_text=on_progress_text,
             tools_enabled=tools_enabled,

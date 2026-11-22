@@ -16,6 +16,7 @@ class ChatContextProvider(Protocol):
         speaker_role: str | None = None,
         memory_enabled: bool = True,
         message_channel: str = "app_chat",
+        images: tuple[str, ...] = (),
     ) -> ChatContext: ...
 
 

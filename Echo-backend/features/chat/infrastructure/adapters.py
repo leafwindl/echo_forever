@@ -267,6 +267,7 @@ class ChatContextProviderAdapter(ChatContextProvider):
         speaker_role: str | None = None,
         memory_enabled: bool = True,
         message_channel: str = "app_chat",
+        images: tuple[str, ...] = (),
     ) -> ChatContext:
         context = await build_chat_context(
             user_id,
@@ -277,6 +278,7 @@ class ChatContextProviderAdapter(ChatContextProvider):
             speaker_role=speaker_role,
             memory_enabled=memory_enabled,
             message_channel=message_channel,
+            images=images,
         )
         return context
 

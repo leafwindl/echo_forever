@@ -163,9 +163,20 @@ def _build_call_temporal_context(
 def _turn_input_message(
     user_message: str,
     conversation_mode: str,
-) -> dict[str, str]:
+    images: tuple[str, ...] = (),
+) -> dict[str, object]:
     # A proactive trigger is internal orchestration context, not evidence of user activity.
     role = "system" if conversation_mode == "proactive" else "user"
+    if images and role == "user":
+        content: list[dict[str, object]] = [{"type": "text", "text": user_message}]
+        for image in images:
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image}"},
+                }
+            )
+        return {"role": role, "content": content}
     return {"role": role, "content": user_message}
 
 
@@ -293,6 +304,7 @@ async def build_chat_context(
     speaker_role: str | None = None,
     memory_enabled: bool = True,
     message_channel: str = "app_chat",
+    images: tuple[str, ...] = (),
 ) -> ChatContext:
     # 渠道标签已从正文移除；参数保留给调用方协议。
     del message_channel
@@ -458,7 +470,7 @@ async def build_chat_context(
         }
     )
     messages.extend(history)
-    messages.append(_turn_input_message(user_message, conversation_mode))
+    messages.append(_turn_input_message(user_message, conversation_mode, images))
 
     proactive_safe_facts: dict[str, str] = {}
     proactive_writer_messages: list[dict[str, str]] = []
