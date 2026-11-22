@@ -52,7 +52,8 @@ class WechatSendArguments(BaseModel):
         max_length=80,
         description="微信联系人昵称、备注或群名。",
     )
-    text: str = Field(min_length=1, max_length=2000, description="要发送的文字。")
+    text: str = Field(default="", max_length=2000)
+    image_base64: str = Field(default="", max_length=8_000_000)
 
 
 class WechatMessagesArguments(BaseModel):
@@ -302,6 +303,14 @@ def register_computer_tools(registry: ToolRegistry) -> None:
     async def wechat_send_handler(context: ToolExecutionContext, arguments: BaseModel):
         parsed = WechatSendArguments.model_validate(arguments)
         command = _bridge_command("/send", {"to": parsed.contact, "text": parsed.text})
+        if parsed.image_base64:
+            command = _bridge_command(
+                "/send_image",
+                {
+                    "image_base64": parsed.image_base64,
+                    "filename": f"echo_{int(time.time())}.png",
+                },
+            )
         ok, output, _ = await _run_remote_command(context, command, timeout_seconds=150)
         if not ok:
             # bridge 已把“已操作发送”归一成成功；走到这里是真的没发出去
