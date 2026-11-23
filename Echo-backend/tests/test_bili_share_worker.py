@@ -101,11 +101,18 @@ class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
             commands.append(command)
             return True, output
 
-        with patch(
-            "features.presence.infrastructure.bili_share_worker._run_remote_command",
-            new=fake_run_remote,
+        with (
+            patch(
+                "features.presence.infrastructure.bili_share_worker._run_remote_command",
+                new=fake_run_remote,
+            ),
+            patch(
+                "features.chat.public.deliver_external_assistant_message",
+                new=AsyncMock(),
+            ) as history_sink,
         ):
             await _send_share(item)
+            self.history_call = history_sink.await_args
         return commands
 
     async def test_send_share_uses_note_and_frame_path(self):
@@ -125,6 +132,23 @@ class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("这画面好刺激", command)
         # 帧内容不能进命令行，否则会被 Windows 命令行上限截断
         self.assertNotIn("AAAA", command)
+
+    async def test_send_share_records_history_entry(self):
+        await self._send(
+            {
+                "title": "火山温泉",
+                "note": "这画面好刺激",
+                "frame": r"C:\EchoComputer\images\bili_scan_0.png",
+                "url": "https://www.bilibili.com/video/BV1xx",
+            }
+        )
+
+        self.assertIsNotNone(self.history_call)
+        kwargs = self.history_call.kwargs
+        self.assertEqual(kwargs["source"], "bili")
+        self.assertIn("我刚分享了B站视频《火山温泉》", kwargs["content"])
+        self.assertIn("这画面好刺激", kwargs["content"])
+        self.assertTrue(kwargs["idempotency_key"].startswith("bili_share:"))
 
     async def test_send_share_falls_back_to_text_without_frame(self):
         commands = await self._send({"title": "t", "note": "有意思"})

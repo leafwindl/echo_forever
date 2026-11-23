@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 
@@ -31,6 +32,13 @@ from features.chat.infrastructure.postgres_repositories import (
 from features.chat.infrastructure.postgres_repositories import (
     list_recent_chat_user_ids as _list_recent_chat_user_ids,
 )
+from features.conversation_events.public import (
+    ACTOR_ECHO,
+    EVENT_MESSAGE,
+    record_conversation_event,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def clear_chat_context(user_id: str) -> ChatContextClearResult:
@@ -186,6 +194,22 @@ async def deliver_external_assistant_message(
     if delivery.replayed:
         return delivery
     message = delivery.message
+    try:
+        record_conversation_event(
+            event_type=EVENT_MESSAGE,
+            source=source,
+            actor=ACTOR_ECHO,
+            user_id=user_id,
+            conversation_id=delivery.conversation_id,
+            content=message.content,
+            payload={
+                "message_id": message.message_id,
+                "message_type": message.message_type,
+            },
+            source_created_at=message.created_at,
+        )
+    except Exception:
+        logger.warning("record external assistant event failed", exc_info=True)
     await get_chat_event_broker().publish(
         user_id,
         ChatEvent(

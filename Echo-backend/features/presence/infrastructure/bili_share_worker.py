@@ -242,6 +242,18 @@ async def _send_share(item: dict) -> None:
         )
     except Exception:
         logger.warning("record bili share event failed", exc_info=True)
+    try:
+        from features.chat.public import deliver_external_assistant_message
+
+        title = str(item.get("title") or "").strip()[:80]
+        await deliver_external_assistant_message(
+            user_id=_owner_user_id(),
+            content=f"我刚分享了B站视频《{title}》，配文：{text}",
+            idempotency_key=f"bili_share:{item.get('url') or title}",
+            source="bili",
+        )
+    except Exception:
+        logger.warning("record bili share history failed", exc_info=True)
     logger.info(
         "bili share sent title=%s text=%s frame=%s",
         item.get("title", "")[:40],
