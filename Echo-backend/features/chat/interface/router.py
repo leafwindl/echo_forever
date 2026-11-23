@@ -122,6 +122,11 @@ def accept_message(
     body: AsyncChatMessageRequest,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ):
+    if not settings.app_chat_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="App 聊天已关闭，请通过微信联系 Echo",
+        )
     try:
         consume_chat_quota(current_user.user_id)
     except RateLimitExceeded as exc:

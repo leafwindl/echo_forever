@@ -690,6 +690,10 @@ class Settings(BaseSettings):
         ge=1,
         le=10000,
     )
+    app_chat_enabled: bool = Field(
+        default=True,
+        validation_alias="APP_CHAT_ENABLED",
+    )
     chat_async_enabled: bool = Field(
         default=True,
         validation_alias="CHAT_ASYNC_ENABLED",
