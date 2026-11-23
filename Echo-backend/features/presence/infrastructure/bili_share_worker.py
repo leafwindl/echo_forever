@@ -21,13 +21,23 @@ BRIDGE_SCAN_COMMAND = (
 MAX_SHARE_PER_ROUND = 2
 # 每小时刷一次
 SCAN_INTERVAL_SECONDS = 3600
+# 低于这个分数不分享
+MIN_SHARE_SCORE = 6.0
+# 启动时等自己的电脑节点上线，避免首轮必然失败
+NODE_WAIT_SECONDS = 180
+NODE_WAIT_INTERVAL_SECONDS = 5
 
-SHARE_NOTE_SYSTEM_PROMPT = (
-    "你是 Echo，刚在B站刷到一个视频，想随口分享给叶子。"
-    "只输出一句中文，20 字以内，像微信里随手发的一句；"
-    "不要提B站、标题、链接、截图；不要引号、解释或换行。"
-)
 FALLBACK_SHARE_TEXT = "刚刷到一个挺有意思的"
+
+# Echo 自己就是多模态模型，看图、判断、写话术一次完成，不再单独调视觉模型。
+SHARE_JUDGE_PROMPT = (
+    "你是 Echo，正在刷B站。看这张视频截图，判断值不值得分享给叶子。"
+    '只输出一个 JSON 对象，不要 Markdown：'
+    '{"score": 0到10的整数, "note": "20字以内的分享话术"}。'
+    "有趣、新鲜、有故事感、有梗算高分；教学、广告、纯文字、黑屏算低分。"
+    "note 像微信里随手发的一句；不要提B站、标题、链接，不要说截图二字。"
+    "score 低于 6 时 note 留空字符串。"
+)
 
 
 def _owner_user_id() -> str:
@@ -84,80 +94,85 @@ def _pick_candidates(items: list[dict]) -> list[dict]:
     return picked
 
 
-async def _judge(items: list[dict]) -> list[dict]:
-    """让视觉模型看帧，挑出值得分享的（宁缺毋滥）。"""
-    from providers.vision_provider import describe_desktop_image
-
-    scored: list[tuple[float, dict, str]] = []
-    for item in items:
-        frame = str(item.get("frame_base64") or "")
-        if not frame:
-            continue
-        try:
-            description = await describe_desktop_image(
-                image_base64=frame,
-                mime_type="image/png",
-                question=(
-                    "这是B站视频画面截帧。用一句话说明画面内容，并判断它是否有分享价值"
-                    "（有趣/新鲜/有故事感算有，教学/广告/纯文字/黑屏算没有）。"
-                    "最后单独一行输出分数（0-10，越高越值得分享）。"
-                ),
-            )
-        except Exception:
-            logger.warning("bili frame judge failed", exc_info=True)
-            continue
-        score = 0.0
-        for line in description.splitlines():
-            line = line.strip()
-            if line.replace(".", "").isdigit():
-                try:
-                    score = float(line)
-                    break
-                except ValueError:
-                    continue
-        scored.append((score, item, description))
-    scored.sort(key=lambda row: row[0], reverse=True)
-    return [
-        {**item, "judge": description, "score": score}
-        for score, item, description in scored[:MAX_SHARE_PER_ROUND]
-        if score >= 6.0
-    ]
+def _parse_json_object(raw: str) -> dict:
+    text = str(raw or "").strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:].strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
-def _clean_description(text: str) -> str:
-    """去掉视觉模型最后那行纯分数，只留画面描述。"""
-    kept = [
-        line.strip()
-        for line in text.splitlines()
-        if line.strip() and not line.strip().replace(".", "").replace("。", "").isdigit()
-    ]
-    return " ".join(kept)[:300]
+def _coerce_score(value) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(score, 10.0))
 
 
-async def _compose_share_text(item: dict) -> str:
-    """用一次轻量生成写分享话术，不写入聊天历史。"""
+def _clean_note(value) -> str:
+    return " ".join(str(value or "").split()).strip().strip('"“”')[:60]
+
+
+async def _judge_one(item: dict) -> dict | None:
+    """让 Echo 看帧，返回 {score, note}；失败返回 None。"""
     from providers.llm_provider import get_llm_provider
 
-    facts = (
-        f"视频标题：{str(item.get('title') or '').strip()[:80]}\n"
-        f"画面描述：{_clean_description(str(item.get('judge') or ''))}"
-    )
+    frame = str(item.get("frame_base64") or "").strip()
+    if not frame:
+        return None
+    title = str(item.get("title") or "").strip()[:80]
     try:
         response = await get_llm_provider().chat_completion_message(
             messages=[
-                {"role": "system", "content": SHARE_NOTE_SYSTEM_PROMPT},
-                {"role": "user", "content": facts},
+                {"role": "system", "content": SHARE_JUDGE_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"视频标题（只作参考，不要写进话术）：{title}",
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{frame}"},
+                        },
+                    ],
+                },
             ],
             thinking={"type": "disabled"},
-            temperature=0.9,
-            max_tokens=80,
+            temperature=0.8,
+            max_tokens=200,
         )
-        text = " ".join(str(response.content or "").split()).strip().strip('"“”')
-        if text:
-            return text[:60]
+        payload = _parse_json_object(response.content)
     except Exception:
-        logger.warning("bili share compose failed", exc_info=True)
-    return FALLBACK_SHARE_TEXT
+        logger.warning("bili share judge failed", exc_info=True)
+        return None
+    return {
+        "score": _coerce_score(payload.get("score")),
+        "note": _clean_note(payload.get("note")),
+    }
+
+
+async def _judge(items: list[dict]) -> list[dict]:
+    """让 Echo 自己看图判断并写话术（宁缺毋滥）。"""
+    scored: list[dict] = []
+    for item in items:
+        verdict = await _judge_one(item)
+        if verdict is None:
+            continue
+        scored.append({**item, **verdict})
+    scored.sort(key=lambda row: row["score"], reverse=True)
+    return [
+        item
+        for item in scored[:MAX_SHARE_PER_ROUND]
+        if item["score"] >= MIN_SHARE_SCORE and item["note"]
+    ]
 
 
 def _bridge_command(path: str, payload: dict, *, timeout_seconds: int) -> str:
@@ -185,7 +200,7 @@ async def _send_share(item: dict) -> None:
     帧的 base64 有几百 KB，塞进 agent 的 PowerShell 命令行会被截断，
     所以只传路径，让 bridge 自己从 images 目录读取。
     """
-    text = await _compose_share_text(item)
+    text = str(item.get("note") or "").strip() or FALLBACK_SHARE_TEXT
     frame = str(item.get("frame") or "").strip()
     if frame:
         command = _bridge_command(
@@ -215,6 +230,23 @@ async def _send_share(item: dict) -> None:
     )
 
 
+async def _wait_for_echo_node(timeout_seconds: int = NODE_WAIT_SECONDS) -> bool:
+    """等 Echo 自己的电脑节点上线，避免启动瞬间首轮必然失败。"""
+    from features.desktop.public import list_desktop_nodes
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_seconds
+    while loop.time() < deadline:
+        try:
+            nodes = await asyncio.to_thread(list_desktop_nodes, _owner_user_id(), "echo")
+        except Exception:
+            nodes = []
+        if any(item.online for item in nodes):
+            return True
+        await asyncio.sleep(NODE_WAIT_INTERVAL_SECONDS)
+    return False
+
+
 async def process_bili_share_once() -> int:
     items = await _scan_videos()
     if not items:
@@ -232,6 +264,8 @@ async def process_bili_share_once() -> int:
 
 
 async def run_bili_share_loop() -> None:
+    if not await _wait_for_echo_node():
+        logger.warning("bili share: Echo 电脑节点未上线，首轮照常尝试")
     while True:
         try:
             shared = await process_bili_share_once()

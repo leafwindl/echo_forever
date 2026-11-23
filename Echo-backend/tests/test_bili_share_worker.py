@@ -10,9 +10,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.presence.infrastructure.bili_share_worker import (
     FALLBACK_SHARE_TEXT,
-    _clean_description,
-    _compose_share_text,
+    MIN_SHARE_SCORE,
+    _judge,
+    _judge_one,
     _send_share,
+    _wait_for_echo_node,
 )
 
 
@@ -34,43 +36,61 @@ class _Provider:
         return _Response(self.content)
 
 
-class BiliShareComposeTests(unittest.IsolatedAsyncioTestCase):
-    async def test_compose_returns_provider_text_without_writing_chat_history(self):
-        provider = _Provider("这个画面冲击感好强")
-        with (
-            patch("providers.llm_provider.get_llm_provider", return_value=provider),
-            patch(
-                "features.chat.public.generate_chat_reply",
-                side_effect=AssertionError("分享话术不能写聊天历史"),
-            ),
-        ):
-            text = await _compose_share_text(
-                {"title": "地表最强", "judge": "画面很有梗\n8"}
-            )
+class BiliJudgeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_judge_one_sends_the_frame_as_an_image_message(self):
+        provider = _Provider('{"score": 8, "note": "这画面好刺激"}')
+        with patch("providers.llm_provider.get_llm_provider", return_value=provider):
+            verdict = await _judge_one({"title": "火山温泉", "frame_base64": "QUJD"})
 
-        self.assertEqual(text, "这个画面冲击感好强")
-        self.assertEqual(len(provider.calls), 1)
-        prompt = provider.calls[0]["messages"][1]["content"]
-        self.assertIn("地表最强", prompt)
-        self.assertNotIn("\n8", prompt)
+        self.assertEqual(verdict, {"score": 8.0, "note": "这画面好刺激"})
+        content = provider.calls[0]["messages"][1]["content"]
+        self.assertEqual(content[0]["type"], "text")
+        self.assertEqual(content[1]["type"], "image_url")
+        self.assertEqual(
+            content[1]["image_url"]["url"],
+            "data:image/png;base64,QUJD",
+        )
 
-    async def test_compose_falls_back_when_provider_raises(self):
+    async def test_judge_one_accepts_code_fenced_json(self):
+        provider = _Provider('```json\n{"score": 7, "note": "有点意思"}\n```')
+        with patch("providers.llm_provider.get_llm_provider", return_value=provider):
+            verdict = await _judge_one({"title": "t", "frame_base64": "QUJD"})
+
+        self.assertEqual(verdict, {"score": 7.0, "note": "有点意思"})
+
+    async def test_judge_one_returns_none_when_provider_fails(self):
         provider = _Provider(error=RuntimeError("boom"))
         with patch("providers.llm_provider.get_llm_provider", return_value=provider):
-            text = await _compose_share_text({"title": "标题", "judge": "画面描述"})
+            verdict = await _judge_one({"title": "t", "frame_base64": "QUJD"})
 
-        self.assertEqual(text, FALLBACK_SHARE_TEXT)
+        self.assertIsNone(verdict)
 
-    async def test_compose_falls_back_when_provider_returns_blank(self):
-        provider = _Provider("   ")
-        with patch("providers.llm_provider.get_llm_provider", return_value=provider):
-            text = await _compose_share_text({"title": "标题", "judge": "画面描述"})
+    async def test_judge_keeps_top_scores_and_drops_low_ones(self):
+        verdicts = [
+            {"score": 9.0, "note": "a"},
+            {"score": 3.0, "note": "b"},
+            {"score": 7.0, "note": "c"},
+            {"score": 8.0, "note": "d"},
+        ]
+        items = [{"title": str(index)} for index in range(4)]
+        with patch(
+            "features.presence.infrastructure.bili_share_worker._judge_one",
+            new=AsyncMock(side_effect=verdicts),
+        ):
+            picked = await _judge(items)
 
-        self.assertEqual(text, FALLBACK_SHARE_TEXT)
+        self.assertEqual([item["note"] for item in picked], ["a", "d"])
+        self.assertTrue(all(item["score"] >= MIN_SHARE_SCORE for item in picked))
 
-    def test_clean_description_drops_score_line(self):
-        self.assertEqual(_clean_description("画面有冲击力\n8"), "画面有冲击力")
-        self.assertEqual(_clean_description("荒诞感很强\n\n7。"), "荒诞感很强")
+    async def test_judge_drops_empty_notes(self):
+        verdicts = [{"score": 9.0, "note": ""}, {"score": 8.0, "note": "好"}]
+        with patch(
+            "features.presence.infrastructure.bili_share_worker._judge_one",
+            new=AsyncMock(side_effect=verdicts),
+        ):
+            picked = await _judge([{"title": "a"}, {"title": "b"}])
+
+        self.assertEqual([item["note"] for item in picked], ["好"])
 
 
 class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
@@ -81,23 +101,18 @@ class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
             commands.append(command)
             return True, output
 
-        with (
-            patch(
-                "features.presence.infrastructure.bili_share_worker._compose_share_text",
-                new=AsyncMock(return_value="这画面好刺激"),
-            ),
-            patch(
-                "features.presence.infrastructure.bili_share_worker._run_remote_command",
-                new=fake_run_remote,
-            ),
+        with patch(
+            "features.presence.infrastructure.bili_share_worker._run_remote_command",
+            new=fake_run_remote,
         ):
             await _send_share(item)
         return commands
 
-    async def test_send_share_uses_frame_path_through_send_image(self):
+    async def test_send_share_uses_note_and_frame_path(self):
         commands = await self._send(
             {
                 "title": "火山温泉",
+                "note": "这画面好刺激",
                 "frame": r"C:\EchoComputer\images\bili_scan_0.png",
                 "frame_base64": "A" * 5000,
             }
@@ -111,30 +126,51 @@ class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
         # 帧内容不能进命令行，否则会被 Windows 命令行上限截断
         self.assertNotIn("AAAA", command)
 
-    async def test_send_share_falls_back_to_text_when_frame_missing(self):
-        commands = await self._send({"title": "t", "frame": ""})
+    async def test_send_share_falls_back_to_text_without_frame(self):
+        commands = await self._send({"title": "t", "note": "有意思"})
 
         self.assertEqual(len(commands), 1)
         self.assertIn("/send_sequence", commands[0])
-        self.assertIn("这画面好刺激", commands[0])
+        self.assertIn("有意思", commands[0])
+
+    async def test_send_share_uses_fallback_text_when_note_missing(self):
+        commands = await self._send({"title": "t", "frame": r"C:\EchoComputer\images\x.png"})
+
+        self.assertIn(FALLBACK_SHARE_TEXT, commands[0])
 
     async def test_send_share_reports_bridge_rejection(self):
         with self.assertLogs(level="WARNING") as captured:
             await self._send(
-                {"title": "t", "frame": r"C:\EchoComputer\images\x.png"},
+                {"title": "t", "note": "x", "frame": r"C:\EchoComputer\images\x.png"},
                 output='{"ok": false, "stderr": "file not found: x.png"}',
             )
 
         self.assertTrue(any("bridge rejected" in line for line in captured.output))
 
-    async def test_send_share_reports_non_json_bridge_output(self):
-        with self.assertLogs(level="WARNING") as captured:
-            await self._send(
-                {"title": "t", "frame": r"C:\EchoComputer\images\x.png"},
-                output="powershell.exe : 字符串缺少终止符",
-            )
 
-        self.assertTrue(any("non-json" in line for line in captured.output))
+class BiliStartupWaitTests(unittest.IsolatedAsyncioTestCase):
+    async def test_wait_for_echo_node_returns_true_when_online(self):
+        status = type("Status", (), {"online": True})()
+        with patch(
+            "features.desktop.public.list_desktop_nodes",
+            return_value=[status],
+        ):
+            ok = await _wait_for_echo_node(timeout_seconds=1)
+
+        self.assertTrue(ok)
+
+    async def test_wait_for_echo_node_times_out_when_offline(self):
+        status = type("Status", (), {"online": False})()
+        with (
+            patch("features.desktop.public.list_desktop_nodes", return_value=[status]),
+            patch(
+                "features.presence.infrastructure.bili_share_worker.NODE_WAIT_INTERVAL_SECONDS",
+                0,
+            ),
+        ):
+            ok = await _wait_for_echo_node(timeout_seconds=0.2)
+
+        self.assertFalse(ok)
 
 
 if __name__ == "__main__":
