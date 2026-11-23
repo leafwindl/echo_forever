@@ -249,7 +249,7 @@ async def _send_share(item: dict) -> None:
         await deliver_external_assistant_message(
             user_id=_owner_user_id(),
             content=f"我刚分享了B站视频《{title}》，配文：{text}",
-            idempotency_key=f"bili_share:{item.get('url') or title}",
+            idempotency_key=f"bili_share:{item.get('url') or title}:{text[:24]}",
             source="bili",
         )
     except Exception:
