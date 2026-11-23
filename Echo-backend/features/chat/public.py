@@ -220,6 +220,7 @@ async def generate_proactive_action(
     user_id: str,
     conversation_id: str,
     instruction: str,
+    tool_scope: tuple[str, ...] | None = None,
 ):
     """让 Agent 在主动场景里执行一次动作（可调用工具），并返回模型结果。"""
     from features.agent.public import run_chat_agent
@@ -236,6 +237,7 @@ async def generate_proactive_action(
         conversation_id=conversation_id,
         conversation_mode="proactive",
         tools_enabled=True,
+        tool_scope=tool_scope,
     )
 
 

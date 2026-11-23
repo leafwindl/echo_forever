@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from datetime import UTC, datetime
 
 from features.desktop.infrastructure.bili_scan_store import (
@@ -28,6 +29,9 @@ MAX_JUDGE_ITEMS = 10
 MAX_NOTIFY_ITEMS = 8
 MIN_SHARE_SCORE = 6.0
 WORKER_POLL_SECONDS = 5
+
+# 完成通知只允许分享和交付，不允许再次发起扫描（否则会自激循环）。
+NOTIFY_TOOL_SCOPE = ("bili_share", "emit_chat_beats", "send_sticker")
 
 JUDGE_PROMPT = (
     "你是 Echo，正在刷B站。看这张视频截图，判断值不值得分享给叶子。"
@@ -62,6 +66,19 @@ def _coerce_score(value) -> float:
 
 def _clean_note(value) -> str:
     return " ".join(str(value or "").split()).strip().strip('"“”')[:60]
+
+
+def _is_noise_title(title: str) -> bool:
+    """过滤推荐流里的按钮文案和时长数字，别让它们进评分。"""
+    clean = " ".join(title.split())
+    if len(clean) < 6:
+        return True
+    if "添加至稍后再看" in clean:
+        return True
+    compact = clean.replace(" ", "")
+    if compact.isdigit():
+        return True
+    return re.fullmatch(r"[\d:：.万]+", compact) is not None
 
 
 async def _scan_videos(user_id: str) -> list[dict]:
@@ -125,7 +142,12 @@ async def _judge_one(item: dict) -> dict | None:
 
 async def _judge(items: list[dict]) -> list[dict]:
     scored: list[dict] = []
-    for item in items[:MAX_JUDGE_ITEMS]:
+    candidates = [
+        item
+        for item in items
+        if not _is_noise_title(str(item.get("title") or ""))
+    ]
+    for item in candidates[:MAX_JUDGE_ITEMS]:
         verdict = await _judge_one(item)
         if verdict is None:
             continue
@@ -153,8 +175,9 @@ def _instruction(items: list[dict]) -> str:
     return (
         "你刚刷完B站，结果如下（只作参考，不要逐条念）：\n"
         f"{lines}\n"
-        "如果你自己觉得有值得分享的（最多2条），直接调用 bili_share 发给叶子；"
-        "如果觉得没什么想发的，就只回一句你看了什么、什么感觉。"
+        "这一轮只决定分享或不分享：有值得的就调用 bili_share 发给叶子（最多2条），"
+        "没有就只回一句你看了什么、什么感觉。"
+        "不要再发起扫描；如果还想刷，等下次对话再说。"
         "不要说“我去刷了”，已经刷完了。"
     )
 
@@ -175,6 +198,12 @@ async def _notify_completed(job: dict, result: dict) -> None:
             user_id=user_id,
             conversation_id=conversation_id,
             instruction=_instruction(items),
+            tool_scope=NOTIFY_TOOL_SCOPE,
+        )
+        logger.info(
+            "bili scan notify job_id=%s tools=%s",
+            job["job_id"],
+            [result.tool_name for result in reply.tool_results],
         )
         segments = tuple(
             segment.strip()

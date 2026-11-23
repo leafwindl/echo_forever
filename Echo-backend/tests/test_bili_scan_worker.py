@@ -4,15 +4,19 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.desktop.infrastructure.bili_scan_worker import (
+    NOTIFY_TOOL_SCOPE,
     _clean_note,
     _coerce_score,
     _instruction,
+    _is_noise_title,
     _judge,
+    _notify_completed,
     _parse_json_object,
 )
 
@@ -45,19 +49,60 @@ class BiliScanWorkerRulesTests(unittest.TestCase):
         )
         self.assertIn("视频A", text)
         self.assertIn("bili_scan_0.png", text)
+        self.assertIn("不要再发起扫描", text)
+
+    def test_noise_titles_are_filtered(self):
+        for title in ("添加至稍后再看153.3万", "10:15", "12.3万", "短"):
+            with self.subTest(title=title):
+                self.assertTrue(_is_noise_title(title))
+        self.assertFalse(_is_noise_title("旦角戏腔版《新·与天齐》"))
+
+
+class BiliScanNotifyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_notify_scope_blocks_another_scan(self):
+        reply = SimpleNamespace(
+            reply_segments=("刷完了",),
+            reply_text="",
+            tool_results=(),
+        )
+        with (
+            patch(
+                "features.chat.public.generate_proactive_action",
+                new=AsyncMock(return_value=reply),
+            ) as generate,
+            patch(
+                "features.desktop.public.send_wechat_message",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "features.chat.public.deliver_external_assistant_message",
+                new=AsyncMock(),
+            ) as history_sink,
+        ):
+            await _notify_completed(
+                {"job_id": "j1", "user_id": "u1", "conversation_id": "c1"},
+                {"items": [{"title": "视频A", "frame": "f.png", "score": 8}]},
+            )
+
+        self.assertEqual(
+            generate.await_args.kwargs["tool_scope"],
+            NOTIFY_TOOL_SCOPE,
+        )
+        self.assertNotIn("bili_browse", NOTIFY_TOOL_SCOPE)
+        history_sink.assert_awaited_once()
 
 
 class BiliScanWorkerJudgeTests(unittest.IsolatedAsyncioTestCase):
     async def test_judge_sorts_and_skips_missing_verdict(self):
         async def fake_judge_one(item):
-            if item["title"] == "bad":
+            if item["title"] == "坏视频素材分享":
                 return None
             return {"score": item["score"], "note": item["note"]}
 
         items = [
-            {"title": "low", "frame": r"C:\EchoComputer\images\a.png", "score": 3, "note": "x"},
-            {"title": "bad", "frame": r"C:\EchoComputer\images\b.png", "score": 9, "note": "y"},
-            {"title": "high", "frame": r"C:\EchoComputer\images\c.png", "score": 8, "note": "好"},
+            {"title": "低分视频推荐", "frame": r"C:\EchoComputer\images\a.png", "score": 3, "note": "x"},
+            {"title": "坏视频素材分享", "frame": r"C:\EchoComputer\images\b.png", "score": 9, "note": "y"},
+            {"title": "高分视频推荐", "frame": r"C:\EchoComputer\images\c.png", "score": 8, "note": "好"},
         ]
         with patch(
             "features.desktop.infrastructure.bili_scan_worker._judge_one",
@@ -65,7 +110,7 @@ class BiliScanWorkerJudgeTests(unittest.IsolatedAsyncioTestCase):
         ):
             scored = await _judge(items)
 
-        self.assertEqual([row["title"] for row in scored], ["high", "low"])
+        self.assertEqual([row["title"] for row in scored], ["高分视频推荐", "低分视频推荐"])
         self.assertEqual(scored[0]["frame"], "c.png")
 
 

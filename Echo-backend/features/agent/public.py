@@ -32,6 +32,7 @@ async def run_chat_agent(
     on_text_delta: Callable[[str], Awaitable[None]] | None = None,
     on_progress_text: Callable[[str], Awaitable[None]] | None = None,
     tools_enabled: bool | None = None,
+    tool_scope: tuple[str, ...] | None = None,
 ) -> AgentTurnResult:
     agent = get_call_agent() if conversation_mode == "call" else get_chat_agent()
     allowed_tool_names: tuple[str, ...] | None = None
@@ -92,6 +93,11 @@ async def run_chat_agent(
                         call_route_instruction = route.instruction
         else:
             allowed_tool_names = select_proactive_tool_names(selection_context)
+        if tool_scope is not None:
+            scope = set(tool_scope)
+            allowed_tool_names = tuple(
+                name for name in (allowed_tool_names or ()) if name in scope
+            )
         computer_tool_count = sum(
             1 for name in (allowed_tool_names or ()) if name.startswith("computer_")
         )
