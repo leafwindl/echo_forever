@@ -258,12 +258,24 @@ class Settings(BaseSettings):
         default=1024,
         validation_alias="EMBEDDING_VECTOR_DIMENSION",
     )
+    chat_history_max_messages: int = Field(
+        default=100,
+        validation_alias="CHAT_HISTORY_MAX_MESSAGES",
+        ge=10,
+        le=1000,
+    )
+    chat_history_max_tokens: int = Field(
+        default=64000,
+        validation_alias="CHAT_HISTORY_MAX_TOKENS",
+        ge=1000,
+        le=500000,
+    )
     conversation_summary_trigger_messages: int = Field(
-        default=24,
+        default=120,
         validation_alias="CONVERSATION_SUMMARY_TRIGGER_MESSAGES",
     )
     conversation_summary_keep_recent_messages: int = Field(
-        default=12,
+        default=60,
         validation_alias="CONVERSATION_SUMMARY_KEEP_RECENT_MESSAGES",
     )
     conversation_summary_temperature: float = Field(

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from shared.config import settings
 from shared.prompting.renderer import (
+    estimate_prompt_tokens,
     render_prompt_layers,
 )
 
@@ -27,9 +28,24 @@ from features.user_profile.public import get_user_profile
 
 logger = logging.getLogger(__name__)
 
-MAX_ROUNDS = 10
-MAX_HISTORY_MESSAGES = MAX_ROUNDS * 2
 MAX_LONG_TERM_MEMORIES = 8
+
+
+def _trim_history_by_tokens(history: list[dict], max_tokens: int) -> list[dict]:
+    """从旧到新丢，保留最近的消息；至少留一条，避免上下文全空。"""
+    if max_tokens <= 0:
+        return history
+    total = 0
+    kept: list[dict] = []
+    for message in reversed(history):
+        content = str(message.get("content") or "")
+        cost = estimate_prompt_tokens(content) + 4
+        if kept and total + cost > max_tokens:
+            break
+        kept.append(message)
+        total += cost
+    kept.reverse()
+    return kept
 
 
 
@@ -345,13 +361,19 @@ async def build_chat_context(
         if unknown_speaker or not memory_enabled
         else postgres_repositories.get_history(
             user_id,
-            limit=settings.call_history_messages if is_call else MAX_HISTORY_MESSAGES,
+            limit=(
+                settings.call_history_messages
+                if is_call
+                else settings.chat_history_max_messages
+            ),
             conversation_id=conversation_id,
             after_message_id=summary_message_id,
             before_message_id=history_before_message_id,
             timezone_name=timezone_name,
         )
     )
+    if not is_call:
+        history = _trim_history_by_tokens(history, settings.chat_history_max_tokens)
     history_times: list[dict[str, str]] = []
     cleaned_history: list[dict[str, str]] = []
     for message in history:
