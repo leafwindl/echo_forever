@@ -901,6 +901,8 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             user_id TEXT NOT NULL,
             conversation_id TEXT NOT NULL DEFAULT '',
             item_limit INTEGER NOT NULL DEFAULT 8 CHECK (item_limit > 0),
+            chain_id TEXT NOT NULL DEFAULT '',
+            round INTEGER NOT NULL DEFAULT 1 CHECK (round > 0),
             status VARCHAR(16) NOT NULL DEFAULT 'pending'
                 CHECK (status IN ('pending', 'running', 'completed', 'failed')),
             attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),

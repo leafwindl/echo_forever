@@ -9,12 +9,16 @@ from typing import Any
 from db.postgres_connection import transaction
 from psycopg.types.json import Jsonb
 
+CHAIN_WINDOW_MINUTES = 10
+MAX_CHAIN_ROUNDS = 3
+
 
 def create_or_get_scan_job(
     *,
     user_id: str,
     conversation_id: str,
     item_limit: int = 8,
+    source: str = "chat",
 ) -> dict[str, Any]:
     with transaction() as conn, conn.cursor() as cursor:
         cursor.execute(
@@ -34,20 +38,60 @@ def create_or_get_scan_job(
                 "status": str(existing["status"]),
                 "reused": True,
             }
+        previous = None
+        if source == "proactive":
+            cursor.execute(
+                """
+                SELECT chain_id, round
+                FROM bili_scan_jobs
+                WHERE user_id = %s AND finished_at IS NOT NULL
+                  AND finished_at > NOW() - make_interval(mins => %s)
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (user_id, CHAIN_WINDOW_MINUTES),
+            )
+            previous = cursor.fetchone()
+        if previous is not None and int(previous["round"]) >= MAX_CHAIN_ROUNDS:
+            return {
+                "blocked": True,
+                "round": int(previous["round"]),
+                "max_rounds": MAX_CHAIN_ROUNDS,
+                "reused": False,
+            }
+        if previous is not None:
+            chain_id = str(previous["chain_id"] or "")
+            round_no = int(previous["round"]) + 1
+        else:
+            chain_id = ""
+            round_no = 1
+        if not chain_id:
+            chain_id = f"bili_chain_{uuid.uuid4().hex[:12]}"
         job_id = f"bili_scan_{uuid.uuid4().hex[:16]}"
         cursor.execute(
             """
-            INSERT INTO bili_scan_jobs (job_id, user_id, conversation_id, item_limit)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO bili_scan_jobs
+                (job_id, user_id, conversation_id, item_limit, chain_id, round)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING job_id, status
             """,
-            (job_id, user_id, conversation_id, max(1, min(item_limit, 10))),
+            (
+                job_id,
+                user_id,
+                conversation_id,
+                max(1, min(item_limit, 10)),
+                chain_id,
+                round_no,
+            ),
         )
         row = cursor.fetchone()
         return {
             "job_id": str(row["job_id"]),
             "status": str(row["status"]),
             "reused": False,
+            "chain_id": chain_id,
+            "round": round_no,
+            "max_rounds": MAX_CHAIN_ROUNDS,
         }
 
 
@@ -55,7 +99,8 @@ def claim_next_scan_job() -> dict[str, Any] | None:
     with transaction() as conn, conn.cursor() as cursor:
         cursor.execute(
             """
-            SELECT id, job_id, user_id, conversation_id, attempts, max_attempts, item_limit
+            SELECT id, job_id, user_id, conversation_id, attempts, max_attempts,
+                   item_limit, chain_id, round
             FROM bili_scan_jobs
             WHERE status = 'pending'
             ORDER BY id ASC

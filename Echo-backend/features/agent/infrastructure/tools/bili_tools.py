@@ -96,10 +96,17 @@ async def _browse(context: ToolExecutionContext, parsed: BiliBrowseArguments) ->
             user_id=context.user_id,
             conversation_id=context.conversation_id or "",
             item_limit=parsed.limit,
+            source="proactive" if context.conversation_mode == "proactive" else "chat",
         )
     except Exception:
         logger.warning("start bili scan failed", exc_info=True)
         return _failed("bili_browse", "start_failed", "B站扫描没启动成功，稍后再试。")
+    if job.get("blocked"):
+        return _completed(
+            "bili_browse",
+            safe_for_model="已经连续刷满3轮了，先别刷：挑1-2个分享，或者收手。",
+            data={**job, "status": "chain_limit"},
+        )
     if job.get("reused"):
         return _completed(
             "bili_browse",

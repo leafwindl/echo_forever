@@ -22,6 +22,7 @@ from features.desktop.public import RemoteCommandResult
 class _Context:
     user_id = "phone_1"
     conversation_id = "conv_1"
+    conversation_mode = "chat"
 
 
 def _result(payload: dict) -> RemoteCommandResult:
@@ -69,6 +70,21 @@ class BiliBrowseTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.status, AgentToolStatus.FAILED)
         self.assertEqual(result.error_code, "start_failed")
+
+    async def test_browse_reports_chain_limit(self):
+        with patch(
+            "features.desktop.public.start_bili_scan",
+            return_value={
+                "blocked": True,
+                "round": 3,
+                "max_rounds": 3,
+                "reused": False,
+            },
+        ):
+            result = await _browse(_Context(), BiliBrowseArguments())
+
+        self.assertEqual(result.status, AgentToolStatus.COMPLETED)
+        self.assertEqual(result.data["status"], "chain_limit")
 
 
 class BiliShareTests(unittest.IsolatedAsyncioTestCase):

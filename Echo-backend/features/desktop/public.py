@@ -55,6 +55,7 @@ def start_bili_scan(
     user_id: str,
     conversation_id: str,
     item_limit: int = 8,
+    source: str = "chat",
 ) -> dict[str, Any]:
     """发起一次异步B站扫描；同一用户已有任务时直接复用。"""
     from features.desktop.infrastructure.bili_scan_store import create_or_get_scan_job
@@ -63,6 +64,7 @@ def start_bili_scan(
         user_id=user_id,
         conversation_id=conversation_id,
         item_limit=item_limit,
+        source=source,
     )
 
 

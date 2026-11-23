@@ -49,7 +49,7 @@ class BiliScanWorkerRulesTests(unittest.TestCase):
         )
         self.assertIn("视频A", text)
         self.assertIn("bili_scan_0.png", text)
-        self.assertIn("不要再发起扫描", text)
+        self.assertIn("第 1/3 轮", text)
 
     def test_noise_titles_are_filtered(self):
         for title in ("添加至稍后再看153.3万", "10:15", "12.3万", "短"):
@@ -59,7 +59,7 @@ class BiliScanWorkerRulesTests(unittest.TestCase):
 
 
 class BiliScanNotifyTests(unittest.IsolatedAsyncioTestCase):
-    async def test_notify_scope_blocks_another_scan(self):
+    async def test_notify_scope_allows_self_decided_scan(self):
         reply = SimpleNamespace(
             reply_segments=("刷完了",),
             reply_text="",
@@ -80,16 +80,52 @@ class BiliScanNotifyTests(unittest.IsolatedAsyncioTestCase):
             ) as history_sink,
         ):
             await _notify_completed(
-                {"job_id": "j1", "user_id": "u1", "conversation_id": "c1"},
+                {
+                    "job_id": "j1",
+                    "user_id": "u1",
+                    "conversation_id": "c1",
+                    "round": 1,
+                },
                 {"items": [{"title": "视频A", "frame": "f.png", "score": 8}]},
             )
 
-        self.assertEqual(
-            generate.await_args.kwargs["tool_scope"],
-            NOTIFY_TOOL_SCOPE,
-        )
-        self.assertNotIn("bili_browse", NOTIFY_TOOL_SCOPE)
+        scope = generate.await_args.kwargs["tool_scope"]
+        self.assertEqual(scope, NOTIFY_TOOL_SCOPE)
+        self.assertIn("bili_browse", scope)
+        self.assertIn("bili_share", scope)
+        instruction = generate.await_args.kwargs["instruction"]
+        self.assertIn("第 1/3 轮", instruction)
         history_sink.assert_awaited_once()
+
+    async def test_last_round_forbids_another_scan(self):
+        reply = SimpleNamespace(reply_segments=("刷够了",), reply_text="", tool_results=())
+        with (
+            patch(
+                "features.chat.public.generate_proactive_action",
+                new=AsyncMock(return_value=reply),
+            ) as generate,
+            patch(
+                "features.desktop.public.send_wechat_message",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "features.chat.public.deliver_external_assistant_message",
+                new=AsyncMock(),
+            ),
+        ):
+            await _notify_completed(
+                {
+                    "job_id": "j2",
+                    "user_id": "u1",
+                    "conversation_id": "c1",
+                    "round": 3,
+                },
+                {"items": [{"title": "视频A", "frame": "f.png", "score": 8}]},
+            )
+
+        instruction = generate.await_args.kwargs["instruction"]
+        self.assertIn("第 3/3 轮", instruction)
+        self.assertIn("不能再刷", instruction)
 
 
 class BiliScanWorkerJudgeTests(unittest.IsolatedAsyncioTestCase):
@@ -100,9 +136,24 @@ class BiliScanWorkerJudgeTests(unittest.IsolatedAsyncioTestCase):
             return {"score": item["score"], "note": item["note"]}
 
         items = [
-            {"title": "低分视频推荐", "frame": r"C:\EchoComputer\images\a.png", "score": 3, "note": "x"},
-            {"title": "坏视频素材分享", "frame": r"C:\EchoComputer\images\b.png", "score": 9, "note": "y"},
-            {"title": "高分视频推荐", "frame": r"C:\EchoComputer\images\c.png", "score": 8, "note": "好"},
+            {
+                "title": "低分视频推荐",
+                "frame": r"C:\EchoComputer\images\a.png",
+                "score": 3,
+                "note": "x",
+            },
+            {
+                "title": "坏视频素材分享",
+                "frame": r"C:\EchoComputer\images\b.png",
+                "score": 9,
+                "note": "y",
+            },
+            {
+                "title": "高分视频推荐",
+                "frame": r"C:\EchoComputer\images\c.png",
+                "score": 8,
+                "note": "好",
+            },
         ]
         with patch(
             "features.desktop.infrastructure.bili_scan_worker._judge_one",

@@ -9,6 +9,7 @@ import re
 from datetime import UTC, datetime
 
 from features.desktop.infrastructure.bili_scan_store import (
+    MAX_CHAIN_ROUNDS,
     claim_next_scan_job,
     cleanup_old_scan_jobs,
     complete_scan_job,
@@ -30,8 +31,8 @@ MAX_NOTIFY_ITEMS = 8
 MIN_SHARE_SCORE = 6.0
 WORKER_POLL_SECONDS = 5
 
-# 完成通知只允许分享和交付，不允许再次发起扫描（否则会自激循环）。
-NOTIFY_TOOL_SCOPE = ("bili_share", "emit_chat_beats", "send_sticker")
+# 完成通知允许继续刷（由模型自己决定），但 store 会把连续刷限制在 3 轮内。
+NOTIFY_TOOL_SCOPE = ("bili_browse", "bili_share", "emit_chat_beats", "send_sticker")
 
 JUDGE_PROMPT = (
     "你是 Echo，正在刷B站。看这张视频截图，判断值不值得分享给叶子。"
@@ -167,17 +168,33 @@ async def _judge(items: list[dict]) -> list[dict]:
     return scored
 
 
-def _instruction(items: list[dict]) -> str:
+def _instruction(
+    items: list[dict],
+    round_no: int = 1,
+    max_rounds: int = MAX_CHAIN_ROUNDS,
+) -> str:
     lines = "\n".join(
         f"- {item['title']}（frame: {item['frame']}，score: {item['score']}）"
         for item in items[:MAX_NOTIFY_ITEMS]
     )
+    if round_no >= max_rounds:
+        action_rule = (
+            f"这是连续刷的第 {round_no}/{max_rounds} 轮，已经到上限，不能再刷了。"
+            "只能决定：有值得的就 bili_share 分享（最多2条），"
+            "没有就说一句你看了什么、什么感觉。"
+        )
+    else:
+        action_rule = (
+            f"这是连续刷的第 {round_no}/{max_rounds} 轮。你可以自己决定："
+            "1) 还没看够：调用 bili_browse 再刷一轮（最多到第3轮）；"
+            "2) 看够了但有想分享的：调用 bili_share 发给叶子（最多2条）；"
+            "3) 看够了也没想发的：只回一句你的感受。"
+            "如果想继续刷，就像微信里那样自然地说“还没看够，再刷一下”，不要机械重复。"
+        )
     return (
         "你刚刷完B站，结果如下（只作参考，不要逐条念）：\n"
         f"{lines}\n"
-        "这一轮只决定分享或不分享：有值得的就调用 bili_share 发给叶子（最多2条），"
-        "没有就只回一句你看了什么、什么感觉。"
-        "不要再发起扫描；如果还想刷，等下次对话再说。"
+        f"{action_rule}"
         "不要说“我去刷了”，已经刷完了。"
     )
 
@@ -197,7 +214,11 @@ async def _notify_completed(job: dict, result: dict) -> None:
         reply = await generate_proactive_action(
             user_id=user_id,
             conversation_id=conversation_id,
-            instruction=_instruction(items),
+            instruction=_instruction(
+                items,
+                round_no=int(job.get("round") or 1),
+                max_rounds=MAX_CHAIN_ROUNDS,
+            ),
             tool_scope=NOTIFY_TOOL_SCOPE,
         )
         logger.info(
