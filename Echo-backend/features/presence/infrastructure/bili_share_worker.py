@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import logging
 
@@ -22,6 +21,8 @@ BRIDGE_SCAN_COMMAND = (
 MAX_SHARE_PER_ROUND = 2
 # 每小时刷一次
 SCAN_INTERVAL_SECONDS = 3600
+# 分享发给叶子的微信会话（专用微信只有这一个联系人）
+WECHAT_SHARE_TARGET = "叶子"
 
 SHARE_NOTE_SYSTEM_PROMPT = (
     "你是 Echo，刚在B站刷到一个视频，想随口分享给叶子。"
@@ -161,39 +162,27 @@ async def _compose_share_text(item: dict) -> str:
     return FALLBACK_SHARE_TEXT
 
 
-def _bridge_post_command(path: str, payload: dict, *, timeout_seconds: int) -> str:
-    """把 JSON 先编码成 base64，避免中文和引号在 PowerShell 命令行里被拆坏。"""
-    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
-    return (
-        "$body = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
-        f"{encoded}')); "
-        f"Invoke-RestMethod -Uri 'http://127.0.0.1:8765{path}' -Method Post "
-        "-ContentType 'application/json; charset=utf-8' "
-        f"-Body $body -TimeoutSec {timeout_seconds} | ConvertTo-Json -Compress -Depth 6"
-    )
-
-
 async def _send_share(item: dict) -> None:
+    """把分享话术发到叶子的微信。
+
+    帧 base64 会达到几百 KB，而 agent 用命令行执行 PowerShell，
+    Windows 命令行上限约 32767 字符，带图必然被截断。这里只发文字。
+    """
+    from features.desktop.public import send_wechat_message
+
     text = await _compose_share_text(item)
-    items = [{"type": "text", "text": text}]
-    frame = str(item.get("frame_base64") or "")
-    if frame:
-        items.append({"type": "image", "image_base64": frame})
-    command = _bridge_post_command(
-        "/send_sequence",
-        {"items": items},
-        timeout_seconds=180,
+    ok = await send_wechat_message(
+        user_id=_owner_user_id(),
+        chat=WECHAT_SHARE_TARGET,
+        text=text,
     )
-    ok, output = await _run_remote_command(command, timeout_seconds=200)
     if not ok:
-        logger.warning("bili share send failed: %s", output[:300])
+        logger.warning("bili share send failed title=%s", item.get("title", "")[:40])
         return
     logger.info(
-        "bili share sent title=%s text=%s bridge=%s",
+        "bili share sent via wechat title=%s text=%s",
         item.get("title", "")[:40],
         text[:30],
-        output[:300],
     )
 
 

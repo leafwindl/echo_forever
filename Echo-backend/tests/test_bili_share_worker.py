@@ -1,20 +1,19 @@
 # ruff: noqa: ARG002
 from __future__ import annotations
 
-import base64
-import json
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.presence.infrastructure.bili_share_worker import (
     FALLBACK_SHARE_TEXT,
-    _bridge_post_command,
+    WECHAT_SHARE_TARGET,
     _clean_description,
     _compose_share_text,
+    _send_share,
 )
 
 
@@ -74,22 +73,49 @@ class BiliShareComposeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_clean_description("画面有冲击力\n8"), "画面有冲击力")
         self.assertEqual(_clean_description("荒诞感很强\n\n7。"), "荒诞感很强")
 
-    def test_bridge_command_encodes_body_as_base64(self):
-        payload = {"items": [{"type": "text", "text": "这也太离谱了吧'哈哈"}]}
 
-        command = _bridge_post_command(
-            "/send_sequence",
-            payload,
-            timeout_seconds=180,
+class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
+    async def test_send_share_delivers_text_to_wechat_target(self):
+        sender = AsyncMock(return_value=True)
+        compose = AsyncMock(return_value="这画面好刺激")
+        with (
+            patch(
+                "features.presence.infrastructure.bili_share_worker._compose_share_text",
+                new=compose,
+            ),
+            patch("features.desktop.public.send_wechat_message", new=sender),
+            patch(
+                "features.presence.infrastructure.bili_share_worker._owner_user_id",
+                return_value="user_1",
+            ),
+        ):
+            await _send_share({"title": "火山温泉", "frame_base64": "AAAA"})
+
+        sender.assert_awaited_once_with(
+            user_id="user_1",
+            chat=WECHAT_SHARE_TARGET,
+            text="这画面好刺激",
         )
 
-        self.assertIn("/send_sequence", command)
-        self.assertIn("FromBase64String", command)
-        # 原文不能出现在命令行里，否则中文和引号会被 PowerShell 拆坏
-        self.assertNotIn("太离谱", command)
-        encoded = command.split("FromBase64String('", 1)[1].split("'", 1)[0]
-        decoded = json.loads(base64.b64decode(encoded).decode("utf-8"))
-        self.assertEqual(decoded, payload)
+    async def test_send_share_swallows_delivery_failure(self):
+        sender = AsyncMock(return_value=False)
+        with (
+            patch(
+                "features.presence.infrastructure.bili_share_worker._compose_share_text",
+                new=AsyncMock(return_value="x"),
+            ),
+            patch("features.desktop.public.send_wechat_message", new=sender),
+            patch(
+                "features.presence.infrastructure.bili_share_worker._owner_user_id",
+                return_value="user_1",
+            ),
+        ):
+            await _send_share({"title": "t"})
+
+        sender.assert_awaited_once()
+
+    def test_wechat_target_is_the_owner(self):
+        self.assertEqual(WECHAT_SHARE_TARGET, "叶子")
 
 
 if __name__ == "__main__":
