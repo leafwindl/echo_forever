@@ -72,6 +72,7 @@ class ProactiveGoal:
     status: str
     trigger_ref: str = ""
     action_intent: str = ""
+    plan: str = ""
     result_status: str = ""
     result_summary: str = ""
     created_at: datetime | None = None

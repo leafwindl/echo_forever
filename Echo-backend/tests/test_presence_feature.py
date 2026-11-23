@@ -105,6 +105,7 @@ class FakeGoalCreator:
         trigger_type="presence",
         trigger_ref="",
         action_intent="",
+        plan="",
     ):
         self.goals.append((user_id, draft_text, action_intent))
         return f"goal_{len(self.goals)}"
@@ -322,6 +323,27 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         result = await service.tick("user-1", now=now)
         self.assertEqual(result.reason, "duplicate_thought")
         self.assertEqual(len(repository.thoughts), 1)
+
+    async def test_not_due_is_skipped(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository(
+            PresenceState(
+                user_id="user-1",
+                next_tick_at=now + timedelta(minutes=10),
+            )
+        )
+        service = _service(repository, FakeContext(now - timedelta(hours=2)))
+        result = await service.tick("user-1", now=now)
+        self.assertEqual(result.reason, "not_due")
+        self.assertEqual(repository.thoughts, [])
+
+    async def test_next_tick_is_scheduled_after_thought(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository()
+        service = _service(repository, FakeContext(now - timedelta(hours=2)))
+        await service.tick("user-1", now=now)
+        self.assertIsNotNone(repository.state.next_tick_at)
+        self.assertGreater(repository.state.next_tick_at, now)
 
     async def test_run_once_processes_recent_users(self):
         now = datetime.now(UTC)

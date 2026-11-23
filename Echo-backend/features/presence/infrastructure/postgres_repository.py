@@ -17,6 +17,7 @@ def _state(row: dict[str, Any]) -> PresenceState:
         enabled=bool(row["enabled"]),
         last_user_message_at=row.get("last_user_message_at"),
         last_tick_at=row.get("last_tick_at"),
+        next_tick_at=row.get("next_tick_at"),
         last_thought_at=row.get("last_thought_at"),
         thought_budget_date=row.get("thought_budget_date"),
         thoughts_used=int(row.get("thoughts_used") or 0),
@@ -47,6 +48,7 @@ def _thought(row: dict[str, Any]) -> PresenceThought:
         source_memory_id=str(row["source_memory_id"] or ""),
         source_memory_text=str(row["source_memory_text"] or ""),
         draft_text=str(row.get("draft_text") or ""),
+        plan=str(row.get("plan") or ""),
         created_at=row.get("created_at"),
     )
 
@@ -74,7 +76,7 @@ class PostgresPresenceRepository:
                 """
                 UPDATE presence_states
                 SET status = %s, enabled = %s, last_user_message_at = %s,
-                    last_tick_at = %s, last_thought_at = %s,
+                    last_tick_at = %s, next_tick_at = %s, last_thought_at = %s,
                     thought_budget_date = %s, thoughts_used = %s,
                     last_proactive_message_at = %s, proactive_messages_used = %s,
                     proactive_budget_date = %s,
@@ -92,6 +94,7 @@ class PostgresPresenceRepository:
                     state.enabled,
                     state.last_user_message_at,
                     state.last_tick_at,
+                    state.next_tick_at,
                     state.last_thought_at,
                     state.thought_budget_date,
                     state.thoughts_used,
@@ -133,8 +136,8 @@ class PostgresPresenceRepository:
                 INSERT INTO presence_thoughts (
                     thought_id, user_id, text, salience, shareable,
                     action_intent, source_memory_id, source_memory_text,
-                    draft_text, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()))
+                    draft_text, plan, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()))
                 """,
                 (
                     thought.thought_id,
@@ -146,6 +149,7 @@ class PostgresPresenceRepository:
                     thought.source_memory_id,
                     thought.source_memory_text,
                     thought.draft_text,
+                    thought.plan,
                     thought.created_at,
                 ),
             )

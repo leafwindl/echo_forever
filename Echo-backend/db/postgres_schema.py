@@ -780,6 +780,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             intent TEXT NOT NULL DEFAULT '',
             action_intent TEXT NOT NULL DEFAULT '',
             draft_text TEXT NOT NULL DEFAULT '',
+            plan TEXT NOT NULL DEFAULT '',
             status VARCHAR(16) NOT NULL DEFAULT 'pending'
                 CHECK (status IN ('pending', 'reported', 'failed', 'expired', 'cancelled')),
             result_status VARCHAR(16),
@@ -963,6 +964,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             enabled BOOLEAN NOT NULL DEFAULT TRUE,
             last_user_message_at TIMESTAMPTZ,
             last_tick_at TIMESTAMPTZ,
+            next_tick_at TIMESTAMPTZ,
             last_thought_at TIMESTAMPTZ,
             thought_budget_date DATE,
             thoughts_used INTEGER NOT NULL DEFAULT 0 CHECK (thoughts_used >= 0),
@@ -1000,6 +1002,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             source_memory_id TEXT NOT NULL DEFAULT '',
             source_memory_text TEXT NOT NULL DEFAULT '',
             draft_text TEXT NOT NULL DEFAULT '',
+            plan TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
         """,
@@ -1264,6 +1267,12 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE bili_scan_jobs ADD COLUMN IF NOT EXISTS round "
         "INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS next_tick_at "
+        "TIMESTAMPTZ",
+        "ALTER TABLE presence_thoughts ADD COLUMN IF NOT EXISTS plan "
+        "TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE proactive_goals ADD COLUMN IF NOT EXISTS plan "
+        "TEXT NOT NULL DEFAULT ''",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_devices_user_status "
         "ON mobile_agent_devices(user_id, status, last_seen_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_pairing_expires "

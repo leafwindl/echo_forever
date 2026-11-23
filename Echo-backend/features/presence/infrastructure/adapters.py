@@ -43,8 +43,20 @@ class ChatPresenceContextSource:
             ),
             last_assistant_at=last_assistant.created_at if last_assistant else None,
             recent_actions=await self._recent_actions(user_id),
+            recent_messages=tuple(messages[-3:]),
+            open_goals=await self._open_goals(user_id),
             timezone=timezone,
         )
+
+    async def _open_goals(self, user_id: str) -> tuple[str, ...]:
+        from features.proactive_chat.public import pending_goal_summaries
+
+        try:
+            return tuple(
+                await asyncio.to_thread(pending_goal_summaries, user_id, 3)
+            )
+        except Exception:
+            return ()
 
     async def _recent_actions(self, user_id: str) -> tuple[PresenceActionSummary, ...]:
         from features.desktop.public import recent_bili_scan_summaries
@@ -114,6 +126,7 @@ class ProactivePresenceGoalCreator:
         trigger_type: str = "presence",
         trigger_ref: str = "",
         action_intent: str = "",
+        plan: str = "",
     ) -> str:
         from features.proactive_chat.public import create_proactive_goal
 
@@ -124,6 +137,7 @@ class ProactivePresenceGoalCreator:
             trigger_type=trigger_type,
             trigger_ref=trigger_ref,
             action_intent=action_intent,
+            plan=plan,
         )
 
 

@@ -151,10 +151,28 @@ class Settings(BaseSettings):
         validation_alias="PRESENCE_ENABLED",
     )
     presence_tick_interval_seconds: int = Field(
-        default=1800,
+        default=60,
         validation_alias="PRESENCE_TICK_INTERVAL_SECONDS",
-        ge=60,
+        ge=30,
         le=3600,
+    )
+    presence_active_interval_minutes: int = Field(
+        default=45,
+        validation_alias="PRESENCE_ACTIVE_INTERVAL_MINUTES",
+        ge=10,
+        le=360,
+    )
+    presence_idle_interval_minutes: int = Field(
+        default=60,
+        validation_alias="PRESENCE_IDLE_INTERVAL_MINUTES",
+        ge=10,
+        le=720,
+    )
+    presence_sleeping_interval_minutes: int = Field(
+        default=90,
+        validation_alias="PRESENCE_SLEEPING_INTERVAL_MINUTES",
+        ge=10,
+        le=720,
     )
     presence_active_window_minutes: int = Field(
         default=5,

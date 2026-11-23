@@ -476,14 +476,16 @@ class ProcessProactiveChatJobs:
         if not goal.draft_text.strip():
             instruction = (
                 f"这是你自己的主动动作，不是用户发来的新消息：{goal.intent}\n"
-                f"你原本想做的事：{goal.action_intent or '随便看看'}\n"
+                + (f"这次计划：{goal.plan}\n" if goal.plan else "")
+                + f"你原本想做的事：{goal.action_intent or '随便看看'}\n"
                 "这次不需要发消息给用户，只做想做的事；做完用一两句简短的内部记录"
                 "说明你做了什么、结果如何。不要提工具名、系统、调度或内部流程。"
             )
         else:
             instruction = (
                 f"这是你自己的主动念头，不是用户发来的新消息：{goal.intent}\n"
-                f"你原本倾向做的事：{goal.action_intent or '只是想说句话'}\n"
+                + (f"这次计划：{goal.plan}\n" if goal.plan else "")
+                + f"你原本倾向做的事：{goal.action_intent or '只是想说句话'}\n"
                 "可以照这个倾向做，也可以根据当下判断换一件更合适的事，或者只发一句话。"
                 "如果做了动作，做完就用一两句自然的话告诉用户你做了什么、结果如何；"
                 "没做成或只完成一部分，就如实说，不要假装完成。"

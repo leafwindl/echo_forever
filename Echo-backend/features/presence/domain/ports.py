@@ -79,4 +79,5 @@ class PresenceGoalCreator(Protocol):
         trigger_type: str = "presence",
         trigger_ref: str = "",
         action_intent: str = "",
+        plan: str = "",
     ) -> str: ...

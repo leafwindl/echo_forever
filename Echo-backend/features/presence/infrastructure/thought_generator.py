@@ -23,8 +23,11 @@ _SYSTEM_PROMPT = f"""你是 Echo 的内部念头生成器，不是聊天回复�
 字段固定为：
 {{"thought": "第一人称中文念头，20-80字", "salience": 0.0到1.0,
  "shareable": true或false, "action_intent": "" 或结构化动作,
- "draft_text": "如果要主动发给用户，写成 20-80 字的第一人称自然消息；不适合发就留空"}}
+ "draft_text": "如果要主动发给用户，写成 20-80 字的第一人称自然消息；不适合发就留空",
+ "plan": "这次准备做什么/不做什么，20-40字"}}
 要求：
+- 先想 plan（这次值得说句话、做个小动作，还是什么都不做），再决定 shareable 和 action_intent。
+- plan 是给自己的短计划，不是发给用户的话。
 - 只使用提供的事实，不编造用户当前正在做什么、在哪里、是否在线。
 - 旧记忆必须承认它来自过去，不能当成刚刚发生。
 - 事实里的 now、local_date、weekday、day_period、last_user_message_at 都是用户本地时间；
@@ -112,6 +115,11 @@ class ProviderPresenceThoughtGenerator:
                 else None
             ),
             "recent_thoughts": [item.text for item in recent_thoughts],
+            "recent_messages": [
+                {"role": item.role, "text": item.content[:120]}
+                for item in context.recent_messages
+            ],
+            "open_goals": list(context.open_goals),
             "recent_actions": [
                 {
                     "kind": item.kind,
@@ -160,4 +168,5 @@ class ProviderPresenceThoughtGenerator:
             shareable=bool(payload.get("shareable", False)),
             action_intent=str(payload.get("action_intent") or "").strip()[:160],
             draft_text=str(payload.get("draft_text") or "").strip()[:500],
+            plan=str(payload.get("plan") or "").strip()[:200],
         )

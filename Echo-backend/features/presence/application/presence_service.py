@@ -58,6 +58,9 @@ class PresenceService:
         memory_salience_threshold: float,
         context_messages: int,
         max_candidate_users: int,
+        active_interval_minutes: int = 45,
+        idle_interval_minutes: int = 60,
+        sleeping_interval_minutes: int = 90,
     ):
         self.repository = repository
         self.context_source = context_source
@@ -74,6 +77,9 @@ class PresenceService:
         self.memory_salience_threshold = memory_salience_threshold
         self.context_messages = context_messages
         self.max_candidate_users = max_candidate_users
+        self.active_interval = timedelta(minutes=active_interval_minutes)
+        self.idle_interval = timedelta(minutes=idle_interval_minutes)
+        self.sleeping_interval = timedelta(minutes=sleeping_interval_minutes)
 
     def state(self, user_id: str) -> PresenceState:
         return self.repository.get_or_create_state(user_id)
@@ -84,6 +90,14 @@ class PresenceService:
     async def tick(self, user_id: str, *, now: datetime | None = None) -> PresenceTickResult:
         current = now or datetime.now(UTC)
         state = self.repository.get_or_create_state(user_id)
+        if state.next_tick_at is not None and current < state.next_tick_at:
+            return PresenceTickResult(
+                user_id=user_id,
+                status=state.status,
+                decision="skipped",
+                reason="not_due",
+                thoughts_used=state.thoughts_used,
+            )
         context = await self.context_source.load(user_id, self.context_messages)
         last_user_at = context.last_user_message_at
         status = (
@@ -166,6 +180,7 @@ class PresenceService:
             source_memory_id=memory.memory_id if memory else "",
             source_memory_text=_compact(memory.content, 500) if memory else "",
             draft_text=_compact(draft.draft_text, 500),
+            plan=_compact(draft.plan, 200),
             created_at=current,
         )
         self.repository.add_thought(thought)
@@ -237,6 +252,13 @@ class PresenceService:
                     }
                 )
                 self.repository.save_state(state)
+        state = PresenceState(
+            **{
+                **state.__dict__,
+                "next_tick_at": self._next_tick_at(state, current),
+            }
+        )
+        self.repository.save_state(state)
         return PresenceTickResult(
             user_id=user_id,
             status=state.status,
@@ -272,6 +294,7 @@ class PresenceService:
                 trigger_type="memory" if thought.source_memory_id else "presence",
                 trigger_ref=thought.source_memory_id,
                 action_intent=intent_text,
+                plan=thought.plan,
             )
         except Exception:
             logger.warning(
@@ -364,13 +387,27 @@ class PresenceService:
             }
         )
 
-    def _finish(self, state, decision: str, reason: str, now) -> PresenceTickResult:
+    def _next_tick_at(self, state, now: datetime) -> datetime:
+        if state.status == PresenceStatus.ACTIVE:
+            return now + self.active_interval
+        if state.status == PresenceStatus.SLEEPING:
+            return now + self.sleeping_interval
+        return now + self.idle_interval
+
+    def _finish(
+        self,
+        state,
+        decision: str,
+        reason: str,
+        now,
+    ) -> PresenceTickResult:
         state = PresenceState(
             **{
                 **state.__dict__,
                 "last_decision": decision,
                 "last_decision_reason": reason,
                 "last_tick_at": now,
+                "next_tick_at": self._next_tick_at(state, now),
             }
         )
         self.repository.save_state(state)

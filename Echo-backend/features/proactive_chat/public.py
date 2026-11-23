@@ -53,6 +53,7 @@ def create_proactive_goal(
     trigger_type: str = "presence",
     trigger_ref: str = "",
     action_intent: str = "",
+    plan: str = "",
 ) -> str:
     """写入一次主动意图并排队投递；命中 48 小时去重时返回空字符串。"""
     goal = get_proactive_repository().create_goal(
@@ -62,8 +63,20 @@ def create_proactive_goal(
         draft_text=draft_text,
         trigger_ref=trigger_ref,
         action_intent=action_intent,
+        plan=plan,
     )
     return goal.goal_id if goal is not None else ""
+
+
+def pending_goal_summaries(user_id: str, limit: int = 3) -> list[str]:
+    """还没做完的主动目标，供 presence briefing 参考。"""
+    rows = get_proactive_repository().pending_goals(user_id, limit)
+    summaries: list[str] = []
+    for row in rows:
+        text = str(row.get("plan") or row.get("intent") or "").strip()
+        if text:
+            summaries.append(text[:160])
+    return summaries
 
 
 def recent_goal_summaries(user_id: str, limit: int = 3) -> list[dict]:
@@ -89,6 +102,7 @@ __all__ = [
     "get_proactive_preferences",
     "get_proactive_repository",
     "process_proactive_chat_once",
+    "pending_goal_summaries",
     "recent_goal_summaries",
     "reset_user_proactive_state",
 ]

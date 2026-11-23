@@ -41,6 +41,9 @@ def get_presence_service() -> PresenceService:
         memory_salience_threshold=settings.presence_memory_salience_threshold,
         context_messages=settings.presence_context_messages,
         max_candidate_users=settings.presence_max_candidate_users,
+        active_interval_minutes=settings.presence_active_interval_minutes,
+        idle_interval_minutes=settings.presence_idle_interval_minutes,
+        sleeping_interval_minutes=settings.presence_sleeping_interval_minutes,
     )
 
 

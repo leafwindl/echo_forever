@@ -20,6 +20,7 @@ class PresenceState:
     enabled: bool = True
     last_user_message_at: datetime | None = None
     last_tick_at: datetime | None = None
+    next_tick_at: datetime | None = None
     last_thought_at: datetime | None = None
     thought_budget_date: date | None = None
     thoughts_used: int = 0
@@ -49,6 +50,7 @@ class PresenceThought:
     source_memory_id: str = ""
     source_memory_text: str = ""
     draft_text: str = ""
+    plan: str = ""
     created_at: datetime | None = None
 
 
@@ -75,6 +77,8 @@ class PresenceContext:
     last_assistant_at: datetime | None = None
     timezone: str = "Asia/Shanghai"
     recent_actions: tuple[PresenceActionSummary, ...] = ()
+    recent_messages: tuple[PresenceMessage, ...] = ()
+    open_goals: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -91,6 +95,7 @@ class ThoughtDraft:
     shareable: bool = False
     action_intent: str = ""
     draft_text: str = ""
+    plan: str = ""
 
 
 @dataclass(frozen=True)

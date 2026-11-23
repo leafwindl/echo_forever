@@ -120,6 +120,7 @@ def _goal(row) -> ProactiveGoal:
         status=str(row["status"]),
         trigger_ref=str(row["trigger_ref"] or ""),
         action_intent=str(row["action_intent"] or ""),
+        plan=str(row.get("plan") or ""),
         result_status=str(row["result_status"] or ""),
         result_summary=str(row["result_summary"] or ""),
         created_at=row.get("created_at"),
@@ -541,6 +542,7 @@ class PostgresProactiveChatRepository:
         draft_text: str,
         trigger_ref: str = "",
         action_intent: str = "",
+        plan: str = "",
         scheduled_for: datetime | None = None,
     ) -> ProactiveGoal | None:
         """写入一次主动意图，并立刻创建一个只属于它的投递 job。
@@ -571,8 +573,8 @@ class PostgresProactiveChatRepository:
                 """
                 INSERT INTO proactive_goals (
                     goal_id, user_id, trigger_type, trigger_ref, intent,
-                    action_intent, draft_text
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    action_intent, draft_text, plan
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -583,6 +585,7 @@ class PostgresProactiveChatRepository:
                     intent[:500],
                     action_intent[:2000],
                     draft_text[:2000],
+                    plan[:2000],
                 ),
             )
             row = cursor.fetchone()
@@ -604,6 +607,20 @@ class PostgresProactiveChatRepository:
                 FROM proactive_goals
                 WHERE user_id = %s AND reported_at IS NOT NULL
                 ORDER BY reported_at DESC
+                LIMIT %s
+                """,
+                (user_id, limit),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def pending_goals(self, user_id: str, limit: int = 3) -> list[dict]:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT intent, action_intent, draft_text, plan, created_at
+                FROM proactive_goals
+                WHERE user_id = %s AND status = 'pending'
+                ORDER BY created_at DESC
                 LIMIT %s
                 """,
                 (user_id, limit),
