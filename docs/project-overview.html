@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Echo 项目全景 · 功能 / 模块 / 工具 / 卡点</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --panel:#111a2e;
+    --panel2:#15213a;
+    --line:#22304d;
+    --text:#dbe6f7;
+    --muted:#8ea3c4;
+    --blue:#4da3ff;
+    --cyan:#38d9d0;
+    --green:#4ade80;
+    --amber:#fbbf24;
+    --red:#f87171;
+    --purple:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:radial-gradient(1200px 600px at 20% -10%, #16305a 0%, transparent 60%), var(--bg);
+    color:var(--text);
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    line-height:1.65;
+    font-size:15px;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  header{
+    padding:48px 32px 28px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(30,58,95,.35), transparent);
+  }
+  header h1{
+    margin:0 0 6px;
+    font-size:34px;
+    letter-spacing:1px;
+  }
+  header h1 .whale{color:var(--blue)}
+  header p{margin:0;color:var(--muted);font-size:16px}
+  .meta{
+    margin-top:16px;
+    display:flex;flex-wrap:wrap;gap:10px;
+  }
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:4px 12px;border-radius:999px;
+    background:var(--panel2);border:1px solid var(--line);
+    color:var(--muted);font-size:13px;
+  }
+  .pill b{color:var(--text);font-weight:600}
+  nav{
+    position:sticky;top:0;z-index:10;
+    background:rgba(11,18,32,.92);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+    padding:10px 32px;
+    display:flex;flex-wrap:wrap;gap:6px;
+  }
+  nav a{
+    padding:5px 12px;border-radius:8px;color:var(--muted);font-size:13px;
+  }
+  nav a:hover{background:var(--panel2);color:var(--text);text-decoration:none}
+  main{padding:32px;max-width:1280px;margin:0 auto}
+  section{margin-bottom:52px}
+  h2{
+    font-size:22px;margin:0 0 6px;
+    display:flex;align-items:center;gap:10px;
+  }
+  h2::before{
+    content:"";width:6px;height:22px;border-radius:3px;
+    background:linear-gradient(180deg,var(--blue),var(--cyan));
+  }
+  .sub{color:var(--muted);margin:0 0 20px;font-size:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:14px;padding:16px 18px;
+  }
+  .card h3{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:8px}
+  .card h3 .tag{
+    font-size:11px;padding:1px 8px;border-radius:999px;font-weight:500;
+    background:rgba(77,163,255,.14);color:var(--blue);border:1px solid rgba(77,163,255,.3);
+  }
+  .card p{margin:0 0 8px;color:var(--muted);font-size:13.5px}
+  .card ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px}
+  .card li{margin:2px 0}
+  .badge{
+    display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;
+    border:1px solid transparent;font-weight:600;letter-spacing:.3px;
+  }
+  .b-ok{background:rgba(74,222,128,.12);color:var(--green);border-color:rgba(74,222,128,.3)}
+  .b-warn{background:rgba(251,191,36,.12);color:var(--amber);border-color:rgba(251,191,36,.3)}
+  .b-bad{background:rgba(248,113,113,.12);color:var(--red);border-color:rgba(248,113,113,.3)}
+  .b-info{background:rgba(77,163,255,.12);color:var(--blue);border-color:rgba(77,163,255,.3)}
+  .b-mute{background:rgba(142,163,196,.1);color:var(--muted);border-color:rgba(142,163,196,.25)}
+
+  .flow{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px;margin-bottom:16px;
+  }
+  .flow h3{margin:0 0 12px;font-size:16px}
+  .steps{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .step{
+    background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:8px 12px;font-size:13px;color:var(--text);
+  }
+  .step small{display:block;color:var(--muted);font-size:11px}
+  .arrow{color:var(--blue);font-size:16px}
+  .note{color:var(--muted);font-size:13px;margin-top:10px}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  thead th{
+    text-align:left;color:var(--muted);font-weight:600;
+    border-bottom:1px solid var(--line);padding:8px 10px;white-space:nowrap;
+  }
+  tbody td{border-bottom:1px solid rgba(34,48,77,.6);padding:8px 10px;vertical-align:top}
+  tbody tr:hover{background:rgba(77,163,255,.05)}
+  code{
+    background:#0a1526;border:1px solid var(--line);border-radius:5px;
+    padding:1px 6px;font-size:12.5px;color:#9fd0ff;
+    font-family:Consolas,Menlo,monospace;
+  }
+  pre{
+    background:#0a1526;border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;overflow:auto;font-size:12.5px;color:#c9e3ff;
+    font-family:Consolas,Menlo,monospace;line-height:1.5;
+  }
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:900px){.two{grid-template-columns:1fr}}
+
+  .blocker{
+    border-left:4px solid var(--red);
+    background:linear-gradient(90deg, rgba(248,113,113,.08), var(--panel));
+    border-radius:0 12px 12px 0;padding:14px 16px;margin-bottom:12px;
+  }
+  .blocker.p1{border-left-color:var(--amber);background:linear-gradient(90deg, rgba(251,191,36,.07), var(--panel))}
+  .blocker.p2{border-left-color:var(--blue);background:linear-gradient(90deg, rgba(77,163,255,.06), var(--panel))}
+  .blocker h4{margin:0 0 4px;font-size:15px;display:flex;gap:8px;align-items:center}
+  .blocker p{margin:0;color:var(--muted);font-size:13.5px}
+  .blocker .where{color:#9fd0ff;font-family:Consolas,monospace;font-size:12px}
+
+  .timeline{position:relative;margin-left:8px;padding-left:22px;border-left:1px solid var(--line)}
+  .titem{position:relative;margin-bottom:16px}
+  .titem::before{
+    content:"";position:absolute;left:-27px;top:7px;width:9px;height:9px;border-radius:50%;
+    background:var(--green);box-shadow:0 0 0 3px rgba(74,222,128,.15);
+  }
+  .titem b{display:block;font-size:14px}
+  .titem span{color:var(--muted);font-size:13px}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12.5px;margin-top:10px}
+  footer{
+    border-top:1px solid var(--line);padding:24px 32px;color:var(--muted);
+    font-size:13px;text-align:center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Echo 项目全景 <span class="whale">🐋</span></h1>
+  <p>功能 · 模块 · 工具 · 执行链路 · 当前卡点（基于真实代码与线上验证）</p>
+  <div class="meta">
+    <span class="pill">版本 <b>eb75b1d</b></span>
+    <span class="pill">后端 <b>42.193.236.243</b> · Docker · healthy</span>
+    <span class="pill">数据库 <b>PostgreSQL + pgvector</b></span>
+    <span class="pill">模型 <b>deepseek-v4-flash</b>（多模态）</span>
+    <span class="pill">更新 <b>2026-11-23</b></span>
+  </div>
+</header>
+
+<nav>
+  <a href="#architecture">架构</a>
+  <a href="#modules">功能模块</a>
+  <a href="#tools">工具清单</a>
+  <a href="#flows">执行链路</a>
+  <a href="#context">上下文与历史</a>
+  <a href="#blockers">当前卡点</a>
+  <a href="#recent">本次完成</a>
+  <a href="#tables">数据表</a>
+</nav>
+
+<main>
+
+<!-- ============ 架构 ============ -->
+<section id="architecture">
+  <h2>一、整体架构</h2>
+  <p class="sub">四端一脑：手机/鸿蒙 App、安卓 Phone Agent、Windows 电脑节点、Hyper-V 虚拟机，加一个 FastAPI 后端和 DeepSeek 模型。</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>客户端 <span class="tag">Flutter / Harmony</span></h3>
+      <p>Flutter App（13 个 feature：聊天、语音、设备、表情、来信、记忆、在场、推送、专注、更新…）和 HarmonyOS 原生版（Index / Devices / Notifications / Update）。</p>
+      <ul>
+        <li>聊天走 <code>POST /chat/messages</code> + SSE 事件</li>
+        <li>设备走 BLE 配网 + WebSocket 语音</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Phone Agent <span class="tag">Android</span></h3>
+      <p>无障碍服务 + 截图桥 + 通知监听 + 微信 OCR 监控，通过 WebSocket 接入后端，按技能执行手机任务。</p>
+      <ul>
+        <li>技能：抖音/小红书/B站/音乐/微信/通知</li>
+        <li>输入走 PC ADB 桥（8765）</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Desktop Node <span class="tag">Windows</span></h3>
+      <p>用户自己的电脑节点：屏幕截图、应用、媒体控制、DSH 任务，带审批和 token 配对。</p>
+      <ul>
+        <li><code>/desktop/nodes/ws</code> 长连接</li>
+        <li>审批弹窗，auto_approve 可配</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>EchoComputer <span class="tag">Hyper-V VM</span></h3>
+      <p>Echo 自己的 Windows 电脑：<code>agent.ps1</code>（点击/输入/截图/exec）+ <code>wechat_bridge.py</code>（微信 UI 自动化、图片目录、B站扫描）。</p>
+      <ul>
+        <li>exec 是异步 job：Start-Job + job_result 轮询</li>
+        <li>微信只服务唯一联系人「叶子」</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>后端 <span class="tag">FastAPI</span></h3>
+      <p>21 个 feature、18 个路由模块、8 个后台循环。分层：Interface → Application → Domain ← Infrastructure。</p>
+      <ul>
+        <li>WebSocket 节点通道 + HTTP API + SSE</li>
+        <li>异步聊天队列 <code>chat_turn_jobs</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>模型与外部服务 <span class="tag">Providers</span></h3>
+      <p>DeepSeek 文本 + 多模态；另有 ASR、TTS、视觉、网页搜索、图片生成、Embedding、COS 存储、Getui 推送。</p>
+      <ul>
+        <li>图片消息直接进 DeepSeek，不再单独视觉模型</li>
+        <li>上下文预算按 token 估算</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><span class="badge b-ok">已完成</span> 线上验证过</span>
+    <span><span class="badge b-warn">有风险</span> 可用但脆弱</span>
+    <span><span class="badge b-bad">阻塞</span> 当前卡点</span>
+  </div>
+</section>
+
+<!-- ============ 模块 ============ -->
+<section id="modules">
+  <h2>二、功能模块（后端 21 个 feature）</h2>
+  <p class="sub">每个模块只写职责和最关键的入口，细节链路在「执行链路」一节。</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>chat 会话 <span class="badge b-ok">核心</span></h3>
+      <p>消息、异步队列、历史、摘要、交付、清除上下文。</p>
+      <ul>
+        <li><code>POST /chat/messages</code>（202 入队）</li>
+        <li><code>GET /chat/messages</code>、<code>GET /chat/events</code>(SSE)</li>
+        <li>摘要：24 条触发，保留最近 12 条</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>agent 模型回路 <span class="badge b-ok">核心</span></h3>
+      <p>受限模型循环、工具选择、执行门禁、轨迹与去重。</p>
+      <ul>
+        <li>42 个工具、按模式注入</li>
+        <li>记录 <code>agent_runs</code> / <code>agent_tool_calls</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>conversation_events 事件流 <span class="badge b-warn">新</span></h3>
+      <p>统一历史表：消息、工具调用、B站分享、主动发送都写同一时间线，供后续压缩。</p>
+      <ul>
+        <li>字段：type / source / actor / payload / source_created_at</li>
+        <li>聊天消息已 1:1 覆盖，孤儿与重复为 0</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>desktop 电脑节点 <span class="badge b-ok">核心</span></h3>
+      <p>节点配对、在线状态、审批后的电脑操作、微信桥事件、审计。</p>
+      <ul>
+        <li><code>/desktop/nodes/ws</code>、<code>/desktop/wechat/events</code></li>
+        <li>统一异步 exec：<code>run_remote_command</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>presence 在场 <span class="badge b-warn">有风险</span></h3>
+      <p>心跳、内心念头、主动触达预算，以及每小时 B站刷视频分享。</p>
+      <ul>
+        <li><code>POST /presence/bili/share</code> 手动触发</li>
+        <li>bili 分享走 scan → 多模态判图 → 微信图+文</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>proactive_chat 主动 <span class="badge b-ok">核心</span></h3>
+      <p>主动策略、提醒任务、到期处理，先发微信再记录 App。</p>
+      <ul>
+        <li>预算、静默、去重门禁</li>
+        <li>已接入统一事件流</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>memory 记忆 <span class="badge b-ok">核心</span></h3>
+      <p>长期记忆抽取、索引、召回、后台任务恢复。</p>
+      <ul>
+        <li>Job 状态持久化 <code>background_jobs</code></li>
+        <li>召回最多 8 条进上下文</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>voice 语音 <span class="badge b-ok">核心</span></h3>
+      <p>ASR、TTS、语音文件、过期音频清理。</p>
+      <ul>
+        <li><code>/voice</code> 路由 + 设备流式识别</li>
+        <li>清理循环可配间隔</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>devices 设备 <span class="badge b-ok">核心</span></h3>
+      <p>配对、连接、设备语音、声纹录入与校准。</p>
+      <ul>
+        <li>声纹只用于称呼，不是授权</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>mobile_agent 手机 Agent <span class="badge b-warn">有风险</span></h3>
+      <p>手机配对、命令下发、技能执行、微信通道回调。</p>
+      <ul>
+        <li><code>/mobile-agent</code></li>
+        <li>依赖 Android 无障碍服务</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>stickers 表情 <span class="badge b-ok">核心</span></h3>
+      <p>表情资产、向量检索、按意图生成、发送。</p>
+      <ul>
+        <li>生成任务 + embedding 回填</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>letters 每日来信 <span class="badge b-ok">核心</span></h3>
+      <p>来信证据、生成、配图、发布、阅读状态。</p>
+      <ul>
+        <li>每日生成 + 到点发布循环</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>relationship 关系 <span class="badge b-ok">核心</span></h3>
+      <p>相处方式、熟悉阶段、关系信号、亲昵边界。</p>
+      <ul>
+        <li>用户显式选择朋友 / AI 恋人</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>persona 用户偏好 <span class="badge b-ok">核心</span></h3>
+      <p>用户的称呼、偏好、引导数据，不是助手人格。</p>
+    </div>
+    <div class="card">
+      <h3>assistant_persona 助手人格 <span class="badge b-ok">核心</span></h3>
+      <p>Echo 固定人格与版本（echo-persona-v4）。</p>
+    </div>
+    <div class="card">
+      <h3>auth 认证 <span class="badge b-ok">核心</span></h3>
+      <p>手机验证码、JWT access/refresh、令牌族吊销。</p>
+      <ul>
+        <li>刷新令牌 hash 存储</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>push 推送 <span class="badge b-ok">核心</span></h3>
+      <p>推送目标、通知 Outbox、发送与重试（Getui）。</p>
+    </div>
+    <div class="card">
+      <h3>releases 版本发布 <span class="badge b-ok">核心</span></h3>
+      <p>手机应用版本、发布、下载地址。</p>
+    </div>
+    <div class="card">
+      <h3>firmware_releases 固件 <span class="badge b-mute">低频</span></h3>
+      <p>设备固件版本数据与查询。</p>
+    </div>
+    <div class="card">
+      <h3>study_focus 专注 <span class="badge b-mute">模块</span></h3>
+      <p>专注记录、完成反馈、专注证据。</p>
+    </div>
+    <div class="card">
+      <h3>system 系统 <span class="badge b-ok">核心</span></h3>
+      <p>健康检查、版本信息、一键重置陪伴数据。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 工具 ============ -->
+<section id="tools">
+  <h2>三、工具清单（42 个）</h2>
+  <p class="sub">工具由 <code>ToolRegistry</code> 按模式注入：chat / proactive / call。tools 描述会进 prompt，token 预算棘轮 5,000。</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>表达与交付 <span class="tag">4</span></h3>
+      <ul>
+        <li><code>send_sticker</code> 5s / 4 次 · 发表情</li>
+        <li><code>emit_chat_beats</code> 5s / 4 次 · 一次给多条气泡</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>用户电脑 desktop_* <span class="tag">9</span></h3>
+      <ul>
+        <li>speak 70s · status 10s · open_app 55s</li>
+        <li>media_control 50s · look 70s · screenshot 70s</li>
+        <li>music_search_play 75s · notepad_write 55s</li>
+        <li>dsh_task 340s（交给 DSH 的任务）</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Echo 自己的电脑 computer_* <span class="tag">6</span></h3>
+      <ul>
+        <li>screenshot 60s / 4 次</li>
+        <li>click 30s / 12 次 · type 30s / 8 次</li>
+        <li>key 30s / 8 次 · launch 40s / 4 次</li>
+        <li><code>computer_exec</code> 100s / 4 次（内部等 90s）</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>微信 <span class="tag">3</span></h3>
+      <ul>
+        <li><code>wechat_send</code> 170s / 4 次（文本或图文序列）</li>
+        <li><code>wechat_messages</code> 130s / 6 次</li>
+        <li><code>wechat_sessions</code> 100s / 6 次</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>手机 phone_* <span class="tag">21</span></h3>
+      <ul>
+        <li>状态/观察/截图/OCR/启动/点击/返回</li>
+        <li>音乐、微信、小红书、抖音、B站</li>
+        <li><code>phone_run_task</code> 180s（长任务）</li>
+        <li><code>phone_stop</code> 15s 紧急停止</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>关系与主动 <span class="tag">4</span></h3>
+      <ul>
+        <li><code>propose_relationship</code> / <code>respond_relationship</code></li>
+        <li><code>pause_proactive_contact</code> / <code>resume_proactive_contact</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>定时提醒 <span class="tag">3</span></h3>
+      <ul>
+        <li><code>create_chat_schedule</code></li>
+        <li><code>list_chat_schedules</code></li>
+        <li><code>cancel_chat_schedule</code></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>联网搜索 <span class="tag">按需</span></h3>
+      <p>未配置 key 时不注册；配置后按路由注入 <code>web_search</code>。</p>
+      <p><span class="badge b-mute">当前默认关闭</span></p>
+    </div>
+  </div>
+
+  <div class="flow" style="margin-top:16px">
+    <h3>工具执行门禁（代码强制，不靠 prompt）</h3>
+    <div class="steps">
+      <span class="step">模式允许<small>allowed_modes</small></span><span class="arrow">→</span>
+      <span class="step">调用次数<small>max_calls_per_turn</small></span><span class="arrow">→</span>
+      <span class="step">参数校验<small>pydantic schema</small></span><span class="arrow">→</span>
+      <span class="step">超时<small>asyncio.wait_for</small></span><span class="arrow">→</span>
+      <span class="step">同轮去重<small>call_id / 参数</small></span><span class="arrow">→</span>
+      <span class="step">结果回填<small>AgentToolResult</small></span>
+    </div>
+    <p class="note">工具失败不会伪造成功：错误码走 <code>error_code</code>，模型只能看到 <code>safe_for_model</code>。</p>
+  </div>
+</section>
+
+<!-- ============ 链路 ============ -->
+<section id="flows">
+  <h2>四、核心执行链路</h2>
+  <p class="sub">按真实代码路径整理，括号里是落库位置。</p>
+
+  <div class="flow">
+    <h3>1. App 聊天（异步队列）</h3>
+    <div class="steps">
+      <span class="step">POST /chat/messages<small>写 chat_messages + chat_turn_jobs</small></span><span class="arrow">→</span>
+      <span class="step">chat worker<small>process_turns 轮询</small></span><span class="arrow">→</span>
+      <span class="step">build_chat_context<small>记忆/摘要/关系/历史</small></span><span class="arrow">→</span>
+      <span class="step">DeepSeek<small>多模态 + 工具选择</small></span><span class="arrow">→</span>
+      <span class="step">complete_turn<small>拆分 deliveries</small></span><span class="arrow">→</span>
+      <span class="step">SSE chat.delivery.created<small>App 渲染</small></span>
+    </div>
+    <p class="note">回复按段拆成多条 assistant 消息，写 <code>conversation_events</code>（message / app_chat）。</p>
+  </div>
+
+  <div class="flow">
+    <h3>2. 微信收消息</h3>
+    <div class="steps">
+      <span class="step">微信窗口<small>叶子会话</small></span><span class="arrow">→</span>
+      <span class="step">bridge watcher<small>1s UIA 读列表 + 左右判断归属</small></span><span class="arrow">→</span>
+      <span class="step">攒批 flush<small>文本合并 / 图片下载原图</small></span><span class="arrow">→</span>
+      <span class="step">POST /desktop/wechat/events<small>带 created_at</small></span><span class="arrow">→</span>
+      <span class="step">generate_chat_reply<small>同步一轮</small></span><span class="arrow">→</span>
+      <span class="step">/send_many<small>逐条发回微信</small></span>
+    </div>
+    <p class="note">写 <code>chat_messages</code>（channel=wechat）+ <code>conversation_events</code>（source=wechat，source_created_at=原始时间）。</p>
+  </div>
+
+  <div class="flow">
+    <h3>3. Echo 主动发微信 / 分享</h3>
+    <div class="steps">
+      <span class="step">决策<small>工具调用 / 主动策略 / B站分享</small></span><span class="arrow">→</span>
+      <span class="step">exec 提交<small>agent 返回 job_id</small></span><span class="arrow">→</span>
+      <span class="step">job_result 轮询<small>done / failed / missing</small></span><span class="arrow">→</span>
+      <span class="step">bridge /send_image<small>path + text，常驻实例</small></span><span class="arrow">→</span>
+      <span class="step">微信<small>图 + 文</small></span>
+    </div>
+    <p class="note">图片只传 VM 本地路径（<code>C:/EchoComputer/images</code>），base64 不进命令行。</p>
+  </div>
+
+  <div class="flow">
+    <h3>4. B站每小时分享</h3>
+    <div class="steps">
+      <span class="step">bili worker<small>每小时 / 手动触发</small></span><span class="arrow">→</span>
+      <span class="step">/bili_scan<small>Playwright 刷 10 个视频 + 截帧</small></span><span class="arrow">→</span>
+      <span class="step">多模态判图<small>DeepSeek 看图给 score + note</small></span><span class="arrow">→</span>
+      <span class="step">≥6 分才分享<small>最多 2 条</small></span><span class="arrow">→</span>
+      <span class="step">/send_image<small>帧路径 + 话术</small></span>
+    </div>
+    <p class="note"><span class="badge b-warn">瓶颈</span> 扫描输出 4–5MB 走 job output，慢且脆。</p>
+  </div>
+
+  <div class="flow">
+    <h3>5. 主动消息（proactive）</h3>
+    <div class="steps">
+      <span class="step">presence tick<small>念头 + 预算</small></span><span class="arrow">→</span>
+      <span class="step">proactive job<small>门禁：静默/预算/去重</small></span><span class="arrow">→</span>
+      <span class="step">生成正文<small>安全事实注入</small></span><span class="arrow">→</span>
+      <span class="step">persist_delivery<small>写 App 历史</small></span><span class="arrow">→</span>
+      <span class="step">微信发送<small>/send</small></span>
+    </div>
+    <p class="note">已补写 <code>conversation_events</code>（source=proactive）。</p>
+  </div>
+
+  <div class="flow">
+    <h3>6. 工具调用（Agent loop）</h3>
+    <div class="steps">
+      <span class="step">模型返回 tool_call<small>名称 + 参数</small></span><span class="arrow">→</span>
+      <span class="step">门禁 + 执行<small>ToolExecutionContext</small></span><span class="arrow">→</span>
+      <span class="step">结果回填<small>AgentToolResult</small></span><span class="arrow">→</span>
+      <span class="step">record_tool_call<small>agent_tool_calls</small></span><span class="arrow">→</span>
+      <span class="step">写事件<small>conversation_events / tool_call</small></span>
+    </div>
+    <p class="note">工具事件已接入代码，但还没有真实调用数据。</p>
+  </div>
+</section>
+
+<!-- ============ 上下文 ============ -->
+<section id="context">
+  <h2>五、上下文与历史</h2>
+
+  <div class="two">
+    <div class="flow">
+      <h3>Prompt 拼装顺序</h3>
+      <pre>[system] 身份 / 规则
+[system] 长期记忆(≤8) + 会话摘要 + 关系
+[system] 时间上下文（本地时间/间隔）
+[user/assistant] history（最近 10 轮 = 20 条）
+[user] 当前输入（文本 + 图片 parts）</pre>
+      <p class="note">摘要 24 条触发，保留最近 12 条；更早的折叠进 summary。</p>
+    </div>
+    <div class="flow">
+      <h3>统一历史表 conversation_events</h3>
+      <pre>event_type  message / tool_call / send / share
+source      app_chat / wechat / agent / bili / proactive
+actor       user / echo / system
+content     文本正文
+payload     message_id、工具参数、标题、图片标记
+source_created_at  原始发生时间（微信 create_time）
+created_at         落库时间</pre>
+      <p class="note">压缩口径：按 <code>COALESCE(source_created_at, created_at), id</code> 排序。</p>
+    </div>
+  </div>
+
+  <div class="flow">
+    <h3>一致性现状</h3>
+    <table>
+      <thead><tr><th>检查项</th><th>结果</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>chat_messages ↔ message 事件</td><td><span class="badge b-ok">1:1</span></td><td>52 条消息 / 52 条事件</td></tr>
+        <tr><td>孤儿事件 / 重复 message_id</td><td><span class="badge b-ok">0 / 0</span></td><td>已清理回填重复</td></tr>
+        <tr><td>历史事件 source_created_at</td><td><span class="badge b-ok">已补齐</span></td><td>历史用 created_at 回填</td></tr>
+        <tr><td>微信事件来源</td><td><span class="badge b-ok">wechat 46</span></td><td>user 23 + echo 23</td></tr>
+        <tr><td>tool_call 事件</td><td><span class="badge b-warn">0</span></td><td>等真实工具调用</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 卡点 ============ -->
+<section id="blockers">
+  <h2>六、当前卡点 / 风险</h2>
+  <p class="sub">按优先级排；P0 是现在真正卡住体验的，P1 是可用的但脆弱，P2 是优化项。</p>
+
+  <div class="blocker">
+    <h4><span class="badge b-bad">P0</span> 微信 UI 自动化稳定性</h4>
+    <p>bridge 依赖微信窗口的 UIA 控件树。微信白屏/最小化/掉线时读不到消息列表，文本消息会延迟甚至漏读；恢复后补读可能一次涌进多条。本次两次归属错配都是这个根因。</p>
+    <p class="where">VM: wechat_bridge.py · ChatTextItemView 读取 / ensure_window</p>
+  </div>
+
+  <div class="blocker">
+    <h4><span class="badge b-bad">P0</span> 微信发送依赖常驻实例</h4>
+    <p>白屏时 <code>/send_image</code> 会卡到 Invoke-RestMethod 超时（120s），后端只能看到「操作超时」。重启 EchoWechatBridge 任务能恢复，但没有自愈。</p>
+    <p class="where">VM: _send_image / _get_wx · 后端: bili_share_worker / wechat_events</p>
+  </div>
+
+  <div class="blocker p1">
+    <h4><span class="badge b-warn">P1</span> B站扫描 payload 太大</h4>
+    <p>一次扫描回传 4–5MB（10 张帧 base64 全走 job output）。虽然能过，但慢、占内存，且对 WS/agent 缓冲敏感。</p>
+    <p class="where">wechat_bridge.py: _bili_scan · bili_share_worker: _scan_videos</p>
+  </div>
+
+  <div class="blocker p1">
+    <h4><span class="badge b-warn">P1</span> 微信文本没有精确原始时间</h4>
+    <p>UIA 文本行没有 local_id，只能记 bridge 发现时间（误差 1–2 秒）。图片已经用微信 create_time，文本还差这一层。</p>
+    <p class="where">wechat_bridge.py: _check_once / _maybe_flush</p>
+  </div>
+
+  <div class="blocker p1">
+    <h4><span class="badge b-warn">P1</span> 事件流还有三个口子</h4>
+    <p>tool_call 还没有真实数据；<code>deliver_external_assistant_message</code> 未接事件；图片/表情的 content_parts 未进 payload。</p>
+    <p class="where">conversation_events · chat/public.py</p>
+  </div>
+
+  <div class="blocker p1">
+    <h4><span class="badge b-warn">P1</span> 压缩机制未实现</h4>
+    <p>事件表已经统一，但裁剪/摘要/预算策略还没写。目前只有「24 条触发摘要、保留 12 条」这一层。</p>
+    <p class="where">chat/infrastructure/conversation_summary.py</p>
+  </div>
+
+  <div class="blocker p2">
+    <h4><span class="badge b-info">P2</span> 固定窗口，没有 token 预算</h4>
+    <p>历史固定 20 条，不按 token 预算动态裁剪；长文本、图片消息多时上下文会偏大。</p>
+    <p class="where">chat/infrastructure/context_builder.py · MAX_HISTORY_MESSAGES=20</p>
+  </div>
+
+  <div class="blocker p2">
+    <h4><span class="badge b-info">P2</span> 文本归属靠 UIA 左右位置</h4>
+    <p>图片已按字节数 + 发送后标记 seen 严格过滤；文本仍靠 x 坐标判断左右，极窄窗口/特殊布局可能误判。</p>
+    <p class="where">wechat_bridge.py: _check_once / self_side</p>
+  </div>
+
+  <div class="blocker p2">
+    <h4><span class="badge b-info">P2</span> 8899 bootstrap 服务不自动拉起</h4>
+    <p>VM 更新用的 8899 文件服务在电脑重启后会掉，redeploy 报「无法连接到远程服务器」；需要重跑 launch-echo.ps1 或手动启动。</p>
+    <p class="where">launch-echo.ps1 · vm/redeploy-bridge.ps1</p>
+  </div>
+</section>
+
+<!-- ============ 本次完成 ============ -->
+<section id="recent">
+  <h2>七、本次会话完成</h2>
+  <div class="timeline">
+    <div class="titem">
+      <b>统一异步 exec 轮询</b>
+      <span>三个调用方合并成 <code>run_remote_command</code>；修掉「等 completed 永远等不到 done」的 8 分钟超时；补 exit_code 与非 json 判断。</span>
+    </div>
+    <div class="titem">
+      <b>B站分享改成图 + 文</b>
+      <span>bridge 返回帧路径，后端走 <code>/send_image</code>（path + text），base64 不进命令行；不再污染聊天历史。</span>
+    </div>
+    <div class="titem">
+      <b>图片归属过滤</b>
+      <span>发送后按原图字节数把消息标记 seen 并持久化；TTL 时间窗改为最近 200 张永久匹配，解决 UIA 掉线半小时后的补读误判。</span>
+    </div>
+    <div class="titem">
+      <b>多模态判图</b>
+      <span>帧直接以 image_url 交给 DeepSeek，一次调用输出 score + 分享话术，去掉独立视觉模型和二次文本生成。</span>
+    </div>
+    <div class="titem">
+      <b>启动竞态</b>
+      <span>bili 循环启动时等待 echo 节点上线，最多 180 秒，不再必然首轮失败。</span>
+    </div>
+    <div class="titem">
+      <b>统一事件流</b>
+      <span>新增 <code>conversation_events</code>，接入聊天、工具、分享、主动消息；回填历史并修正 source 与原始时间。</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 数据表 ============ -->
+<section id="tables">
+  <h2>八、核心数据表</h2>
+  <table>
+    <thead><tr><th>表</th><th>作用</th><th>关键字段</th></tr></thead>
+    <tbody>
+      <tr><td><code>chat_messages</code></td><td>聊天消息（展示与交付）</td><td>role / content / channel / visibility / created_at</td></tr>
+      <tr><td><code>conversations</code></td><td>会话与摘要</td><td>summary / summary_message_id</td></tr>
+      <tr><td><code>chat_turn_jobs</code></td><td>异步聊天队列</td><td>status / collect_until / input_last_message_id</td></tr>
+      <tr><td><code>conversation_events</code></td><td>统一历史时间线（压缩源）</td><td>event_type / source / actor / payload / source_created_at</td></tr>
+      <tr><td><code>user_memories</code> / <code>memory_embeddings</code></td><td>长期记忆与向量</td><td>content / importance / embedding</td></tr>
+      <tr><td><code>agent_runs</code> / <code>agent_tool_calls</code></td><td>Agent 轨迹</td><td>run_id / tool_name / status / input_summary</td></tr>
+      <tr><td><code>desktop_nodes</code> / <code>desktop_actions</code></td><td>节点与操作审计</td><td>owner_type / capabilities / action / duration_ms</td></tr>
+      <tr><td><code>presence_*</code></td><td>在场状态、念头、事件</td><td>status / salience / shareable</td></tr>
+      <tr><td><code>proactive_chat_*</code></td><td>主动任务与偏好</td><td>scheduled_for / status / budget</td></tr>
+      <tr><td><code>daily_letters</code></td><td>每日来信</td><td>status / publish_at / context_snapshot</td></tr>
+      <tr><td><code>stickers</code></td><td>表情资产与向量</td><td>owner_type / semantic_tags / embedding</td></tr>
+      <tr><td><code>notification_outbox</code></td><td>推送 Outbox</td><td>status / next_attempt_at</td></tr>
+    </tbody>
+  </table>
+
+  <div class="flow" style="margin-top:18px">
+    <h3>关键配置（只列键名）</h3>
+    <pre>DATABASE_URL / POSTGRES_*
+OPENAI_API_KEY / OPENAI_BASE_URL / LLM_MODEL
+BILI_SHARE_USER_ID
+PRESENCE_ENABLED / PRESENCE_*_BUDGET
+PROACTIVE_CHAT_ENABLED / PROACTIVE_*
+CHAT_ASYNC_ENABLED / CHAT_WORKER_POLL_INTERVAL_MS
+CONVERSATION_SUMMARY_*</pre>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Echo 项目全景 · 生成于 2026-11-23 · 版本 eb75b1d · 数据来自真实代码与线上验证
+</footer>
+
+</body>
+</html>

@@ -16,6 +16,7 @@ from shared.prompting.renderer import (
     render_persona,
     render_prompt_layers,
     render_relationship_guidance,
+    render_user_profile,
 )
 
 
@@ -59,9 +60,10 @@ class PromptRendererTests(unittest.TestCase):
         self.assertEqual(NATURAL_DIALOGUE_POLICY, messages[2]["content"])
         self.assertIn("模式: chat", messages[3]["content"])
         self.assertIn("RELATIONSHIP_GUIDANCE", messages[4]["content"])
-        self.assertIn("USER_PREFERENCES_DATA", messages[5]["content"])
-        self.assertIn("LONG_TERM_MEMORY_DATA", messages[6]["content"])
-        self.assertIn("CONVERSATION_SUMMARY_DATA", messages[7]["content"])
+        self.assertIn("USER_PROFILE", messages[5]["content"])
+        self.assertIn("USER_PREFERENCES_DATA", messages[6]["content"])
+        self.assertIn("LONG_TERM_MEMORY_DATA", messages[7]["content"])
+        self.assertIn("CONVERSATION_SUMMARY_DATA", messages[8]["content"])
 
     def test_call_mode_is_oral_without_changing_persona_layers(self):
         rendered = render_conversation_mode_guidance("call")
@@ -105,6 +107,45 @@ class PromptRendererTests(unittest.TestCase):
         self.assertNotIn("虚构示范", rendered)
         self.assertEqual(self.assistant_persona.dialogue_examples, ())
 
+    def test_user_profile_is_injected_with_relationship_label(self):
+        from types import SimpleNamespace
+
+        profile = SimpleNamespace(
+            display_name="叶子",
+            basics={"职业": "研究生"},
+            routine={"睡觉": "一两点"},
+            personality="嘴上说没事",
+            communication="回得短",
+            interests=("AI",),
+            boundaries=("家庭",),
+            notes="",
+            confidence={"毕业时间": "不确定"},
+            is_empty=False,
+        )
+        text = render_user_profile(profile, "ambiguous")
+        self.assertIn("称呼：叶子", text)
+        self.assertIn("关系：暧昧", text)
+        self.assertIn("毕业时间", text)
+
+    def test_empty_user_profile_prompts_small_talk_discovery(self):
+        from types import SimpleNamespace
+
+        profile = SimpleNamespace(
+            display_name="",
+            basics={},
+            routine={},
+            personality="",
+            communication="",
+            interests=(),
+            boundaries=(),
+            notes="",
+            confidence={},
+            is_empty=True,
+        )
+        text = render_user_profile(profile, "")
+        self.assertIn("你还不太了解他", text)
+        self.assertIn("一次只问一个", text)
+
     def test_persona_usage_is_rendered_as_optional_and_contextual(self):
         rendered = render_persona(self.persona, 400)
 
@@ -116,7 +157,7 @@ class PromptRendererTests(unittest.TestCase):
         persona_text = render_assistant_persona(self.assistant_persona)
         relationship_text = render_relationship_guidance(self.relationship)
 
-        self.assertIn("傲娇甜软", persona_text)
+        self.assertIn("傲娇", persona_text)
         self.assertIn("共同经历、学习和复盘", persona_text)
         self.assertIn("当前关系: 初识", relationship_text)
         self.assertNotIn("score", relationship_text.lower())

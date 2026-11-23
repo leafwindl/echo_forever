@@ -1,14 +1,12 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:echo_app/core/di/providers.dart';
 import 'package:echo_app/core/routing/route_names.dart';
 import 'package:echo_app/features/app_update/presentation/app_update_controller.dart';
 import 'package:echo_app/features/auth/presentation/auth_controller.dart';
 import 'package:echo_app/features/chat/domain/chat_message.dart';
 import 'package:echo_app/features/chat/presentation/chat_controller.dart';
 import 'package:echo_app/features/letters/presentation/letters_controller.dart';
-import 'package:echo_app/features/persona/presentation/persona_controller.dart';
 import 'package:echo_app/features/stickers/domain/sticker.dart';
 import 'package:echo_app/features/stickers/presentation/stickers_controller.dart';
 import 'package:echo_app/shared/widgets/character_renderer.dart';
@@ -53,8 +51,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   String _inputText = '';
   String? _lastTailSignature;
   bool _historyLoadInFlight = false;
-  bool _proposalCheckInFlight = false;
-  String? _shownProposalId;
 
   @override
   void initState() {
@@ -74,13 +70,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(chatControllerProvider);
     final unreadLetterCount = ref.watch(lettersUnreadCountProvider);
-    ref.listen(chatControllerProvider, (previous, next) {
-      if (previous == null) return;
-      final grew = next.messages.length > previous.messages.length;
-      if (grew && (next.echoTyping || previous.echoTyping)) {
-        unawaited(_maybeShowRelationshipProposal());
-      }
-    });
+    // 关系确认弹窗暂时禁用：聊天里不再弹出确认窗口。
     _scheduleScrollForState(state);
     return Scaffold(
       appBar: AppBar(
@@ -256,56 +246,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             ChatSticker(stickerId: sticker.stickerId, url: uri.toString()),
           ),
     );
-  }
-
-  Future<void> _maybeShowRelationshipProposal() async {
-    if (!mounted || _proposalCheckInFlight) return;
-    _proposalCheckInFlight = true;
-    try {
-      final relationship = await ref
-          .read(personaRepositoryProvider)
-          .getRelationship();
-      final proposal = relationship.pendingProposal;
-      if (!mounted ||
-          proposal == null ||
-          proposal.proposalId == _shownProposalId) {
-        return;
-      }
-      _shownProposalId = proposal.proposalId;
-      final accepted = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('和 Echo 的关系'),
-          content: Text(
-            'Echo 想和你确认：从现在开始，做${proposal.directionLabel}吗？',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('再想想'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('愿意'),
-            ),
-          ],
-        ),
-      );
-      if (accepted == true) {
-        await ref
-            .read(personaRepositoryProvider)
-            .acceptRelationshipProposal(proposal.proposalId);
-      } else {
-        await ref
-            .read(personaRepositoryProvider)
-            .deferRelationshipProposal(proposal.proposalId);
-      }
-      ref.invalidate(relationshipStateProvider);
-    } on Object {
-      // A relationship refresh must never interrupt chat delivery.
-    } finally {
-      _proposalCheckInFlight = false;
-    }
   }
 
   Future<void> _handleMenuAction(_ChatMenuAction action) async {

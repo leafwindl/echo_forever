@@ -16,6 +16,7 @@ from features.agent.infrastructure.tools import (
     register_desktop_tools,
     register_mobile_agent_tools,
     register_proactive_tools,
+    register_profile_tools,
     register_relationship_tools,
     register_schedule_tools,
     register_sticker_tools,
@@ -37,6 +38,7 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
     registry = ToolRegistry()
     register_sticker_tools(registry)
     register_beat_tools(registry)
+    register_profile_tools(registry)
     register_desktop_tools(registry)
     register_computer_tools(registry)
     register_bili_tools(registry)

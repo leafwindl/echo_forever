@@ -34,6 +34,7 @@ from shared.prompting.renderer import estimate_prompt_tokens
 CHAT_TOOL_ORDER = (
     "send_sticker",
     "emit_chat_beats",
+    "update_user_profile",
     "desktop_speak",
     "desktop_status",
     "desktop_open_app",
@@ -87,6 +88,7 @@ CALL_TOOL_ORDER = (
 PROACTIVE_TOOL_ORDER = (
     "send_sticker",
     "emit_chat_beats",
+    "update_user_profile",
     "desktop_speak",
     "desktop_status",
     "desktop_open_app",
@@ -130,6 +132,7 @@ DAILY_LETTER_TOOL_ORDER = ()
 TOOL_SPECS = {
     "send_sticker": (("chat", "proactive"), 5, 4),
     "emit_chat_beats": (("chat", "proactive"), 5, 4),
+    "update_user_profile": (("chat", "proactive"), 5, 1),
     "desktop_speak": (("chat", "proactive"), 70, 2),
     "desktop_status": (("chat", "proactive"), 10, 1),
     "desktop_open_app": (("chat", "proactive"), 55, 2),
@@ -178,7 +181,7 @@ TOOL_SPECS = {
 # 后续若再瘦身，继续收紧；新增工具应触发这里失败，先评估影响。
 # 微信三件套（send/messages/sessions）再占约 288 tok：Echo 自有电脑上的
 # 实际社交能力，评估后把棘轮放到 5,000。
-CHAT_TOKEN_BUDGET = 5_200
+CHAT_TOKEN_BUDGET = 5_650  # 含 update_user_profile：参数 schema 较大
 
 
 def _descriptions(registry, mode):

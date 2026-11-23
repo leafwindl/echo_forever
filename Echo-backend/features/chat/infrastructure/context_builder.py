@@ -23,6 +23,7 @@ from features.memory.public import (
 )
 from features.persona.public import get_persona
 from features.relationship.public import get_relationship_context
+from features.user_profile.public import get_user_profile
 
 logger = logging.getLogger(__name__)
 
@@ -409,6 +410,11 @@ async def build_chat_context(
 
     assistant_persona = get_assistant_persona(settings.assistant_persona_version)
     try:
+        user_profile = None if unknown_speaker else get_user_profile(user_id)
+    except Exception:
+        logger.warning("User profile loading unavailable", exc_info=True)
+        user_profile = None
+    try:
         relationship = (
             None
             if unknown_speaker
@@ -436,6 +442,7 @@ async def build_chat_context(
         summary_maximum_tokens=settings.summary_prompt_max_tokens,
         assistant_persona=assistant_persona,
         relationship=relationship,
+        user_profile=user_profile,
         conversation_mode=conversation_mode,
     )
     if unknown_speaker:

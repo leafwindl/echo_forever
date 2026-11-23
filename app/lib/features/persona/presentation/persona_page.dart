@@ -71,9 +71,8 @@ class PersonaPage extends ConsumerWidget {
                     ),
                     data: (state) => _RelationshipCard(
                       state: state,
-                      onOpenProposal: state.pendingProposal == null
-                          ? null
-                          : () => _showProposalDialog(context, ref, state),
+                      // 关系确认弹窗暂时禁用：关系变化不再要求用户确认。
+                      onOpenProposal: null,
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -136,51 +135,6 @@ class PersonaPage extends ConsumerWidget {
     }
   }
 
-  Future<void> _showProposalDialog(
-    BuildContext context,
-    WidgetRef ref,
-    RelationshipStateDto state,
-  ) async {
-    final proposal = state.pendingProposal;
-    if (proposal == null) return;
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('和 Echo 的关系'),
-        content: Text(
-          'Echo 想和你确认：从现在开始，做${proposal.directionLabel}吗？',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('再想想'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('愿意'),
-          ),
-        ],
-      ),
-    );
-    try {
-      if (accepted == true) {
-        await ref
-            .read(personaRepositoryProvider)
-            .acceptRelationshipProposal(proposal.proposalId);
-      } else {
-        await ref
-            .read(personaRepositoryProvider)
-            .deferRelationshipProposal(proposal.proposalId);
-      }
-      ref.invalidate(relationshipStateProvider);
-    } on Object catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('关系确认失败：$error')),
-        );
-      }
-    }
-  }
 }
 
 class _RelationshipCard extends StatelessWidget {

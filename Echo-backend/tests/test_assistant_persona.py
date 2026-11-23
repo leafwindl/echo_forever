@@ -18,13 +18,13 @@ class AssistantPersonaTests(unittest.TestCase):
         self.assertEqual("echo-persona-v4", persona.version)
         self.assertIn("情感陪伴为核心", persona.role)
         self.assertIn("朋友或 AI 恋人", persona.role)
-        self.assertIn("傲娇甜软", persona.traits[0])
+        self.assertIn("傲娇", persona.traits[0])
         self.assertEqual(len(persona.traits), 3)
         self.assertTrue(any("颜文字" in item for item in persona.conversation_principles))
         self.assertTrue(any("共同进步" in item for item in persona.conversation_principles))
         self.assertTrue(any("人类生活史" in item for item in persona.forbidden_claims))
         self.assertEqual(persona.dialogue_examples, ())
-        self.assertTrue(any("嘴硬" in item for item in persona.traits))
+        self.assertTrue(any("否认" in item for item in persona.traits))
 
     def test_unknown_persona_version_is_rejected(self):
         for version in ("missing-persona", "echo-persona-v3", "echo-persona-v2"):

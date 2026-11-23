@@ -991,6 +991,21 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            user_id TEXT PRIMARY KEY,
+            display_name VARCHAR(40) NOT NULL DEFAULT '',
+            basics JSONB NOT NULL DEFAULT '{}'::jsonb,
+            routine JSONB NOT NULL DEFAULT '{}'::jsonb,
+            personality VARCHAR(600) NOT NULL DEFAULT '',
+            communication VARCHAR(600) NOT NULL DEFAULT '',
+            interests JSONB NOT NULL DEFAULT '[]'::jsonb,
+            boundaries JSONB NOT NULL DEFAULT '[]'::jsonb,
+            notes TEXT NOT NULL DEFAULT '',
+            confidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS presence_thoughts (
             id BIGSERIAL PRIMARY KEY,
             thought_id TEXT NOT NULL UNIQUE,
@@ -1158,6 +1173,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ALTER TABLE proactive_goals ADD COLUMN IF NOT EXISTS result_summary TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE study_focus_sessions ADD COLUMN IF NOT EXISTS completion_goal_id TEXT",
         "ALTER TABLE presence_thoughts ADD COLUMN IF NOT EXISTS draft_text TEXT NOT NULL DEFAULT ''",
+        "CREATE INDEX IF NOT EXISTS idx_user_profiles_updated ON user_profiles(updated_at DESC)",
         "ALTER TABLE desktop_nodes ADD COLUMN IF NOT EXISTS owner_type VARCHAR(16) NOT NULL DEFAULT 'user'",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS cycle_started_at TIMESTAMPTZ",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS allowed_contact_seconds INTEGER NOT NULL DEFAULT 0",

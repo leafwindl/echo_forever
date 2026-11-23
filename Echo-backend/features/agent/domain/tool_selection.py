@@ -21,6 +21,7 @@ from dataclasses import dataclass
 CORE_TOOL_NAMES = (
     "emit_chat_beats",
     "send_sticker",
+    "update_user_profile",
     "create_chat_schedule",
     "list_chat_schedules",
     "cancel_chat_schedule",

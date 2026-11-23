@@ -39,3 +39,18 @@ class RelationshipContext(Protocol):
     interaction_warmth: str
     effective_affection_style: str
     proposable_direction: str
+
+
+class UserProfileView(Protocol):
+    display_name: str
+    basics: dict[str, str]
+    routine: dict[str, str]
+    personality: str
+    communication: str
+    interests: tuple[str, ...]
+    boundaries: tuple[str, ...]
+    notes: str
+    confidence: dict[str, str]
+
+    @property
+    def is_empty(self) -> bool: ...
