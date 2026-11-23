@@ -23,6 +23,7 @@ _SYSTEM_PROMPT = f"""你是 Echo 的内部念头生成器，不是聊天回复�
 字段固定为：
 {{"thought": "第一人称中文念头，20-80字", "salience": 0.0到1.0,
  "shareable": true或false, "action_intent": "" 或结构化动作,
+ "action_request": "" 或自然语言能力请求,
  "draft_text": "如果要主动发给用户，写成 20-80 字的第一人称自然消息；不适合发就留空",
  "plan": "这次准备做什么/不做什么，20-40字"}}
 要求：
@@ -44,6 +45,9 @@ _SYSTEM_PROMPT = f"""你是 Echo 的内部念头生成器，不是聊天回复�
 - action_intent 只有语境明确支持时才填写，格式必须是以下之一：
 {_ACTION_HINT}
   其他情况一律留空字符串；不要为了用动作而编造动作。
+- 如果你想做点什么但不确定对应哪个动作，可以填 action_request，
+  用自然语言说想要什么（如“想看看B站”“想看看你的屏幕”）；系统会路由到已注册能力，
+  匹配不到会被记为能力缺口。不要编造工具名。
 - 填了 bili 时 draft_text 可以留空，表示这次只是自己想看看、不一定要发消息。
 - recent_actions 是你最近真的做过的事（刷过B站、分享过视频、执行过任务）。
   刚做过的事不要假装没发生过，也不要为了显得主动而重复做；如果有新理由
@@ -167,6 +171,7 @@ class ProviderPresenceThoughtGenerator:
             salience=max(0.0, min(salience, 1.0)),
             shareable=bool(payload.get("shareable", False)),
             action_intent=str(payload.get("action_intent") or "").strip()[:160],
+            action_request=str(payload.get("action_request") or "").strip()[:160],
             draft_text=str(payload.get("draft_text") or "").strip()[:500],
             plan=str(payload.get("plan") or "").strip()[:200],
         )

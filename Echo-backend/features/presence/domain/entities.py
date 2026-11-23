@@ -94,6 +94,7 @@ class ThoughtDraft:
     salience: float
     shareable: bool = False
     action_intent: str = ""
+    action_request: str = ""
     draft_text: str = ""
     plan: str = ""
 

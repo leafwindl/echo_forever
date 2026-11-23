@@ -345,6 +345,63 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(repository.state.next_tick_at)
         self.assertGreater(repository.state.next_tick_at, now)
 
+    async def test_action_request_is_routed_to_registered_action(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository()
+        creator = FakeGoalCreator()
+        generator = FakeGenerator(
+            ThoughtDraft(
+                text="想看看B站今天有什么",
+                salience=0.6,
+                action_request="想看看B站",
+            )
+        )
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=2)),
+            generator=generator,
+            goal_creator=creator,
+        )
+        await service.tick("user-1", now=now)
+        self.assertEqual(len(creator.goals), 1)
+        self.assertTrue(creator.goals[0][2].startswith("bili:"))
+
+    async def test_unavailable_action_request_records_gap(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository()
+        creator = FakeGoalCreator()
+        generator = FakeGenerator(
+            ThoughtDraft(
+                text="想变成一只猫",
+                salience=0.6,
+                action_request="想变成一只猫",
+            )
+        )
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=2)),
+            generator=generator,
+            goal_creator=creator,
+        )
+        await service.tick("user-1", now=now)
+        self.assertEqual(creator.goals, [])
+        self.assertIn("action_unavailable", repository.events)
+
+    async def test_downshift_extends_next_tick(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository(
+            PresenceState(
+                user_id="user-1",
+                outreach_downshift_until=now + timedelta(days=1),
+            )
+        )
+        service = _service(repository, FakeContext(now - timedelta(hours=2)))
+        await service.tick("user-1", now=now)
+        self.assertGreaterEqual(
+            repository.state.next_tick_at,
+            now + timedelta(minutes=179),
+        )
+
     async def test_run_once_processes_recent_users(self):
         now = datetime.now(UTC)
         repository = FakeRepository()

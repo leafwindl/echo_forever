@@ -61,6 +61,7 @@ class PresenceService:
         active_interval_minutes: int = 45,
         idle_interval_minutes: int = 60,
         sleeping_interval_minutes: int = 90,
+        downshift_interval_minutes: int = 180,
     ):
         self.repository = repository
         self.context_source = context_source
@@ -80,6 +81,7 @@ class PresenceService:
         self.active_interval = timedelta(minutes=active_interval_minutes)
         self.idle_interval = timedelta(minutes=idle_interval_minutes)
         self.sleeping_interval = timedelta(minutes=sleeping_interval_minutes)
+        self.downshift_interval = timedelta(minutes=downshift_interval_minutes)
 
     def state(self, user_id: str) -> PresenceState:
         return self.repository.get_or_create_state(user_id)
@@ -170,13 +172,27 @@ class PresenceService:
         if _is_duplicate(cleaned, recent):
             return self._finish(state, "skipped", "duplicate_thought", current)
 
+        action_intent = _compact(draft.action_intent, 2000)
+        action_request = _compact(draft.action_request, 200)
+        if not action_intent and action_request:
+            from features.agent.public import route_action_request
+
+            action_intent = route_action_request(action_request)
+            if not action_intent:
+                self.repository.record_event(
+                    user_id=user_id,
+                    event_type="action_unavailable",
+                    detail={"request": action_request},
+                    now=current,
+                )
+
         thought = PresenceThought(
             thought_id=f"thought_{uuid.uuid4().hex}",
             user_id=user_id,
             text=cleaned,
             salience=max(0.0, min(float(draft.salience), 1.0)),
             shareable=bool(draft.shareable),
-            action_intent=_compact(draft.action_intent, 2000),
+            action_intent=action_intent,
             source_memory_id=memory.memory_id if memory else "",
             source_memory_text=_compact(memory.content, 500) if memory else "",
             draft_text=_compact(draft.draft_text, 500),
@@ -388,11 +404,30 @@ class PresenceService:
         )
 
     def _next_tick_at(self, state, now: datetime) -> datetime:
+        if (
+            state.outreach_downshift_until is not None
+            and now < state.outreach_downshift_until
+        ):
+            return now + self.downshift_interval
         if state.status == PresenceStatus.ACTIVE:
-            return now + self.active_interval
-        if state.status == PresenceStatus.SLEEPING:
-            return now + self.sleeping_interval
-        return now + self.idle_interval
+            base = self.active_interval
+        elif state.status == PresenceStatus.SLEEPING:
+            base = self.sleeping_interval
+        else:
+            base = self.idle_interval
+        return now + self._reply_adjusted(base, state)
+
+    def _reply_adjusted(self, base, state) -> timedelta:
+        sent = state.outreach_sent_count
+        replied = state.outreach_replied_count
+        if sent < 3:
+            return base
+        rate = replied / sent
+        if rate < 0.2:
+            return base * 2
+        if rate < 0.5:
+            return base + timedelta(minutes=30)
+        return base
 
     def _finish(
         self,

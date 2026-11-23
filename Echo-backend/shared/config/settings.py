@@ -174,6 +174,12 @@ class Settings(BaseSettings):
         ge=10,
         le=720,
     )
+    presence_downshift_interval_minutes: int = Field(
+        default=180,
+        validation_alias="PRESENCE_DOWNSHIFT_INTERVAL_MINUTES",
+        ge=30,
+        le=1440,
+    )
     presence_active_window_minutes: int = Field(
         default=5,
         validation_alias="PRESENCE_ACTIVE_WINDOW_MINUTES",

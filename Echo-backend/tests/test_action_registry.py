@@ -10,6 +10,7 @@ from features.agent.domain.action_registry import (
     ACTION_SPECS,
     get_action_spec,
     parse_action_kind,
+    route_action_request,
 )
 
 
@@ -30,6 +31,16 @@ class ActionRegistryTests(unittest.TestCase):
     def test_parse_action_kind(self):
         self.assertEqual(parse_action_kind("music:晴天"), "music")
         self.assertEqual(parse_action_kind("no-colon"), "")
+
+    def test_route_request_matches_registered_action(self):
+        self.assertTrue(
+            route_action_request("想看看B站有什么好玩的").startswith("bili:")
+        )
+        self.assertTrue(route_action_request("想看看你的屏幕").startswith("look:"))
+        self.assertTrue(route_action_request("想看看你的手机").startswith("phone_look:"))
+
+    def test_route_request_unknown_returns_empty(self):
+        self.assertEqual(route_action_request("想变成一只猫"), "")
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from features.agent.domain.action_registry import (
     ActionSpec,
     get_action_spec,
     parse_action_kind,
+    route_action_request,
 )
 from features.agent.domain.call_routing import route_call_tools
 from features.agent.domain.chat_action_routing import ChatActionMode, route_chat_action
@@ -189,6 +190,7 @@ __all__ = [
     "ProactiveDecision",
     "get_action_spec",
     "parse_action_kind",
+    "route_action_request",
     "plan_proactive_message",
     "run_chat_agent",
     "run_daily_letter_agent",
