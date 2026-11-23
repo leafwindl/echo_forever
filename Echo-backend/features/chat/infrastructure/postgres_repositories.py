@@ -242,6 +242,7 @@ def add_external_assistant_message(
     content: str,
     idempotency_key: str,
     source: str,
+    content_parts: tuple[ContentPart, ...] = (),
 ) -> ExternalAssistantDelivery:
     with transaction() as conn:
         with conn.cursor() as cursor:
@@ -297,6 +298,7 @@ def add_external_assistant_message(
             reply_group_id=reply_group_id,
             source=source,
         )
+        _add_message_attachments(conn, user_id, stable_id, content_parts, 0)
         with conn.cursor() as cursor:
             cursor.execute(
                 "SELECT created_at FROM chat_messages WHERE id = %s",
@@ -310,7 +312,7 @@ def add_external_assistant_message(
             role="assistant",
             content=content,
             message_type="text",
-            content_parts=(),
+            content_parts=content_parts,
             sources=(),
             reply_group_id=reply_group_id,
             created_at=created_at,
@@ -329,11 +331,31 @@ def _add_message_attachments(
     content_parts: tuple[ContentPart, ...],
     position_offset: int,
 ) -> None:
+    image_parts = [part for part in content_parts if part.type == "image" and part.url]
     sticker_parts = [part for part in content_parts if part.type == "sticker" and part.sticker_id]
-    if not sticker_parts:
+    if not image_parts and not sticker_parts:
         return
     with conn.cursor() as cursor:
-        for index, part in enumerate(sticker_parts, start=position_offset):
+        for index, part in enumerate(image_parts, start=position_offset):
+            cursor.execute(
+                """
+                INSERT INTO chat_message_attachments (
+                    attachment_id, message_id, user_id, attachment_type,
+                    resource_id, position, metadata
+                ) VALUES (%s, %s, %s, 'image', %s, %s, %s::jsonb)
+                """,
+                (
+                    f"att_{uuid.uuid4().hex}",
+                    message_id,
+                    user_id,
+                    "",
+                    index,
+                    json.dumps({"url": part.url}, ensure_ascii=False),
+                ),
+            )
+        for index, part in enumerate(
+            sticker_parts, start=position_offset + len(image_parts)
+        ):
             cursor.execute(
                 """
                 SELECT description, semantic_tags, public_url

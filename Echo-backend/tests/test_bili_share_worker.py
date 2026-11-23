@@ -94,7 +94,12 @@ class BiliJudgeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
-    async def _send(self, item: dict, output: str = '{"ok": true}') -> list[str]:
+    async def _send(
+        self,
+        item: dict,
+        output: str = '{"ok": true}',
+        image_url: str = "",
+    ) -> list[str]:
         commands: list[str] = []
 
         async def fake_run_remote(command: str, *, timeout_seconds: int = 480):  # noqa: ARG001
@@ -105,6 +110,10 @@ class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
             patch(
                 "features.presence.infrastructure.bili_share_worker._run_remote_command",
                 new=fake_run_remote,
+            ),
+            patch(
+                "features.presence.infrastructure.bili_share_worker._store_frame_image",
+                return_value=image_url,
             ),
             patch(
                 "features.chat.public.deliver_external_assistant_message",
@@ -146,9 +155,21 @@ class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(self.history_call)
         kwargs = self.history_call.kwargs
         self.assertEqual(kwargs["source"], "bili")
-        self.assertIn("我刚分享了B站视频《火山温泉》", kwargs["content"])
-        self.assertIn("这画面好刺激", kwargs["content"])
+        self.assertIn("刚刷到一个视频《火山温泉》", kwargs["content"])
+        self.assertEqual(kwargs["content_parts"], ())
         self.assertTrue(kwargs["idempotency_key"].startswith("bili_share:"))
+
+    async def test_send_share_attaches_cos_image(self):
+        await self._send(
+            {"title": "火山温泉", "note": "这画面好刺激"},
+            image_url="https://cos.example/bili/frame.png",
+        )
+
+        kwargs = self.history_call.kwargs
+        parts = kwargs["content_parts"]
+        self.assertEqual(len(parts), 1)
+        self.assertEqual(parts[0].type, "image")
+        self.assertEqual(parts[0].url, "https://cos.example/bili/frame.png")
 
     async def test_send_share_falls_back_to_text_without_frame(self):
         commands = await self._send({"title": "t", "note": "有意思"})

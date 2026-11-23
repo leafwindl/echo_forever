@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
 import logging
+import time
 
 from shared.config import settings
 
@@ -194,6 +197,25 @@ def _bridge_ok(output: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _store_frame_image(item: dict) -> str:
+    """把分享的帧存到后端可访问的 COS，历史里可以回看。失败只少图。"""
+    frame = str(item.get("frame_base64") or "").strip()
+    if not frame:
+        return ""
+    try:
+        from shared.storage.cos_storage import get_cos_object_storage
+
+        data = base64.b64decode(frame)
+        digest = hashlib.md5(data).hexdigest()[:12]
+        key = f"bili/{int(time.time())}_{digest}.png"
+        storage = get_cos_object_storage()
+        storage.put_bytes(key, data, "image/png", cache_control="private, max-age=604800")
+        return storage.download_url(key, expires_seconds=86400)
+    except Exception:
+        logger.warning("store bili frame image failed", exc_info=True)
+        return ""
+
+
 async def _send_share(item: dict) -> None:
     """用 bridge 的图片目录发图+文：bridge 已把帧存在 C:/EchoComputer/images。
 
@@ -243,14 +265,20 @@ async def _send_share(item: dict) -> None:
     except Exception:
         logger.warning("record bili share event failed", exc_info=True)
     try:
+        from features.agent.domain.entities import ContentPart
         from features.chat.public import deliver_external_assistant_message
 
         title = str(item.get("title") or "").strip()[:80]
+        image_url = _store_frame_image(item)
+        content_parts = (
+            (ContentPart(type="image", url=image_url),) if image_url else ()
+        )
         await deliver_external_assistant_message(
             user_id=_owner_user_id(),
-            content=f"我刚分享了B站视频《{title}》，配文：{text}",
+            content=f"刚刷到一个视频《{title}》，觉得挺有意思，分享给你了。",
             idempotency_key=f"bili_share:{item.get('url') or title}:{text[:24]}",
             source="bili",
+            content_parts=content_parts,
         )
     except Exception:
         logger.warning("record bili share history failed", exc_info=True)

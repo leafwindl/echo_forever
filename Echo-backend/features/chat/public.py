@@ -184,12 +184,14 @@ async def deliver_external_assistant_message(
     content: str,
     idempotency_key: str,
     source: str,
+    content_parts: tuple[ContentPart, ...] = (),
 ) -> ExternalAssistantDelivery:
     delivery = add_external_assistant_message(
         user_id=user_id,
         content=content,
         idempotency_key=idempotency_key,
         source=source,
+        content_parts=content_parts,
     )
     if delivery.replayed:
         return delivery
