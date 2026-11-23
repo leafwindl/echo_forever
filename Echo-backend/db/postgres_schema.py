@@ -250,6 +250,21 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
           AND visibility = 'main_chat'
         """,
         """
+        CREATE TABLE IF NOT EXISTS conversation_events (
+            id BIGSERIAL PRIMARY KEY,
+            event_type TEXT NOT NULL,
+            source TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            conversation_id TEXT,
+            turn_id TEXT NOT NULL DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            source_created_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS chat_request_results (
             user_id TEXT NOT NULL,
             request_id TEXT NOT NULL,
@@ -1085,6 +1100,14 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         """
         CREATE INDEX IF NOT EXISTS idx_chat_messages_turn_group
         ON chat_messages(agent_turn_id, reply_group_id, sequence_in_group)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_conversation_events_user_created
+        ON conversation_events(user_id, created_at DESC)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_conversation_events_conversation
+        ON conversation_events(conversation_id, id)
         """,
         """
         CREATE INDEX IF NOT EXISTS idx_chat_turn_jobs_due

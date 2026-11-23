@@ -239,7 +239,13 @@ class ModelToolLoop:
                             tool_call_count += 1
 
                         tool_results.append(tool_result)
-                        self._record_tool_result(run_id, call, tool_result)
+                        self._record_tool_result(
+                            run_id,
+                            user_id,
+                            conversation_id,
+                            call,
+                            tool_result,
+                        )
                         agent_messages.append(self._tool_result_message(tool_result))
                         sticker_placement = self._collect_delivery(
                             tool_result,
@@ -751,6 +757,8 @@ class ModelToolLoop:
     def _record_tool_result(
         self,
         run_id: str,
+        user_id: str,
+        conversation_id: str | None,
         call: AgentToolCall,
         result: AgentToolResult,
     ) -> None:
@@ -763,3 +771,27 @@ class ModelToolLoop:
             status=result.status.value,
             tool_call_id=call.call_id,
         )
+        try:
+            from features.conversation_events.public import (
+                ACTOR_ECHO,
+                EVENT_TOOL_CALL,
+                record_conversation_event,
+            )
+
+            record_conversation_event(
+                event_type=EVENT_TOOL_CALL,
+                source="agent",
+                actor=ACTOR_ECHO,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                turn_id=run_id,
+                content=f"{call.tool_name} {result.status.value}",
+                payload={
+                    "tool_name": call.tool_name,
+                    "status": result.status.value,
+                    "error_code": result.error_code or "",
+                    "arguments": call.arguments,
+                },
+            )
+        except Exception:
+            logger.warning("record tool call event failed", exc_info=True)

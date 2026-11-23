@@ -32,6 +32,12 @@ from features.chat.domain.services import (
     MemoryExtractionScheduler,
     RelationshipTurnRecorder,
 )
+from features.conversation_events.public import (
+    ACTOR_ECHO,
+    ACTOR_USER,
+    EVENT_MESSAGE,
+    record_conversation_event,
+)
 from features.proactive_chat.application.explicit_reminders import (
     parse_explicit_relative_reminder,
 )
@@ -131,6 +137,48 @@ class GenerateChatReply:
         self._summary_tasks.add(task)
         task.add_done_callback(self._summary_tasks.discard)
 
+    @staticmethod
+    def _record_message_events(
+        *,
+        user_id: str,
+        conversation_id: str,
+        channel: str,
+        user_message: str,
+        assistant_reply: str,
+        user_message_id: int,
+        assistant_message_id: int,
+        user_message_type: str,
+        assistant_message_type: str,
+    ) -> None:
+        """把这一轮写进统一事件流；失败只记日志，不影响聊天本身。"""
+        try:
+            record_conversation_event(
+                event_type=EVENT_MESSAGE,
+                source=channel,
+                actor=ACTOR_USER,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                content=user_message,
+                payload={
+                    "message_id": user_message_id,
+                    "message_type": user_message_type,
+                },
+            )
+            record_conversation_event(
+                event_type=EVENT_MESSAGE,
+                source=channel,
+                actor=ACTOR_ECHO,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                content=assistant_reply,
+                payload={
+                    "message_id": assistant_message_id,
+                    "message_type": assistant_message_type,
+                },
+            )
+        except Exception:
+            logger.warning("record conversation message events failed", exc_info=True)
+
     async def _complete_turn(
         self,
         clean_user_id: str,
@@ -158,6 +206,17 @@ class GenerateChatReply:
             assistant_content_parts=assistant_content_parts,
             channel=channel,
             visibility=visibility,
+        )
+        self._record_message_events(
+            user_id=clean_user_id,
+            conversation_id=resolved_conversation_id,
+            channel=channel,
+            user_message=clean_message,
+            assistant_reply=reply,
+            user_message_id=user_message_id,
+            assistant_message_id=assistant_message_id,
+            user_message_type=user_message_type,
+            assistant_message_type=assistant_message_type,
         )
 
         summary_updated, memory_gate = await self._run_post_persistence(

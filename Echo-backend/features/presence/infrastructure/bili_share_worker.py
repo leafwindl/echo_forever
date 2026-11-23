@@ -222,6 +222,26 @@ async def _send_share(item: dict) -> None:
     if not delivered:
         logger.warning("bili share bridge rejected: %s", reason)
         return
+    try:
+        from features.conversation_events.public import (
+            ACTOR_ECHO,
+            EVENT_SHARE,
+            record_conversation_event,
+        )
+
+        record_conversation_event(
+            event_type=EVENT_SHARE,
+            source="bili",
+            actor=ACTOR_ECHO,
+            user_id=_owner_user_id(),
+            content=text,
+            payload={
+                "title": str(item.get("title") or "")[:80],
+                "frame": bool(frame),
+            },
+        )
+    except Exception:
+        logger.warning("record bili share event failed", exc_info=True)
     logger.info(
         "bili share sent title=%s text=%s frame=%s",
         item.get("title", "")[:40],
