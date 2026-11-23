@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from features.desktop.application.desktop_service import DesktopNodeStatus
@@ -32,6 +33,7 @@ async def relay_wechat_message(
     content: str,
     local_id: int,
     images: tuple[str, ...] = (),
+    source_created_at: datetime | None = None,
 ) -> None:
     """微信桥事件入口：Echo 回复后把结果发回微信。"""
     # 延迟导入：wechat_events 依赖 chat.public，而 chat 侧也可能导入 desktop
@@ -44,6 +46,7 @@ async def relay_wechat_message(
         content=content,
         local_id=local_id,
         images=images,
+        source_created_at=source_created_at,
     )
 
 

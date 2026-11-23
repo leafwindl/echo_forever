@@ -1,8 +1,10 @@
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 
 from features.agent.domain.entities import ContentPart
 from features.chat.domain.entities import (
     CHAT_CHANNEL_APP,
+    CHAT_CHANNEL_WECHAT,
     CHAT_VISIBILITY_MAIN,
     ChatContextClearResult,
     ChatHistoryPage,
@@ -101,6 +103,7 @@ async def generate_chat_reply(
     speaker_confidence: float = 0.0,
     speaker_name: str | None = None,
     memory_enabled: bool = True,
+    source_created_at: datetime | None = None,
 ) -> ChatTurnResult:
     use_case = get_generate_chat_reply_use_case()
     return await use_case.execute(
@@ -122,6 +125,7 @@ async def generate_chat_reply(
         speaker_confidence=speaker_confidence,
         speaker_name=speaker_name,
         memory_enabled=memory_enabled,
+        source_created_at=source_created_at,
     )
 
 
@@ -220,6 +224,7 @@ async def deliver_external_assistant_message(
 
 
 __all__ = [
+    "CHAT_CHANNEL_WECHAT",
     "ChatContextClearResult",
     "ChatHistoryPage",
     "ChatMessageAcceptance",

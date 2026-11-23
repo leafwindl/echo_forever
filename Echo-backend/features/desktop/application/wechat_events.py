@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime
 
-from features.chat.public import generate_chat_reply
+from features.chat.public import CHAT_CHANNEL_WECHAT, generate_chat_reply
 from features.desktop.application.desktop_service import DesktopService
 from features.desktop.application.remote_command import run_remote_command
 
@@ -84,6 +85,7 @@ async def handle_wechat_message(
     content: str,
     local_id: int,
     images: tuple[str, ...] = (),
+    source_created_at: datetime | None = None,
 ) -> None:
     """把微信新消息交给 Echo，回复按回复分段逐条发回微信。
 
@@ -97,6 +99,7 @@ async def handle_wechat_message(
             content=content,
             local_id=local_id,
             images=images,
+            source_created_at=source_created_at,
         )
 
 
@@ -108,6 +111,7 @@ async def _handle_wechat_message_locked(
     content: str,
     local_id: int,
     images: tuple[str, ...] = (),
+    source_created_at: datetime | None = None,
 ) -> None:
     try:
         message_text = f"（微信）{chat} 对你说：{content}"
@@ -126,6 +130,8 @@ async def _handle_wechat_message_locked(
             message=message_text,
             conversation_mode="chat",
             user_images=images,
+            message_channel=CHAT_CHANNEL_WECHAT,
+            source_created_at=source_created_at,
         )
         segments = tuple(
             segment.strip() for segment in result.reply_segments if segment.strip()

@@ -24,6 +24,16 @@ logger = logging.getLogger(__name__)
 _WECHAT_NOTIFY_TARGET = "叶子"
 
 
+def _iso_to_datetime(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
 class ProcessProactiveChatJobs:
     def __init__(
         self,
@@ -216,6 +226,7 @@ class ProcessProactiveChatJobs:
             )
             if not messages:
                 return True
+            self._record_delivery_events(job.user_id, conversation_id, messages)
             # 主动消息优先走微信：App 侧照常记录，微信是主要触达渠道
             from features.desktop.public import send_wechat_message
 
@@ -261,6 +272,38 @@ class ProcessProactiveChatJobs:
             return True
         finally:
             self.request_guard.release(job.user_id)
+
+    @staticmethod
+    def _record_delivery_events(
+        user_id: str,
+        conversation_id: str,
+        messages: list[dict[str, object]],
+    ) -> None:
+        """主动消息不经过聊天用例，这里补写统一事件流。"""
+        from features.conversation_events.public import (
+            ACTOR_ECHO,
+            EVENT_MESSAGE,
+            record_conversation_event,
+        )
+
+        try:
+            for message in messages:
+                record_conversation_event(
+                    event_type=EVENT_MESSAGE,
+                    source="proactive",
+                    actor=ACTOR_ECHO,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    content=str(message.get("content") or ""),
+                    payload={
+                        "message_id": message.get("message_id"),
+                        "message_type": message.get("message_type"),
+                        "reply_group_id": message.get("reply_group_id"),
+                    },
+                    source_created_at=_iso_to_datetime(message.get("created_at")),
+                )
+        except Exception:
+            logger.warning("record proactive delivery events failed", exc_info=True)
 
     async def _deliver_goal_job(self, job) -> bool:
         """投递 presence 产出的目标：文案已经在生成念头时写好，这里只做门禁与投递。"""
@@ -343,6 +386,7 @@ class ProcessProactiveChatJobs:
                 self.repository.suppress_job(job.job_id, "goal_persist_failed")
                 self.repository.mark_goal_failed(goal.goal_id)
                 return True
+            self._record_delivery_events(job.user_id, conversation_id, messages)
             await self.event_broker.publish(
                 job.user_id,
                 ChatEvent(

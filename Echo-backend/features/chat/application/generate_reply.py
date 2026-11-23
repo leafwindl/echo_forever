@@ -149,6 +149,7 @@ class GenerateChatReply:
         assistant_message_id: int,
         user_message_type: str,
         assistant_message_type: str,
+        source_created_at: datetime | None = None,
     ) -> None:
         """把这一轮写进统一事件流；失败只记日志，不影响聊天本身。"""
         try:
@@ -163,6 +164,7 @@ class GenerateChatReply:
                     "message_id": user_message_id,
                     "message_type": user_message_type,
                 },
+                source_created_at=source_created_at,
             )
             record_conversation_event(
                 event_type=EVENT_MESSAGE,
@@ -175,6 +177,7 @@ class GenerateChatReply:
                     "message_id": assistant_message_id,
                     "message_type": assistant_message_type,
                 },
+                source_created_at=source_created_at,
             )
         except Exception:
             logger.warning("record conversation message events failed", exc_info=True)
@@ -194,6 +197,7 @@ class GenerateChatReply:
         reply_segments: tuple[str, ...] = (),
         sticker_placement: str = "after_text",
         memory_enabled: bool = True,
+        source_created_at: datetime | None = None,
     ) -> ChatTurnResult:
         user_message_id, assistant_message_id = self.conversation_repository.add_chat_turn(
             user_id=clean_user_id,
@@ -217,6 +221,7 @@ class GenerateChatReply:
             assistant_message_id=assistant_message_id,
             user_message_type=user_message_type,
             assistant_message_type=assistant_message_type,
+            source_created_at=source_created_at,
         )
 
         summary_updated, memory_gate = await self._run_post_persistence(
@@ -622,6 +627,7 @@ class GenerateChatReply:
         speaker_confidence: float = 0.0,
         speaker_name: str | None = None,
         memory_enabled: bool = True,
+        source_created_at: datetime | None = None,
     ) -> ChatTurnResult:
         clean_user_id = user_id.strip()
         clean_message = message.strip()
@@ -675,6 +681,7 @@ class GenerateChatReply:
             reply_segments=prepared.reply_segments,
             sticker_placement=prepared.sticker_placement,
             memory_enabled=memory_enabled,
+            source_created_at=source_created_at,
         )
         result.sources = prepared.sources
         result.content_parts = prepared.content_parts

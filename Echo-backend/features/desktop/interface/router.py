@@ -201,6 +201,13 @@ async def wechat_event(
         )
     local_id = int(payload.get("local_id") or 0)
     images = payload.get("images") or []
+    source_created_at: datetime | None = None
+    raw_created_at = payload.get("created_at")
+    if raw_created_at:
+        try:
+            source_created_at = datetime.fromisoformat(str(raw_created_at))
+        except ValueError:
+            source_created_at = None
     background.add_task(
         relay_wechat_message,
         user_id=node.user_id,
@@ -208,5 +215,6 @@ async def wechat_event(
         content=content[:2000],
         local_id=local_id,
         images=tuple(str(item) for item in images),
+        source_created_at=source_created_at,
     )
     return {"ok": True}
