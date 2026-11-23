@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.presence.infrastructure.bili_share_worker import (
     FALLBACK_SHARE_TEXT,
-    WECHAT_SHARE_TARGET,
     _clean_description,
     _compose_share_text,
     _send_share,
@@ -75,47 +74,67 @@ class BiliShareComposeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class BiliShareSendTests(unittest.IsolatedAsyncioTestCase):
-    async def test_send_share_delivers_text_to_wechat_target(self):
-        sender = AsyncMock(return_value=True)
-        compose = AsyncMock(return_value="这画面好刺激")
+    async def _send(self, item: dict, output: str = '{"ok": true}') -> list[str]:
+        commands: list[str] = []
+
+        async def fake_run_remote(command: str, *, timeout_seconds: int = 480):  # noqa: ARG001
+            commands.append(command)
+            return True, output
+
         with (
             patch(
                 "features.presence.infrastructure.bili_share_worker._compose_share_text",
-                new=compose,
+                new=AsyncMock(return_value="这画面好刺激"),
             ),
-            patch("features.desktop.public.send_wechat_message", new=sender),
             patch(
-                "features.presence.infrastructure.bili_share_worker._owner_user_id",
-                return_value="user_1",
+                "features.presence.infrastructure.bili_share_worker._run_remote_command",
+                new=fake_run_remote,
             ),
         ):
-            await _send_share({"title": "火山温泉", "frame_base64": "AAAA"})
+            await _send_share(item)
+        return commands
 
-        sender.assert_awaited_once_with(
-            user_id="user_1",
-            chat=WECHAT_SHARE_TARGET,
-            text="这画面好刺激",
+    async def test_send_share_uses_frame_path_through_send_image(self):
+        commands = await self._send(
+            {
+                "title": "火山温泉",
+                "frame": r"C:\EchoComputer\images\bili_scan_0.png",
+                "frame_base64": "A" * 5000,
+            }
         )
 
-    async def test_send_share_swallows_delivery_failure(self):
-        sender = AsyncMock(return_value=False)
-        with (
-            patch(
-                "features.presence.infrastructure.bili_share_worker._compose_share_text",
-                new=AsyncMock(return_value="x"),
-            ),
-            patch("features.desktop.public.send_wechat_message", new=sender),
-            patch(
-                "features.presence.infrastructure.bili_share_worker._owner_user_id",
-                return_value="user_1",
-            ),
-        ):
-            await _send_share({"title": "t"})
+        self.assertEqual(len(commands), 1)
+        command = commands[0]
+        self.assertIn("/send_image", command)
+        self.assertIn("bili_scan_0.png", command)
+        self.assertIn("这画面好刺激", command)
+        # 帧内容不能进命令行，否则会被 Windows 命令行上限截断
+        self.assertNotIn("AAAA", command)
 
-        sender.assert_awaited_once()
+    async def test_send_share_falls_back_to_text_when_frame_missing(self):
+        commands = await self._send({"title": "t", "frame": ""})
 
-    def test_wechat_target_is_the_owner(self):
-        self.assertEqual(WECHAT_SHARE_TARGET, "叶子")
+        self.assertEqual(len(commands), 1)
+        self.assertIn("/send_sequence", commands[0])
+        self.assertIn("这画面好刺激", commands[0])
+
+    async def test_send_share_reports_bridge_rejection(self):
+        with self.assertLogs(level="WARNING") as captured:
+            await self._send(
+                {"title": "t", "frame": r"C:\EchoComputer\images\x.png"},
+                output='{"ok": false, "stderr": "file not found: x.png"}',
+            )
+
+        self.assertTrue(any("bridge rejected" in line for line in captured.output))
+
+    async def test_send_share_reports_non_json_bridge_output(self):
+        with self.assertLogs(level="WARNING") as captured:
+            await self._send(
+                {"title": "t", "frame": r"C:\EchoComputer\images\x.png"},
+                output="powershell.exe : 字符串缺少终止符",
+            )
+
+        self.assertTrue(any("non-json" in line for line in captured.output))
 
 
 if __name__ == "__main__":

@@ -21,8 +21,6 @@ BRIDGE_SCAN_COMMAND = (
 MAX_SHARE_PER_ROUND = 2
 # 每小时刷一次
 SCAN_INTERVAL_SECONDS = 3600
-# 分享发给叶子的微信会话（专用微信只有这一个联系人）
-WECHAT_SHARE_TARGET = "叶子"
 
 SHARE_NOTE_SYSTEM_PROMPT = (
     "你是 Echo，刚在B站刷到一个视频，想随口分享给叶子。"
@@ -162,27 +160,58 @@ async def _compose_share_text(item: dict) -> str:
     return FALLBACK_SHARE_TEXT
 
 
-async def _send_share(item: dict) -> None:
-    """把分享话术发到叶子的微信。
-
-    帧 base64 会达到几百 KB，而 agent 用命令行执行 PowerShell，
-    Windows 命令行上限约 32767 字符，带图必然被截断。这里只发文字。
-    """
-    from features.desktop.public import send_wechat_message
-
-    text = await _compose_share_text(item)
-    ok = await send_wechat_message(
-        user_id=_owner_user_id(),
-        chat=WECHAT_SHARE_TARGET,
-        text=text,
+def _bridge_command(path: str, payload: dict, *, timeout_seconds: int) -> str:
+    body = json.dumps(payload, ensure_ascii=False).replace("'", "''")
+    return (
+        f"Invoke-RestMethod -Uri 'http://127.0.0.1:8765{path}' -Method Post "
+        "-ContentType 'application/json; charset=utf-8' "
+        f"-Body '{body}' -TimeoutSec {timeout_seconds} | ConvertTo-Json -Compress -Depth 6"
     )
+
+
+def _bridge_ok(output: str) -> tuple[bool, str]:
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return False, f"non-json: {output[:200]}"
+    if not isinstance(payload, dict) or not payload.get("ok"):
+        return False, str(payload)[:200]
+    return True, ""
+
+
+async def _send_share(item: dict) -> None:
+    """用 bridge 的图片目录发图+文：bridge 已把帧存在 C:/EchoComputer/images。
+
+    帧的 base64 有几百 KB，塞进 agent 的 PowerShell 命令行会被截断，
+    所以只传路径，让 bridge 自己从 images 目录读取。
+    """
+    text = await _compose_share_text(item)
+    frame = str(item.get("frame") or "").strip()
+    if frame:
+        command = _bridge_command(
+            "/send_image",
+            {"path": frame, "text": text},
+            timeout_seconds=120,
+        )
+    else:
+        command = _bridge_command(
+            "/send_sequence",
+            {"items": [{"type": "text", "text": text}]},
+            timeout_seconds=120,
+        )
+    ok, output = await _run_remote_command(command, timeout_seconds=140)
     if not ok:
-        logger.warning("bili share send failed title=%s", item.get("title", "")[:40])
+        logger.warning("bili share send failed: %s", output[:300])
+        return
+    delivered, reason = _bridge_ok(output)
+    if not delivered:
+        logger.warning("bili share bridge rejected: %s", reason)
         return
     logger.info(
-        "bili share sent via wechat title=%s text=%s",
+        "bili share sent title=%s text=%s frame=%s",
         item.get("title", "")[:40],
         text[:30],
+        bool(frame),
     )
 
 
