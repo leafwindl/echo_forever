@@ -377,8 +377,7 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_speak",
         description=(
-            "在用户已配对的 Windows 电脑扬声器上朗读一段文字；"
-            "不要用它代替普通聊天回复。"
+            "在用户电脑扬声器朗读文字，不能代替普通回复。"
         ),
         arguments_model=DesktopSpeakArguments,
         handler=speak_handler,
@@ -388,7 +387,7 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
     _register(
         registry,
         name="desktop_status",
-        description="查看用户电脑上的 Echo Desktop 是否在线；只有在线时才能操作电脑。",
+        description="查看用户电脑节点是否在线。",
         arguments_model=DesktopStatusArguments,
         handler=status_handler,
         timeout_seconds=10,
@@ -398,8 +397,7 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_open_app",
         description=(
-            "在用户已配对的 Windows 电脑上打开允许的应用：网易云音乐、记事本、计算器；"
-            "电脑端会弹出本地批准窗口，用户拒绝就会失败。"
+            "在用户电脑上打开允许的应用，电脑端会弹窗批准。"
         ),
         arguments_model=DesktopOpenAppArguments,
         handler=open_app_handler,
@@ -458,9 +456,7 @@ def register_desktop_tools(registry: ToolRegistry) -> None:
         registry,
         name="desktop_dsh_task",
         description=(
-            "让用户电脑上的 DSH 执行一个独立任务并返回最终结果。"
-            "DSH 拥有电脑完整权限，可能修改文件或运行命令；"
-            "任务可能持续几分钟，适合代码检查、修复、运行测试。"
+            "让用户电脑上的 DSH 执行任务并返回结果；会弹窗批准。"
         ),
         arguments_model=DesktopDshTaskArguments,
         handler=dsh_handler,

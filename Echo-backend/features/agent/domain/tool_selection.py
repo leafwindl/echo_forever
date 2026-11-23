@@ -82,6 +82,8 @@ ECHO_COMPUTER_TOOL_NAMES = (
     "wechat_send",
     "wechat_messages",
     "wechat_sessions",
+    "bili_browse",
+    "bili_share",
 )
 
 _PROACTIVE_CONTACT_KEYWORDS = (

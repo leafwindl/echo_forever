@@ -78,9 +78,8 @@ def register_proactive_tools(registry: ToolRegistry) -> None:
             specification=ToolSpecification(
                 name="pause_proactive_contact",
                 description=(
-                    "用户明确要求暂停 Echo 的自然主动联系时调用。"
-                    "用户说“这两天别主动找我”用 days；说“以后别主动发消息”用 indefinite。"
-                    "明确提醒任务不受影响。"
+                    "用户明确要求暂停自然主动联系时调用。"
+                    "说“这两天别主动找我”用 days，说“以后别发”用 indefinite。"
                 ),
                 timeout_seconds=5,
                 allowed_modes=("chat",),
@@ -93,10 +92,7 @@ def register_proactive_tools(registry: ToolRegistry) -> None:
         ToolDefinition(
             specification=ToolSpecification(
                 name="resume_proactive_contact",
-                description=(
-                    "用户明确要求恢复 Echo 的自然主动联系时调用。"
-                    "不要因为用户只是聊得开心就自动恢复。"
-                ),
+                description="用户明确要求恢复自然主动联系时调用。",
                 timeout_seconds=5,
                 allowed_modes=("chat",),
             ),

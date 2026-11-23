@@ -155,9 +155,8 @@ def register_sticker_tools(
             specification=ToolSpecification(
                 name="send_sticker",
                 description=(
-                    "按语境发送一张可用表情包，未找到则不发送。用 after_text_index "
-                    "指定夹在第几条文字之后（从 0 开始）；同轮还有多条文字时，"
-                    "先调本工具再调 emit_chat_beats。"
+                    "按语境发一张表情包，未找到就不发；"
+                    "after_text_index 指定夹在第几条文字后（0 开始）。"
                 ),
                 timeout_seconds=5,
                 allowed_modes=("chat", "proactive"),

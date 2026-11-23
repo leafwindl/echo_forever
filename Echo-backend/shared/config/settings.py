@@ -208,6 +208,10 @@ class Settings(BaseSettings):
         default="",
         validation_alias="BILI_SHARE_USER_ID",
     )
+    bili_share_loop_enabled: bool = Field(
+        default=False,
+        validation_alias="BILI_SHARE_LOOP_ENABLED",
+    )
     presence_proactive_action_budget: int = Field(
         default=3,
         validation_alias="PRESENCE_PROACTIVE_ACTION_BUDGET",

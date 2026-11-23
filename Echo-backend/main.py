@@ -194,7 +194,7 @@ async def lifespan(_app: FastAPI):
         proactive_chat_task = asyncio.create_task(run_proactive_chat_loop())
     if settings.presence_enabled:
         presence_task = asyncio.create_task(run_presence_loop())
-    if settings.bili_share_user_id:
+    if settings.bili_share_user_id and settings.bili_share_loop_enabled:
         bili_share_task = asyncio.create_task(run_bili_share_loop())
     if settings.push_enabled:
         push_notification_task = asyncio.create_task(run_push_notification_loop())

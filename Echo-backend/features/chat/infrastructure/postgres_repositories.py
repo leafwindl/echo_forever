@@ -324,6 +324,29 @@ def add_external_assistant_message(
         )
 
 
+def add_internal_assistant_note(
+    *,
+    user_id: str,
+    conversation_id: str,
+    content: str,
+    source: str = "agent_action",
+) -> int:
+    """写一条不展示给客户端、但会进上下文的内部记录（纯动作留痕）。"""
+    with transaction() as conn:
+        internal_id, _stable_id = _add_message_record(
+            user_id=user_id,
+            role="assistant",
+            content=content,
+            conversation_id=conversation_id,
+            message_type="text",
+            conn=conn,
+            source=source,
+            channel=source,
+            visibility="internal",
+        )
+        return internal_id
+
+
 def _add_message_attachments(
     conn,
     user_id: str,

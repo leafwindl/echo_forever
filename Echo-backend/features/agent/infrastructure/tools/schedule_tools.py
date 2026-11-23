@@ -161,9 +161,7 @@ def register_schedule_tools(
             specification=ToolSpecification(
                 name="create_chat_schedule",
                 description=(
-                    "创建用户可见的持久提醒或一次性回访。相对时间用本轮注入的"
-                    "当前时间上下文解析；只有时间明确时才创建，时间含糊时先"
-                    "简短问清。"
+                    "创建用户可见的定时提醒；时间含糊时先问清。"
                 ),
                 timeout_seconds=5,
                 allowed_modes=("chat", "call"),

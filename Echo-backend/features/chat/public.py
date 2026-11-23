@@ -178,6 +178,43 @@ async def send_chat_message(
     )
 
 
+def record_internal_assistant_note(
+    *,
+    user_id: str,
+    conversation_id: str,
+    content: str,
+    source: str = "agent_action",
+) -> int:
+    """记录一次纯动作的结果：不进客户端展示，但会进聊天上下文。"""
+    from features.chat.infrastructure.postgres_repositories import (
+        add_internal_assistant_note,
+    )
+
+    message_id = add_internal_assistant_note(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        content=content,
+        source=source,
+    )
+    try:
+        record_conversation_event(
+            event_type=EVENT_MESSAGE,
+            source=source,
+            actor=ACTOR_ECHO,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            content=content,
+            payload={
+                "message_id": message_id,
+                "message_type": "text",
+                "visibility": "internal",
+            },
+        )
+    except Exception:
+        logger.warning("record internal assistant event failed", exc_info=True)
+    return message_id
+
+
 async def deliver_external_assistant_message(
     *,
     user_id: str,
@@ -266,5 +303,6 @@ __all__ = [
     "list_chat_messages",
     "list_recent_chat_user_ids",
     "process_pending_chat_turn_once",
+    "record_internal_assistant_note",
     "send_chat_message",
 ]

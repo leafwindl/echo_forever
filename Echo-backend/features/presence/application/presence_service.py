@@ -248,7 +248,11 @@ class PresenceService:
                 thoughts_used=state.thoughts_used,
             )
         message_text = ""
-        if thought.shareable or thought.salience >= self.message_min_salience:
+        if (
+            thought.shareable
+            or thought.salience >= self.message_min_salience
+            or thought.action_intent.strip()
+        ):
             message_text = await self._maybe_create_goal(
                 state=state,
                 thought=thought,
@@ -349,8 +353,9 @@ class PresenceService:
         now: datetime,
     ) -> str:
         text = thought.draft_text.strip()
-        if not text:
-            # 这次念头只想自己待着，不打扰用户。
+        intent_text = thought.action_intent.strip()
+        if not text and not intent_text:
+            # 既不想说话、也没有想做的事，就自己待着。
             return ""
         try:
             goal_id = self.goal_creator.create_goal(

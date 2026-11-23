@@ -11,6 +11,7 @@ from features.agent.infrastructure.postgres_repository import PostgresAgentRunRe
 from features.agent.infrastructure.proactive_planner import ProviderProactiveDecisionPlanner
 from features.agent.infrastructure.tools import (
     register_beat_tools,
+    register_bili_tools,
     register_computer_tools,
     register_desktop_tools,
     register_mobile_agent_tools,
@@ -38,6 +39,7 @@ def get_chat_agent() -> OrchestrateChatWithAgent:
     register_beat_tools(registry)
     register_desktop_tools(registry)
     register_computer_tools(registry)
+    register_bili_tools(registry)
     register_mobile_agent_tools(registry)
     register_relationship_tools(registry)
     register_proactive_tools(registry)
