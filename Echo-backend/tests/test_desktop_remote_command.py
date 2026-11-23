@@ -99,6 +99,15 @@ class RemoteCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.output, "boom")
         self.assertEqual(result.status, "failed")
 
+    async def test_nonzero_exit_code_marks_failure(self):
+        _, result = await _run(
+            [{"job_id": 7}, {"status": "done", "output": "boom", "exit_code": 1}]
+        )
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.output, "boom")
+
     async def test_missing_job_fails_fast_instead_of_waiting_for_timeout(self):
         service, result = await _run(
             [{"job_id": 7}, {"status": "missing"}],

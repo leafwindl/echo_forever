@@ -1,6 +1,8 @@
 # ruff: noqa: ARG002
 from __future__ import annotations
 
+import base64
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -10,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.presence.infrastructure.bili_share_worker import (
     FALLBACK_SHARE_TEXT,
+    _bridge_post_command,
     _clean_description,
     _compose_share_text,
 )
@@ -70,6 +73,23 @@ class BiliShareComposeTests(unittest.IsolatedAsyncioTestCase):
     def test_clean_description_drops_score_line(self):
         self.assertEqual(_clean_description("画面有冲击力\n8"), "画面有冲击力")
         self.assertEqual(_clean_description("荒诞感很强\n\n7。"), "荒诞感很强")
+
+    def test_bridge_command_encodes_body_as_base64(self):
+        payload = {"items": [{"type": "text", "text": "这也太离谱了吧'哈哈"}]}
+
+        command = _bridge_post_command(
+            "/send_sequence",
+            payload,
+            timeout_seconds=180,
+        )
+
+        self.assertIn("/send_sequence", command)
+        self.assertIn("FromBase64String", command)
+        # 原文不能出现在命令行里，否则中文和引号会被 PowerShell 拆坏
+        self.assertNotIn("太离谱", command)
+        encoded = command.split("FromBase64String('", 1)[1].split("'", 1)[0]
+        decoded = json.loads(base64.b64decode(encoded).decode("utf-8"))
+        self.assertEqual(decoded, payload)
 
 
 if __name__ == "__main__":

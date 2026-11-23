@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 
@@ -160,27 +161,39 @@ async def _compose_share_text(item: dict) -> str:
     return FALLBACK_SHARE_TEXT
 
 
+def _bridge_post_command(path: str, payload: dict, *, timeout_seconds: int) -> str:
+    """把 JSON 先编码成 base64，避免中文和引号在 PowerShell 命令行里被拆坏。"""
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
+    return (
+        "$body = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
+        f"{encoded}')); "
+        f"Invoke-RestMethod -Uri 'http://127.0.0.1:8765{path}' -Method Post "
+        "-ContentType 'application/json; charset=utf-8' "
+        f"-Body $body -TimeoutSec {timeout_seconds} | ConvertTo-Json -Compress -Depth 6"
+    )
+
+
 async def _send_share(item: dict) -> None:
     text = await _compose_share_text(item)
     items = [{"type": "text", "text": text}]
     frame = str(item.get("frame_base64") or "")
     if frame:
         items.append({"type": "image", "image_base64": frame})
-    body = json.dumps({"items": items}, ensure_ascii=False).replace("'", "''")
-    command = (
-        "Invoke-RestMethod -Uri 'http://127.0.0.1:8765/send_sequence' -Method Post "
-        "-ContentType 'application/json; charset=utf-8' "
-        f"-Body '{body}' -TimeoutSec 180 | ConvertTo-Json -Compress -Depth 6"
+    command = _bridge_post_command(
+        "/send_sequence",
+        {"items": items},
+        timeout_seconds=180,
     )
     ok, output = await _run_remote_command(command, timeout_seconds=200)
     if not ok:
-        logger.warning("bili share send failed: %s", output[:200])
+        logger.warning("bili share send failed: %s", output[:300])
         return
     logger.info(
         "bili share sent title=%s text=%s bridge=%s",
         item.get("title", "")[:40],
         text[:30],
-        output[:120],
+        output[:300],
     )
 
 

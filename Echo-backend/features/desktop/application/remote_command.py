@@ -144,10 +144,20 @@ async def run_remote_command(
 
         status = _status_of(result.data)
         if status in DONE_STATUSES:
+            exit_code = _exit_code_of(result.data)
+            if exit_code not in (None, 0):
+                # agent 报完成但进程非 0，输出通常就是错误信息
+                return RemoteCommandResult(
+                    False,
+                    _text_of(result.data).strip() or f"exit_code={exit_code}",
+                    exit_code=exit_code,
+                    status=status,
+                    job_id=job_id,
+                )
             return RemoteCommandResult(
                 True,
                 _text_of(result.data).strip(),
-                exit_code=_exit_code_of(result.data),
+                exit_code=exit_code,
                 status=status,
                 job_id=job_id,
             )
