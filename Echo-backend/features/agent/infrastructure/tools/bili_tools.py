@@ -165,7 +165,7 @@ async def _share(context: ToolExecutionContext, parsed: BiliShareArguments) -> A
         content_parts = ((ContentPart(type="image", url=image_url),) if image_url else ())
         await deliver_external_assistant_message(
             user_id=context.user_id,
-            content=f"刚刷到一个视频《{title}》，觉得挺有意思，分享给你了。",
+            content=f"{parsed.note}\n（分享的视频：《{title}》）",
             idempotency_key=f"bili_share:{frame}:{parsed.note[:24]}",
             source="bili",
             content_parts=content_parts,
