@@ -207,7 +207,7 @@ def register_bili_tools(registry: ToolRegistry) -> None:
             specification=ToolSpecification(
                 name="bili_browse",
                 description="刷B站推荐流，返回标题和帧名，不自动发送。",
-                timeout_seconds=500,
+                timeout_seconds=170,
                 allowed_modes=("chat", "proactive"),
                 max_calls_per_turn=1,
                 max_successful_calls_per_turn=1,
@@ -221,7 +221,7 @@ def register_bili_tools(registry: ToolRegistry) -> None:
             specification=ToolSpecification(
                 name="bili_share",
                 description="把选中的视频连图带话术发给叶子。",
-                timeout_seconds=150,
+                timeout_seconds=90,
                 allowed_modes=("chat", "proactive"),
                 max_calls_per_turn=2,
                 max_successful_calls_per_turn=2,
