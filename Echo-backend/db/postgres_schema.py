@@ -1260,6 +1260,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ON bili_scan_jobs(status, id)",
         "CREATE INDEX IF NOT EXISTS idx_bili_scan_jobs_user_created "
         "ON bili_scan_jobs(user_id, created_at DESC)",
+        "ALTER TABLE bili_scan_jobs ADD COLUMN IF NOT EXISTS chain_id "
+        "TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE bili_scan_jobs ADD COLUMN IF NOT EXISTS round "
+        "INTEGER NOT NULL DEFAULT 1",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_devices_user_status "
         "ON mobile_agent_devices(user_id, status, last_seen_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_pairing_expires "
