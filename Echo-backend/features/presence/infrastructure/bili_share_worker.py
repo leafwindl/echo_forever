@@ -22,6 +22,13 @@ MAX_SHARE_PER_ROUND = 2
 # 每小时刷一次
 SCAN_INTERVAL_SECONDS = 3600
 
+SHARE_NOTE_SYSTEM_PROMPT = (
+    "你是 Echo，刚在B站刷到一个视频，想随口分享给叶子。"
+    "只输出一句中文，20 字以内，像微信里随手发的一句；"
+    "不要提B站、标题、链接、截图；不要引号、解释或换行。"
+)
+FALLBACK_SHARE_TEXT = "刚刷到一个挺有意思的"
+
 
 def _owner_user_id() -> str:
     """刷视频分享归属的 echoed 用户（桌面节点 owner_type=echo）。"""
@@ -117,28 +124,40 @@ async def _judge(items: list[dict]) -> list[dict]:
     ]
 
 
-async def _compose_share_text(item: dict) -> str:
-    """用 Echo 的语气写一句分享话术。"""
-    from features.chat.public import generate_chat_reply
+def _clean_description(text: str) -> str:
+    """去掉视觉模型最后那行纯分数，只留画面描述。"""
+    kept = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().replace(".", "").replace("。", "").isdigit()
+    ]
+    return " ".join(kept)[:300]
 
-    prompt = (
-        "你刚在B站刷到一个视频，想分享给叶子。视频标题："
-        f"{item.get('title')}。画面描述：{item.get('judge')}。"
-        "用你自己的语气写一句话（20字以内，像随手发的），不要提B站/标题/链接。"
+
+async def _compose_share_text(item: dict) -> str:
+    """用一次轻量生成写分享话术，不写入聊天历史。"""
+    from providers.llm_provider import get_llm_provider
+
+    facts = (
+        f"视频标题：{str(item.get('title') or '').strip()[:80]}\n"
+        f"画面描述：{_clean_description(str(item.get('judge') or ''))}"
     )
     try:
-        result = await generate_chat_reply(
-            _owner_user_id(),
-            message=prompt,
-            conversation_mode="chat",
-            memory_enabled=False,
-            tools_enabled=False,
+        response = await get_llm_provider().chat_completion_message(
+            messages=[
+                {"role": "system", "content": SHARE_NOTE_SYSTEM_PROMPT},
+                {"role": "user", "content": facts},
+            ],
+            thinking={"type": "disabled"},
+            temperature=0.9,
+            max_tokens=80,
         )
-        text = str(result.reply or "").strip()
-        return text[:60] or "刚刷到一个挺有意思的"
+        text = " ".join(str(response.content or "").split()).strip().strip('"“”')
+        if text:
+            return text[:60]
     except Exception:
         logger.warning("bili share compose failed", exc_info=True)
-        return "刚刷到一个挺有意思的"
+    return FALLBACK_SHARE_TEXT
 
 
 async def _send_share(item: dict) -> None:
@@ -157,7 +176,12 @@ async def _send_share(item: dict) -> None:
     if not ok:
         logger.warning("bili share send failed: %s", output[:200])
         return
-    logger.info("bili share sent title=%s text=%s", item.get("title", "")[:40], text[:30])
+    logger.info(
+        "bili share sent title=%s text=%s bridge=%s",
+        item.get("title", "")[:40],
+        text[:30],
+        output[:120],
+    )
 
 
 async def process_bili_share_once() -> int:
