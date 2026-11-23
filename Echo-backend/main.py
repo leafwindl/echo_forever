@@ -12,6 +12,7 @@ from features.assistant_persona.public import get_assistant_persona
 from features.auth.interface.router import router as auth_router
 from features.chat.interface.router import router as chat_router
 from features.chat.public import process_pending_chat_turn_once
+from features.desktop.infrastructure.bili_scan_worker import run_bili_scan_loop
 from features.desktop.interface.router import router as desktop_router
 from features.devices.interface.router import router as devices_router
 from features.devices.interface.speaker_router import router as speaker_router
@@ -178,6 +179,7 @@ async def lifespan(_app: FastAPI):
     proactive_chat_task: asyncio.Task[None] | None = None
     presence_task: asyncio.Task[None] | None = None
     bili_share_task: asyncio.Task[None] | None = None
+    bili_scan_task: asyncio.Task[None] | None = None
     push_notification_task: asyncio.Task[None] | None = None
     sticker_embedding_backfill_task = asyncio.create_task(
         run_sticker_embedding_backfill_once()
@@ -196,6 +198,7 @@ async def lifespan(_app: FastAPI):
         presence_task = asyncio.create_task(run_presence_loop())
     if settings.bili_share_user_id and settings.bili_share_loop_enabled:
         bili_share_task = asyncio.create_task(run_bili_share_loop())
+    bili_scan_task = asyncio.create_task(run_bili_scan_loop())
     if settings.push_enabled:
         push_notification_task = asyncio.create_task(run_push_notification_loop())
 
@@ -230,6 +233,10 @@ async def lifespan(_app: FastAPI):
             bili_share_task.cancel()
             with suppress(asyncio.CancelledError):
                 await bili_share_task
+        if bili_scan_task:
+            bili_scan_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await bili_scan_task
         if push_notification_task:
             push_notification_task.cancel()
             with suppress(asyncio.CancelledError):

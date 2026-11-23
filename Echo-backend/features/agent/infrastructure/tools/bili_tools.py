@@ -20,12 +20,6 @@ from features.desktop.public import run_desktop_command
 
 logger = logging.getLogger(__name__)
 
-BILI_SCAN_COMMAND = (
-    "Invoke-RestMethod -Uri 'http://127.0.0.1:8765/bili_scan' -Method Post "
-    "-ContentType 'application/json; charset=utf-8' -TimeoutSec 420 "
-    "| ConvertTo-Json -Compress -Depth 6"
-)
-
 
 def _bridge_command(path: str, payload: dict, *, timeout_seconds: int) -> str:
     body = json.dumps(payload, ensure_ascii=False).replace("'", "''")
@@ -94,42 +88,28 @@ def _store_frame(image_base64: str) -> str:
 
 
 async def _browse(context: ToolExecutionContext, parsed: BiliBrowseArguments) -> AgentToolResult:
-    result = await run_desktop_command(
-        user_id=context.user_id,
-        command=BILI_SCAN_COMMAND,
-        owner_type="echo",
-        timeout_seconds=480,
-    )
-    if not result.ok:
-        return _failed("bili_browse", "scan_failed", result.output[:300] or "B站扫描失败")
+    """只负责发起任务，真正的扫描由 desktop 的异步 worker 执行。"""
+    from features.desktop.public import start_bili_scan
+
     try:
-        payload = json.loads(result.output)
-    except json.JSONDecodeError:
-        return _failed("bili_browse", "scan_non_json", "B站扫描返回的不是 JSON")
-    items: list[dict[str, str]] = []
-    for item in payload.get("items") or []:
-        if not item.get("ok") or not item.get("frame"):
-            continue
-        name = str(item.get("frame") or "").replace("\\", "/").rsplit("/", 1)[-1]
-        if not name:
-            continue
-        items.append({"frame": name, "title": str(item.get("title") or "")[:80]})
-        if len(items) >= parsed.limit:
-            break
-    if not items:
+        job = start_bili_scan(
+            user_id=context.user_id,
+            conversation_id=context.conversation_id or "",
+            item_limit=parsed.limit,
+        )
+    except Exception:
+        logger.warning("start bili scan failed", exc_info=True)
+        return _failed("bili_browse", "start_failed", "B站扫描没启动成功，稍后再试。")
+    if job.get("reused"):
         return _completed(
             "bili_browse",
-            safe_for_model="这轮没刷到可分享的视频。",
-            data={"items": []},
+            safe_for_model="上一轮B站还在刷，等它跑完就行，不用重复发起。",
+            data={**job, "status": "already_running", "eta_seconds": 90},
         )
-    listing = "\n".join(
-        f"- {index + 1}. {item['title']}（frame: {item['frame']}）"
-        for index, item in enumerate(items)
-    )
     return _completed(
         "bili_browse",
-        safe_for_model=f"刷到这些视频，图还在你自己的电脑上：\n{listing}",
-        data={"items": items},
+        safe_for_model="已经开始刷B站了，大概一分半钟；刷完会主动告诉你。",
+        data={**job, "status": "started", "eta_seconds": 90},
     )
 
 
@@ -207,11 +187,11 @@ def register_bili_tools(registry: ToolRegistry) -> None:
             specification=ToolSpecification(
                 name="bili_browse",
                 description=(
-                    "当用户让你刷B站，或你自己想看看时，先调用它。"
-                    "它只返回标题和帧名，不会发送；看完再决定是否 bili_share。"
+                    "发起一次B站扫描，立即返回；扫描完成后会主动告诉用户。"
+                    "当用户让你刷B站，或你自己想看看时调用它。"
                     "例：用户说“去刷B站”→ 先调本工具。"
                 ),
-                timeout_seconds=170,
+                timeout_seconds=10,
                 allowed_modes=("chat", "proactive"),
                 max_calls_per_turn=1,
                 max_successful_calls_per_turn=1,

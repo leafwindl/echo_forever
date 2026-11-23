@@ -50,6 +50,22 @@ async def relay_wechat_message(
     )
 
 
+def start_bili_scan(
+    *,
+    user_id: str,
+    conversation_id: str,
+    item_limit: int = 8,
+) -> dict[str, Any]:
+    """发起一次异步B站扫描；同一用户已有任务时直接复用。"""
+    from features.desktop.infrastructure.bili_scan_store import create_or_get_scan_job
+
+    return create_or_get_scan_job(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        item_limit=item_limit,
+    )
+
+
 async def send_wechat_message(*, user_id: str, chat: str, text: str) -> bool:
     """主动消息投递到微信（Echo 自己的电脑）。"""
     from features.desktop.application.wechat_events import send_wechat_text
@@ -171,4 +187,5 @@ __all__ = [
     "pair_desktop_node",
     "revoke_desktop_node",
     "run_desktop_command",
+    "start_bili_scan",
 ]

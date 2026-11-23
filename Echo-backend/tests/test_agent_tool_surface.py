@@ -148,7 +148,7 @@ TOOL_SPECS = {
     "wechat_send": (("chat", "proactive"), 170, 4),
     "wechat_messages": (("chat", "proactive"), 130, 6),
     "wechat_sessions": (("chat", "proactive"), 100, 6),
-    "bili_browse": (("chat", "proactive"), 170, 1),
+    "bili_browse": (("chat", "proactive"), 10, 1),
     "bili_share": (("chat", "proactive"), 90, 2),
     "phone_status": (("chat", "proactive"), 15, 2),
     "phone_observe": (("chat", "proactive"), 35, 4),

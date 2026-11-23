@@ -215,6 +215,30 @@ def record_internal_assistant_note(
     return message_id
 
 
+async def generate_proactive_action(
+    *,
+    user_id: str,
+    conversation_id: str,
+    instruction: str,
+):
+    """让 Agent 在主动场景里执行一次动作（可调用工具），并返回模型结果。"""
+    from features.agent.public import run_chat_agent
+
+    return await run_chat_agent(
+        user_id=user_id,
+        message=instruction,
+        messages=[
+            {
+                "role": "system",
+                "content": "这是一次主动动作，不是用户发来的新消息。",
+            }
+        ],
+        conversation_id=conversation_id,
+        conversation_mode="proactive",
+        tools_enabled=True,
+    )
+
+
 async def deliver_external_assistant_message(
     *,
     user_id: str,
@@ -300,6 +324,7 @@ __all__ = [
     "deliver_external_assistant_message",
     "accept_chat_message",
     "generate_chat_reply",
+    "generate_proactive_action",
     "list_chat_messages",
     "list_recent_chat_user_ids",
     "process_pending_chat_turn_once",

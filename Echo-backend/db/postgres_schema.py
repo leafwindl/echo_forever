@@ -895,6 +895,25 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS bili_scan_jobs (
+            id BIGSERIAL PRIMARY KEY,
+            job_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL DEFAULT '',
+            item_limit INTEGER NOT NULL DEFAULT 8 CHECK (item_limit > 0),
+            status VARCHAR(16) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+            attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+            max_attempts INTEGER NOT NULL DEFAULT 2 CHECK (max_attempts > 0),
+            result JSONB,
+            error TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            started_at TIMESTAMPTZ,
+            finished_at TIMESTAMPTZ
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS mobile_agent_devices (
             id BIGSERIAL PRIMARY KEY,
             device_id TEXT NOT NULL UNIQUE,
@@ -1235,6 +1254,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ON desktop_pairing_codes(expires_at) WHERE consumed_at IS NULL",
         "CREATE INDEX IF NOT EXISTS idx_desktop_actions_user_created "
         "ON desktop_actions(user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_bili_scan_jobs_status "
+        "ON bili_scan_jobs(status, id)",
+        "CREATE INDEX IF NOT EXISTS idx_bili_scan_jobs_user_created "
+        "ON bili_scan_jobs(user_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_devices_user_status "
         "ON mobile_agent_devices(user_id, status, last_seen_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_pairing_expires "

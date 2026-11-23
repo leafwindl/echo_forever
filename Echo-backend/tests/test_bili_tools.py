@@ -21,6 +21,7 @@ from features.desktop.public import RemoteCommandResult
 
 class _Context:
     user_id = "phone_1"
+    conversation_id = "conv_1"
 
 
 def _result(payload: dict) -> RemoteCommandResult:
@@ -28,46 +29,46 @@ def _result(payload: dict) -> RemoteCommandResult:
 
 
 class BiliBrowseTests(unittest.IsolatedAsyncioTestCase):
-    async def test_browse_returns_titles_and_frames_without_base64(self):
-        payload = {
-            "ok": True,
-            "items": [
-                {
-                    "ok": True,
-                    "title": "视频A",
-                    "frame": r"C:\EchoComputer\images\bili_scan_0.png",
-                    "frame_base64": "A" * 100,
-                },
-                {
-                    "ok": True,
-                    "title": "视频B",
-                    "frame": r"C:\EchoComputer\images\bili_scan_1.png",
-                    "frame_base64": "B" * 100,
-                },
-            ],
-        }
+    async def test_browse_starts_async_job(self):
         with patch(
-            "features.agent.infrastructure.tools.bili_tools.run_desktop_command",
-            new=AsyncMock(return_value=_result(payload)),
-        ):
-            result = await _browse(_Context(), BiliBrowseArguments(limit=2))
+            "features.desktop.public.start_bili_scan",
+            return_value={
+                "job_id": "bili_scan_1",
+                "status": "pending",
+                "reused": False,
+            },
+        ) as start:
+            result = await _browse(_Context(), BiliBrowseArguments(limit=6))
 
         self.assertEqual(result.status, AgentToolStatus.COMPLETED)
-        self.assertEqual(
-            [item["frame"] for item in result.data["items"]],
-            ["bili_scan_0.png", "bili_scan_1.png"],
-        )
-        self.assertNotIn("AAAA", result.safe_for_model)
+        self.assertEqual(result.data["status"], "started")
+        self.assertEqual(result.data["job_id"], "bili_scan_1")
+        self.assertEqual(start.call_args.kwargs["item_limit"], 6)
+        self.assertEqual(start.call_args.kwargs["conversation_id"], "conv_1")
 
-    async def test_browse_reports_empty_round(self):
+    async def test_browse_reuses_running_job(self):
         with patch(
-            "features.agent.infrastructure.tools.bili_tools.run_desktop_command",
-            new=AsyncMock(return_value=_result({"ok": True, "items": []})),
+            "features.desktop.public.start_bili_scan",
+            return_value={
+                "job_id": "bili_scan_1",
+                "status": "running",
+                "reused": True,
+            },
         ):
             result = await _browse(_Context(), BiliBrowseArguments())
 
         self.assertEqual(result.status, AgentToolStatus.COMPLETED)
-        self.assertEqual(result.data["items"], [])
+        self.assertEqual(result.data["status"], "already_running")
+
+    async def test_browse_fails_when_job_cannot_start(self):
+        with patch(
+            "features.desktop.public.start_bili_scan",
+            side_effect=RuntimeError("db down"),
+        ):
+            result = await _browse(_Context(), BiliBrowseArguments())
+
+        self.assertEqual(result.status, AgentToolStatus.FAILED)
+        self.assertEqual(result.error_code, "start_failed")
 
 
 class BiliShareTests(unittest.IsolatedAsyncioTestCase):
