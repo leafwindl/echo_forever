@@ -9,6 +9,12 @@ from features.chat.domain.delivery_timing import DeliveryTimingPolicy
 from features.chat.domain.repositories import ChatTurnRepository
 from features.chat.domain.services import ChatRequestGuard
 from features.chat.infrastructure.events import ChatEvent, ChatEventBroker
+from features.conversation_events.public import (
+    ACTOR_ECHO,
+    ACTOR_USER,
+    EVENT_MESSAGE,
+    record_conversation_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +89,7 @@ class ProcessPendingChatTurns:
             group = self.repository.complete_turn(turn, prepared, presentation)
             if group is None:
                 return True
+            self._record_turn_events(turn, batch, group)
             try:
                 await self.reply_generator.finalize_persisted_turn(
                     user_id=turn.user_id,
@@ -141,6 +148,41 @@ class ProcessPendingChatTurns:
                     },
                 ),
             )
+
+    @staticmethod
+    def _record_turn_events(turn, batch, group) -> None:
+        """把队列处理完的一轮写进统一事件流；失败只记日志。"""
+        try:
+            record_conversation_event(
+                event_type=EVENT_MESSAGE,
+                source="app_chat",
+                actor=ACTOR_USER,
+                user_id=turn.user_id,
+                conversation_id=turn.conversation_id,
+                turn_id=turn.turn_id,
+                content=batch.combined_content,
+                payload={
+                    "turn_id": turn.turn_id,
+                    "message_count": turn.message_count,
+                },
+            )
+            for message in group.messages:
+                record_conversation_event(
+                    event_type=EVENT_MESSAGE,
+                    source="app_chat",
+                    actor=ACTOR_ECHO,
+                    user_id=turn.user_id,
+                    conversation_id=turn.conversation_id,
+                    turn_id=turn.turn_id,
+                    content=message.content,
+                    payload={
+                        "message_id": message.message_id,
+                        "message_type": message.message_type,
+                        "sequence_in_group": message.sequence_in_group,
+                    },
+                )
+        except Exception:
+            logger.warning("record queued chat events failed", exc_info=True)
 
     @staticmethod
     def _reply_group_payload(group) -> dict[str, object]:
