@@ -36,6 +36,14 @@ class ChatActionIntentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(route.mode, ChatActionMode.SUGGEST)
         self.assertFalse(route.require_tool)
 
+    async def test_share_action(self):
+        route = await self._classify(
+            '{"action": "share", "mode": "explicit", "reason": "要分享"}'
+        )
+        self.assertEqual(route.action_kind, "share")
+        self.assertIn("bili_share", route.allowed_tool_names)
+        self.assertNotIn("bili_browse", route.allowed_tool_names)
+
     async def test_none(self):
         route = await self._classify('{"mode": "none", "reason": "闲聊"}')
         self.assertEqual(route.mode, ChatActionMode.NONE)

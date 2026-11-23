@@ -20,10 +20,18 @@ class ChatActionMode(StrEnum):
 @dataclass(frozen=True)
 class ChatActionRoute:
     mode: ChatActionMode = ChatActionMode.NONE
+    action_kind: str = "browse"
     allowed_tool_names: tuple[str, ...] = ()
     instruction: str = ""
     require_tool: bool = False
 
+
+# 用户要求分享/发视频，而不是再去刷。
+_SHARE_REQUEST = re.compile(
+    r"分享|发我|发给我|发过来|给我看|有什么(?:可以)?(?:分享|看)|"
+    r"没有(?:可以)?分享|挑(?:个|几个)(?:给|发)",
+    re.IGNORECASE,
+)
 
 # 明确否定优先，命中后一律不路由。
 _NEGATION = re.compile(
@@ -83,11 +91,26 @@ def suggest_route() -> ChatActionRoute:
     )
 
 
+def share_route() -> ChatActionRoute:
+    return ChatActionRoute(
+        mode=ChatActionMode.EXPLICIT,
+        action_kind="share",
+        allowed_tool_names=("bili_share", *_DELIVERY_TOOL_NAMES),
+        instruction=(
+            "用户想看你刚才刷到的视频。从上下文里最近一次B站候选挑1-2个，"
+            "调用 bili_share 发给用户；不要重新刷B站。"
+        ),
+        require_tool=True,
+    )
+
+
 def route_chat_action(message: str) -> ChatActionRoute:
     """返回聊天轮的行动路由；没有命中就返回 NONE。"""
     clean = " ".join(message.split())
     if not clean or _NEGATION.search(clean):
         return ChatActionRoute()
+    if _SHARE_REQUEST.search(clean):
+        return share_route()
     if _EXPLICIT.search(clean) or _SHORT_IMPERATIVE.search(clean):
         return explicit_route()
     if _SUGGEST.search(clean):
@@ -100,5 +123,6 @@ __all__ = [
     "ChatActionRoute",
     "explicit_route",
     "route_chat_action",
+    "share_route",
     "suggest_route",
 ]

@@ -44,6 +44,15 @@ class ChatActionRoutingTests(unittest.TestCase):
                 self.assertFalse(route.require_tool)
                 self.assertTrue(route.instruction)
 
+    def test_share_request_targets_share_tool(self):
+        for message in ("没有可以分享的吗", "挑个发我", "有什么可以分享的"):
+            with self.subTest(message=message):
+                route = route_chat_action(message)
+                self.assertEqual(route.mode, ChatActionMode.EXPLICIT)
+                self.assertEqual(route.action_kind, "share")
+                self.assertIn("bili_share", route.allowed_tool_names)
+                self.assertNotIn("bili_browse", route.allowed_tool_names)
+
     def test_negation_wins(self):
         for message in ("别刷B站", "不想看视频", "不用去刷了"):
             with self.subTest(message=message):

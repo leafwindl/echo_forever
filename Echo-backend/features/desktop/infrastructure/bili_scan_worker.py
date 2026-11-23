@@ -177,24 +177,33 @@ def _instruction(
         f"- {item['title']}（frame: {item['frame']}，score: {item['score']}）"
         for item in items[:MAX_NOTIFY_ITEMS]
     )
-    if round_no >= max_rounds:
-        action_rule = (
-            f"这是连续刷的第 {round_no}/{max_rounds} 轮，已经到上限，不能再刷了。"
-            "只能决定：有值得的就 bili_share 分享（最多2条），"
-            "没有就说一句你看了什么、什么感觉。"
+    shareable = [
+        item
+        for item in items
+        if float(item.get("score") or 0) >= MIN_SHARE_SCORE
+        and str(item.get("note") or "").strip()
+    ]
+    if shareable:
+        share_rule = (
+            "这一轮有值得分享的。先调用 bili_share 挑 1-2 个发给叶子"
+            "（frame 用上面列的），发完再决定要不要继续刷；不要空手收手。"
         )
     else:
-        action_rule = (
-            f"这是连续刷的第 {round_no}/{max_rounds} 轮。你可以自己决定："
-            "1) 还没看够：调用 bili_browse 再刷一轮（最多到第3轮）；"
-            "2) 看够了但有想分享的：调用 bili_share 发给叶子（最多2条）；"
-            "3) 看够了也没想发的：只回一句你的感受。"
-            "如果想继续刷，就像微信里那样自然地说“还没看够，再刷一下”，不要机械重复。"
+        share_rule = "这一轮没有值得分享的。"
+    if round_no >= max_rounds:
+        next_rule = (
+            f"这是第 {round_no}/{max_rounds} 轮，已经到上限，不能再刷了；"
+            "只能分享或收手。"
+        )
+    else:
+        next_rule = (
+            f"这是第 {round_no}/{max_rounds} 轮。如果还没看够，可以调用 bili_browse"
+            "再刷一轮；如果想继续，就像微信里那样自然地说“还没看够，再刷一下”。"
         )
     return (
         "你刚刷完B站，结果如下（只作参考，不要逐条念）：\n"
         f"{lines}\n"
-        f"{action_rule}"
+        f"{share_rule}{next_rule}"
         "不要说“我去刷了”，已经刷完了。"
     )
 
@@ -254,6 +263,21 @@ async def _notify_completed(job: dict, result: dict) -> None:
         )
     except Exception:
         logger.warning("bili scan notify history failed", exc_info=True)
+    try:
+        from features.chat.public import record_internal_assistant_note
+
+        candidates = "\n".join(
+            f"- {item['title']}（frame: {item['frame']}，score: {item['score']}）"
+            for item in items[:MAX_NOTIFY_ITEMS]
+        )
+        record_internal_assistant_note(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            content=f"刚刷到的B站候选：\n{candidates}",
+            source="bili",
+        )
+    except Exception:
+        logger.warning("bili scan candidate history failed", exc_info=True)
 
 
 async def _notify_failed(job: dict) -> None:
