@@ -164,6 +164,7 @@ class ProcessPendingChatTurns:
                 payload={
                     "turn_id": turn.turn_id,
                     "message_count": turn.message_count,
+                    "message_id": turn.input_last_message_id,
                 },
             )
             for message in group.messages:
