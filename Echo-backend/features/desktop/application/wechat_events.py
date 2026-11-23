@@ -51,13 +51,22 @@ async def _run_remote_command(
     command: str,
     timeout_seconds: int = BRIDGE_SEND_TIMEOUT_SECONDS,
 ) -> tuple[bool, str]:
-    result = await run_remote_command(
-        service,
-        user_id=user_id,
-        command=command,
-        owner_type="echo",
-        timeout_seconds=timeout_seconds,
-    )
+    """发送失败且节点刚掉线时重试几次，覆盖 agent 重连窗口。"""
+    result = None
+    for attempt in range(3):
+        result = await run_remote_command(
+            service,
+            user_id=user_id,
+            command=command,
+            owner_type="echo",
+            timeout_seconds=timeout_seconds,
+        )
+        if result.ok or result.status != "desktop_offline":
+            return result.ok, result.output
+        if attempt < 2:
+            await asyncio.sleep(3)
+    if result is None:
+        return False, "desktop_offline"
     return result.ok, result.output
 
 
