@@ -69,6 +69,7 @@ class OrchestrateChatWithAgent:
         allowed_tool_names: tuple[str, ...] | None = None,
         tool_call_limit: int | None = None,
         call_route_instruction: str = "",
+        require_tool: bool = False,
     ) -> AgentTurnResult:
         return await self.runtime.run(
             AgentTurn(
@@ -82,6 +83,7 @@ class OrchestrateChatWithAgent:
                 allowed_tool_names=allowed_tool_names,
                 tool_call_limit=tool_call_limit,
                 call_route_instruction=call_route_instruction,
+                require_tool=require_tool,
                 on_text_delta=on_text_delta,
                 on_progress_text=on_progress_text,
             )

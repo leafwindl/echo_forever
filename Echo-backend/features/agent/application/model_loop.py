@@ -100,6 +100,7 @@ class ModelToolLoop:
         deadline: float,
         tools_enabled: bool,
         allowed_tool_names: tuple[str, ...] | None,
+        require_tool: bool = False,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
     ) -> LoopOutcome:
@@ -125,6 +126,9 @@ class ModelToolLoop:
         try:
             while model_steps < profile.max_steps:
                 model_steps += 1
+                tool_choice = (
+                    "required" if require_tool and not tool_results else "auto"
+                )
                 step_tool_names = {
                     str(item.get("function", {}).get("name") or "") for item in tools
                 }
@@ -132,12 +136,19 @@ class ModelToolLoop:
                     messages=agent_messages,
                     tools=tools,
                     structured_output=profile.structured_output,
-                    tool_choice="auto",
+                    tool_choice=tool_choice,
                     deadline=deadline,
                     run_id=run_id,
                     timeout_retries_remaining=llm_timeout_retries_remaining,
                     on_text_delta=on_text_delta,
                 )
+                if require_tool and not tool_results and not response.tool_calls:
+                    logger.warning(
+                        "Agent required tool call was not returned; falling back to auto "
+                        "run_id=%s",
+                        run_id,
+                    )
+                    require_tool = False
 
                 finish_reason = response.finish_reason.strip().lower()
                 if finish_reason == "length" and (

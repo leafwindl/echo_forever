@@ -5,6 +5,7 @@ from shared.config import settings
 
 from features.agent.application.tool_availability import load_tool_availability
 from features.agent.domain.call_routing import route_call_tools
+from features.agent.domain.chat_action_routing import ChatActionMode, route_chat_action
 from features.agent.domain.entities import AgentTurnResult, ProactiveDecision
 from features.agent.domain.tool_selection import (
     ToolSelectionContext,
@@ -36,6 +37,8 @@ async def run_chat_agent(
     allowed_tool_names: tuple[str, ...] | None = None
     tool_call_limit: int | None = None
     call_route_instruction = ""
+    action_mode = ChatActionMode.NONE
+    require_tool = False
     effective_tools_enabled = settings.agent_enabled if tools_enabled is None else tools_enabled
     if conversation_mode == "call":
         call_routing_enabled = (
@@ -71,6 +74,22 @@ async def run_chat_agent(
         )
         if conversation_mode == "chat":
             allowed_tool_names = select_chat_tool_names(selection_context)
+            if (
+                settings.chat_action_routing_enabled
+                and availability.echo_computer_online
+                and allowed_tool_names is not None
+            ):
+                route = route_chat_action(message)
+                if route.mode is not ChatActionMode.NONE:
+                    available = set(allowed_tool_names)
+                    routed = tuple(
+                        name for name in route.allowed_tool_names if name in available
+                    )
+                    if routed:
+                        allowed_tool_names = routed
+                        action_mode = route.mode
+                        require_tool = route.require_tool
+                        call_route_instruction = route.instruction
         else:
             allowed_tool_names = select_proactive_tool_names(selection_context)
         computer_tool_count = sum(
@@ -78,15 +97,17 @@ async def run_chat_agent(
         )
         logger.info(
             "Agent tool selection mode=%s desktop=%s phone=%s echo_computer=%s "
-            "tools=%d computer=%d",
+            "tools=%d computer=%d action=%s require_tool=%s",
             conversation_mode,
             availability.desktop_online,
             availability.phone_online,
             availability.echo_computer_online,
             len(allowed_tool_names or ()),
             computer_tool_count,
+            action_mode.value,
+            require_tool,
         )
-    return await agent.execute(
+    result = await agent.execute(
         user_id,
         message,
         messages,
@@ -103,7 +124,15 @@ async def run_chat_agent(
         allowed_tool_names=allowed_tool_names,
         tool_call_limit=tool_call_limit,
         call_route_instruction=call_route_instruction,
+        require_tool=require_tool,
     )
+    if action_mode is not ChatActionMode.NONE:
+        logger.info(
+            "Agent action route result mode=%s tool_calls=%d",
+            action_mode.value,
+            len(result.tool_results),
+        )
+    return result
 
 
 async def run_daily_letter_agent(

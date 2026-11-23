@@ -167,7 +167,7 @@ class TurnPolicy:
         )
         result = [instruction, *context_messages]
         clean_call_instruction = call_route_instruction.strip()
-        if conversation_mode == "call" and clean_call_instruction:
+        if conversation_mode in {"call", "chat"} and clean_call_instruction:
             result.insert(
                 1,
                 {

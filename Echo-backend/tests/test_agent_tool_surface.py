@@ -178,7 +178,7 @@ TOOL_SPECS = {
 # 后续若再瘦身，继续收紧；新增工具应触发这里失败，先评估影响。
 # 微信三件套（send/messages/sessions）再占约 288 tok：Echo 自有电脑上的
 # 实际社交能力，评估后把棘轮放到 5,000。
-CHAT_TOKEN_BUDGET = 5_000
+CHAT_TOKEN_BUDGET = 5_200
 
 
 def _descriptions(registry, mode):

@@ -29,6 +29,7 @@ class AgentTurn:
     allowed_tool_names: tuple[str, ...] | None = None
     tool_call_limit: int | None = None
     call_route_instruction: str = ""
+    require_tool: bool = False
     on_text_delta: Callable[[str], Awaitable[None]] | None = None
     on_progress_text: Callable[[str], Awaitable[None]] | None = None
 
@@ -77,6 +78,7 @@ class AgentTurnRuntime:
             deadline=deadline,
             tools_enabled=turn.tools_enabled,
             allowed_tool_names=turn.allowed_tool_names,
+            require_tool=turn.require_tool,
             on_text_delta=turn.on_text_delta,
             on_progress_text=turn.on_progress_text,
         )

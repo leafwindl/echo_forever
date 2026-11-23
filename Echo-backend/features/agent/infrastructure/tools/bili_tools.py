@@ -206,7 +206,11 @@ def register_bili_tools(registry: ToolRegistry) -> None:
         ToolDefinition(
             specification=ToolSpecification(
                 name="bili_browse",
-                description="刷B站推荐流，返回标题和帧名，不自动发送。",
+                description=(
+                    "当用户让你刷B站，或你自己想看看时，先调用它。"
+                    "它只返回标题和帧名，不会发送；看完再决定是否 bili_share。"
+                    "例：用户说“去刷B站”→ 先调本工具。"
+                ),
                 timeout_seconds=170,
                 allowed_modes=("chat", "proactive"),
                 max_calls_per_turn=1,
@@ -220,7 +224,10 @@ def register_bili_tools(registry: ToolRegistry) -> None:
         ToolDefinition(
             specification=ToolSpecification(
                 name="bili_share",
-                description="把选中的视频连图带话术发给叶子。",
+                description=(
+                    "把 bili_browse 选中的视频连图带话术发给叶子。"
+                    "note 用你平时说话的语气，不要写成模板。"
+                ),
                 timeout_seconds=90,
                 allowed_modes=("chat", "proactive"),
                 max_calls_per_turn=2,
