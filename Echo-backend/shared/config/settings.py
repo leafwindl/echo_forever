@@ -894,6 +894,10 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="CHAT_ACTION_ROUTING_ENABLED",
     )
+    chat_action_intent_enabled: bool = Field(
+        default=True,
+        validation_alias="CHAT_ACTION_INTENT_ENABLED",
+    )
     agent_max_steps: int = Field(default=6, validation_alias="AGENT_MAX_STEPS", ge=1, le=12)
     agent_max_tool_calls: int = Field(
         default=4, validation_alias="AGENT_MAX_TOOL_CALLS", ge=1, le=10

@@ -26,6 +26,8 @@ class ChatActionRoutingTests(unittest.TestCase):
             "去b站刷刷",
             "刷会儿视频",
             "（微信）叶子 对你说：去刷B站",
+            "你去刷吧",
+            "再刷一下",
         ):
             with self.subTest(message=message):
                 route = route_chat_action(message)
@@ -98,6 +100,7 @@ class ChatActionRoutingIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 new=AsyncMock(return_value=self._availability()),
             ),
             patch.object(settings, "chat_action_routing_enabled", True),
+            patch.object(settings, "chat_action_intent_enabled", False),
         ):
             await run_chat_agent("u1", "在忙吗", [])
 
@@ -113,6 +116,7 @@ class ChatActionRoutingIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 new=AsyncMock(return_value=self._availability()),
             ),
             patch.object(settings, "chat_action_routing_enabled", True),
+            patch.object(settings, "chat_action_intent_enabled", False),
         ):
             await run_chat_agent("u1", "别刷B站", [])
 

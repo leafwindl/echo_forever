@@ -81,6 +81,15 @@ async def run_chat_agent(
                 and allowed_tool_names is not None
             ):
                 route = route_chat_action(message)
+                if (
+                    route.mode is ChatActionMode.NONE
+                    and settings.chat_action_intent_enabled
+                ):
+                    from features.agent.infrastructure.chat_action_intent import (
+                        classify_chat_action,
+                    )
+
+                    route = await classify_chat_action(message)
                 if route.mode is not ChatActionMode.NONE:
                     available = set(allowed_tool_names)
                     routed = tuple(
