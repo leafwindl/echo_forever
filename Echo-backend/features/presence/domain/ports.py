@@ -59,16 +59,6 @@ class PresenceQuietHours(Protocol):
     def can_send_spontaneous(self, user_id: str, now: datetime) -> bool: ...
 
 
-class PresenceActionExecutor(Protocol):
-    async def execute(
-        self,
-        *,
-        user_id: str,
-        action_intent: str,
-        thought_id: str,
-    ) -> str: ...
-
-
 class PresenceMemoryWriter(Protocol):
     async def remember(self, *, user_id: str, text: str, salience: float) -> str | None: ...
 

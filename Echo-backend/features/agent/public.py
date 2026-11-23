@@ -4,6 +4,12 @@ from collections.abc import Awaitable, Callable
 from shared.config import settings
 
 from features.agent.application.tool_availability import load_tool_availability
+from features.agent.domain.action_registry import (
+    ACTION_SPECS,
+    ActionSpec,
+    get_action_spec,
+    parse_action_kind,
+)
 from features.agent.domain.call_routing import route_call_tools
 from features.agent.domain.chat_action_routing import ChatActionMode, route_chat_action
 from features.agent.domain.entities import AgentTurnResult, ProactiveDecision
@@ -177,8 +183,12 @@ async def plan_proactive_message(
 
 
 __all__ = [
+    "ACTION_SPECS",
+    "ActionSpec",
     "AgentTurnResult",
     "ProactiveDecision",
+    "get_action_spec",
+    "parse_action_kind",
     "plan_proactive_message",
     "run_chat_agent",
     "run_daily_letter_agent",

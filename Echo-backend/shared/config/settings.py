@@ -212,18 +212,6 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="BILI_SHARE_LOOP_ENABLED",
     )
-    presence_proactive_action_budget: int = Field(
-        default=3,
-        validation_alias="PRESENCE_PROACTIVE_ACTION_BUDGET",
-        ge=0,
-        le=6,
-    )
-    presence_proactive_action_interval_minutes: int = Field(
-        default=90,
-        validation_alias="PRESENCE_PROACTIVE_ACTION_INTERVAL_MINUTES",
-        ge=30,
-        le=1440,
-    )
     presence_message_min_salience: float = Field(
         default=0.3,
         validation_alias="PRESENCE_MESSAGE_MIN_SALIENCE",

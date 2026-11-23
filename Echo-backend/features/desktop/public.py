@@ -68,6 +68,15 @@ def start_bili_scan(
     )
 
 
+def recent_bili_scan_summaries(user_id: str, limit: int = 3) -> list[dict]:
+    """最近完成的B站扫描摘要，供 presence 念头参考。"""
+    from features.desktop.infrastructure.bili_scan_store import (
+        recent_completed_scan_summaries,
+    )
+
+    return recent_completed_scan_summaries(user_id, limit)
+
+
 async def send_wechat_message(*, user_id: str, chat: str, text: str) -> bool:
     """主动消息投递到微信（Echo 自己的电脑）。"""
     from features.desktop.application.wechat_events import send_wechat_text
@@ -189,5 +198,6 @@ __all__ = [
     "pair_desktop_node",
     "revoke_desktop_node",
     "run_desktop_command",
+    "recent_bili_scan_summaries",
     "start_bili_scan",
 ]

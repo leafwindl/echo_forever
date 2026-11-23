@@ -106,7 +106,7 @@ class FakeGoalCreator:
         trigger_ref="",
         action_intent="",
     ):
-        self.goals.append((user_id, draft_text))
+        self.goals.append((user_id, draft_text, action_intent))
         return f"goal_{len(self.goals)}"
 
 
@@ -117,15 +117,6 @@ class FakeMemoryWriter:
     async def remember(self, *, user_id, text, salience):
         self.written.append((text, salience))
         return "mem_test"
-
-
-class FakeActionExecutor:
-    def __init__(self):
-        self.calls: list[str] = []
-
-    async def execute(self, *, user_id, action_intent, thought_id):
-        self.calls.append(action_intent)
-        return "played" if action_intent.startswith("music:") else "done"
 
 
 def _service(
@@ -141,8 +132,6 @@ def _service(
         "silence_minutes": 30,
         "min_thought_interval_minutes": 45,
         "daily_thought_budget": 8,
-        "proactive_action_budget": 1,
-        "proactive_action_interval_minutes": 240,
         "message_min_salience": 0.3,
         "memory_salience_threshold": 0.7,
         "context_messages": 8,
@@ -156,7 +145,6 @@ def _service(
         thought_generator=generator or FakeGenerator(),
         goal_creator=goal_creator or FakeGoalCreator(),
         memory_writer=FakeMemoryWriter(),
-        action_executor=FakeActionExecutor(),
         quiet_hours=quiet or FakeQuiet(),
         **values,
     )
@@ -254,10 +242,9 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.state.consecutive_unanswered, 2)
         self.assertIsNotNone(repository.state.outreach_downshift_until)
 
-    async def test_action_intent_runs_desktop_action_instead_of_message(self):
+    async def test_action_intent_creates_goal_instead_of_direct_execution(self):
         now = datetime.now(UTC)
         repository = FakeRepository()
-        action_executor = FakeActionExecutor()
         creator = FakeGoalCreator()
         generator = FakeGenerator(
             ThoughtDraft(
@@ -273,12 +260,9 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
             generator=generator,
             goal_creator=creator,
         )
-        service.action_executor = action_executor
-        result = await service.tick("user-1", now=now)
-        self.assertEqual(result.decision, "action")
-        self.assertEqual(action_executor.calls, ["music:晴天"])
-        self.assertEqual(creator.goals, [])
-        self.assertEqual(repository.state.proactive_actions_used, 1)
+        await service.tick("user-1", now=now)
+        self.assertEqual(len(creator.goals), 1)
+        self.assertEqual(creator.goals[0][2], "music:晴天")
 
     async def test_high_salience_thought_is_written_to_memory(self):
         now = datetime.now(UTC)

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from providers.llm_provider import get_llm_provider
 
+from features.agent.public import ACTION_SPECS
 from features.presence.domain.entities import (
     PresenceContext,
     PresenceMemory,
@@ -14,13 +15,15 @@ from features.presence.domain.entities import (
     ThoughtDraft,
 )
 
-_SYSTEM_PROMPT = """你是 Echo 的内部念头生成器，不是聊天回复生成器。
+_ACTION_HINT = "\n".join(f'  "{spec.label}"' for spec in ACTION_SPECS)
+
+_SYSTEM_PROMPT = f"""你是 Echo 的内部念头生成器，不是聊天回复生成器。
 根据下面的事实，生成 Echo 此刻一个自然、短小的内心念头。
 只输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释。
 字段固定为：
-{"thought": "第一人称中文念头，20-80字", "salience": 0.0到1.0,
+{{"thought": "第一人称中文念头，20-80字", "salience": 0.0到1.0,
  "shareable": true或false, "action_intent": "" 或结构化动作,
- "draft_text": "如果要主动发给用户，写成 20-80 字的第一人称自然消息；不适合发就留空"}
+ "draft_text": "如果要主动发给用户，写成 20-80 字的第一人称自然消息；不适合发就留空"}}
 要求：
 - 只使用提供的事实，不编造用户当前正在做什么、在哪里、是否在线。
 - 旧记忆必须承认它来自过去，不能当成刚刚发生。
@@ -33,16 +36,15 @@ _SYSTEM_PROMPT = """你是 Echo 的内部念头生成器，不是聊天回复生
 - draft_text 是准备直接发出去的消息，不是念头复述：像微信里的一句话，
   不提念头、系统、调度或内部机制；不适合打扰时留空字符串。
 - draft_text 非空时 shareable 必须为 true；两者不能互相矛盾。
-- 如果语境里有一个轻量、自然的小动作（放一首合适的歌、写一句便签、交给 DSH
-  一个明确任务），可以填写 action_intent；不需要每轮都有，但不要因为害怕打扰
-  而总是留空。
+- 如果语境里有一个轻量、自然的小动作，可以填写 action_intent；不需要每轮都有，
+  但不要因为害怕打扰而总是留空。
 - action_intent 只有语境明确支持时才填写，格式必须是以下之一：
-  "music:歌曲或歌手"（想放一首合适的歌）
-  "notepad:要留下的短句"（想写一张便签，不超过200字）
-  "dsh:明确的任务"（用户之前确实提过、适合交给电脑执行的任务）
-  "bili:想看看"（想自己去B站刷推荐流，看看有没有有趣的视频）
+{_ACTION_HINT}
   其他情况一律留空字符串；不要为了用动作而编造动作。
-- 填了 bili 时 draft_text 可以留空，表示这次只是自己想看看、不一定要发消息。"""
+- 填了 bili 时 draft_text 可以留空，表示这次只是自己想看看、不一定要发消息。
+- recent_actions 是你最近真的做过的事（刷过B站、分享过视频、执行过任务）。
+  刚做过的事不要假装没发生过，也不要为了显得主动而重复做；如果有新理由
+  （没看够、上次没分享成功、用户刚提过）可以说出来。"""
 
 
 def _day_period(hour: int) -> str:
@@ -110,6 +112,17 @@ class ProviderPresenceThoughtGenerator:
                 else None
             ),
             "recent_thoughts": [item.text for item in recent_thoughts],
+            "recent_actions": [
+                {
+                    "kind": item.kind,
+                    "summary": item.summary,
+                    "minutes_ago": max(
+                        0,
+                        int((now - item.occurred_at).total_seconds() // 60),
+                    ),
+                }
+                for item in context.recent_actions
+            ],
         }
         response = await get_llm_provider().chat_completion_message(
             messages=[

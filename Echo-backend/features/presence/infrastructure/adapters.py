@@ -5,6 +5,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from features.presence.domain.entities import (
+    PresenceActionSummary,
     PresenceContext,
     PresenceMemory,
     PresenceMessage,
@@ -41,8 +42,33 @@ class ChatPresenceContextSource:
                 " ".join(last_assistant.content.split())[:300] if last_assistant else ""
             ),
             last_assistant_at=last_assistant.created_at if last_assistant else None,
+            recent_actions=await self._recent_actions(user_id),
             timezone=timezone,
         )
+
+    async def _recent_actions(self, user_id: str) -> tuple[PresenceActionSummary, ...]:
+        from features.desktop.public import recent_bili_scan_summaries
+        from features.proactive_chat.public import recent_goal_summaries
+
+        summaries: list[PresenceActionSummary] = []
+        for fetcher in (recent_goal_summaries, recent_bili_scan_summaries):
+            try:
+                rows = await asyncio.to_thread(fetcher, user_id, 3)
+            except Exception:
+                continue
+            for row in rows:
+                occurred_at = row.get("occurred_at")
+                if occurred_at is None:
+                    continue
+                summaries.append(
+                    PresenceActionSummary(
+                        kind=str(row.get("kind") or ""),
+                        summary=str(row.get("summary") or "")[:200],
+                        occurred_at=occurred_at,
+                    )
+                )
+        summaries.sort(key=lambda item: item.occurred_at, reverse=True)
+        return tuple(summaries[:5])
 
     def recent_user_ids(self, limit: int) -> tuple[str, ...]:
         from features.chat.public import list_recent_chat_user_ids
@@ -63,48 +89,6 @@ class MemoryPresenceSource:
             content=hit.content,
             importance=hit.importance,
         )
-
-
-class DesktopPresenceActionExecutor:
-    async def execute(
-        self,
-        *,
-        user_id: str,
-        action_intent: str,
-        thought_id: str,
-    ) -> str:
-        from features.desktop.public import DesktopError, execute_desktop_action
-
-        _ = thought_id
-        kind, _, argument = action_intent.partition(":")
-        kind = kind.strip().lower()
-        argument = argument.strip()
-        if not argument:
-            return ""
-        if kind == "music":
-            action = "music_search_play"
-            arguments = {"query": argument[:160]}
-            timeout = 65
-        elif kind == "notepad":
-            action = "notepad_write"
-            arguments = {"text": argument[:2000]}
-            timeout = 45
-        elif kind == "dsh":
-            action = "dsh_task"
-            arguments = {"instruction": argument[:2000], "workspace": ""}
-            timeout = 300
-        else:
-            return ""
-        try:
-            result = await execute_desktop_action(
-                user_id=user_id,
-                action=action,
-                arguments=arguments,
-                timeout_seconds=timeout,
-            )
-        except DesktopError:
-            return ""
-        return str(result.data.get("result") or result.data.get("preview") or "ok")
 
 
 class MemoryPresenceWriter:

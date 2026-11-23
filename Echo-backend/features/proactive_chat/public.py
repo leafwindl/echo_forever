@@ -66,6 +66,19 @@ def create_proactive_goal(
     return goal.goal_id if goal is not None else ""
 
 
+def recent_goal_summaries(user_id: str, limit: int = 3) -> list[dict]:
+    """最近完成的主动动作摘要，供 presence 念头参考。"""
+    rows = get_proactive_repository().recent_reported_goals(user_id, limit)
+    return [
+        {
+            "kind": "goal",
+            "summary": str(row.get("result_summary") or row.get("intent") or "")[:200],
+            "occurred_at": row.get("reported_at"),
+        }
+        for row in rows
+    ]
+
+
 def reset_user_proactive_state(user_id: str) -> None:
     """Reset preferences, reminders and queued jobs for a new companionship cycle."""
     get_proactive_repository().reset_user_state(user_id)
@@ -76,5 +89,6 @@ __all__ = [
     "get_proactive_preferences",
     "get_proactive_repository",
     "process_proactive_chat_once",
+    "recent_goal_summaries",
     "reset_user_proactive_state",
 ]

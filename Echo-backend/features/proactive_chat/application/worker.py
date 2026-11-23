@@ -464,8 +464,14 @@ class ProcessProactiveChatJobs:
 
         `action_intent` 只是倾向，不是命令；代码只负责判断结果、兜底和记账。
         """
-        from features.agent.public import run_chat_agent
+        from features.agent.public import (
+            get_action_spec,
+            parse_action_kind,
+            run_chat_agent,
+        )
 
+        spec = get_action_spec(parse_action_kind(goal.action_intent))
+        tool_scope = spec.tool_scope if spec is not None else None
         fallback = goal.draft_text.strip() or f"本来想{goal.intent[:40]}，这次没做成。"
         if not goal.draft_text.strip():
             instruction = (
@@ -493,6 +499,7 @@ class ProcessProactiveChatJobs:
                 conversation_id=conversation_id,
                 conversation_mode="proactive",
                 tools_enabled=True,
+                tool_scope=tool_scope,
             )
         except Exception as exc:
             return (fallback,), "failed", f"主动执行异常：{type(exc).__name__}"

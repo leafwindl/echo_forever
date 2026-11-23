@@ -178,6 +178,42 @@ def recover_running_scan_jobs() -> int:
         return cursor.rowcount
 
 
+def recent_completed_scan_summaries(user_id: str, limit: int = 3) -> list[dict]:
+    """最近完成的扫描摘要，供 presence 念头参考。"""
+    with transaction() as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT round, result, finished_at
+            FROM bili_scan_jobs
+            WHERE user_id = %s AND status = 'completed' AND finished_at IS NOT NULL
+            ORDER BY finished_at DESC
+            LIMIT %s
+            """,
+            (user_id, limit),
+        )
+        rows = cursor.fetchall()
+    summaries: list[dict] = []
+    for row in rows:
+        result = row.get("result") or {}
+        items = result.get("items") or []
+        titles = [
+            str(item.get("title") or "").strip()
+            for item in items[:2]
+            if str(item.get("title") or "").strip()
+        ]
+        summary = f"刷了第{row['round']}轮"
+        if titles:
+            summary += "，看到：" + "、".join(titles)
+        summaries.append(
+            {
+                "kind": "bili",
+                "summary": summary[:200],
+                "occurred_at": row["finished_at"],
+            }
+        )
+    return summaries
+
+
 def cleanup_old_scan_jobs(*, days: int = 7) -> int:
     cutoff = datetime.now(UTC) - timedelta(days=days)
     with transaction() as conn, conn.cursor() as cursor:

@@ -60,6 +60,13 @@ class PresenceMessage:
 
 
 @dataclass(frozen=True)
+class PresenceActionSummary:
+    kind: str
+    summary: str
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
 class PresenceContext:
     messages: tuple[PresenceMessage, ...]
     last_user_message_at: datetime | None
@@ -67,6 +74,7 @@ class PresenceContext:
     recent_assistant_text: str
     last_assistant_at: datetime | None = None
     timezone: str = "Asia/Shanghai"
+    recent_actions: tuple[PresenceActionSummary, ...] = ()
 
 
 @dataclass(frozen=True)

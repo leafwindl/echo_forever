@@ -596,6 +596,20 @@ class PostgresProactiveChatRepository:
             )
         return _goal(row)
 
+    def recent_reported_goals(self, user_id: str, limit: int = 3) -> list[dict]:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT intent, result_status, result_summary, reported_at
+                FROM proactive_goals
+                WHERE user_id = %s AND reported_at IS NOT NULL
+                ORDER BY reported_at DESC
+                LIMIT %s
+                """,
+                (user_id, limit),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_goal(self, goal_id: str) -> ProactiveGoal | None:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(

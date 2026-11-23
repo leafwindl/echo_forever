@@ -12,7 +12,6 @@ from features.presence.domain.entities import (
     PresenceTickResult,
 )
 from features.presence.domain.ports import (
-    PresenceActionExecutor,
     PresenceContextSource,
     PresenceGoalCreator,
     PresenceMemorySource,
@@ -50,14 +49,11 @@ class PresenceService:
         thought_generator: PresenceThoughtGenerator,
         goal_creator: PresenceGoalCreator,
         memory_writer: PresenceMemoryWriter,
-        action_executor: PresenceActionExecutor,
         quiet_hours: PresenceQuietHours,
         active_window_minutes: int,
         silence_minutes: int,
         min_thought_interval_minutes: int,
         daily_thought_budget: int,
-        proactive_action_budget: int,
-        proactive_action_interval_minutes: int,
         message_min_salience: float,
         memory_salience_threshold: float,
         context_messages: int,
@@ -69,16 +65,11 @@ class PresenceService:
         self.thought_generator = thought_generator
         self.goal_creator = goal_creator
         self.memory_writer = memory_writer
-        self.action_executor = action_executor
         self.quiet_hours = quiet_hours
         self.active_window = timedelta(minutes=active_window_minutes)
         self.silence_window = timedelta(minutes=silence_minutes)
         self.thought_interval = timedelta(minutes=min_thought_interval_minutes)
         self.daily_thought_budget = daily_thought_budget
-        self.proactive_action_budget = proactive_action_budget
-        self.proactive_action_interval = timedelta(
-            minutes=proactive_action_interval_minutes
-        )
         self.message_min_salience = message_min_salience
         self.memory_salience_threshold = memory_salience_threshold
         self.context_messages = context_messages
@@ -215,38 +206,6 @@ class PresenceService:
                     user_id,
                     exc_info=True,
                 )
-        action_result = await self._maybe_execute_action(
-            state=state,
-            thought=thought,
-            now=current,
-        )
-        if action_result:
-            state = PresenceState(
-                **{
-                    **state.__dict__,
-                    "proactive_actions_used": (
-                        0
-                        if state.proactive_action_budget_date != current.date()
-                        else state.proactive_actions_used
-                    )
-                    + 1,
-                    "proactive_action_budget_date": current.date(),
-                    "last_proactive_action_at": current,
-                    "last_decision": "action",
-                    "last_decision_reason": f"action:{thought.action_intent.split(':', 1)[0]}",
-                    "last_tick_at": current,
-                }
-            )
-            self.repository.save_state(state)
-            return PresenceTickResult(
-                user_id=user_id,
-                status=state.status,
-                decision="action",
-                reason=state.last_decision_reason,
-                thought=thought,
-                action_result=action_result,
-                thoughts_used=state.thoughts_used,
-            )
         message_text = ""
         if (
             thought.shareable
@@ -288,63 +247,6 @@ class PresenceService:
             thoughts_used=state.thoughts_used,
         )
 
-    async def _maybe_execute_action(
-        self,
-        *,
-        state: PresenceState,
-        thought: PresenceThought,
-        now: datetime,
-    ) -> str:
-        intent = thought.action_intent.strip()
-        kind = intent.split(":", 1)[0].lower() if ":" in intent else ""
-        if kind not in {"music", "notepad", "dsh"}:
-            return ""
-        used = (
-            state.proactive_actions_used
-            if state.proactive_action_budget_date == now.date()
-            else 0
-        )
-        if used >= self.proactive_action_budget:
-            return ""
-        if (
-            state.last_proactive_action_at is not None
-            and now - state.last_proactive_action_at < self.proactive_action_interval
-        ):
-            return ""
-        if self.quiet_hours.is_quiet(state.user_id, now):
-            return ""
-        if not self.quiet_hours.can_send_spontaneous(state.user_id, now):
-            return ""
-        try:
-            result = await self.action_executor.execute(
-                user_id=state.user_id,
-                action_intent=intent,
-                thought_id=thought.thought_id,
-            )
-        except Exception:
-            logger.warning(
-                "Presence action failed user_id=%s kind=%s",
-                state.user_id,
-                kind,
-                exc_info=True,
-            )
-            self.repository.record_event(
-                user_id=state.user_id,
-                event_type="action_failed",
-                detail={"thought_id": thought.thought_id, "kind": kind},
-                now=now,
-            )
-            return ""
-        if not result:
-            return ""
-        self.repository.record_event(
-            user_id=state.user_id,
-            event_type="action_executed",
-            detail={"thought_id": thought.thought_id, "kind": kind},
-            now=now,
-        )
-        return result
-
     async def _maybe_create_goal(
         self,
         *,
@@ -354,6 +256,11 @@ class PresenceService:
     ) -> str:
         text = thought.draft_text.strip()
         intent_text = thought.action_intent.strip()
+        if intent_text:
+            from features.agent.public import get_action_spec, parse_action_kind
+
+            if get_action_spec(parse_action_kind(intent_text)) is None:
+                intent_text = ""
         if not text and not intent_text:
             # 既不想说话、也没有想做的事，就自己待着。
             return ""
@@ -364,7 +271,7 @@ class PresenceService:
                 draft_text=text,
                 trigger_type="memory" if thought.source_memory_id else "presence",
                 trigger_ref=thought.source_memory_id,
-                action_intent=thought.action_intent,
+                action_intent=intent_text,
             )
         except Exception:
             logger.warning(
@@ -467,6 +374,16 @@ class PresenceService:
             }
         )
         self.repository.save_state(state)
+        self.repository.record_event(
+            user_id=state.user_id,
+            event_type="tick",
+            detail={
+                "decision": decision,
+                "reason": reason,
+                "status": state.status,
+            },
+            now=now,
+        )
         return PresenceTickResult(
             user_id=state.user_id,
             status=state.status,
