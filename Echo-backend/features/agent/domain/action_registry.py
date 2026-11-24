@@ -43,6 +43,13 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         tool_scope=("phone_observe", "phone_screenshot", "emit_chat_beats"),
     ),
     ActionSpec(
+        kind="reflect",
+        label="reflect:整理/准备——回顾最近的聊天和记忆，整理或准备话题",
+        instruction="回顾最近的聊天和记忆，写一条简短的内部整理或话题准备。",
+        keywords=("整理", "回忆", "准备话题"),
+        tool_scope=(),
+    ),
+    ActionSpec(
         kind="music",
         label="music:歌曲或歌手——想放一首合适的歌",
         instruction="放一首符合当下语境的歌，放完用一句话说说为什么选它。",

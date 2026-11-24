@@ -23,6 +23,15 @@ from features.presence.domain.ports import (
 
 logger = logging.getLogger(__name__)
 
+# 用户长时间没消息时，从这些低成本活动里挑一件做，避免一直空转。
+_DEFAULT_AGENDA = (
+    ("bili", "看看B站今天有什么", "bili"),
+    ("reflect", "整理一下最近的记忆", "reflect"),
+    ("reflect", "准备一个可以聊的话题", "reflect"),
+    ("notepad", "写一张便签", "notepad"),
+    ("bili", "看看有没有值得分享的视频", "bili"),
+)
+
 
 def _compact(value: str, limit: int = 500) -> str:
     return " ".join(value.split())[:limit]
@@ -62,6 +71,9 @@ class PresenceService:
         idle_interval_minutes: int = 60,
         sleeping_interval_minutes: int = 90,
         downshift_interval_minutes: int = 180,
+        daily_activity_minimum: int = 5,
+        activity_interval_minutes: int = 180,
+        skip_threshold: int = 3,
     ):
         self.repository = repository
         self.context_source = context_source
@@ -82,6 +94,9 @@ class PresenceService:
         self.idle_interval = timedelta(minutes=idle_interval_minutes)
         self.sleeping_interval = timedelta(minutes=sleeping_interval_minutes)
         self.downshift_interval = timedelta(minutes=downshift_interval_minutes)
+        self.daily_activity_minimum = daily_activity_minimum
+        self.activity_interval = timedelta(minutes=activity_interval_minutes)
+        self.skip_threshold = skip_threshold
 
     def state(self, user_id: str) -> PresenceState:
         return self.repository.get_or_create_state(user_id)
@@ -134,6 +149,13 @@ class PresenceService:
         silence = current - last_user_at
         if silence < self.silence_window:
             return self._finish(state, "skipped", "too_recent", current)
+        activity_result = await self._maybe_run_activity(
+            state=state,
+            user_id=user_id,
+            now=current,
+        )
+        if activity_result is not None:
+            return activity_result
         if state.thoughts_used >= self.daily_thought_budget:
             return self._finish(state, "skipped", "daily_budget", current)
         if (
@@ -272,6 +294,9 @@ class PresenceService:
             **{
                 **state.__dict__,
                 "next_tick_at": self._next_tick_at(state, current),
+                "consecutive_skips": (
+                    0 if message_text else state.consecutive_skips + 1
+                ),
             }
         )
         self.repository.save_state(state)
@@ -282,6 +307,86 @@ class PresenceService:
             reason="proactive_message" if message_text else "inner_thought",
             thought=thought,
             message_text=message_text,
+            thoughts_used=state.thoughts_used,
+        )
+
+    async def _maybe_run_activity(
+        self,
+        *,
+        state: PresenceState,
+        user_id: str,
+        now: datetime,
+    ) -> PresenceTickResult | None:
+        """用户长时间没消息时，从议程挑一件低成本活动做，避免一直空转。"""
+        if state.status in {PresenceStatus.ACTIVE, PresenceStatus.SLEEPING}:
+            return None
+        today = now.date()
+        activities = state.activities_used if state.activity_budget_date == today else 0
+        due = (
+            activities < self.daily_activity_minimum
+            and state.last_activity_at is not None
+            and now - state.last_activity_at >= self.activity_interval
+        )
+        forced = state.consecutive_skips >= self.skip_threshold
+        if not (due or forced):
+            return None
+        self.repository.ensure_agenda(user_id, _DEFAULT_AGENDA)
+        item = self.repository.pick_agenda_item(user_id)
+        if item is None:
+            return None
+        tell = (activities + 1) % 5 == 0
+        plan = f"从议程做一件低成本活动：{item.title}"
+        if tell:
+            plan += " [tell]"
+        action_kind = item.action_kind or "reflect"
+        try:
+            goal_id = self.goal_creator.create_goal(
+                user_id=user_id,
+                intent=item.title,
+                draft_text="",
+                trigger_type="agenda",
+                trigger_ref=item.item_id,
+                action_intent=f"{action_kind}:{item.title}",
+                plan=plan,
+            )
+        except Exception:
+            logger.warning(
+                "Presence agenda goal failed user_id=%s",
+                user_id,
+                exc_info=True,
+            )
+            return None
+        if not goal_id:
+            return None
+        state = PresenceState(
+            **{
+                **state.__dict__,
+                "consecutive_skips": 0,
+                "activities_used": activities + 1,
+                "activity_budget_date": today,
+                "last_activity_at": now,
+                "last_decision": "action",
+                "last_decision_reason": "agenda_activity",
+                "last_tick_at": now,
+                "next_tick_at": self._next_tick_at(state, now),
+            }
+        )
+        self.repository.save_state(state)
+        self.repository.record_event(
+            user_id=user_id,
+            event_type="agenda_activity",
+            detail={
+                "item_id": item.item_id,
+                "kind": item.kind,
+                "tell": tell,
+            },
+            now=now,
+        )
+        return PresenceTickResult(
+            user_id=user_id,
+            status=state.status,
+            decision="action",
+            reason="agenda_activity",
             thoughts_used=state.thoughts_used,
         )
 
@@ -443,6 +548,7 @@ class PresenceService:
                 "last_decision_reason": reason,
                 "last_tick_at": now,
                 "next_tick_at": self._next_tick_at(state, now),
+                "consecutive_skips": state.consecutive_skips + 1,
             }
         )
         self.repository.save_state(state)

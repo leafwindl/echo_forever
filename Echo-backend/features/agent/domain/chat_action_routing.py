@@ -33,6 +33,12 @@ _SHARE_REQUEST = re.compile(
     re.IGNORECASE,
 )
 
+# 定时提醒：微信里也要能设。
+_REMINDER = re.compile(
+    r"提醒(?:我)?|叫我|喊我|闹钟|定时|每天.{0,8}(?:提醒|叫我)|每周.{0,8}(?:提醒|叫我)",
+    re.IGNORECASE,
+)
+
 # 明确否定优先，命中后一律不路由。
 _NEGATION = re.compile(
     r"别刷|不要刷|不想刷|别看B站|不要看B站|不看B站|别去看|不用去刷|"
@@ -104,6 +110,19 @@ def share_route() -> ChatActionRoute:
     )
 
 
+def reminder_route() -> ChatActionRoute:
+    return ChatActionRoute(
+        mode=ChatActionMode.EXPLICIT,
+        action_kind="reminder",
+        allowed_tool_names=("create_chat_schedule", *_DELIVERY_TOOL_NAMES),
+        instruction=(
+            "用户要设置提醒。用当前时间上下文解析出准确时间和重复规则，"
+            "调用 create_chat_schedule；时间不明确就先问清楚，不要猜。"
+        ),
+        require_tool=False,
+    )
+
+
 def route_chat_action(message: str) -> ChatActionRoute:
     """返回聊天轮的行动路由；没有命中就返回 NONE。"""
     clean = " ".join(message.split())
@@ -111,6 +130,8 @@ def route_chat_action(message: str) -> ChatActionRoute:
         return ChatActionRoute()
     if _SHARE_REQUEST.search(clean):
         return share_route()
+    if _REMINDER.search(clean):
+        return reminder_route()
     if _EXPLICIT.search(clean) or _SHORT_IMPERATIVE.search(clean):
         return explicit_route()
     if _SUGGEST.search(clean):
@@ -122,6 +143,7 @@ __all__ = [
     "ChatActionMode",
     "ChatActionRoute",
     "explicit_route",
+    "reminder_route",
     "route_chat_action",
     "share_route",
     "suggest_route",

@@ -986,8 +986,29 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             last_proactive_action_at TIMESTAMPTZ,
             last_decision VARCHAR(24) NOT NULL DEFAULT '',
             last_decision_reason VARCHAR(64) NOT NULL DEFAULT '',
+            consecutive_skips INTEGER NOT NULL DEFAULT 0
+                CHECK (consecutive_skips >= 0),
+            activities_used INTEGER NOT NULL DEFAULT 0
+                CHECK (activities_used >= 0),
+            activity_budget_date DATE,
+            last_activity_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS presence_agenda (
+            id BIGSERIAL PRIMARY KEY,
+            item_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            kind VARCHAR(24) NOT NULL,
+            title TEXT NOT NULL,
+            action_kind VARCHAR(24) NOT NULL DEFAULT '',
+            status VARCHAR(16) NOT NULL DEFAULT 'open'
+                CHECK (status IN ('open', 'done', 'skipped', 'expired')),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            done_at TIMESTAMPTZ
         )
         """,
         """
@@ -1289,6 +1310,16 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE proactive_goals ADD COLUMN IF NOT EXISTS plan "
         "TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS consecutive_skips "
+        "INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS activities_used "
+        "INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS activity_budget_date "
+        "DATE",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS last_activity_at "
+        "TIMESTAMPTZ",
+        "CREATE INDEX IF NOT EXISTS idx_presence_agenda_user_status "
+        "ON presence_agenda(user_id, status, id)",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_devices_user_status "
         "ON mobile_agent_devices(user_id, status, last_seen_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_pairing_expires "

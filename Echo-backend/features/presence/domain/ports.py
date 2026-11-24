@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Protocol
 
 from features.presence.domain.entities import (
+    AgendaItem,
     PresenceContext,
     PresenceMemory,
     PresenceState,
@@ -29,6 +30,14 @@ class PresenceRepository(Protocol):
         detail: dict,
         now: datetime,
     ) -> None: ...
+
+    def ensure_agenda(
+        self,
+        user_id: str,
+        items: tuple[tuple[str, str, str], ...],
+    ) -> None: ...
+
+    def pick_agenda_item(self, user_id: str) -> AgendaItem | None: ...
 
 
 class PresenceContextSource(Protocol):

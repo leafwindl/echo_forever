@@ -13,6 +13,7 @@ from features.agent.domain.chat_action_routing import (
     ChatActionMode,
     ChatActionRoute,
     explicit_route,
+    reminder_route,
     share_route,
     suggest_route,
 )
@@ -20,10 +21,12 @@ from features.agent.domain.chat_action_routing import (
 logger = logging.getLogger(__name__)
 
 INTENT_PROMPT = (
-    "你是 Echo 的意图识别器。判断用户这句话是不是在让 Echo 刷B站或分享视频。"
+    "你是 Echo 的意图识别器。判断用户这句话是不是在让 Echo 刷B站、分享视频或设提醒。"
     "只输出一个 JSON 对象，不要 Markdown："
-    '{"action": "browse|share|none", "mode": "explicit|suggest|none", "reason": "20字以内"}'
-    "action：browse=让 Echo 去刷/看视频；share=要 Echo 分享/发视频；none=无关或否定。"
+    '{"action": "browse|share|reminder|none", '
+    '"mode": "explicit|suggest|none", "reason": "20字以内"}'
+    "action：browse=让 Echo 去刷/看视频；share=要 Echo 分享/发视频；"
+    "reminder=要 Echo 设提醒/闹钟/定时；none=无关或否定。"
     "mode：explicit=明确祈使（省略宾语也算，如“你去刷吧”）；"
     "suggest=给了行动余地但没有直接命令（如“好无聊”）；none=没有行动意图。"
 )
@@ -72,6 +75,8 @@ async def classify_chat_action(message: str) -> ChatActionRoute:
     )
     if action == "share":
         return share_route()
+    if action == "reminder":
+        return reminder_route()
     if action == "browse" and mode == ChatActionMode.EXPLICIT.value:
         return explicit_route()
     if action == "browse" and mode == ChatActionMode.SUGGEST.value:

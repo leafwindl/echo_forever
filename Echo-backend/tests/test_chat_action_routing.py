@@ -53,6 +53,15 @@ class ChatActionRoutingTests(unittest.TestCase):
                 self.assertIn("bili_share", route.allowed_tool_names)
                 self.assertNotIn("bili_browse", route.allowed_tool_names)
 
+    def test_reminder_request_targets_schedule_tool(self):
+        for message in ("明天早上8点叫我", "每天晚上提醒我喝水"):
+            with self.subTest(message=message):
+                route = route_chat_action(message)
+                self.assertEqual(route.mode, ChatActionMode.EXPLICIT)
+                self.assertEqual(route.action_kind, "reminder")
+                self.assertIn("create_chat_schedule", route.allowed_tool_names)
+                self.assertFalse(route.require_tool)
+
     def test_negation_wins(self):
         for message in ("别刷B站", "不想看视频", "不用去刷了"):
             with self.subTest(message=message):

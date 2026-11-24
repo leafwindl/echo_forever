@@ -37,6 +37,21 @@ class PresenceState:
     last_proactive_action_at: datetime | None = None
     last_decision: str = ""
     last_decision_reason: str = ""
+    consecutive_skips: int = 0
+    activities_used: int = 0
+    activity_budget_date: date | None = None
+    last_activity_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class AgendaItem:
+    item_id: str
+    user_id: str
+    kind: str
+    title: str
+    action_kind: str
+    status: str = "open"
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True)

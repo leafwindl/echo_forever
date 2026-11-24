@@ -7,7 +7,7 @@ from typing import Any
 from db.postgres_connection import get_connection, transaction
 from psycopg.types.json import Jsonb
 
-from features.presence.domain.entities import PresenceState, PresenceThought
+from features.presence.domain.entities import AgendaItem, PresenceState, PresenceThought
 
 
 def _state(row: dict[str, Any]) -> PresenceState:
@@ -34,6 +34,10 @@ def _state(row: dict[str, Any]) -> PresenceState:
         last_proactive_action_at=row.get("last_proactive_action_at"),
         last_decision=str(row.get("last_decision") or ""),
         last_decision_reason=str(row.get("last_decision_reason") or ""),
+        consecutive_skips=int(row.get("consecutive_skips") or 0),
+        activities_used=int(row.get("activities_used") or 0),
+        activity_budget_date=row.get("activity_budget_date"),
+        last_activity_at=row.get("last_activity_at"),
     )
 
 
@@ -86,6 +90,8 @@ class PostgresPresenceRepository:
                     proactive_actions_used = %s, proactive_action_budget_date = %s,
                     last_proactive_action_at = %s,
                     last_decision = %s, last_decision_reason = %s,
+                    consecutive_skips = %s, activities_used = %s,
+                    activity_budget_date = %s, last_activity_at = %s,
                     updated_at = NOW()
                 WHERE user_id = %s
                 """,
@@ -111,6 +117,10 @@ class PostgresPresenceRepository:
                     state.last_proactive_action_at,
                     state.last_decision,
                     state.last_decision_reason,
+                    state.consecutive_skips,
+                    state.activities_used,
+                    state.activity_budget_date,
+                    state.last_activity_at,
                     state.user_id,
                 ),
             )
@@ -153,6 +163,68 @@ class PostgresPresenceRepository:
                     thought.created_at,
                 ),
             )
+
+    def ensure_agenda(
+        self,
+        user_id: str,
+        items: tuple[tuple[str, str, str], ...],
+    ) -> None:
+        with transaction() as conn, conn.cursor() as cursor:
+            for kind, title, action_kind in items:
+                cursor.execute(
+                    """
+                    INSERT INTO presence_agenda (
+                        item_id, user_id, kind, title, action_kind
+                    )
+                    SELECT %s, %s, %s, %s, %s
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM presence_agenda
+                        WHERE user_id = %s AND title = %s AND status = 'open'
+                    )
+                    """,
+                    (
+                        f"agenda_{uuid.uuid4().hex[:16]}",
+                        user_id,
+                        kind,
+                        title,
+                        action_kind,
+                        user_id,
+                        title,
+                    ),
+                )
+
+    def pick_agenda_item(self, user_id: str) -> AgendaItem | None:
+        with transaction() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT * FROM presence_agenda
+                WHERE user_id = %s AND status = 'open'
+                ORDER BY id ASC
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            cursor.execute(
+                """
+                UPDATE presence_agenda
+                SET status = 'done', done_at = NOW(), updated_at = NOW()
+                WHERE id = %s
+                """,
+                (row["id"],),
+            )
+        return AgendaItem(
+            item_id=str(row["item_id"]),
+            user_id=str(row["user_id"]),
+            kind=str(row["kind"]),
+            title=str(row["title"]),
+            action_kind=str(row["action_kind"] or ""),
+            status="done",
+            created_at=row.get("created_at"),
+        )
 
     def record_event(
         self,

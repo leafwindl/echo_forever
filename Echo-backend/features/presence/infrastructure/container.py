@@ -45,6 +45,9 @@ def get_presence_service() -> PresenceService:
         idle_interval_minutes=settings.presence_idle_interval_minutes,
         sleeping_interval_minutes=settings.presence_sleeping_interval_minutes,
         downshift_interval_minutes=settings.presence_downshift_interval_minutes,
+        daily_activity_minimum=settings.presence_daily_activity_minimum,
+        activity_interval_minutes=settings.presence_activity_interval_minutes,
+        skip_threshold=settings.presence_skip_threshold,
     )
 
 

@@ -44,6 +44,7 @@ class ProcessProactiveChatJobs:
         event_broker: ChatEventBroker,
         timing_policy: DeliveryTimingPolicy,
         lease_seconds: int,
+        daily_budget: int = 20,
         allow_spontaneous_jobs: bool = True,
     ):
         self.repository = repository
@@ -52,6 +53,7 @@ class ProcessProactiveChatJobs:
         self.event_broker = event_broker
         self.timing_policy = timing_policy
         self.lease_seconds = lease_seconds
+        self.daily_budget = daily_budget
         self.allow_spontaneous_jobs = allow_spontaneous_jobs
 
     async def run_once(self) -> bool:
@@ -343,7 +345,7 @@ class ProcessProactiveChatJobs:
 
             # 三档预算：quiet 1 / standard 6 / active 12（按当日已投递目标计）。
             level = getattr(preference, "proactivity_level", "standard") or "standard"
-            budget = {"quiet": 1, "standard": 6, "active": 12}.get(level, 6)
+            budget = self.daily_budget
             if self.repository.count_goals_reported_today(goal.user_id) >= budget:
                 self.repository.suppress_job(job.job_id, "daily_budget")
                 self.repository.mark_goal_failed(
@@ -363,21 +365,44 @@ class ProcessProactiveChatJobs:
                 segments = (draft,) if draft else ()
                 result_status, result_summary = "success", ""
             if pure_action:
-                # 纯动作：不打扰用户，只把结果留进内部历史，下次提问能想起来。
+                # 纯动作默认只留内部历史；议程里标记 [tell] 的那次才说一句。
                 note = " ".join(segment.strip() for segment in segments if segment.strip())
                 if not note:
                     note = f"做了{goal.action_intent[:40]}，没有更多细节。"
-                try:
-                    from features.chat.public import record_internal_assistant_note
+                tell = "[tell]" in goal.plan and bool(note)
+                if tell:
+                    from features.chat.public import deliver_external_assistant_message
+                    from features.desktop.public import send_wechat_message
 
-                    record_internal_assistant_note(
-                        user_id=job.user_id,
-                        conversation_id=conversation_id,
-                        content=note,
-                        source="presence_action",
-                    )
-                except Exception:
-                    logger.warning("record pure action note failed", exc_info=True)
+                    try:
+                        await send_wechat_message(
+                            user_id=job.user_id,
+                            chat=_WECHAT_NOTIFY_TARGET,
+                            text=note,
+                        )
+                    except Exception:
+                        logger.warning("pure action tell delivery failed", exc_info=True)
+                    try:
+                        await deliver_external_assistant_message(
+                            user_id=job.user_id,
+                            content=note,
+                            idempotency_key=f"agenda_tell:{goal.goal_id}",
+                            source="presence",
+                        )
+                    except Exception:
+                        logger.warning("pure action tell history failed", exc_info=True)
+                else:
+                    try:
+                        from features.chat.public import record_internal_assistant_note
+
+                        record_internal_assistant_note(
+                            user_id=job.user_id,
+                            conversation_id=conversation_id,
+                            content=note,
+                            source="presence_action",
+                        )
+                    except Exception:
+                        logger.warning("record pure action note failed", exc_info=True)
                 self.repository.mark_goal_reported(
                     goal.goal_id,
                     result_status=result_status,

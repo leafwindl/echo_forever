@@ -180,6 +180,24 @@ class Settings(BaseSettings):
         ge=30,
         le=1440,
     )
+    presence_daily_activity_minimum: int = Field(
+        default=5,
+        validation_alias="PRESENCE_DAILY_ACTIVITY_MINIMUM",
+        ge=1,
+        le=24,
+    )
+    presence_activity_interval_minutes: int = Field(
+        default=180,
+        validation_alias="PRESENCE_ACTIVITY_INTERVAL_MINUTES",
+        ge=30,
+        le=720,
+    )
+    presence_skip_threshold: int = Field(
+        default=3,
+        validation_alias="PRESENCE_SKIP_THRESHOLD",
+        ge=1,
+        le=12,
+    )
     presence_active_window_minutes: int = Field(
         default=5,
         validation_alias="PRESENCE_ACTIVE_WINDOW_MINUTES",
@@ -777,6 +795,12 @@ class Settings(BaseSettings):
     proactive_chat_enabled: bool = Field(
         default=True,
         validation_alias="PROACTIVE_CHAT_ENABLED",
+    )
+    proactive_daily_budget: int = Field(
+        default=20,
+        validation_alias="PROACTIVE_DAILY_BUDGET",
+        ge=1,
+        le=48,
     )
     proactive_chat_worker_interval_seconds: int = Field(
         default=30,

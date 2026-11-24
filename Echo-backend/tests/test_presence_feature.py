@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.presence.application.presence_service import PresenceService
 from features.presence.domain.entities import (
+    AgendaItem,
     PresenceContext,
     PresenceMemory,
     PresenceMessage,
@@ -26,6 +27,7 @@ class FakeRepository:
         self.state = state or PresenceState(user_id="user-1")
         self.thoughts: list[PresenceThought] = []
         self.events: list[str] = []
+        self.agenda: list[tuple[str, str, str]] = []
 
     def get_or_create_state(self, user_id):
         if self.state.user_id != user_id:
@@ -43,6 +45,24 @@ class FakeRepository:
 
     def record_event(self, *, user_id, event_type, detail, now):
         self.events.append(event_type)
+
+    def ensure_agenda(self, user_id, items):
+        titles = {item[1] for item in self.agenda}
+        for kind, title, action_kind in items:
+            if title not in titles:
+                self.agenda.append((kind, title, action_kind))
+
+    def pick_agenda_item(self, user_id):
+        if not self.agenda:
+            return None
+        kind, title, action_kind = self.agenda.pop(0)
+        return AgendaItem(
+            item_id=f"item_{len(self.agenda)}",
+            user_id=user_id,
+            kind=kind,
+            title=title,
+            action_kind=action_kind,
+        )
 
 
 class FakeContext:
@@ -401,6 +421,25 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
             repository.state.next_tick_at,
             now + timedelta(minutes=179),
         )
+
+    async def test_consecutive_skips_force_agenda_activity(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository(
+            PresenceState(user_id="user-1", consecutive_skips=3)
+        )
+        creator = FakeGoalCreator()
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=2)),
+            goal_creator=creator,
+        )
+        result = await service.tick("user-1", now=now)
+        self.assertEqual(result.decision, "action")
+        self.assertEqual(result.reason, "agenda_activity")
+        self.assertEqual(len(creator.goals), 1)
+        self.assertTrue(creator.goals[0][2].startswith("bili:"))
+        self.assertEqual(repository.state.consecutive_skips, 0)
+        self.assertEqual(repository.state.activities_used, 1)
 
     async def test_run_once_processes_recent_users(self):
         now = datetime.now(UTC)
