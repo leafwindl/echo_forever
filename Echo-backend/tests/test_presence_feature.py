@@ -150,9 +150,7 @@ def _service(
     **overrides,
 ):
     values = {
-        "active_window_minutes": 5,
-        "silence_minutes": 30,
-        "min_thought_interval_minutes": 45,
+        "interaction_window_minutes": 20,
         "daily_thought_budget": 8,
         "message_min_salience": 0.3,
         "memory_salience_threshold": 0.7,
@@ -190,14 +188,6 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reason, "quiet_hours")
         self.assertEqual(repository.state.status, PresenceStatus.SLEEPING)
 
-    async def test_recent_silence_is_skipped(self):
-        now = datetime.now(UTC)
-        repository = FakeRepository()
-        service = _service(repository, FakeContext(now - timedelta(minutes=10)))
-        result = await service.tick("user-1", now=now)
-        self.assertEqual(result.reason, "too_recent")
-        self.assertEqual(repository.thoughts, [])
-
     async def test_daily_budget_is_enforced(self):
         now = datetime.now(UTC)
         repository = FakeRepository(
@@ -210,19 +200,7 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         service = _service(repository, FakeContext(now - timedelta(hours=2)))
         result = await service.tick("user-1", now=now)
         self.assertEqual(result.reason, "daily_budget")
-
-    async def test_thought_cooldown_is_enforced(self):
-        now = datetime.now(UTC)
-        repository = FakeRepository(
-            PresenceState(
-                user_id="user-1",
-                last_thought_at=now - timedelta(minutes=10),
-                thought_budget_date=now.date(),
-            )
-        )
-        service = _service(repository, FakeContext(now - timedelta(hours=2)))
-        result = await service.tick("user-1", now=now)
-        self.assertEqual(result.reason, "thought_cooldown")
+        self.assertEqual(repository.state.consecutive_skips, 1)
 
     async def test_eligible_user_creates_one_thought(self):
         now = datetime.now(UTC)
@@ -324,7 +302,7 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.decision, "message")
         self.assertEqual(result.message_text, "上次说的事后来怎么样了？")
         self.assertEqual(len(creator.goals), 1)
-        self.assertEqual(repository.state.proactive_messages_used, 1)
+        self.assertEqual(repository.state.outreach_sent_count, 1)
         self.assertEqual(repository.state.last_decision, "message")
 
     async def test_duplicate_thought_is_not_stored(self):

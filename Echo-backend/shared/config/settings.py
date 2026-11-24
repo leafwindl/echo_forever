@@ -151,7 +151,7 @@ class Settings(BaseSettings):
         validation_alias="PRESENCE_ENABLED",
     )
     presence_tick_interval_seconds: int = Field(
-        default=60,
+        default=300,
         validation_alias="PRESENCE_TICK_INTERVAL_SECONDS",
         ge=30,
         le=3600,
@@ -187,7 +187,7 @@ class Settings(BaseSettings):
         le=24,
     )
     presence_activity_interval_minutes: int = Field(
-        default=180,
+        default=150,
         validation_alias="PRESENCE_ACTIVITY_INTERVAL_MINUTES",
         ge=30,
         le=720,
@@ -204,21 +204,9 @@ class Settings(BaseSettings):
         ge=0,
         le=12,
     )
-    presence_active_window_minutes: int = Field(
-        default=5,
-        validation_alias="PRESENCE_ACTIVE_WINDOW_MINUTES",
-        ge=1,
-        le=60,
-    )
-    presence_silence_minutes: int = Field(
+    presence_interaction_window_minutes: int = Field(
         default=20,
-        validation_alias="PRESENCE_SILENCE_MINUTES",
-        ge=5,
-        le=720,
-    )
-    presence_min_thought_interval_minutes: int = Field(
-        default=30,
-        validation_alias="PRESENCE_MIN_THOUGHT_INTERVAL_MINUTES",
+        validation_alias="PRESENCE_INTERACTION_WINDOW_MINUTES",
         ge=5,
         le=720,
     )

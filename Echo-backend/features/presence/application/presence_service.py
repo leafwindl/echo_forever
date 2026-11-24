@@ -65,11 +65,9 @@ class PresenceService:
         goal_creator: PresenceGoalCreator,
         memory_writer: PresenceMemoryWriter,
         quiet_hours: PresenceQuietHours,
-        active_window_minutes: int,
-        silence_minutes: int,
-        min_thought_interval_minutes: int,
-        daily_thought_budget: int,
-        message_min_salience: float,
+        interaction_window_minutes: int = 20,
+        daily_thought_budget: int = 12,
+        message_min_salience: float = 0.3,
         memory_salience_threshold: float,
         context_messages: int,
         max_candidate_users: int,
@@ -89,9 +87,7 @@ class PresenceService:
         self.goal_creator = goal_creator
         self.memory_writer = memory_writer
         self.quiet_hours = quiet_hours
-        self.active_window = timedelta(minutes=active_window_minutes)
-        self.silence_window = timedelta(minutes=silence_minutes)
-        self.thought_interval = timedelta(minutes=min_thought_interval_minutes)
+        self.interaction_window = timedelta(minutes=interaction_window_minutes)
         self.daily_thought_budget = daily_thought_budget
         self.message_min_salience = message_min_salience
         self.memory_salience_threshold = memory_salience_threshold
@@ -127,7 +123,8 @@ class PresenceService:
         last_user_at = context.last_user_message_at
         status = (
             PresenceStatus.ACTIVE
-            if last_user_at is not None and current - last_user_at <= self.active_window
+            if last_user_at is not None
+            and current - last_user_at <= self.interaction_window
             else PresenceStatus.IDLE
         )
         if self.quiet_hours.is_quiet(user_id, current):
@@ -154,9 +151,6 @@ class PresenceService:
             return self._finish(state, "skipped", "quiet_hours", current)
         if last_user_at is None:
             return self._finish(state, "skipped", "no_activity", current)
-        silence = current - last_user_at
-        if silence < self.silence_window:
-            return self._finish(state, "skipped", "too_recent", current)
         activity_result = await self._maybe_run_activity(
             state=state,
             user_id=user_id,
@@ -166,12 +160,13 @@ class PresenceService:
         if activity_result is not None:
             return activity_result
         if state.thoughts_used >= self.daily_thought_budget:
-            return self._finish(state, "skipped", "daily_budget", current)
-        if (
-            state.last_thought_at is not None
-            and current - state.last_thought_at < self.thought_interval
-        ):
-            return self._finish(state, "skipped", "thought_cooldown", current)
+            return self._finish(
+                state,
+                "skipped",
+                "daily_budget",
+                current,
+                count_skip=True,
+            )
 
         recent = tuple(self.repository.recent_thoughts(user_id, 3))
         query = _compact(context.last_user_text or context.recent_assistant_text, 300)
@@ -284,13 +279,6 @@ class PresenceService:
                     **{
                         **state.__dict__,
                         "last_proactive_message_at": current,
-                        "proactive_messages_used": (
-                            0
-                            if state.proactive_budget_date != current.date()
-                            else state.proactive_messages_used
-                        )
-                        + 1,
-                        "proactive_budget_date": current.date(),
                         "outreach_sent_count": state.outreach_sent_count + 1,
                         "outreach_last_counted_at": None,
                         "last_decision": "message",
@@ -591,17 +579,18 @@ class PresenceService:
         decision: str,
         reason: str,
         now,
+        *,
+        count_skip: bool = False,
     ) -> PresenceTickResult:
-        state = PresenceState(
-            **{
-                **state.__dict__,
-                "last_decision": decision,
-                "last_decision_reason": reason,
-                "last_tick_at": now,
-                "next_tick_at": self._next_tick_at(state, now),
-                "consecutive_skips": state.consecutive_skips + 1,
-            }
-        )
+        updates = {
+            "last_decision": decision,
+            "last_decision_reason": reason,
+            "last_tick_at": now,
+            "next_tick_at": self._next_tick_at(state, now),
+        }
+        if count_skip:
+            updates["consecutive_skips"] = state.consecutive_skips + 1
+        state = PresenceState(**{**state.__dict__, **updates})
         self.repository.save_state(state)
         self.repository.record_event(
             user_id=state.user_id,
