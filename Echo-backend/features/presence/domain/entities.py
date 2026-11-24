@@ -41,6 +41,9 @@ class PresenceState:
     activities_used: int = 0
     activity_budget_date: date | None = None
     last_activity_at: datetime | None = None
+    consecutive_l0: int = 0
+    l2_used: int = 0
+    l2_budget_date: date | None = None
 
 
 @dataclass(frozen=True)

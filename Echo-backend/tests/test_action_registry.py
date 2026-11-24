@@ -19,10 +19,17 @@ class ActionRegistryTests(unittest.TestCase):
         kinds = [spec.kind for spec in ACTION_SPECS]
         self.assertEqual(len(kinds), len(set(kinds)))
 
-    def test_bili_scope_has_scan_and_share(self):
+    def test_bili_scope_is_l0_browse_only(self):
         spec = get_action_spec("bili")
         self.assertIsNotNone(spec)
+        self.assertEqual(spec.tier, 0)
         self.assertIn("bili_browse", spec.tool_scope)
+        self.assertNotIn("bili_share", spec.tool_scope)
+
+    def test_share_is_l1(self):
+        spec = get_action_spec("share")
+        self.assertIsNotNone(spec)
+        self.assertEqual(spec.tier, 1)
         self.assertIn("bili_share", spec.tool_scope)
 
     def test_unknown_action_returns_none(self):

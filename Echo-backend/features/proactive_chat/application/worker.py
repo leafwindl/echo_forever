@@ -365,12 +365,15 @@ class ProcessProactiveChatJobs:
                 segments = (draft,) if draft else ()
                 result_status, result_summary = "success", ""
             if pure_action:
-                # 纯动作默认只留内部历史；议程里标记 [tell] 的那次才说一句。
+                # L0 只写内部历史；L1/L2 才接触用户。
+                from features.agent.public import get_action_spec, parse_action_kind
+
+                spec = get_action_spec(parse_action_kind(goal.action_intent))
+                tier = spec.tier if spec is not None else 0
                 note = " ".join(segment.strip() for segment in segments if segment.strip())
                 if not note:
                     note = f"做了{goal.action_intent[:40]}，没有更多细节。"
-                tell = "[tell]" in goal.plan and bool(note)
-                if tell:
+                if tier > 0:
                     from features.chat.public import deliver_external_assistant_message
                     from features.desktop.public import send_wechat_message
 
@@ -381,16 +384,16 @@ class ProcessProactiveChatJobs:
                             text=note,
                         )
                     except Exception:
-                        logger.warning("pure action tell delivery failed", exc_info=True)
+                        logger.warning("activity delivery failed", exc_info=True)
                     try:
                         await deliver_external_assistant_message(
                             user_id=job.user_id,
                             content=note,
-                            idempotency_key=f"agenda_tell:{goal.goal_id}",
+                            idempotency_key=f"agenda_action:{goal.goal_id}",
                             source="presence",
                         )
                     except Exception:
-                        logger.warning("pure action tell history failed", exc_info=True)
+                        logger.warning("activity history failed", exc_info=True)
                 else:
                     try:
                         from features.chat.public import record_internal_assistant_note

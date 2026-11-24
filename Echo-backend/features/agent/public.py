@@ -7,6 +7,7 @@ from features.agent.application.tool_availability import load_tool_availability
 from features.agent.domain.action_registry import (
     ACTION_SPECS,
     ActionSpec,
+    actions_for_tier,
     get_action_spec,
     parse_action_kind,
     route_action_request,
@@ -188,6 +189,7 @@ __all__ = [
     "ActionSpec",
     "AgentTurnResult",
     "ProactiveDecision",
+    "actions_for_tier",
     "get_action_spec",
     "parse_action_kind",
     "route_action_request",

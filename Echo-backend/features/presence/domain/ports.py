@@ -37,7 +37,11 @@ class PresenceRepository(Protocol):
         items: tuple[tuple[str, str, str], ...],
     ) -> None: ...
 
-    def pick_agenda_item(self, user_id: str) -> AgendaItem | None: ...
+    def pick_agenda_item(
+        self,
+        user_id: str,
+        action_kinds: tuple[str, ...],
+    ) -> AgendaItem | None: ...
 
 
 class PresenceContextSource(Protocol):

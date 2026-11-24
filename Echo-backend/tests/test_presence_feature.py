@@ -52,17 +52,18 @@ class FakeRepository:
             if title not in titles:
                 self.agenda.append((kind, title, action_kind))
 
-    def pick_agenda_item(self, user_id):
-        if not self.agenda:
-            return None
-        kind, title, action_kind = self.agenda.pop(0)
-        return AgendaItem(
-            item_id=f"item_{len(self.agenda)}",
-            user_id=user_id,
-            kind=kind,
-            title=title,
-            action_kind=action_kind,
-        )
+    def pick_agenda_item(self, user_id, action_kinds):
+        for index, (kind, title, action_kind) in enumerate(self.agenda):
+            if action_kind in action_kinds:
+                self.agenda.pop(index)
+                return AgendaItem(
+                    item_id=f"item_{index}",
+                    user_id=user_id,
+                    kind=kind,
+                    title=title,
+                    action_kind=action_kind,
+                )
+        return None
 
 
 class FakeContext:
@@ -437,9 +438,52 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.decision, "action")
         self.assertEqual(result.reason, "agenda_activity")
         self.assertEqual(len(creator.goals), 1)
-        self.assertTrue(creator.goals[0][2].startswith("bili:"))
+        self.assertTrue(creator.goals[0][2])
+        self.assertIn("agenda_activity", repository.events)
         self.assertEqual(repository.state.consecutive_skips, 0)
         self.assertEqual(repository.state.activities_used, 1)
+
+    async def test_short_gap_keeps_activity_at_l0(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository(
+            PresenceState(
+                user_id="user-1",
+                last_activity_at=now - timedelta(hours=4),
+                activity_budget_date=now.date(),
+                activities_used=0,
+            )
+        )
+        creator = FakeGoalCreator()
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=1)),
+            goal_creator=creator,
+        )
+        result = await service.tick("user-1", now=now)
+        self.assertEqual(result.reason, "agenda_activity")
+        self.assertTrue(creator.goals[0][2].startswith("bili:"))
+        self.assertEqual(repository.state.consecutive_l0, 1)
+
+    async def test_long_gap_upgrades_to_l2(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository(
+            PresenceState(
+                user_id="user-1",
+                last_activity_at=now - timedelta(hours=4),
+                activity_budget_date=now.date(),
+                activities_used=0,
+            )
+        )
+        creator = FakeGoalCreator()
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=7)),
+            goal_creator=creator,
+        )
+        result = await service.tick("user-1", now=now)
+        self.assertEqual(result.reason, "agenda_activity")
+        self.assertTrue(creator.goals[0][2].startswith("propose:"))
+        self.assertEqual(repository.state.l2_used, 1)
 
     async def test_run_once_processes_recent_users(self):
         now = datetime.now(UTC)

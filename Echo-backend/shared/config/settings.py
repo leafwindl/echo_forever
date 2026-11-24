@@ -198,6 +198,12 @@ class Settings(BaseSettings):
         ge=1,
         le=12,
     )
+    presence_l2_daily_limit: int = Field(
+        default=2,
+        validation_alias="PRESENCE_L2_DAILY_LIMIT",
+        ge=0,
+        le=12,
+    )
     presence_active_window_minutes: int = Field(
         default=5,
         validation_alias="PRESENCE_ACTIVE_WINDOW_MINUTES",

@@ -38,6 +38,9 @@ def _state(row: dict[str, Any]) -> PresenceState:
         activities_used=int(row.get("activities_used") or 0),
         activity_budget_date=row.get("activity_budget_date"),
         last_activity_at=row.get("last_activity_at"),
+        consecutive_l0=int(row.get("consecutive_l0") or 0),
+        l2_used=int(row.get("l2_used") or 0),
+        l2_budget_date=row.get("l2_budget_date"),
     )
 
 
@@ -92,6 +95,7 @@ class PostgresPresenceRepository:
                     last_decision = %s, last_decision_reason = %s,
                     consecutive_skips = %s, activities_used = %s,
                     activity_budget_date = %s, last_activity_at = %s,
+                    consecutive_l0 = %s, l2_used = %s, l2_budget_date = %s,
                     updated_at = NOW()
                 WHERE user_id = %s
                 """,
@@ -121,6 +125,9 @@ class PostgresPresenceRepository:
                     state.activities_used,
                     state.activity_budget_date,
                     state.last_activity_at,
+                    state.consecutive_l0,
+                    state.l2_used,
+                    state.l2_budget_date,
                     state.user_id,
                 ),
             )
@@ -193,17 +200,22 @@ class PostgresPresenceRepository:
                     ),
                 )
 
-    def pick_agenda_item(self, user_id: str) -> AgendaItem | None:
+    def pick_agenda_item(
+        self,
+        user_id: str,
+        action_kinds: tuple[str, ...],
+    ) -> AgendaItem | None:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
                 SELECT * FROM presence_agenda
                 WHERE user_id = %s AND status = 'open'
+                  AND action_kind = ANY(%s)
                 ORDER BY id ASC
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
                 """,
-                (user_id,),
+                (user_id, list(action_kinds)),
             )
             row = cursor.fetchone()
             if row is None:

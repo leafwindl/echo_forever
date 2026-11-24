@@ -992,6 +992,11 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
                 CHECK (activities_used >= 0),
             activity_budget_date DATE,
             last_activity_at TIMESTAMPTZ,
+            consecutive_l0 INTEGER NOT NULL DEFAULT 0
+                CHECK (consecutive_l0 >= 0),
+            l2_used INTEGER NOT NULL DEFAULT 0
+                CHECK (l2_used >= 0),
+            l2_budget_date DATE,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
@@ -1318,6 +1323,11 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "DATE",
         "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS last_activity_at "
         "TIMESTAMPTZ",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS consecutive_l0 "
+        "INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS l2_used "
+        "INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS l2_budget_date DATE",
         "CREATE INDEX IF NOT EXISTS idx_presence_agenda_user_status "
         "ON presence_agenda(user_id, status, id)",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_devices_user_status "

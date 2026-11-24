@@ -26,10 +26,16 @@ logger = logging.getLogger(__name__)
 # 用户长时间没消息时，从这些低成本活动里挑一件做，避免一直空转。
 _DEFAULT_AGENDA = (
     ("bili", "看看B站今天有什么", "bili"),
+    ("bili", "看看有没有值得分享的视频", "bili"),
+    ("selfie", "看看自己的屏幕", "selfie"),
     ("reflect", "整理一下最近的记忆", "reflect"),
     ("reflect", "准备一个可以聊的话题", "reflect"),
+    ("look", "看看用户现在在忙什么", "look"),
+    ("phone_look", "看看用户手机上有什么", "phone_look"),
+    ("music", "找一首应景的歌", "music"),
     ("notepad", "写一张便签", "notepad"),
-    ("bili", "看看有没有值得分享的视频", "bili"),
+    ("sticker", "发个表情", "sticker"),
+    ("propose", "问问用户要不要一起做点什么", "propose"),
 )
 
 
@@ -74,6 +80,7 @@ class PresenceService:
         daily_activity_minimum: int = 5,
         activity_interval_minutes: int = 180,
         skip_threshold: int = 3,
+        l2_daily_limit: int = 2,
     ):
         self.repository = repository
         self.context_source = context_source
@@ -97,6 +104,7 @@ class PresenceService:
         self.daily_activity_minimum = daily_activity_minimum
         self.activity_interval = timedelta(minutes=activity_interval_minutes)
         self.skip_threshold = skip_threshold
+        self.l2_daily_limit = l2_daily_limit
 
     def state(self, user_id: str) -> PresenceState:
         return self.repository.get_or_create_state(user_id)
@@ -152,6 +160,7 @@ class PresenceService:
         activity_result = await self._maybe_run_activity(
             state=state,
             user_id=user_id,
+            last_user_at=last_user_at,
             now=current,
         )
         if activity_result is not None:
@@ -310,34 +319,68 @@ class PresenceService:
             thoughts_used=state.thoughts_used,
         )
 
+    def _target_activity_tier(
+        self,
+        state: PresenceState,
+        last_user_at: datetime | None,
+        now: datetime,
+    ) -> int:
+        gap = now - last_user_at if last_user_at is not None else timedelta(0)
+        if gap >= timedelta(hours=6):
+            tier = 2
+        elif gap >= timedelta(hours=2):
+            tier = 1
+        else:
+            tier = 0
+        if state.consecutive_l0 >= self.skip_threshold:
+            tier = max(tier, 1)
+        today = now.date()
+        l2_today = state.l2_used if state.l2_budget_date == today else 0
+        if tier >= 2 and l2_today >= self.l2_daily_limit:
+            tier = 1
+        return tier
+
     async def _maybe_run_activity(
         self,
         *,
         state: PresenceState,
         user_id: str,
+        last_user_at: datetime | None,
         now: datetime,
     ) -> PresenceTickResult | None:
-        """用户长时间没消息时，从议程挑一件低成本活动做，避免一直空转。"""
+        """按 L0/L1/L2 挑一件议程活动；间隔越长越往高等级走。"""
         if state.status in {PresenceStatus.ACTIVE, PresenceStatus.SLEEPING}:
             return None
+        from features.agent.public import actions_for_tier
+
         today = now.date()
         activities = state.activities_used if state.activity_budget_date == today else 0
-        due = (
-            activities < self.daily_activity_minimum
-            and state.last_activity_at is not None
+        interval_ready = (
+            state.last_activity_at is not None
             and now - state.last_activity_at >= self.activity_interval
         )
         forced = state.consecutive_skips >= self.skip_threshold
-        if not (due or forced):
+        target_tier = self._target_activity_tier(state, last_user_at, now)
+        should_run = (
+            forced
+            or (target_tier > 0 and interval_ready)
+            or (activities < self.daily_activity_minimum and interval_ready)
+        )
+        if not should_run:
             return None
         self.repository.ensure_agenda(user_id, _DEFAULT_AGENDA)
-        item = self.repository.pick_agenda_item(user_id)
+        item = None
+        tier = 0
+        for candidate in (target_tier, 1, 0):
+            item = self.repository.pick_agenda_item(
+                user_id,
+                actions_for_tier(candidate),
+            )
+            if item is not None:
+                tier = candidate
+                break
         if item is None:
             return None
-        tell = (activities + 1) % 5 == 0
-        plan = f"从议程做一件低成本活动：{item.title}"
-        if tell:
-            plan += " [tell]"
         action_kind = item.action_kind or "reflect"
         try:
             goal_id = self.goal_creator.create_goal(
@@ -347,7 +390,7 @@ class PresenceService:
                 trigger_type="agenda",
                 trigger_ref=item.item_id,
                 action_intent=f"{action_kind}:{item.title}",
-                plan=plan,
+                plan=f"从议程做一件 L{tier} 活动：{item.title}",
             )
         except Exception:
             logger.warning(
@@ -365,6 +408,14 @@ class PresenceService:
                 "activities_used": activities + 1,
                 "activity_budget_date": today,
                 "last_activity_at": now,
+                "consecutive_l0": (
+                    state.consecutive_l0 + 1 if tier == 0 else 0
+                ),
+                "l2_used": (
+                    (state.l2_used if state.l2_budget_date == today else 0)
+                    + (1 if tier == 2 else 0)
+                ),
+                "l2_budget_date": today,
                 "last_decision": "action",
                 "last_decision_reason": "agenda_activity",
                 "last_tick_at": now,
@@ -378,7 +429,7 @@ class PresenceService:
             detail={
                 "item_id": item.item_id,
                 "kind": item.kind,
-                "tell": tell,
+                "tier": tier,
             },
             now=now,
         )
