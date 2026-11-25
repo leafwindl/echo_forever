@@ -349,6 +349,9 @@ class PresenceService:
         )
         forced = state.consecutive_skips >= self.skip_threshold
         target_tier = self._target_activity_tier(state, last_user_at, now)
+        # 每第二次活动强制 L0，保证每天至少两次只写内部历史的自主活动。
+        if (activities + 1) % 2 == 0:
+            target_tier = 0
         should_run = (
             forced
             or (target_tier > 0 and interval_ready)

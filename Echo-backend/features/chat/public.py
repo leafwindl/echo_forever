@@ -248,6 +248,7 @@ async def deliver_external_assistant_message(
     idempotency_key: str,
     source: str,
     content_parts: tuple[ContentPart, ...] = (),
+    channel: str = CHAT_CHANNEL_WECHAT,
 ) -> ExternalAssistantDelivery:
     delivery = add_external_assistant_message(
         user_id=user_id,
@@ -255,6 +256,7 @@ async def deliver_external_assistant_message(
         idempotency_key=idempotency_key,
         source=source,
         content_parts=content_parts,
+        channel=channel,
     )
     if delivery.replayed:
         return delivery

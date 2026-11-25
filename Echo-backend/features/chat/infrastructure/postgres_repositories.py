@@ -243,6 +243,7 @@ def add_external_assistant_message(
     idempotency_key: str,
     source: str,
     content_parts: tuple[ContentPart, ...] = (),
+    channel: str = CHAT_CHANNEL_APP,
 ) -> ExternalAssistantDelivery:
     with transaction() as conn:
         with conn.cursor() as cursor:
@@ -297,6 +298,7 @@ def add_external_assistant_message(
             client_message_id=idempotency_key,
             reply_group_id=reply_group_id,
             source=source,
+            channel=channel,
         )
         _add_message_attachments(conn, user_id, stable_id, content_parts, 0)
         with conn.cursor() as cursor:
