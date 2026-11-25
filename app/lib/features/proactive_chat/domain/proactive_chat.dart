@@ -13,9 +13,9 @@ class ProactiveChatPreferences {
   });
 
   const ProactiveChatPreferences.defaults()
-    : enabled = false,
+    : enabled = true,
       allowEchoScheduling = true,
-      allowSpontaneousChat = false,
+      allowSpontaneousChat = true,
       timezone = 'Asia/Shanghai',
       quietStart = '22:30',
       quietEnd = '08:00',
@@ -26,9 +26,9 @@ class ProactiveChatPreferences {
 
   factory ProactiveChatPreferences.fromJson(Map<String, dynamic> json) {
     return ProactiveChatPreferences(
-      enabled: json['enabled'] as bool? ?? false,
+      enabled: json['enabled'] as bool? ?? true,
       allowEchoScheduling: json['allow_echo_scheduling'] as bool? ?? true,
-      allowSpontaneousChat: json['allow_spontaneous_chat'] as bool? ?? false,
+      allowSpontaneousChat: json['allow_spontaneous_chat'] as bool? ?? true,
       timezone: json['timezone'] as String? ?? 'Asia/Shanghai',
       quietStart: _shortTime(json['quiet_start']),
       quietEnd: _shortTime(json['quiet_end']),

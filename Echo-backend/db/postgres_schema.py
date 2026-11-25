@@ -703,9 +703,9 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         """
         CREATE TABLE IF NOT EXISTS proactive_chat_preferences (
             user_id TEXT PRIMARY KEY,
-            enabled BOOLEAN NOT NULL DEFAULT FALSE,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
             allow_echo_scheduling BOOLEAN NOT NULL DEFAULT TRUE,
-            allow_spontaneous_chat BOOLEAN NOT NULL DEFAULT FALSE,
+            allow_spontaneous_chat BOOLEAN NOT NULL DEFAULT TRUE,
             timezone TEXT NOT NULL DEFAULT 'Asia/Shanghai',
             quiet_start TIME NOT NULL DEFAULT '22:30',
             quiet_end TIME NOT NULL DEFAULT '08:00',
@@ -1328,6 +1328,9 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS l2_used "
         "INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE presence_states ADD COLUMN IF NOT EXISTS l2_budget_date DATE",
+        "ALTER TABLE proactive_chat_preferences ALTER COLUMN enabled SET DEFAULT TRUE",
+        "ALTER TABLE proactive_chat_preferences ALTER COLUMN allow_spontaneous_chat "
+        "SET DEFAULT TRUE",
         "CREATE INDEX IF NOT EXISTS idx_presence_agenda_user_status "
         "ON presence_agenda(user_id, status, id)",
         "CREATE INDEX IF NOT EXISTS idx_mobile_agent_devices_user_status "
