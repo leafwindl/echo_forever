@@ -210,6 +210,18 @@ class Settings(BaseSettings):
         ge=5,
         le=720,
     )
+    presence_min_wake_minutes: int = Field(
+        default=30,
+        validation_alias="PRESENCE_MIN_WAKE_MINUTES",
+        ge=10,
+        le=240,
+    )
+    presence_max_wake_minutes: int = Field(
+        default=240,
+        validation_alias="PRESENCE_MAX_WAKE_MINUTES",
+        ge=30,
+        le=720,
+    )
     presence_daily_thought_budget: int = Field(
         default=12,
         validation_alias="PRESENCE_DAILY_THOUGHT_BUDGET",

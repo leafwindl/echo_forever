@@ -47,6 +47,8 @@ def get_presence_service() -> PresenceService:
         activity_interval_minutes=settings.presence_activity_interval_minutes,
         skip_threshold=settings.presence_skip_threshold,
         l2_daily_limit=settings.presence_l2_daily_limit,
+        min_wake_minutes=settings.presence_min_wake_minutes,
+        max_wake_minutes=settings.presence_max_wake_minutes,
     )
 
 

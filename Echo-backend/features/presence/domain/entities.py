@@ -115,6 +115,7 @@ class ThoughtDraft:
     action_request: str = ""
     draft_text: str = ""
     plan: str = ""
+    next_wake_minutes: int = 0
 
 
 @dataclass(frozen=True)

@@ -79,6 +79,8 @@ class PresenceService:
         activity_interval_minutes: int = 180,
         skip_threshold: int = 3,
         l2_daily_limit: int = 2,
+        min_wake_minutes: int = 30,
+        max_wake_minutes: int = 240,
     ):
         self.repository = repository
         self.context_source = context_source
@@ -101,6 +103,8 @@ class PresenceService:
         self.activity_interval = timedelta(minutes=activity_interval_minutes)
         self.skip_threshold = skip_threshold
         self.l2_daily_limit = l2_daily_limit
+        self.min_wake_minutes = min_wake_minutes
+        self.max_wake_minutes = max_wake_minutes
 
     def state(self, user_id: str) -> PresenceState:
         return self.repository.get_or_create_state(user_id)
@@ -290,7 +294,11 @@ class PresenceService:
         state = PresenceState(
             **{
                 **state.__dict__,
-                "next_tick_at": self._next_tick_at(state, current),
+                "next_tick_at": self._next_tick_at(
+                    state,
+                    current,
+                    override_minutes=draft.next_wake_minutes,
+                ),
                 "consecutive_skips": (
                     0 if message_text else state.consecutive_skips + 1
                 ),
@@ -550,12 +558,23 @@ class PresenceService:
             }
         )
 
-    def _next_tick_at(self, state, now: datetime) -> datetime:
+    def _next_tick_at(
+        self,
+        state,
+        now: datetime,
+        override_minutes: int = 0,
+    ) -> datetime:
         if (
             state.outreach_downshift_until is not None
             and now < state.outreach_downshift_until
         ):
             return now + self.downshift_interval
+        if override_minutes:
+            minutes = max(
+                self.min_wake_minutes,
+                min(int(override_minutes), self.max_wake_minutes),
+            )
+            return now + timedelta(minutes=minutes)
         if state.status == PresenceStatus.ACTIVE:
             base = self.active_interval
         elif state.status == PresenceStatus.SLEEPING:

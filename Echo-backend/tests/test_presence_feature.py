@@ -463,6 +463,48 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(creator.goals[0][2].startswith("propose:"))
         self.assertEqual(repository.state.l2_used, 1)
 
+    async def test_model_can_set_next_wake(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository()
+        generator = FakeGenerator(
+            ThoughtDraft(
+                text="刚聊完，先安静一会儿",
+                salience=0.4,
+                next_wake_minutes=120,
+            )
+        )
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=2)),
+            generator=generator,
+        )
+        await service.tick("user-1", now=now)
+        self.assertGreaterEqual(
+            repository.state.next_tick_at,
+            now + timedelta(minutes=119),
+        )
+        self.assertLessEqual(
+            repository.state.next_tick_at,
+            now + timedelta(minutes=121),
+        )
+
+    async def test_next_wake_is_clamped(self):
+        now = datetime.now(UTC)
+        repository = FakeRepository()
+        generator = FakeGenerator(
+            ThoughtDraft(text="再想想", salience=0.4, next_wake_minutes=9999)
+        )
+        service = _service(
+            repository,
+            FakeContext(now - timedelta(hours=2)),
+            generator=generator,
+        )
+        await service.tick("user-1", now=now)
+        self.assertLessEqual(
+            repository.state.next_tick_at,
+            now + timedelta(minutes=240),
+        )
+
     async def test_run_once_processes_recent_users(self):
         now = datetime.now(UTC)
         repository = FakeRepository()

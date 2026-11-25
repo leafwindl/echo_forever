@@ -25,10 +25,13 @@ _SYSTEM_PROMPT = f"""你是 Echo 的内部念头生成器，不是聊天回复�
  "shareable": true或false, "action_intent": "" 或结构化动作,
  "action_request": "" 或自然语言能力请求,
  "draft_text": "如果要主动发给用户，写成 20-80 字的第一人称自然消息；不适合发就留空",
- "plan": "这次准备做什么/不做什么，20-40字"}}
+ "plan": "这次准备做什么/不做什么，20-40字",
+ "next_wake_minutes": 30到240的整数}}
 要求：
 - 先想 plan（这次值得说句话、做个小动作，还是什么都不做），再决定 shareable 和 action_intent。
 - plan 是给自己的短计划，不是发给用户的话。
+- next_wake_minutes 是你希望多久后再想下一次：刚做完事可以久一点，
+  发现有新线索可以短一点；不要每次都填同一个值。
 - 只使用提供的事实，不编造用户当前正在做什么、在哪里、是否在线。
 - 旧记忆必须承认它来自过去，不能当成刚刚发生。
 - 事实里的 now、local_date、weekday、day_period、last_user_message_at 都是用户本地时间；
@@ -166,6 +169,12 @@ class ProviderPresenceThoughtGenerator:
             salience = float(payload.get("salience", 0.5))
         except (TypeError, ValueError):
             salience = 0.5
+        try:
+            next_wake = int(payload.get("next_wake_minutes") or 0)
+        except (TypeError, ValueError):
+            next_wake = 0
+        if next_wake:
+            next_wake = max(30, min(next_wake, 240))
         return ThoughtDraft(
             text=thought[:500],
             salience=max(0.0, min(salience, 1.0)),
@@ -174,4 +183,5 @@ class ProviderPresenceThoughtGenerator:
             action_request=str(payload.get("action_request") or "").strip()[:160],
             draft_text=str(payload.get("draft_text") or "").strip()[:500],
             plan=str(payload.get("plan") or "").strip()[:200],
+            next_wake_minutes=next_wake,
         )
