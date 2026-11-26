@@ -102,7 +102,11 @@ ACTION_SPECS: tuple[ActionSpec, ...] = (
         kind="propose",
         tier=2,
         label="propose:提议——问用户要不要一起做点什么",
-        instruction="发一条自然的提议或询问，等用户回应；不要直接执行工具。",
+        instruction=(
+            "发一条主动提议，具体到一件事（听歌/看视频/一起做点什么）。"
+            "不要用“在的/在吗/有什么可以帮你的”这类回应式开场，"
+            "也不要假装用户刚叫你。"
+        ),
         keywords=("要不要", "提议", "一起"),
         tool_scope=(),
     ),
