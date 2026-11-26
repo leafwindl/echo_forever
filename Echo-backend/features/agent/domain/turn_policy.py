@@ -21,6 +21,7 @@ class RetryBudget:
     llm_timeout: int = 1
     delivery_format: int = 1
     sticker_claim: int = 1
+    chat_length: int = 1
 
 
 @dataclass(frozen=True)

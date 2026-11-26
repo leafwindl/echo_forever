@@ -50,6 +50,13 @@ from features.agent.domain.turn_policy import TurnPolicy, TurnProfile
 
 logger = logging.getLogger(__name__)
 
+# 普通聊天超过这个长度且没有走 emit_chat_beats，就要求重写成短消息。
+CHAT_MAX_REPLY_CHARS = 60
+CHAT_LENGTH_RETRY_INSTRUCTION = (
+    "回复太长了。普通微信聊天请改用 emit_chat_beats 发 2-3 条短消息，"
+    "每条一句、不超过 20 字；不要直接输出长段落。"
+)
+
 
 @dataclass(frozen=True)
 class LoopOutcome:
@@ -110,6 +117,7 @@ class ModelToolLoop:
         sources: list[SourceReference] = []
         sticker_placement = "after_text"
         emitted_beats: tuple[str, ...] = ()
+        chat_length_retries_remaining = profile.retries.chat_length
         model_steps = 0
         tool_call_count = 0
         progress_reported = False
@@ -368,6 +376,30 @@ class ModelToolLoop:
                                 prefix_codepoints(response.text),
                             )
                             raise
+                if (
+                    conversation_mode == "chat"
+                    and not emitted_beats
+                    and not content_parts
+                    and delivery_plan.reply_text
+                    and len(delivery_plan.reply_text) > CHAT_MAX_REPLY_CHARS
+                    and chat_length_retries_remaining > 0
+                    and model_steps < profile.max_steps
+                ):
+                    chat_length_retries_remaining -= 1
+                    agent_messages.append(
+                        {"role": "assistant", "content": response.text.strip()}
+                    )
+                    agent_messages.append(
+                        {"role": "system", "content": CHAT_LENGTH_RETRY_INSTRUCTION}
+                    )
+                    logger.warning(
+                        "Unified Agent chat length retry requested run_id=%s "
+                        "length=%s retries_remaining=%s",
+                        run_id,
+                        len(delivery_plan.reply_text),
+                        chat_length_retries_remaining,
+                    )
+                    continue
                 if conversation_mode == "call":
                     deterministic_failure = self.fallbacks.call_tool_failure(
                         tool_results
