@@ -20,7 +20,6 @@ import {
   PresenceSnapshot,
   PresenceThought,
   ProactiveChatPreferences,
-  RelationshipProposal,
   RelationshipState,
   StickerItem
 } from '../model/ApiModels';
@@ -30,10 +29,7 @@ import { NotificationsPage } from './NotificationsPage';
 import { DevicesPage } from './DevicesPage';
 import { UpdatePanel } from './UpdatePanel';
 import {
-  relationshipDirectionLabel,
-  relationshipModeLabel,
-  relationshipStageLabel,
-  relationshipTypeLabel
+  relationshipStageLabel
 } from '../model/Relationship';
 
 interface HarmonyFocusSession {
@@ -102,10 +98,6 @@ const PERSONA_RELATIONSHIP_PACES: PersonaChoice[] = [
   { value: 'slow', label: '慢慢来' },
   { value: 'natural', label: '自然' },
   { value: 'open', label: '开放' }
-];
-const RELATIONSHIP_MODES: PersonaChoice[] = [
-  { value: 'friend', label: '朋友' },
-  { value: 'ai_partner', label: 'AI 恋人' }
 ];
 const PERSONA_AFFECTION_STYLES: PersonaChoice[] = [
   { value: 'restrained', label: '克制' },
@@ -203,10 +195,7 @@ struct Index {
     onboardingCompleted: false
   };
   @State private relationshipState: RelationshipState | undefined = undefined;
-  @State private relationshipModeSaving: boolean = false;
-  @State private pendingRelationshipProposal: RelationshipProposal | undefined = undefined;
-  @State private proposalDialogVisible: boolean = false;
-  private proposalShownId: string = '';
+  @State private relationshipSaving: boolean = false;
   @State private personaError: string = '';
   @State private personaSaving: boolean = false;
   @State private personaCustomTopic: string = '';
@@ -727,7 +716,6 @@ struct Index {
             if (item instanceof Object) parsed.push(messageFromJson(item as Record<string, Object>));
           });
           this.enqueueMessages(parsed, this.deliveryDelays(data));
-          void this.refreshPendingProposal(true);
         }
         if (eventName === 'chat.turn.failed') {
           this.serverTyping = false;
@@ -1046,33 +1034,14 @@ struct Index {
     }
   }
 
-  private async updateRelationshipMode(mode: string): Promise<void> {
-    if (!this.repository || this.relationshipModeSaving || this.personaSaving ||
-      this.relationshipState?.relationshipMode === mode) return;
-    this.relationshipModeSaving = true;
-    this.personaError = '';
-    try {
-      this.relationshipState = await this.repository.updateRelationshipMode(mode);
-      this.toast(`已切换为${relationshipModeLabel(mode)}`);
-    } catch (error) {
-      this.personaError = `相处方式保存失败：${this.describeError(error)}`;
-      this.toast(this.personaError);
-    } finally {
-      this.relationshipModeSaving = false;
-    }
-  }
-
   private async resetRelationshipProgress(): Promise<void> {
-    if (!this.repository || this.personaSaving || this.relationshipModeSaving) return;
+    if (!this.repository || this.personaSaving || this.relationshipSaving) return;
     this.personaConfirmAction = '';
     this.personaSaving = true;
     this.personaError = '';
     try {
       await this.repository.resetCompanionship();
       this.relationshipState = await this.repository.getRelationship();
-      this.pendingRelationshipProposal = undefined;
-      this.proposalDialogVisible = false;
-      this.proposalShownId = '';
       this.cancelRevealQueue();
       this.greetingOverride = 'restart';
       this.messages = [this.restartGreetingMessage()];
@@ -1084,61 +1053,6 @@ struct Index {
       this.statusText = this.personaError;
     } finally {
       this.personaSaving = false;
-    }
-  }
-
-  private async refreshPendingProposal(showDialog: boolean): Promise<void> {
-    if (!this.repository) return;
-    try {
-      const state = await this.repository.getRelationship();
-      this.relationshipState = state;
-      const proposal = state.pendingProposal;
-      this.pendingRelationshipProposal = proposal;
-      if (proposal === undefined) {
-        this.proposalDialogVisible = false;
-        this.proposalShownId = '';
-        return;
-      }
-      if (showDialog && proposal.proposalId !== this.proposalShownId) {
-        this.proposalShownId = proposal.proposalId;
-        this.proposalDialogVisible = true;
-      }
-    } catch (_) {
-      // A relationship refresh failure must not interrupt chat delivery.
-    }
-  }
-
-  private async acceptRelationshipProposal(): Promise<void> {
-    const proposal = this.pendingRelationshipProposal;
-    if (!this.repository || proposal === undefined || this.relationshipModeSaving) return;
-    this.relationshipModeSaving = true;
-    try {
-      this.relationshipState = await this.repository.acceptRelationshipProposal(proposal.proposalId);
-      this.pendingRelationshipProposal = undefined;
-      this.proposalDialogVisible = false;
-      this.proposalShownId = '';
-      this.toast(`关系已更新为${relationshipTypeLabel(this.relationshipState.relationshipType)}`);
-    } catch (error) {
-      this.toast(`确认失败：${this.describeError(error)}`);
-    } finally {
-      this.relationshipModeSaving = false;
-    }
-  }
-
-  private async deferRelationshipProposal(): Promise<void> {
-    const proposal = this.pendingRelationshipProposal;
-    if (!this.repository || proposal === undefined) {
-      this.proposalDialogVisible = false;
-      return;
-    }
-    try {
-      await this.repository.deferRelationshipProposal(proposal.proposalId);
-      this.pendingRelationshipProposal = undefined;
-      this.proposalDialogVisible = false;
-      this.proposalShownId = '';
-      this.toast('好，那就先这样，我不催你');
-    } catch (error) {
-      this.toast(`稍后再试：${this.describeError(error)}`);
     }
   }
 
@@ -3373,15 +3287,6 @@ struct Index {
         }
       } else {
         Row({ space: 8 }) {
-          ForEach(RELATIONSHIP_MODES, (choice: PersonaChoice) => {
-            this.personaOption(choice, this.relationshipState?.relationshipMode || 'friend',
-              () => void this.updateRelationshipMode(choice.value))
-          }, (choice: PersonaChoice) => choice.value)
-          if (this.relationshipModeSaving) {
-            LoadingProgress().width(20).height(20).color('#6750A4')
-          }
-        }.width('100%').enabled(!this.relationshipModeSaving && !this.personaSaving)
-        Row({ space: 8 }) {
           Column({ space: 4 }) {
             Text('熟悉程度').fontSize(12).fontColor('#6F6A78')
             Text(relationshipStageLabel(this.relationshipState.stage))
@@ -3686,7 +3591,7 @@ struct Index {
                   .fontSize(13)
                   .fontColor('#6F6A78')
                   .width('100%')
-                Text(relationshipTypeLabel(this.relationshipState.relationshipType))
+                Text(this.relationshipState.stageLabel || relationshipStageLabel(this.relationshipState.stage))
                   .fontSize(30)
                   .fontWeight(FontWeight.Bold)
                   .fontColor('#262331')
@@ -3708,31 +3613,6 @@ struct Index {
               .padding(18)
               .backgroundColor('#F0EDF5')
               .borderRadius(16)
-
-              if (this.relationshipState.pendingProposal !== undefined) {
-                Column({ space: 10 }) {
-                  Text('Echo 在等你回应')
-                    .fontSize(16)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor('#262331')
-                  Text(`她想和你确认：做${this.relationshipState.pendingProposal.directionLabel}吗？`)
-                    .fontSize(14)
-                    .fontColor('#49454F')
-                  Button('查看确认窗口')
-                    .width('100%')
-                    .height(44)
-                    .fontColor(Color.White)
-                    .backgroundColor('#6750A4')
-                    .onClick(() => {
-                      this.pendingRelationshipProposal = this.relationshipState?.pendingProposal;
-                      this.proposalDialogVisible = true;
-                    })
-                }
-                .width('100%')
-                .padding(16)
-                .backgroundColor('#FFF4E8')
-                .borderRadius(14)
-              }
             }
 
             Text('称呼、聊天方式等个性化设置不再放在这里；关系会随着真实交流自然变化。')
@@ -3778,56 +3658,6 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-  }
-
-  @Builder
-  private relationshipProposalDialog(): void {
-    Stack() {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor('#88000000')
-        .onClick(() => this.proposalDialogVisible = false)
-      Column({ space: 14 }) {
-        Text('和 Echo 的关系')
-          .fontSize(22)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#262331')
-        Text(this.pendingRelationshipProposal === undefined
-          ? 'Echo 想和你确认一件事。'
-          : `Echo 想和你确认：从现在开始，做${relationshipDirectionLabel(this.pendingRelationshipProposal.direction)}吗？`)
-          .fontSize(16)
-          .lineHeight(24)
-          .fontColor('#49454F')
-          .width('100%')
-        Text('确认后，关于她页面会更新你们的关系。')
-          .fontSize(13)
-          .fontColor('#6F6A78')
-          .width('100%')
-        Button(this.relationshipModeSaving ? '确认中…' : '愿意')
-          .width('100%')
-          .height(46)
-          .fontColor(Color.White)
-          .backgroundColor(this.relationshipModeSaving ? '#A99BC7' : '#6750A4')
-          .enabled(!this.relationshipModeSaving)
-          .onClick(() => void this.acceptRelationshipProposal())
-        Button('再想想')
-          .width('100%')
-          .height(44)
-          .backgroundColor('#F0EDF5')
-          .fontColor('#49454F')
-          .enabled(!this.relationshipModeSaving)
-          .onClick(() => void this.deferRelationshipProposal())
-      }
-      .width('84%')
-      .padding(22)
-      .backgroundColor('#FFFBFE')
-      .borderRadius(20)
-    }
-    .width('100%')
-    .height('100%')
-    .alignContent(Alignment.Center)
-    .zIndex(60)
   }
 
   @Builder
@@ -4028,7 +3858,7 @@ struct Index {
                 .height(44)
                 .backgroundColor('#F0EDF5')
                 .fontColor('#49454F')
-                .enabled(!this.personaSaving && !this.relationshipModeSaving)
+                .enabled(!this.personaSaving && !this.relationshipSaving)
                 .onClick(() => this.personaConfirmAction = 'relationship')
             }.width('100%')
 
@@ -4886,9 +4716,6 @@ struct Index {
             onClose: () => this.updateOpen = false,
             onLockChange: (locked: boolean) => this.updateLocked = locked
           })
-        }
-        if (this.proposalDialogVisible) {
-          this.relationshipProposalDialog()
         }
       }
       .height('100%')

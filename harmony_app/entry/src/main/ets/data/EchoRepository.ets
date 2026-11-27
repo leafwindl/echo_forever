@@ -13,7 +13,6 @@ import {
   PresenceSnapshot,
   PresenceThought,
   ProactiveChatPreferences,
-  RelationshipProposal,
   RelationshipState,
   StickerItem
 } from '../model/ApiModels';
@@ -316,13 +315,6 @@ export class EchoRepository {
     return this.toRelationship(value);
   }
 
-  async updateRelationshipMode(mode: string): Promise<RelationshipState> {
-    const body: Record<string, Object> = {};
-    body.relationship_mode = mode;
-    const value = await this.api.put<Record<string, Object>>('/relationship/me', body);
-    return this.toRelationship(value);
-  }
-
   async resetRelationship(): Promise<RelationshipState> {
     const value = await this.api.post<Record<string, Object>>('/relationship/me/reset');
     return this.toRelationship(value);
@@ -330,25 +322,6 @@ export class EchoRepository {
 
   async resetCompanionship(): Promise<void> {
     await this.api.post<Record<string, Object>>('/account/reset');
-  }
-
-  async acceptRelationshipProposal(proposalId: string): Promise<RelationshipState> {
-    const value = await this.api.post<Record<string, Object>>(
-      `/relationship/proposals/${encodePath(proposalId)}/accept`
-    );
-    return this.toRelationship(value);
-  }
-
-  async deferRelationshipProposal(proposalId: string): Promise<void> {
-    await this.api.post<Record<string, Object>>(
-      `/relationship/proposals/${encodePath(proposalId)}/defer`
-    );
-  }
-
-  async declineRelationshipProposal(proposalId: string): Promise<void> {
-    await this.api.post<Record<string, Object>>(
-      `/relationship/proposals/${encodePath(proposalId)}/decline`
-    );
   }
 
   async logout(refreshToken: string, deviceId: string): Promise<void> {
@@ -545,28 +518,12 @@ export class EchoRepository {
   }
 
   private toRelationship(value: Record<string, Object>): RelationshipState {
-    let pending: RelationshipProposal | undefined = undefined;
-    if (value.pending_proposal !== undefined && value.pending_proposal !== null) {
-      const raw = value.pending_proposal as Record<string, Object>;
-      pending = {
-        proposalId: this.asString(raw.proposal_id),
-        direction: this.asString(raw.direction),
-        directionLabel: this.asString(raw.direction_label),
-        status: this.asString(raw.status),
-        createdAt: this.asString(raw.created_at),
-        expiresAt: this.asString(raw.expires_at)
-      };
-    }
     return {
-      relationshipMode: this.asString(value.relationship_mode) || 'friend',
-      relationshipType: this.asString(value.relationship_type) || 'acquaintance',
-      relationshipTypeLabel: this.asString(value.relationship_type_label) || '初识',
       stage: this.asString(value.stage),
       stageLabel: this.asString(value.stage_label),
       interactionTurns: this.asNumber(value.interaction_turns),
       activeDays: this.asNumber(value.active_days),
       affectionPermission: this.asString(value.affection_permission),
-      pendingProposal: pending,
       schemaVersion: this.asNumber(value.schema_version),
       createdAt: this.asString(value.created_at),
       updatedAt: this.asString(value.updated_at)

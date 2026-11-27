@@ -46,25 +46,12 @@ export interface PersonaProfile {
   onboardingCompleted: boolean;
 }
 
-export interface RelationshipProposal {
-  proposalId: string;
-  direction: string;
-  directionLabel: string;
-  status: string;
-  createdAt?: string;
-  expiresAt?: string;
-}
-
 export interface RelationshipState {
-  relationshipMode: string;
-  relationshipType: string;
-  relationshipTypeLabel: string;
   stage: string;
   stageLabel: string;
   interactionTurns: number;
   activeDays: number;
   affectionPermission: string;
-  pendingProposal?: RelationshipProposal;
   schemaVersion: number;
   createdAt?: string;
   updatedAt?: string;
