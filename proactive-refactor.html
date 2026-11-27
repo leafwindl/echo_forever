@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>主动消息正文生成：以前 vs 打算怎么改</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --ink:#1d2129; --muted:#6b7280; --line:#e5e7eb;
+    --a:#0f8a7e; --a-soft:#e6f5f3; --b:#c2410c; --b-soft:#fff2e8;
+    --after:#15803d; --after-soft:#f0fdf4;
+    --danger:#b91c1c; --danger-soft:#fef2f2; --amber:#9a3412; --amber-soft:#fff7ed;
+    --mono:ui-monospace,SFMono-Regular,"Cascadia Mono","Consolas",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif}
+  header{padding:28px 28px 18px;background:var(--panel);border-bottom:1px solid var(--line)}
+  h1{margin:0 0 8px;font-size:22px;letter-spacing:.3px}
+  .lede{margin:0;color:#4b5563;font-size:13.5px;max-width:900px}
+  .lede b{color:var(--ink)}
+  .badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}
+  .badge{background:#f0f2f5;border-radius:999px;padding:3px 11px;font-size:12px;color:#374151}
+  .badge b{font-weight:600}
+  main{max-width:1240px;margin:0 auto;padding:26px 28px 80px}
+  h2{font-size:16px;margin:34px 0 6px;display:flex;align-items:baseline;gap:10px}
+  h2 .n{font-size:12px;color:var(--muted);font-weight:400}
+  .hint{color:var(--muted);font-size:12.5px;margin:0 0 14px}
+
+  /* 以前 */
+  .before{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:stretch}
+  .col{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;position:relative}
+  .col.a{border-top:4px solid var(--a)}
+  .col.b{border-top:4px solid var(--b)}
+  .col h3{margin:0;font-size:14.5px}
+  .col .who{font-size:12px;color:var(--muted);margin:2px 0 12px}
+  .n{position:relative;border:1px solid var(--line);border-radius:10px;background:#fcfdfe;padding:10px 12px;margin-bottom:26px}
+  .n:last-child{margin-bottom:4px}
+  .col.a .n{border-left:3px solid var(--a)}
+  .col.b .n{border-left:3px solid var(--b)}
+  .n::after{content:"";position:absolute;left:22px;bottom:-21px;width:2px;height:17px;background:#d7dde5}
+  .n::before{content:"";position:absolute;left:18px;bottom:-23px;border:4px solid transparent;border-top-color:#d7dde5}
+  .n:last-child::after,.n:last-child::before{display:none}
+  .n .t{font-weight:650;font-size:13.5px;margin-bottom:3px}
+  .n .d{font-size:12.5px;color:#4b5563}
+  .n .c{font-family:var(--mono);font-size:11px;color:#8b95a3}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+  .chip{border-radius:6px;padding:1px 7px;font-size:11px;border:1px solid transparent}
+  .c-bad{background:var(--danger-soft);color:var(--danger);border-color:#fecaca}
+  .c-warn{background:var(--amber-soft);color:var(--amber);border-color:#fed7aa}
+  .c-ok{background:var(--after-soft);color:var(--after);border-color:#bbf7d0}
+  .c-gray{background:#f1f3f6;color:#4b5563;border-color:#e4e8ee}
+
+  .cut{margin:16px 0 0;text-align:center;color:var(--danger);font-size:12.5px;
+    border-top:1px dashed #fecaca;padding-top:10px}
+
+  /* 改后 */
+  .after{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:18px;border-top:4px solid var(--after)}
+  .layerline{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
+  .stage{position:relative}
+  .stage:not(:last-child)::after{content:"→";position:absolute;right:-12px;top:34%;
+    color:#b6bfcc;font-size:15px}
+  .stage .st{border:1px solid var(--line);border-radius:11px;background:#fcfdfe;padding:11px 12px;min-height:104px}
+  .stage .tag{display:inline-block;font:600 10.5px/1 var(--mono);letter-spacing:.4px;
+    background:#eef1f5;color:#4b5563;border-radius:5px;padding:3px 6px;margin-bottom:7px}
+  .stage .st b{display:block;font-size:13.5px;margin-bottom:3px}
+  .stage .st span{font-size:12.2px;color:#4b5563}
+  .stage .keep{margin-top:7px;font-size:11.5px;color:var(--after)}
+  .stage.del .st{border-style:dashed;background:#fafbfc;opacity:.72}
+  .stage.del .tag{background:var(--danger-soft);color:var(--danger)}
+
+  /* 表格 */
+  table{border-collapse:collapse;width:100%;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:12.7px;vertical-align:top}
+  th{background:#f8fafc;color:#4b5563;font-weight:600;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td.mono{font-family:var(--mono);font-size:12px}
+  .old{color:var(--danger)}
+  .new{color:var(--after)}
+  .keepc{color:#4b5563}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .box{border:1px solid var(--line);border-radius:12px;padding:13px 15px;background:var(--panel)}
+  .box h3{margin:0 0 6px;font-size:13.5px}
+  .box ul{margin:6px 0 0;padding-left:18px}
+  .box li{margin:4px 0;font-size:12.7px}
+  .box.good{background:var(--after-soft);border-color:#bbf7d0}
+  .box.warn{background:var(--amber-soft);border-color:#fed7aa}
+  .box.bad{background:var(--danger-soft);border-color:#fecaca}
+  .box.good h3{color:var(--after)}
+  .box.warn h3{color:var(--amber)}
+  .box.bad h3{color:var(--danger)}
+
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:8px 0 4px}
+  .k{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px 13px}
+  .k .kk{font-size:11.5px;color:var(--muted)}
+  .k .vv{font-size:20px;font-weight:650;margin-top:1px}
+  .k .dd{font-size:11.5px;color:#6b7280}
+  .k.plus .vv{color:var(--after)}
+
+  .foot{margin-top:42px;border-top:1px solid var(--line);padding-top:14px;color:var(--muted);font-size:12px;line-height:1.9}
+  @media (max-width:900px){
+    .before,.grid2{grid-template-columns:1fr}
+    .layerline{grid-template-columns:1fr 1fr}
+    .stage:not(:last-child)::after{display:none}
+    header,main{padding-left:16px;padding-right:16px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>主动消息正文生成：以前是什么，打算怎么改</h1>
+  <p class="lede">
+    以前：<b>两条路各写各的正文</b>——念头那条直接投草稿或让一个几乎没人设的 agent 写，定时那条才有完整 11 层人设。
+    改后：<b>两条路共用同一套正文提示与风格守卫</b>；念头本身也补上同源人格摘要，保证"念头怎么说、消息就怎么接"。
+  </p>
+  <div class="badges">
+    <span class="badge">代码版本 <b>2b0fede</b></span>
+    <span class="badge">方案 <b>doc/主动消息统一生成改造方案.md</b></span>
+    <span class="badge">生产实查 <b>2026-11-27</b></span>
+    <span class="badge">未实施 <b>待你拍板</b></span>
+  </div>
+</header>
+<main>
+
+<h2>一、以前 <span class="n">正文在两条路上分叉</span></h2>
+<p class="hint">左边是念头（presence 自发），右边是定时任务。注意分叉点在"正文谁写"。</p>
+
+<div class="before">
+  <div class="col a">
+    <h3>入口 A · presence 自发</h3>
+    <div class="who">presence tick → 念头 → goal → worker</div>
+
+    <div class="n">
+      <div class="t">生成念头（1 次模型）</div>
+      <div class="d">一次调用同时产出：想不想说（shareable）、<b>说什么（draft_text）</b>、做什么（action_intent）。</div>
+      <div class="chips"><span class="chip c-bad">提示里没有 Echo 设定</span><span class="chip c-gray">1,643 字</span></div>
+      <div class="c">thought_generator.py::_SYSTEM_PROMPT</div>
+    </div>
+
+    <div class="n">
+      <div class="t">建 goal + job</div>
+      <div class="d">念头原文进 <span class="c">intent</span>，草稿进 <span class="c">draft_text</span>，交给主动 job 通道。</div>
+      <div class="c">presence_service._maybe_create_goal</div>
+    </div>
+
+    <div class="n">
+      <div class="t">worker：直投草稿 / 裸 agent</div>
+      <div class="d">没动作 → <b>draft_text 原样发</b>，0 次模型；<br>有动作 → 调 agent，messages 只有 1 条 system（"这是一次主动执行"）+ 编排规则。</div>
+      <div class="chips"><span class="chip c-bad">不经过 writer 11 层</span><span class="chip c-bad">无风格检查</span></div>
+      <div class="c">worker.py::_deliver_goal_job / _execute_goal_actions</div>
+    </div>
+  </div>
+
+  <div class="col b">
+    <h3>入口 B · 定时任务</h3>
+    <div class="who">schedule → worker → planner → writer</div>
+
+    <div class="n">
+      <div class="t">planner 决策（1 次模型）</div>
+      <div class="d">只决定发不发、主题、语气、可引用事实，不写正文。</div>
+      <div class="chips"><span class="chip c-warn">英文提示，无人设</span></div>
+      <div class="c">proactive_planner.py::decide</div>
+    </div>
+
+    <div class="n">
+      <div class="t">writer 写正文（1+ 次模型）</div>
+      <div class="d">11 层提示：编排、安全、<b>人设</b>、对话规则、渠道、关系、画像、偏好、writer 约束、静默要求、简报。</div>
+      <div class="chips"><span class="chip c-ok">完整人设</span><span class="chip c-ok">有风格检查与兜底</span></div>
+      <div class="c">generate_reply.prepare → _build_proactive_writer_turn</div>
+    </div>
+
+    <div class="n">
+      <div class="t">投递</div>
+      <div class="d">写 chat_messages → 微信 → 事件流。</div>
+      <div class="c">worker.persist_delivery</div>
+    </div>
+  </div>
+</div>
+<div class="cut">分叉点：A 的正文不经过 writer；B 才有 11 层人设。同一句"主动消息"，两种质量。</div>
+
+<h2>二、生产实况 <span class="n">为什么要改</span></h2>
+<div class="kpi">
+  <div class="k"><div class="kk">presence 草稿被抑制</div><div class="vv">7 / 7</div><div class="dd">原因 proactive_disabled（20:55 快照）</div></div>
+  <div class="k"><div class="kk">goal job 租约失败</div><div class="vv">13</div><div class="dd">agenda 12 + memory 1</div></div>
+  <div class="k"><div class="kk">定时入口跑通</div><div class="vv">1 次</div><div class="dd">planner → writer → 投递</div></div>
+  <div class="k"><div class="kk">念头 / 可分享</div><div class="vv">32 / 11</div><div class="dd">每天十余条可能触发写入</div></div>
+  <div class="k"><div class="kk">A 路原正文的人设层</div><div class="vv">无</div><div class="dd">无安全、无人格，仅 1 条 system</div></div>
+</div>
+
+<h2>三、打算怎么改 <span class="n">四层，正文只留一份</span></h2>
+<p class="hint">触发层保持两套（语义不同，不合并）；②③④ 收成一条。</p>
+
+<div class="after">
+  <div class="layerline">
+    <div class="stage">
+      <div class="st">
+        <span class="tag">① TRIGGER</span>
+        <b>两套触发，保留</b>
+        <span>presence tick 产出念头；schedule 由 planner 批准。预算、安静时段、去重不动。</span>
+        <div class="keep">保留：各自语义</div>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="st">
+        <span class="tag">② INTENT</span>
+        <b>统一成参数</b>
+        <span>intent（念头或提醒目标）、plan、action_intent、force_send。不新建跨 feature DTO。</span>
+        <div class="keep">新增：brief / plan 参数</div>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="st">
+        <span class="tag">③ GENERATE</span>
+        <b>同一套提示与守卫</b>
+        <span>无动作：走 <span class="c">prepare</span>（A 路 skip_planner）。有动作：共用同一套提示层 + 简报，保留 agent 直调以拿到工具结果。</span>
+        <div class="keep">新增：include_user_profile=False / guard_dialogue_reply</div>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="st">
+        <span class="tag">④ DELIVER</span>
+        <b>已共用</b>
+        <span>persist_delivery → 微信 → 事件流 → 通知 Outbox。</span>
+        <div class="keep">不变</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layerline" style="margin-top:16px">
+    <div class="stage">
+      <div class="st">
+        <span class="tag">人格</span>
+        <b>一份源，两种渲染</b>
+        <span>default_persona 仍是唯一内容源；writer 用完整层，念头用 render_persona_digest（≤240 token）。planner 不加。</span>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="st">
+        <span class="tag">念头</span>
+        <b>念头也带人格</b>
+        <span>念头生成器 system = 固定职责 + 人格摘要；念头继续写入 presence_thoughts，App 展示不变。</span>
+      </div>
+    </div>
+    <div class="stage">
+      <div class="st">
+        <span class="tag">一致</span>
+        <b>简报携带念头</b>
+        <span>"你刚才的内心想法：{念头}；表达同一件事，不要原样复述。" 保证语义一致、措辞自由。</span>
+      </div>
+    </div>
+    <div class="stage del">
+      <div class="st">
+        <span class="tag">退役</span>
+        <b>draft_text 下线</b>
+        <span>念头不再产出 draft；goal 不再存 draft；失败改静默 suppress + 内部记录，不再发"本来想…没做成"。</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>四、三个关键差异 <span class="n">以前 vs 改后</span></h2>
+<table>
+  <tr><th>问题</th><th>以前</th><th>改后</th></tr>
+  <tr>
+    <td>主动正文谁写</td>
+    <td class="old">A：草稿直投 / 1 条 system 的 agent；B：writer 11 层</td>
+    <td class="new">A 无动作走 prepare；有动作与 B 共用同一套 11 层提示和风格守卫</td>
+  </tr>
+  <tr>
+    <td>念头本身有没有人设</td>
+    <td class="old">没有，1,643 字里只有"内部念头生成器"</td>
+    <td class="new">引用与 writer 同源的人格摘要</td>
+  </tr>
+  <tr>
+    <td>没人说话 / 生成失败</td>
+    <td class="old">A 用 draft 兜底发"本来想…这次没做成"</td>
+    <td class="new">静默 suppress + 内部记录，不投递</td>
+  </tr>
+  <tr>
+    <td>planner 调用</td>
+    <td class="keepc">B 调，A 不调（因为 A 根本没走 prepare）</td>
+    <td class="new">B 照常调；A 显式 <span class="mono">skip_planner=True</span>，不重复判断</td>
+  </tr>
+  <tr>
+    <td>画像层</td>
+    <td class="old">proactive 也塞"你还不太了解他"的采集提示</td>
+    <td class="new">主动场景传 <span class="mono">include_user_profile=False</span>，先留空</td>
+  </tr>
+  <tr>
+    <td>App 内心念头页</td>
+    <td class="keepc">显示 thought.text</td>
+    <td class="keepc">不变（API 本来就没有 draft_text）</td>
+  </tr>
+</table>
+
+<h2>五、改动清单 <span class="n">不新增 feature</span></h2>
+<table>
+  <tr><th>文件</th><th>改什么</th><th>谁在用</th></tr>
+  <tr><td class="mono">shared/prompting/renderer.py</td><td>新增 <span class="mono">render_persona_digest</span>；<span class="mono">render_prompt_layers</span> 加 <span class="mono">include_user_profile</span></td><td>chat / presence</td></tr>
+  <tr><td class="mono">chat/application/generate_reply.py</td><td><span class="mono">prepare</span> 加 brief/plan/skip_planner（3 个参数）；简报带念头；skip_planner 时内部合成 decision</td><td>proactive_chat</td></tr>
+  <tr><td class="mono">chat/domain/dialogue_style.py</td><td>新增 <span class="mono">guard_dialogue_reply</span> 薄封装</td><td>chat / proactive_chat</td></tr>
+  <tr><td class="mono">chat/public.py</td><td>新增 <span class="mono">build_proactive_writer_messages</span> 公开入口</td><td>proactive_chat</td></tr>
+  <tr><td class="mono">presence/infrastructure/thought_generator.py</td><td>system 改"职责 + 人格摘要"；输出去掉 draft_text</td><td>presence</td></tr>
+  <tr><td class="mono">presence/application/presence_service.py</td><td>建 goal 不再传 draft；条件改为 shareable / salience / action</td><td>presence</td></tr>
+  <tr><td class="mono">presence/domain/ports.py + adapters.py</td><td><span class="mono">create_goal</span> 去掉 draft_text 参数</td><td>presence</td></tr>
+  <tr><td class="mono">proactive_chat/application/worker.py</td><td>无动作分支改走 prepare；动作分支改用共享提示 + 守卫；删直投与 draft 兜底</td><td>proactive_chat</td></tr>
+  <tr><td class="mono">proactive_chat/public.py</td><td><span class="mono">create_proactive_goal</span> 去掉 draft_text</td><td>presence</td></tr>
+  <tr><td class="mono">tests/test_prompt_renderer.py 等</td><td>层顺序断言更新；新增 A 路生成测试</td><td>—</td></tr>
+</table>
+
+<h2>六、代价与验收</h2>
+<div class="grid2">
+  <div class="box warn">
+    <h3>代价</h3>
+    <ul>
+      <li>A 路每次"想说句话"多一次模型调用（后台 worker，不影响用户交互延迟）。</li>
+      <li>按生产数据 32 念头 / 11 可分享，日均十余次。</li>
+      <li>风格兜底可能改写念头语气：语义一致、措辞允许不同。</li>
+      <li>失败改为静默后，用户不会收到"没做成"的提示。</li>
+    </ul>
+  </div>
+  <div class="box good">
+    <h3>验收</h3>
+    <ul>
+      <li>单测：A 路不调 planner；简报含念头；proactive 提示不含 USER_PROFILE。</li>
+      <li>单测：失败/空交付不产生投递。</li>
+      <li>链路：本地库跑一条 presence goal，消息与念头语义一致。</li>
+      <li>回归：定时入口行为不变，仍走 planner。</li>
+      <li>门禁：架构检查 + 全量后端测试 + ruff。</li>
+    </ul>
+  </div>
+</div>
+
+<div class="foot">
+  依据：<span class="mono">doc/主动消息统一生成改造方案.md</span>。生产数据为 2026-11-27 的实查结果；
+  代码位置对应镜像版本 <span class="mono">2b0fede</span>。本页不调用模型、不修改任何代码，仅说明改造前后差异。
+</div>
+</main>
+</body>
+</html>

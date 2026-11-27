@@ -37,6 +37,7 @@ from features.agent.infrastructure.tools import (
 from features.stickers.domain.entities import Sticker
 from providers.llm_provider import LLMProviderTimeoutError, OpenAICompatibleLLMProvider
 from providers.web_search_provider import WebSearchItem, WebSearchResult
+from shared.prompting.renderer import DELIVERY_CHAT_POLICY, DELIVERY_PROACTIVE_POLICY
 
 
 class SequenceAgentModel:
@@ -224,6 +225,20 @@ class AgentDomainTests(unittest.TestCase):
 
         self.assertEqual(_tool_names(descriptions), ["search_web"])
 
+    def test_initial_messages_keeps_safety_first(self):
+        messages = TurnPolicy(max_steps=6, max_tool_calls=4).initial_messages(
+            messages=[
+                {"role": "system", "content": "safety-first"},
+                {"role": "user", "content": "hi"},
+            ],
+            conversation_mode="chat",
+            call_route_instruction="route-hint",
+        )
+
+        self.assertEqual("safety-first", messages[0]["content"])
+        self.assertEqual("route-hint", messages[1]["content"])
+        self.assertEqual("hi", messages[2]["content"])
+
     def test_sticker_policy_has_no_elapsed_turn_quota(self):
         messages = TurnPolicy(max_steps=6, max_tool_calls=4).initial_messages(
             messages=[{"role": "user", "content": "今天心情不错"}],
@@ -231,10 +246,10 @@ class AgentDomainTests(unittest.TestCase):
             sticker_intent="",
         )
 
-        instruction = messages[0]["content"]
-        self.assertNotIn("主动表情包优先窗口", instruction)
-        self.assertIn("按语境自由使用", instruction)
-        self.assertIn("send_sticker 可发送表情包", instruction)
+        self.assertEqual("今天心情不错", messages[0]["content"])
+        self.assertNotIn("主动表情包优先窗口", messages[0]["content"])
+        self.assertIn("send_sticker", DELIVERY_CHAT_POLICY)
+        self.assertIn("after_text_index", DELIVERY_CHAT_POLICY)
 
     def test_proactive_mode_forbids_assuming_current_user_activity(self):
         messages = TurnPolicy(max_steps=6, max_tool_calls=4).initial_messages(
@@ -243,9 +258,9 @@ class AgentDomainTests(unittest.TestCase):
             sticker_intent="",
         )
 
-        instruction = messages[0]["content"]
-        self.assertIn("并非用户发来新消息", instruction)
-        self.assertIn("用户是否醒着、在线、有空未知", instruction)
+        self.assertEqual("internal proactive trigger", messages[0]["content"])
+        self.assertIn("不是用户消息", DELIVERY_PROACTIVE_POLICY)
+        self.assertIn("不推断用户当前是否醒着", DELIVERY_PROACTIVE_POLICY)
 
 
 class AgentProviderTests(unittest.IsolatedAsyncioTestCase):
@@ -675,7 +690,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         final_messages = model.calls[-1]["messages"]
         self.assertEqual(final_messages[-1]["role"], "tool")
         self.assertIn("attached_to_current_reply", final_messages[-1]["content"])
-        self.assertIn("按当前工具清单使用能力", model.calls[0]["messages"][0]["content"])
+        self.assertEqual("assistant", model.calls[0]["messages"][0]["role"])
 
     async def test_no_tool_call_is_forced_or_synthesized_when_model_chooses_text(self):
         model = SequenceAgentModel([AgentModelResponse(text="想要什么样的表情？")])
@@ -1493,7 +1508,7 @@ class AgentOrchestrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(model.calls[0]["structured_output"])
         self.assertFalse(model.calls[1]["structured_output"])
         self.assertEqual(model.calls[1]["tools"], ())
-        self.assertIn("直接输出自然文字", model.calls[0]["messages"][0]["content"])
+        self.assertEqual("hello", model.calls[0]["messages"][0]["content"])
         self.assertEqual(repository.finishes[0][2], None)
 
     async def test_metadata_prefixed_reply_is_recovered_without_another_model_call(self):

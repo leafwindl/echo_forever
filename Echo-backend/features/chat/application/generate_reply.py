@@ -330,6 +330,9 @@ class GenerateChatReply:
         history_before_message_id: int | None = None,
         proactive_intent: str = "",
         proactive_force_send: bool = False,
+        proactive_brief: str = "",
+        proactive_plan: str = "",
+        proactive_skip_planner: bool = False,
         on_text_delta: Callable[[str], Awaitable[None]] | None = None,
         on_progress_text: Callable[[str], Awaitable[None]] | None = None,
         tools_enabled: bool | None = None,
@@ -434,7 +437,9 @@ class GenerateChatReply:
                 on_text_delta=deliver_call_delta,
             )
             effective_on_text_delta = call_reply_limiter.push
-        if conversation_mode == "proactive" and self.proactive_planner is not None:
+        if conversation_mode == "proactive" and (
+            self.proactive_planner is not None or proactive_skip_planner
+        ):
             safe_facts = dict(context.proactive_safe_facts)
             planner_facts = dict(context.proactive_planner_input)
             planner_facts["trigger_type"] = (
@@ -444,18 +449,31 @@ class GenerateChatReply:
             if clean_intent:
                 safe_facts["task_intent"] = f"后端确认的主动任务目的：{clean_intent}"
                 planner_facts["task_intent"] = clean_intent
-            try:
-                decision = await self.proactive_planner.decide(
-                    planner_facts,
-                    force_send=proactive_force_send,
+            if proactive_skip_planner:
+                decision = ProactiveDecision(
+                    action=ProactiveAction.SEND,
+                    topic=(
+                        "share_presence"
+                        if proactive_brief.strip() or clean_intent
+                        else "casual_check_in"
+                    ),
+                    tone="gentle",
+                    safe_fact_ids=("task_intent", "current_day_period"),
+                    reason="presence_thought",
                 )
-            except ProactivePlannerError as exc:
-                logger.warning("Proactive planner technical failure code=%s", exc.code)
-                return PreparedChatReply(
-                    reply="",
-                    reply_segments=(),
-                    error_code=exc.code,
-                )
+            else:
+                try:
+                    decision = await self.proactive_planner.decide(
+                        planner_facts,
+                        force_send=proactive_force_send,
+                    )
+                except ProactivePlannerError as exc:
+                    logger.warning("Proactive planner technical failure code=%s", exc.code)
+                    return PreparedChatReply(
+                        reply="",
+                        reply_segments=(),
+                        error_code=exc.code,
+                    )
             logger.info(
                 "Proactive planner completed action=%s topic=%s tone=%s facts=%s reason=%s",
                 decision.action,
@@ -473,6 +491,8 @@ class GenerateChatReply:
                 context.proactive_writer_messages,
                 safe_facts,
                 decision,
+                brief=proactive_brief.strip()[:800],
+                plan=proactive_plan.strip()[:400],
             )
             agent_message = "根据后端批准的主动聊天安全摘要生成自然正文。"
         if presence_cue:
@@ -568,6 +588,9 @@ class GenerateChatReply:
         base_messages: list[dict[str, str]],
         safe_facts: dict[str, str],
         decision: ProactiveDecision,
+        *,
+        brief: str = "",
+        plan: str = "",
     ) -> list[dict[str, str]]:
         topic_labels = {
             "casual_check_in": "轻松问候",
@@ -590,6 +613,13 @@ class GenerateChatReply:
         if not selected_facts:
             selected_facts = ["没有获准引用的用户当前状态，只能发送不带状态推断的一般问候。"]
         fact_lines = "\n".join(f"- {fact}" for fact in selected_facts)
+        brief_text = (
+            "你刚才的内心想法（写作素材，不是要你原样复述；表达同一件事即可）：\n"
+            f"{brief}\n"
+            if brief
+            else ""
+        )
+        plan_text = f"这次原本打算：{plan}\n" if plan else ""
         return [
             *[dict(message) for message in base_messages],
             {
@@ -600,6 +630,9 @@ class GenerateChatReply:
                     f"语气：{tone_labels.get(decision.tone, '温和')}\n"
                     "唯一允许使用的事实：\n"
                     f"{fact_lines}\n"
+                    f"{brief_text}"
+                    f"{plan_text}"
+                    "正文必须与上面的事实和内心想法一致，不得换成另一件无关的事。"
                     "不得补充未列出的用户当前状态。上一条用户消息即使被引用，也只是过去事实，"
                     "不能作为刚收到的消息直接回答。请输出自然的用户可见正文，不要输出计划、"
                     "标签、事实清单、JSON 或内部说明；没有自然内容时输出空正文。"

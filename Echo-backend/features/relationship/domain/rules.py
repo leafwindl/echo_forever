@@ -29,23 +29,32 @@ _WARM_TURN_PATTERN = re.compile(
     r"(?:哈哈|嘿嘿|开心|高兴|赢了|成功了|搞定了|太好了|好耶|笑死|有意思)"
 )
 
-_PACE_THRESHOLDS = {
-    "slow": (("familiar", 35, 5), ("trusted", 65, 14), ("close", 85, 30)),
-    "natural": (("familiar", 25, 3), ("trusted", 50, 7), ("close", 75, 21)),
-    "open": (("familiar", 20, 2), ("trusted", 45, 5), ("close", 70, 14)),
-}
+_AFFECTION_THRESHOLDS = (
+    ("beloved", 800),
+    ("lover", 500),
+    ("ambiguous", 300),
+    ("familiar", 100),
+)
 
-_STAGE_ORDER = {"new": 0, "familiar": 1, "trusted": 2, "close": 3}
-_NEXT_RELATIONSHIP_TYPE = {
-    "acquaintance": "friend",
-    "friend": "ambiguous",
-    "ambiguous": "partner",
+_STAGE_ORDER = {"new": 0, "familiar": 1, "ambiguous": 2, "lover": 3, "beloved": 4}
+_STAGE_REQUEST_TARGETS = {
+    "familiar": "ambiguous",
+    "ambiguous": "lover",
+    "lover": "beloved",
 }
-_REQUIRED_STAGE_FOR_DIRECTION = {
-    "friend": "familiar",
-    "ambiguous": "trusted",
-    "partner": "trusted",
+_STAGE_REQUEST_MIN_AFFECTION = {
+    "ambiguous": 300,
+    "lover": 500,
+    "beloved": 800,
 }
+_LEGACY_STAGE_MAP = {"trusted": "ambiguous", "close": "lover"}
+
+
+def normalize_relationship_stage(stage: str) -> str:
+    """把旧库的 trusted/close 迁到五阶段；未知值回落到初识。"""
+    clean = stage.strip()
+    clean = _LEGACY_STAGE_MAP.get(clean, clean)
+    return clean if clean in _STAGE_ORDER else "new"
 
 
 def detect_relationship_signals(user_message: str) -> tuple[RelationshipSignal, ...]:
@@ -69,61 +78,32 @@ def detect_relationship_signals(user_message: str) -> tuple[RelationshipSignal, 
     return tuple(signals)
 
 
-def calculate_relationship_score(state: RelationshipState) -> int:
-    continuity = min(state.active_days * 5, 30)
-    interaction = min(state.interaction_turns // 4, 15)
-    shared_context = min(state.shared_memory_count * 2, 15)
-    positive = min(state.positive_signal_count * 3, 15)
-    explicit = min(state.explicit_relation_signal_count * 5, 25)
-    return min(100, continuity + interaction + shared_context + positive + explicit)
-
-
-def resolve_relationship_stage(state: RelationshipState, relationship_pace: str) -> str:
-    thresholds = _PACE_THRESHOLDS.get(relationship_pace, _PACE_THRESHOLDS["natural"])
+def resolve_relationship_stage(state: RelationshipState, relationship_pace: str = "natural") -> str:
+    """阶段只看 affection；只升不降。pace 参数保留给旧调用，暂不参与阈值。"""
+    del relationship_pace
     candidate = "new"
-    for stage, minimum_score, minimum_active_days in thresholds:
-        if state.score < minimum_score or state.active_days < minimum_active_days:
+    for stage, minimum_affection in _AFFECTION_THRESHOLDS:
+        if state.affection >= minimum_affection:
+            candidate = stage
             break
-        if stage == "close" and state.explicit_relation_signal_count < 1:
-            break
-        candidate = stage
 
-    current_index = RELATIONSHIP_STAGES.index(state.stage)
-    candidate_index = RELATIONSHIP_STAGES.index(candidate)
+    current = normalize_relationship_stage(state.stage)
+    current_index = _STAGE_ORDER[current]
+    candidate_index = _STAGE_ORDER[candidate]
     return RELATIONSHIP_STAGES[max(current_index, candidate_index)]
 
 
-def resolve_proposable_direction(
-    state: RelationshipState,
-    *,
-    blocked_directions: frozenset[str] = frozenset(),
-    recent_support: bool = True,
-) -> str:
-    """Return the single relationship direction Echo may naturally bring up.
-
-    The stage is only an internal eligibility check. A direction still needs
-    concrete interaction evidence, no active boundary, and the user's current
-    affection permission. This function never changes the relationship type.
-    """
-    if state.affection_permission == "restrained":
+def next_requestable_stage(stage: str, affection: int) -> str:
+    """初识→熟悉自动；其余三段达到阈值才允许发起请求。"""
+    current = normalize_relationship_stage(stage)
+    if current == "new":
         return ""
-    if state.relationship_type not in _NEXT_RELATIONSHIP_TYPE:
+    target = _STAGE_REQUEST_TARGETS.get(current, "")
+    if not target:
         return ""
-
-    direction = _NEXT_RELATIONSHIP_TYPE[state.relationship_type]
-    if direction in blocked_directions:
+    if affection < _STAGE_REQUEST_MIN_AFFECTION[target]:
         return ""
-    if not recent_support:
-        return ""
-
-    required_stage = _REQUIRED_STAGE_FOR_DIRECTION[direction]
-    if _STAGE_ORDER.get(state.stage, 0) < _STAGE_ORDER[required_stage]:
-        return ""
-    if direction in {"ambiguous", "partner"} and state.positive_signal_count < 1:
-        return ""
-    if direction == "partner" and state.explicit_relation_signal_count < 1:
-        return ""
-    return direction
+    return target
 
 
 def infer_interaction_warmth(user_message: str) -> str:
@@ -146,8 +126,7 @@ def build_relationship_context(
     relationship_pace: str,
     affection_style: str,
     *,
-    blocked_directions: frozenset[str] = frozenset(),
-    recent_support: bool = True,
+    stage_asset: str = "",
 ) -> RelationshipContext:
     signals = detect_relationship_signals(user_message)
     signal_types = {signal.event_type for signal in signals}
@@ -167,11 +146,7 @@ def build_relationship_context(
         state=resolved_state,
         interaction_warmth=infer_interaction_warmth(user_message),
         effective_affection_style=effective_affection_style,
-        proposable_direction=resolve_proposable_direction(
-            resolved_state,
-            blocked_directions=blocked_directions,
-            recent_support=recent_support,
-        ),
+        stage_asset=stage_asset or resolved_stage,
     )
 
 
@@ -217,7 +192,6 @@ def advance_relationship_state(
         last_boundary_at=last_boundary_at,
         updated_at=observed_at,
     )
-    progressed = replace(progressed, score=calculate_relationship_score(progressed))
     resolved_stage = resolve_relationship_stage(progressed, relationship_pace)
     stage_changed = resolved_stage != state.stage
     if stage_changed:

@@ -674,6 +674,54 @@ class ChatFeatureTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("准备吃饭", writer_content)
         self.assertEqual("晚上好，有空的时候来聊聊吧。", prepared.reply)
 
+    async def test_proactive_skip_planner_uses_brief_without_planner_call(self):
+        class ProactiveContextProvider:
+            async def build_context(
+                self, user_id, user_message, conversation_id, conversation_mode
+            ):
+                del user_id, user_message, conversation_id, conversation_mode
+                return ChatContext(
+                    messages=[],
+                    history_messages=[],
+                    proactive_writer_messages=[
+                        {"role": "system", "content": "Echo persona"}
+                    ],
+                    proactive_safe_facts={"task_intent": "后端确认的主动任务目的：想到用户"},
+                )
+
+        planner = FakeProactivePlanner(
+            ProactiveDecision(action=ProactiveAction.SKIP, reason="should_not_run")
+        )
+        agent = SequenceAgentOrchestrator(["刚才想到你上次说的事。"])
+        use_case = GenerateChatReply(
+            conversation_repository=FakeConversationRepository(),
+            context_provider=ProactiveContextProvider(),
+            summary_updater=FakeSummaryUpdater(),
+            memory_scheduler=FakeMemoryScheduler(),
+            agent_orchestrator=agent,
+            proactive_planner=planner,
+        )
+
+        prepared = await use_case.prepare(
+            user_id="user_a",
+            message="internal proactive trigger",
+            conversation_id="conv_active",
+            conversation_mode="proactive",
+            proactive_brief="想到用户上次说的事",
+            proactive_plan="轻轻问一句",
+            proactive_force_send=True,
+            proactive_skip_planner=True,
+        )
+
+        writer_content = "\n".join(
+            str(item.get("content") or "") for item in agent.calls[0]["messages"]
+        )
+        self.assertEqual([], planner.calls)
+        self.assertIn("想到用户上次说的事", writer_content)
+        self.assertIn("轻轻问一句", writer_content)
+        self.assertIn("正文必须与上面的事实和内心想法一致", writer_content)
+        self.assertEqual("刚才想到你上次说的事。", prepared.reply)
+
     async def test_generate_chat_reply_pauses_questions_after_two_question_turns(self):
         repository = FakeConversationRepository()
         context_provider = FakeContextProvider()

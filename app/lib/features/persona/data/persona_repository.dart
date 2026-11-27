@@ -7,10 +7,6 @@ abstract interface class PersonaRepository {
   Future<UserPersona> updatePersona(PersonaUpdate update);
   Future<RelationshipStateDto> getRelationship();
   Future<RelationshipStateDto> resetRelationship();
-  Future<RelationshipStateDto> updateRelationshipMode(RelationshipMode mode);
-  Future<RelationshipStateDto> acceptRelationshipProposal(String proposalId);
-  Future<void> deferRelationshipProposal(String proposalId);
-  Future<void> declineRelationshipProposal(String proposalId);
   Future<void> resetCompanionship();
 }
 
@@ -34,23 +30,6 @@ class PersonaRepositoryImpl implements PersonaRepository {
 
   @override
   Future<RelationshipStateDto> resetRelationship() => _api.resetRelationship();
-
-  @override
-  Future<RelationshipStateDto> updateRelationshipMode(RelationshipMode mode) =>
-      _api.updateRelationshipMode(mode);
-
-  @override
-  Future<RelationshipStateDto> acceptRelationshipProposal(
-    String proposalId,
-  ) => _api.acceptRelationshipProposal(proposalId);
-
-  @override
-  Future<void> deferRelationshipProposal(String proposalId) =>
-      _api.deferRelationshipProposal(proposalId);
-
-  @override
-  Future<void> declineRelationshipProposal(String proposalId) =>
-      _api.declineRelationshipProposal(proposalId);
 
   @override
   Future<void> resetCompanionship() => _api.resetCompanionship();

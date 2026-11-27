@@ -88,7 +88,6 @@ class PresenceGoalCreator(Protocol):
         *,
         user_id: str,
         intent: str,
-        draft_text: str,
         trigger_type: str = "presence",
         trigger_ref: str = "",
         action_intent: str = "",

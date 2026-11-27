@@ -5,7 +5,9 @@ from datetime import UTC, datetime
 
 from shared.config import settings
 from shared.prompting.renderer import (
+    PERSONA_ANCHOR_POLICY,
     estimate_prompt_tokens,
+    render_proactive_context,
     render_prompt_layers,
 )
 
@@ -24,7 +26,7 @@ from features.memory.public import (
 )
 from features.persona.public import get_persona
 from features.relationship.public import get_relationship_context
-from features.user_profile.public import get_user_profile
+from features.user_profile.public import evaluate_profile_onboarding, get_user_profile
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +61,6 @@ _SESSION_BOUNDARY_LINE = re.compile(
 )
 _ATTACHMENT_BLOCK = re.compile(
     r"\s*\n?\[本条消息的可信结构化附件\][\s\S]*$",
-)
-_CALL_EXTENDED_CONTEXT_PATTERN = re.compile(
-    r"(?:还记得|记得吗|记不记得|我说过|我们聊过|你知道我|"
-    r"(?:之前|以前|上次).{0,8}(?:我|我们|说|聊|提|事情|话题)|"
-    r"继续.{0,8}(?:之前|上次|话题))"
 )
 
 
@@ -112,10 +109,6 @@ async def _load_long_term_memories(
     )
 
 
-def _call_requires_extended_context(user_message: str) -> bool:
-    return bool(_CALL_EXTENDED_CONTEXT_PATTERN.search(user_message.strip()))
-
-
 def _clean_call_history_content(content: str) -> str:
     clean = _MESSAGE_TIME_PREFIX.sub("", content, count=1)
     clean = _SESSION_BOUNDARY_LINE.sub("", clean)
@@ -142,9 +135,19 @@ def _build_chat_temporal_context(
     """文字聊天只需要当前时间和上一条消息时间，其余时间字段按需推导。"""
     result = {
         key: temporal_context[key]
-        for key in ("local_datetime", "timezone", "resolved_expressions", "conversation_gap")
+        for key in ("local_datetime", "timezone")
         if key in temporal_context
     }
+    resolved = temporal_context.get("resolved_expressions")
+    if resolved:
+        result["resolved_expressions"] = resolved
+    gap = temporal_context.get("conversation_gap")
+    if isinstance(gap, dict):
+        result["conversation_gap"] = {
+            key: gap[key]
+            for key in ("gap_seconds", "state")
+            if key in gap
+        }
     if history_times:
         result["last_message_at"] = history_times[-1]["local_time"]
     return result
@@ -175,6 +178,14 @@ def _build_call_temporal_context(
     return result
 
 
+
+
+def _should_inject_persona_anchor(
+    history: list[dict[str, str]],
+    conversation_mode: str,
+) -> bool:
+    """长历史才加人格锚点；主动/来信没有长聊天历史。"""
+    return conversation_mode in {"chat", "call"} and len(history) >= 20
 
 
 def _turn_input_message(
@@ -326,7 +337,6 @@ async def build_chat_context(
     # 渠道标签已从正文移除；参数保留给调用方协议。
     del message_channel
     is_call = conversation_mode == "call"
-    use_extended_call_context = is_call and _call_requires_extended_context(user_message)
     clean_speaker_role = (speaker_role or "").strip().lower()
     unknown_speaker = clean_speaker_role in {"unknown", "known"}
     timezone_name = postgres_repositories.get_user_timezone(
@@ -337,8 +347,6 @@ async def build_chat_context(
         long_term_memories, memory_retrieval_mode = [], (
             "speaker_unknown" if unknown_speaker else "disabled"
         )
-    elif is_call and not use_extended_call_context:
-        long_term_memories, memory_retrieval_mode = [], "call_skipped"
     else:
         long_term_memories, memory_retrieval_mode = await _load_long_term_memories(
             user_id,
@@ -346,12 +354,7 @@ async def build_chat_context(
         )
     summary_text = ""
     summary_message_id = 0
-    if (
-        conversation_id
-        and (not is_call or use_extended_call_context)
-        and memory_enabled
-        and not unknown_speaker
-    ):
+    if conversation_id and memory_enabled and not unknown_speaker:
         summary_state = postgres_repositories.get_conversation_summary(user_id, conversation_id)
         summary_text = str(summary_state["summary"])
         summary_message_id = int(summary_state["summary_message_id"])
@@ -455,6 +458,32 @@ async def build_chat_context(
         logger.warning("Relationship state loading unavailable", exc_info=True)
         relationship = None
 
+    profile_onboarding = None
+    if conversation_mode == "chat" and not unknown_speaker:
+        recent_assistant_texts = tuple(
+            str(message.get("content") or "")
+            for message in history
+            if message.get("role") == "assistant"
+        )[-2:]
+        current_user_turns = sum(
+            1 for message in history if message.get("role") == "user"
+        ) + 1
+        profile_onboarding = evaluate_profile_onboarding(
+            profile=user_profile,
+            preferred_name=(
+                persona.preferred_name
+                if persona is not None and persona.enabled
+                else None
+            ),
+            interaction_turns=(
+                relationship.state.interaction_turns if relationship is not None else 0
+            ),
+            stage=relationship.state.stage if relationship is not None else "new",
+            current_conversation_user_turns=current_user_turns,
+            current_message_text=user_message,
+            recent_assistant_texts=recent_assistant_texts,
+        )
+
     messages: list[dict[str, str]] = render_prompt_layers(
         persona=persona,
         long_term_memories=long_term_memories,
@@ -465,7 +494,9 @@ async def build_chat_context(
         assistant_persona=assistant_persona,
         relationship=relationship,
         user_profile=user_profile,
+        profile_onboarding=profile_onboarding,
         conversation_mode=conversation_mode,
+        include_user_profile=conversation_mode != "proactive",
     )
     if unknown_speaker:
         messages.append(
@@ -499,6 +530,8 @@ async def build_chat_context(
         }
     )
     messages.extend(history)
+    if _should_inject_persona_anchor(history, conversation_mode):
+        messages.append({"role": "system", "content": PERSONA_ANCHOR_POLICY})
     messages.append(_turn_input_message(user_message, conversation_mode, images))
 
     proactive_safe_facts: dict[str, str] = {}
@@ -515,7 +548,24 @@ async def build_chat_context(
             assistant_persona=assistant_persona,
             relationship=relationship,
             conversation_mode=conversation_mode,
+            include_user_profile=False,
         )
+        proactive_context_text = render_proactive_context(
+            conversation_summary=summary_text,
+            recent_user_messages=[
+                _clean_proactive_history_content(str(message.get("content") or ""))
+                for message in history
+                if message.get("role") == "user"
+            ],
+            memories=[
+                str(memory.get("content") or "")
+                for memory in long_term_memories
+            ],
+        )
+        if proactive_context_text:
+            writer_base_messages.append(
+                {"role": "system", "content": proactive_context_text}
+            )
         proactive_safe_facts = _build_proactive_safe_facts(temporal_context, history)
         proactive_planner_input = _build_proactive_planner_input(temporal_context, history)
         proactive_writer_messages = _build_proactive_writer_messages(

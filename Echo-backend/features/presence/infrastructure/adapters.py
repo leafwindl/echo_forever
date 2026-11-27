@@ -122,7 +122,6 @@ class ProactivePresenceGoalCreator:
         *,
         user_id: str,
         intent: str,
-        draft_text: str,
         trigger_type: str = "presence",
         trigger_ref: str = "",
         action_intent: str = "",
@@ -133,7 +132,6 @@ class ProactivePresenceGoalCreator:
         return create_proactive_goal(
             user_id=user_id,
             intent=intent,
-            draft_text=draft_text,
             trigger_type=trigger_type,
             trigger_ref=trigger_ref,
             action_intent=action_intent,

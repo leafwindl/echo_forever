@@ -8,14 +8,18 @@ from db.postgres_connection import get_connection, transaction
 
 from features.relationship.domain.entities import (
     RELATIONSHIP_SCHEMA_VERSION,
-    RelationshipDirectionBoundary,
-    RelationshipProposal,
+    RELATIONSHIP_STAGES,
     RelationshipSignal,
     RelationshipState,
     RelationshipValidationError,
+    StageAdvanceRequest,
     default_relationship_state,
 )
-from features.relationship.domain.rules import calculate_relationship_score
+from features.relationship.domain.affection import (
+    cap_daily_delta,
+    clamp_affection,
+)
+from features.relationship.domain.rules import normalize_relationship_stage
 
 
 def _timestamp_text(value: object) -> str | None:
@@ -29,12 +33,9 @@ def _timestamp_text(value: object) -> str | None:
 def _state_from_row(row: dict[str, Any]) -> RelationshipState:
     return RelationshipState(
         user_id=str(row["user_id"]),
-        stage=str(row["stage"]),
-        relationship_mode=str(row.get("relationship_mode") or "friend"),
-        relationship_type=str(row.get("relationship_type") or "acquaintance"),
-        relationship_type_updated_at=_timestamp_text(row.get("relationship_type_updated_at")),
+        stage=normalize_relationship_stage(str(row["stage"])),
         reset_epoch=int(row.get("reset_epoch") or 0),
-        score=int(row["score"]),
+        affection=int(row.get("affection") or 1),
         interaction_turns=int(row["interaction_turns"]),
         active_days=int(row["active_days"]),
         shared_memory_count=int(row["shared_memory_count"]),
@@ -53,53 +54,27 @@ def _state_from_row(row: dict[str, Any]) -> RelationshipState:
 
 
 _STATE_COLUMNS = """
-    user_id, stage, relationship_mode, relationship_type,
-    relationship_type_updated_at, reset_epoch, score, interaction_turns, active_days,
+    user_id, stage,
+    reset_epoch, affection, interaction_turns, active_days,
     shared_memory_count, positive_signal_count, explicit_relation_signal_count,
     boundary_signal_count, affection_permission, last_interaction_date,
     last_interaction_at, last_boundary_at, stage_updated_at,
     created_at, updated_at, schema_version
 """
 
-_PROPOSAL_COLUMNS = """
-    proposal_id, user_id, direction, status, conversation_id, agent_turn_id,
-    source_message_id, evidence, created_at, resolved_at, expires_at
-"""
-
-_BOUNDARY_COLUMNS = """
-    user_id, direction, status, reason, source_message_id, revisit_after, updated_at
-"""
-
-
-def _proposal_from_row(row: dict[str, Any]) -> RelationshipProposal:
-    return RelationshipProposal(
-        proposal_id=str(row["proposal_id"]),
+def _stage_request_from_row(row: dict[str, Any]) -> StageAdvanceRequest:
+    return StageAdvanceRequest(
+        request_id=str(row["request_id"]),
         user_id=str(row["user_id"]),
-        direction=str(row["direction"]),
+        target_stage=str(row["target_stage"]),
         status=str(row["status"]),
         conversation_id=str(row["conversation_id"]) if row.get("conversation_id") else None,
         agent_turn_id=str(row["agent_turn_id"]) if row.get("agent_turn_id") else None,
-        source_message_id=int(row["source_message_id"])
-        if row.get("source_message_id") is not None
-        else None,
         evidence=str(row.get("evidence") or ""),
         created_at=_timestamp_text(row.get("created_at")),
         resolved_at=_timestamp_text(row.get("resolved_at")),
         expires_at=_timestamp_text(row.get("expires_at")),
-    )
-
-
-def _boundary_from_row(row: dict[str, Any]) -> RelationshipDirectionBoundary:
-    return RelationshipDirectionBoundary(
-        user_id=str(row["user_id"]),
-        direction=str(row["direction"]),
-        status=str(row["status"]),
-        reason=str(row.get("reason") or ""),
-        source_message_id=int(row["source_message_id"])
-        if row.get("source_message_id") is not None
-        else None,
-        revisit_after=_timestamp_text(row.get("revisit_after")),
-        updated_at=_timestamp_text(row.get("updated_at")),
+        cooldown_until=_timestamp_text(row.get("cooldown_until")),
     )
 
 
@@ -139,7 +114,7 @@ class PostgresRelationshipRepository:
             last_interaction_at=_timestamp_text(history.get("last_interaction_at")),
             created_at=_timestamp_text(history.get("created_at")),
         )
-        return replace(state, score=calculate_relationship_score(state))
+        return state
 
     def get_or_create(self, user_id: str) -> RelationshipState:
         existing = self._get(user_id)
@@ -169,20 +144,20 @@ class PostgresRelationshipRepository:
             cursor.execute(
                 f"""
                 INSERT INTO relationship_states (
-                    user_id, stage, relationship_mode, relationship_type,
-                    relationship_type_updated_at, reset_epoch, score, interaction_turns, active_days,
+                    user_id, stage,
+                    reset_epoch, affection, interaction_turns, active_days,
                     shared_memory_count, positive_signal_count, explicit_relation_signal_count,
                     boundary_signal_count, affection_permission, last_interaction_date,
                     last_interaction_at, last_boundary_at, stage_updated_at,
                     created_at, updated_at, schema_version
                 )
                 VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), COALESCE(%s, NOW()), %s
                 )
                 ON CONFLICT (user_id) DO UPDATE SET
                     stage = EXCLUDED.stage,
-                    score = EXCLUDED.score,
+                    affection = EXCLUDED.affection,
                     interaction_turns = EXCLUDED.interaction_turns,
                     active_days = EXCLUDED.active_days,
                     shared_memory_count = EXCLUDED.shared_memory_count,
@@ -201,11 +176,8 @@ class PostgresRelationshipRepository:
                 (
                     state.user_id,
                     state.stage,
-                    state.relationship_mode,
-                    state.relationship_type,
-                    state.relationship_type_updated_at,
                     state.reset_epoch,
-                    state.score,
+                    state.affection,
                     state.interaction_turns,
                     state.active_days,
                     state.shared_memory_count,
@@ -246,270 +218,292 @@ class PostgresRelationshipRepository:
             raise RuntimeError("Relationship state upsert returned no row")
         return _state_from_row(row)
 
-    def update_mode(self, user_id: str, relationship_mode: str) -> RelationshipState:
+    def adjust_affection(
+        self,
+        *,
+        user_id: str,
+        delta: int,
+        reason: str,
+        agent_turn_id: str,
+        observed_at: datetime | None = None,
+    ) -> tuple[RelationshipState, int]:
+        clean_user_id = user_id.strip()
+        if not clean_user_id:
+            raise RelationshipValidationError("Missing user_id")
         with transaction() as conn, conn.cursor() as cursor:
-            # Progress saves deliberately do not update this column, so a concurrent
-            # completed turn cannot overwrite the user's explicit choice.
+            cursor.execute(
+                """
+                INSERT INTO relationship_states (user_id)
+                VALUES (%s)
+                ON CONFLICT (user_id) DO NOTHING
+                """,
+                (clean_user_id,),
+            )
             cursor.execute(
                 f"""
-                UPDATE relationship_states
-                SET relationship_mode = %s, schema_version = %s, updated_at = NOW()
+                SELECT {_STATE_COLUMNS}
+                FROM relationship_states
                 WHERE user_id = %s
-                RETURNING {_STATE_COLUMNS}
+                FOR UPDATE
                 """,
-                (relationship_mode, RELATIONSHIP_SCHEMA_VERSION, user_id),
+                (clean_user_id,),
             )
             row = cursor.fetchone()
-        if not row:
-            raise RuntimeError("Relationship mode update returned no row")
-        return _state_from_row(row)
+            if not row:
+                raise RuntimeError("Relationship state lock returned no row")
+            state = _state_from_row(row)
 
-    def update_relationship_type(
-        self, user_id: str, relationship_type: str
-    ) -> RelationshipState:
-        with transaction() as conn, conn.cursor() as cursor:
+            if agent_turn_id.strip():
+                cursor.execute(
+                    """
+                    SELECT 1
+                    FROM relationship_events
+                    WHERE user_id = %s
+                      AND event_type = 'affection_delta'
+                      AND metadata->>'agent_turn_id' = %s
+                    LIMIT 1
+                    """,
+                    (clean_user_id, agent_turn_id.strip()),
+                )
+                if cursor.fetchone():
+                    return state, 0
+
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(weight), 0) AS total
+                FROM relationship_events
+                WHERE user_id = %s
+                  AND event_type = 'affection_delta'
+                  AND created_at >= date_trunc('day', NOW())
+                """,
+                (clean_user_id,),
+            )
+            daily_row = cursor.fetchone() or {}
+            daily_net = int(daily_row.get("total") or 0)
+            allowed = cap_daily_delta(delta, daily_net)
+            if allowed == 0:
+                return state, 0
+
+            before = state.affection
+            after = clamp_affection(before + allowed)
+            applied = after - before
+            if applied == 0:
+                return state, 0
+            new_stage = state.stage
+            stage_updated_at = state.stage_updated_at
+            if state.stage == "new" and after >= 100:
+                new_stage = "familiar"
+                stage_updated_at = (
+                    observed_at.isoformat() if observed_at is not None else datetime.now().isoformat()
+                )
             cursor.execute(
                 f"""
                 UPDATE relationship_states
-                SET relationship_type = %s,
-                    relationship_type_updated_at = NOW(),
+                SET affection = %s,
+                    stage = %s,
+                    affection_updated_at = NOW(),
+                    stage_updated_at = %s,
                     updated_at = NOW()
                 WHERE user_id = %s
                 RETURNING {_STATE_COLUMNS}
                 """,
-                (relationship_type, user_id),
+                (after, new_stage, stage_updated_at, clean_user_id),
             )
-            row = cursor.fetchone()
-        if not row:
-            raise RuntimeError("Relationship type update returned no row")
-        return _state_from_row(row)
+            updated_row = cursor.fetchone()
+            if not updated_row:
+                raise RuntimeError("Relationship affection update returned no row")
+            cursor.execute(
+                """
+                INSERT INTO relationship_events (
+                    event_id, user_id, event_type, weight, source_message_id, metadata
+                )
+                VALUES (%s, %s, 'affection_delta', %s, NULL, %s::jsonb)
+                """,
+                (
+                    f"rel_evt_{uuid.uuid4().hex}",
+                    clean_user_id,
+                    applied,
+                    json.dumps(
+                        {
+                            "reason": reason,
+                            "before": before,
+                            "after": after,
+                            "agent_turn_id": agent_turn_id.strip(),
+                        },
+                        ensure_ascii=False,
+                    ),
+                ),
+            )
+            return _state_from_row(updated_row), applied
 
-    def create_proposal(
+    def create_stage_request(
         self,
         *,
         user_id: str,
-        direction: str,
+        target_stage: str,
         conversation_id: str | None,
         agent_turn_id: str | None,
         evidence: str,
         expires_at: str,
-    ) -> RelationshipProposal:
-        proposal_id = f"rel_prop_{uuid.uuid4().hex}"
+    ) -> StageAdvanceRequest:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(
-                f"""
-                INSERT INTO relationship_proposals (
-                    proposal_id, user_id, direction, status, conversation_id,
+                """
+                INSERT INTO relationship_stage_requests (
+                    request_id, user_id, target_stage, status, conversation_id,
                     agent_turn_id, evidence, expires_at
                 )
                 VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s::timestamptz)
-                ON CONFLICT (user_id, direction) WHERE status = 'pending' DO NOTHING
-                RETURNING {_PROPOSAL_COLUMNS}
+                RETURNING *
                 """,
                 (
-                    proposal_id,
+                    f"rel_stage_{uuid.uuid4().hex}",
                     user_id,
-                    direction,
+                    target_stage,
                     conversation_id,
                     agent_turn_id,
-                    evidence,
+                    evidence[:300],
                     expires_at,
                 ),
             )
             row = cursor.fetchone()
-            if row is None:
-                cursor.execute(
-                    f"""
-                    SELECT {_PROPOSAL_COLUMNS}
-                    FROM relationship_proposals
-                    WHERE user_id = %s AND direction = %s AND status = 'pending'
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                    """,
-                    (user_id, direction),
-                )
-                row = cursor.fetchone()
-        if row is None:
-            raise RuntimeError("Relationship proposal insert returned no row")
-        return _proposal_from_row(row)
+        if not row:
+            raise RuntimeError("Relationship stage request insert returned no row")
+        return _stage_request_from_row(row)
 
-    def get_pending_proposal(self, user_id: str) -> RelationshipProposal | None:
+    def get_pending_stage_request(self, user_id: str) -> StageAdvanceRequest | None:
         with get_connection() as conn, conn.cursor() as cursor:
             cursor.execute(
-                f"""
-                SELECT {_PROPOSAL_COLUMNS}
-                FROM relationship_proposals
-                WHERE user_id = %s
-                  AND status = 'pending'
-                  AND expires_at > NOW()
+                """
+                SELECT * FROM relationship_stage_requests
+                WHERE user_id = %s AND status = 'pending'
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
                 (user_id,),
             )
             row = cursor.fetchone()
-        return _proposal_from_row(row) if row else None
+        return _stage_request_from_row(row) if row else None
 
-    def get_proposal(self, user_id: str, proposal_id: str) -> RelationshipProposal | None:
+    def get_stage_request(self, user_id: str, request_id: str) -> StageAdvanceRequest | None:
         with get_connection() as conn, conn.cursor() as cursor:
             cursor.execute(
-                f"""
-                SELECT {_PROPOSAL_COLUMNS}
-                FROM relationship_proposals
-                WHERE user_id = %s AND proposal_id = %s
+                """
+                SELECT * FROM relationship_stage_requests
+                WHERE user_id = %s AND request_id = %s
                 """,
-                (user_id, proposal_id),
+                (user_id, request_id),
             )
             row = cursor.fetchone()
-        return _proposal_from_row(row) if row else None
+        return _stage_request_from_row(row) if row else None
 
-    def accept_proposal(
+    def latest_stage_request(self, user_id: str) -> StageAdvanceRequest | None:
+        with get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT * FROM relationship_stage_requests
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+        return _stage_request_from_row(row) if row else None
+
+    def accept_stage_request(
         self,
         *,
         user_id: str,
-        proposal_id: str,
-        relationship_type: str,
+        request_id: str,
         resolved_at: str,
     ) -> RelationshipState:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT direction
-                FROM relationship_proposals
-                WHERE user_id = %s
-                  AND proposal_id = %s
-                  AND status = 'pending'
-                  AND expires_at > NOW()
+                SELECT * FROM relationship_stage_requests
+                WHERE user_id = %s AND request_id = %s
                 FOR UPDATE
                 """,
-                (user_id, proposal_id),
+                (user_id, request_id),
             )
-            proposal = cursor.fetchone()
-            if proposal is None:
-                raise RelationshipValidationError("Proposal is not pending")
+            request_row = cursor.fetchone()
+            if not request_row or request_row["status"] != "pending":
+                raise RelationshipValidationError("No pending stage request")
             cursor.execute(
-                """
-                UPDATE relationship_proposals
-                SET status = 'accepted', resolved_at = %s::timestamptz
-                WHERE user_id = %s AND proposal_id = %s
+                f"""
+                SELECT {_STATE_COLUMNS}
+                FROM relationship_states
+                WHERE user_id = %s
+                FOR UPDATE
                 """,
-                (resolved_at, user_id, proposal_id),
+                (user_id,),
             )
+            state_row = cursor.fetchone()
+            if not state_row:
+                raise RelationshipValidationError("Relationship state missing")
+            current_stage = normalize_relationship_stage(str(state_row["stage"]))
+            target_stage = str(request_row["target_stage"])
+            if RELATIONSHIP_STAGES.index(target_stage) <= RELATIONSHIP_STAGES.index(current_stage):
+                raise RelationshipValidationError("Stage request target is not ahead")
             cursor.execute(
                 f"""
                 UPDATE relationship_states
-                SET relationship_type = %s,
-                    relationship_type_updated_at = %s::timestamptz,
-                    updated_at = %s::timestamptz
+                SET stage = %s,
+                    stage_updated_at = %s::timestamptz,
+                    updated_at = NOW()
                 WHERE user_id = %s
                 RETURNING {_STATE_COLUMNS}
                 """,
-                (relationship_type, resolved_at, resolved_at, user_id),
+                (target_stage, resolved_at, user_id),
             )
-            row = cursor.fetchone()
-        if row is None:
-            raise RuntimeError("Relationship type update returned no row")
-        return _state_from_row(row)
+            updated_state = cursor.fetchone()
+            cursor.execute(
+                """
+                UPDATE relationship_stage_requests
+                SET status = 'accepted', resolved_at = %s::timestamptz
+                WHERE user_id = %s AND request_id = %s AND status = 'pending'
+                """,
+                (resolved_at, user_id, request_id),
+            )
+        if not updated_state:
+            raise RuntimeError("Relationship stage update returned no row")
+        return _state_from_row(updated_state)
 
-    def resolve_proposal(
+    def resolve_stage_request(
         self,
         *,
         user_id: str,
-        proposal_id: str,
+        request_id: str,
         status: str,
         resolved_at: str,
-    ) -> RelationshipProposal:
-        with transaction() as conn, conn.cursor() as cursor:
-            cursor.execute(
-                f"""
-                UPDATE relationship_proposals
-                SET status = %s, resolved_at = %s::timestamptz
-                WHERE user_id = %s AND proposal_id = %s AND status = 'pending'
-                RETURNING {_PROPOSAL_COLUMNS}
-                """,
-                (status, resolved_at, user_id, proposal_id),
-            )
-            row = cursor.fetchone()
-        if row is None:
-            raise RelationshipValidationError("Proposal is not pending")
-        return _proposal_from_row(row)
-
-    def list_direction_boundaries(
-        self, user_id: str
-    ) -> tuple[RelationshipDirectionBoundary, ...]:
-        with get_connection() as conn, conn.cursor() as cursor:
-            cursor.execute(
-                f"""
-                SELECT {_BOUNDARY_COLUMNS}
-                FROM relationship_direction_boundaries
-                WHERE user_id = %s
-                ORDER BY direction
-                """,
-                (user_id,),
-            )
-            rows = cursor.fetchall()
-        return tuple(_boundary_from_row(row) for row in rows)
-
-    def upsert_direction_boundary(
-        self,
-        *,
-        user_id: str,
-        direction: str,
-        status: str,
-        reason: str,
-        source_message_id: int | None,
-        revisit_after: str | None,
-    ) -> RelationshipDirectionBoundary:
-        with transaction() as conn, conn.cursor() as cursor:
-            cursor.execute(
-                f"""
-                INSERT INTO relationship_direction_boundaries (
-                    user_id, direction, status, reason, source_message_id, revisit_after
-                )
-                VALUES (%s, %s, %s, %s, %s, %s::timestamptz)
-                ON CONFLICT (user_id, direction) DO UPDATE SET
-                    status = EXCLUDED.status,
-                    reason = EXCLUDED.reason,
-                    source_message_id = EXCLUDED.source_message_id,
-                    revisit_after = EXCLUDED.revisit_after,
-                    updated_at = NOW()
-                RETURNING {_BOUNDARY_COLUMNS}
-                """,
-                (user_id, direction, status, reason, source_message_id, revisit_after),
-            )
-            row = cursor.fetchone()
-        if row is None:
-            raise RuntimeError("Relationship boundary upsert returned no row")
-        return _boundary_from_row(row)
-
-    def cancel_pending_proposals(self, user_id: str) -> int:
+        cooldown_until: str | None,
+    ) -> StageAdvanceRequest:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
-                UPDATE relationship_proposals
-                SET status = 'cancelled', resolved_at = NOW()
-                WHERE user_id = %s AND status = 'pending'
+                UPDATE relationship_stage_requests
+                SET status = %s,
+                    resolved_at = %s::timestamptz,
+                    cooldown_until = %s::timestamptz
+                WHERE user_id = %s AND request_id = %s AND status = 'pending'
+                RETURNING *
                 """,
-                (user_id,),
+                (status, resolved_at, cooldown_until, user_id, request_id),
             )
-            return max(cursor.rowcount, 0)
+            row = cursor.fetchone()
+        if not row:
+            raise RelationshipValidationError("No pending stage request")
+        return _stage_request_from_row(row)
 
     def reset(self, user_id: str) -> RelationshipState:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute("DELETE FROM relationship_events WHERE user_id = %s", (user_id,))
             cursor.execute(
-                "DELETE FROM relationship_proposals WHERE user_id = %s", (user_id,)
-            )
-            cursor.execute(
-                "DELETE FROM relationship_direction_boundaries WHERE user_id = %s",
-                (user_id,),
-            )
-            cursor.execute(
                 f"""
                 UPDATE relationship_states SET
-                    stage = 'new', relationship_type = 'acquaintance',
-                    relationship_type_updated_at = NULL, reset_epoch = reset_epoch + 1,
-                    score = 0, interaction_turns = 0, active_days = 0,
+                    stage = 'new', reset_epoch = reset_epoch + 1,
+                    affection = 1, interaction_turns = 0, active_days = 0,
                     shared_memory_count = 0, positive_signal_count = 0,
                     explicit_relation_signal_count = 0, boundary_signal_count = 0,
                     affection_permission = 'unknown', last_interaction_date = NULL,

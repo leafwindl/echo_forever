@@ -34,6 +34,7 @@ from providers.minimax_image_provider import (
     MiniMaxImageGenerationProvider,
     MiniMaxImageProviderConfig,
 )
+from shared.prompting.renderer import DELIVERY_DAILY_LETTER_POLICY
 
 
 def _letter_json(**overrides) -> str:
@@ -269,10 +270,10 @@ class LetterOutputTests(unittest.TestCase):
             sticker_intent="",
         )
 
-        instruction = messages[0]["content"]
-        self.assertIn("当前无可用工具", instruction)
-        self.assertIn("来信图片通过 image_brief 交给来信业务处理", instruction)
-        self.assertNotIn("send_sticker 返回 completed", instruction)
+        self.assertEqual([], messages)
+        self.assertIn("当前无可用工具", DELIVERY_DAILY_LETTER_POLICY)
+        self.assertIn("来信图片通过 image_brief 交给来信业务处理", DELIVERY_DAILY_LETTER_POLICY)
+        self.assertNotIn("send_sticker", DELIVERY_DAILY_LETTER_POLICY)
 
 
 class _FakeImageProvider:

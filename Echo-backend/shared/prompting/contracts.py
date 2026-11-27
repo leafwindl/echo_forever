@@ -30,15 +30,13 @@ class UserPreferences(Protocol):
 
 class RelationshipState(Protocol):
     stage: str
-    relationship_mode: str
-    relationship_type: str
 
 
 class RelationshipContext(Protocol):
     state: RelationshipState
     interaction_warmth: str
     effective_affection_style: str
-    proposable_direction: str
+    stage_asset: str
 
 
 class UserProfileView(Protocol):
@@ -54,3 +52,12 @@ class UserProfileView(Protocol):
 
     @property
     def is_empty(self) -> bool: ...
+
+
+class ProfileOnboardingView(Protocol):
+    """只读状态：shared 渲染器不依赖 user_profile 业务实体。"""
+
+    phase: str
+    known: tuple[str, ...]
+    missing: tuple[str, ...]
+    ask_allowed: bool

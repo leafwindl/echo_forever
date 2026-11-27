@@ -72,7 +72,6 @@ async def update_session(
             goal_id = create_proactive_goal(
                 user_id=current_user.user_id,
                 intent=message[:200],
-                draft_text=message,
                 trigger_type="focus",
                 trigger_ref=session.session_id,
             )

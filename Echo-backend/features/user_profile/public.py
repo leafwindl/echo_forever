@@ -3,6 +3,10 @@ from __future__ import annotations
 from functools import lru_cache
 
 from features.user_profile.domain.entities import UserProfile
+from features.user_profile.domain.onboarding import (
+    ProfileOnboardingState,
+    evaluate_profile_onboarding,
+)
 from features.user_profile.infrastructure.postgres_repository import (
     PostgresUserProfileRepository,
 )
@@ -23,4 +27,10 @@ def update_user_profile(user_id: str, patch: dict[str, object]) -> UserProfile:
     return _repository().upsert_patch(user_id, patch)
 
 
-__all__ = ["UserProfile", "get_user_profile", "update_user_profile"]
+__all__ = [
+    "ProfileOnboardingState",
+    "UserProfile",
+    "evaluate_profile_onboarding",
+    "get_user_profile",
+    "update_user_profile",
+]

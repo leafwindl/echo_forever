@@ -69,11 +69,7 @@ class PersonaPage extends ConsumerWidget {
                     error: (error, _) => _RelationshipError(
                       onRetry: () => ref.invalidate(relationshipStateProvider),
                     ),
-                    data: (state) => _RelationshipCard(
-                      state: state,
-                      // 关系确认弹窗暂时禁用：关系变化不再要求用户确认。
-                      onOpenProposal: null,
-                    ),
+                    data: (state) => _RelationshipCard(state: state),
                   ),
                   const SizedBox(height: 20),
                   Text(
@@ -138,13 +134,9 @@ class PersonaPage extends ConsumerWidget {
 }
 
 class _RelationshipCard extends StatelessWidget {
-  const _RelationshipCard({
-    required this.state,
-    required this.onOpenProposal,
-  });
+  const _RelationshipCard({required this.state});
 
   final RelationshipStateDto state;
-  final VoidCallback? onOpenProposal;
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +150,7 @@ class _RelationshipCard extends StatelessWidget {
           children: <Widget>[
             Text('关系', style: Theme.of(context).textTheme.labelMedium),
             Text(
-              state.relationshipTypeLabel,
+              state.displayStageLabel,
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 12),
@@ -178,15 +170,6 @@ class _RelationshipCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (onOpenProposal != null) ...<Widget>[
-              const SizedBox(height: 14),
-              FilledButton(
-                onPressed: onOpenProposal,
-                child: Text(
-                  '查看确认窗口（${state.pendingProposal!.directionLabel}）',
-                ),
-              ),
-            ],
           ],
         ),
       ),

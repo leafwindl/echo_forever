@@ -116,7 +116,6 @@ def _goal(row) -> ProactiveGoal:
         user_id=str(row["user_id"]),
         trigger_type=str(row["trigger_type"]),
         intent=str(row["intent"] or ""),
-        draft_text=str(row["draft_text"] or ""),
         status=str(row["status"]),
         trigger_ref=str(row["trigger_ref"] or ""),
         action_intent=str(row["action_intent"] or ""),
@@ -539,7 +538,6 @@ class PostgresProactiveChatRepository:
         user_id: str,
         trigger_type: str,
         intent: str,
-        draft_text: str,
         trigger_ref: str = "",
         action_intent: str = "",
         plan: str = "",
@@ -573,8 +571,8 @@ class PostgresProactiveChatRepository:
                 """
                 INSERT INTO proactive_goals (
                     goal_id, user_id, trigger_type, trigger_ref, intent,
-                    action_intent, draft_text, plan
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    action_intent, plan
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -584,7 +582,6 @@ class PostgresProactiveChatRepository:
                     trigger_ref[:200],
                     intent[:500],
                     action_intent[:2000],
-                    draft_text[:2000],
                     plan[:2000],
                 ),
             )
@@ -617,7 +614,7 @@ class PostgresProactiveChatRepository:
         with transaction() as conn, conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT intent, action_intent, draft_text, plan, created_at
+                SELECT intent, action_intent, plan, created_at
                 FROM proactive_goals
                 WHERE user_id = %s AND status = 'pending'
                 ORDER BY created_at DESC

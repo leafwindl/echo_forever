@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>人设版本策略 A/B 决策页</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#fff; --ink:#191c21; --muted:#6b7280; --line:#e4e7ec;
+    --a:#0f766e; --aSoft:#ecfdf5; --b:#6d28d9; --bSoft:#f5f3ff;
+    --warn:#b45309; --warnSoft:#fffbeb; --bad:#b91c1c;
+    --mono:ui-monospace,SFMono-Regular,"Cascadia Mono","Consolas",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif}
+  header{background:#fff;border-bottom:1px solid var(--line);padding:26px 28px 22px}
+  h1{font-size:23px;margin:0 0 5px;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:13px}
+  main{max-width:1120px;margin:0 auto;padding:24px 28px 90px}
+  h2{font-size:17px;margin:34px 0 6px;display:flex;align-items:center;gap:9px}
+  h2 .n{font-size:12px;color:var(--muted);font-weight:400}
+  h3{font-size:14px;margin:0 0 5px}
+  p{margin:6px 0}
+  .state{background:var(--warnSoft);border:1px solid #fde68a;border-radius:12px;padding:13px 16px;margin:12px 0;font-size:13px}
+  .state b{color:#92400e}
+  .lead{background:#fff;border:1px solid var(--line);border-left:4px solid var(--b);border-radius:11px;padding:13px 16px;margin:12px 0;font-size:14px;color:#374151}
+  .options{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+  @media(max-width:800px){.options{grid-template-columns:1fr}}
+  .option{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 17px;position:relative;overflow:hidden}
+  .option:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--a)}
+  .option.b:before{background:var(--b)}
+  .option .tag{display:inline-block;font:600 11px var(--mono);border-radius:6px;padding:2px 8px;margin-bottom:7px}
+  .option.a .tag{background:var(--aSoft);color:var(--a)}
+  .option.b .tag{background:var(--bSoft);color:var(--b)}
+  .option h3{font-size:16px;margin:0 0 3px}
+  .option .oneline{font-size:12.5px;color:var(--muted);margin-bottom:9px}
+  .option ul{margin:7px 0 0;padding-left:18px}
+  .option li{margin:4px 0;font-size:12.8px;color:#374151}
+  .option .foot{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px;font-size:12.3px;color:#6b7280}
+  .matrix-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+  table{border-collapse:collapse;width:100%;font-size:12.7px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f8fafc;color:#4b5563;font-weight:600;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .yes{color:var(--a);font-weight:600}
+  .no{color:var(--bad);font-weight:600}
+  .mid{color:var(--warn);font-weight:600}
+  .flowbox{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0}
+  .chip{border-radius:8px;padding:5px 9px;font-size:12px;background:#eef1f5;color:#334155;white-space:nowrap}
+  .chip.src{background:var(--bSoft);color:#5b21b6}
+  .chip.ok{background:var(--aSoft);color:#115e59}
+  .chip.off{background:#f1f5f9;color:#94a3b8;text-decoration:line-through}
+  .arw{color:#b6bfcc;font-size:12px}
+  .files{background:#0f172a;color:#dbeafe;border-radius:10px;padding:12px 14px;overflow:auto;
+    font:11.7px/1.75 var(--mono);white-space:pre-wrap;margin:9px 0}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:800px){.split{grid-template-columns:1fr}}
+  .box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+  .box.good{border-left:4px solid var(--a)}
+  .box.warn{border-left:4px solid var(--warn)}
+  .box ul{margin:7px 0 0;padding-left:18px}
+  .box li{margin:4px 0;font-size:12.8px;color:#374151}
+  .decision{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:11px;padding:11px 18px;font:inherit;font-size:14px;cursor:pointer;font-weight:650}
+  .btn.a{color:var(--a);border-color:#a7f3d0}
+  .btn.b{color:var(--b);border-color:#ddd6fe}
+  .btn:hover{background:#f8fafc}
+  .result{display:none;background:#fff;border:1px solid var(--line);border-left:4px solid var(--a);border-radius:12px;padding:14px 16px;margin-top:10px}
+  .result.on{display:block}
+  .result.b{border-left-color:var(--b)}
+  .result b{font-size:13.5px}
+  .result ul{margin:7px 0 0;padding-left:18px}
+  .result li{margin:4px 0;font-size:12.8px;color:#374151}
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:11px;padding:12px 15px;margin:12px 0;font-size:13px}
+  .note b{color:#92400e}
+  .foot{border-top:1px solid var(--line);margin-top:36px;padding-top:14px;color:var(--muted);font-size:12px;line-height:1.9}
+</style>
+</head>
+<body>
+<header>
+  <h1>人设版本策略：A 还是 B</h1>
+  <div class="sub">示例放不放进人格合同，决定 P0 要不要升 v5、要不要同步部署配置。</div>
+</header>
+
+<main>
+  <div class="state">
+    <b>已选 A。</b>P0 保持 v4；示例旁挂；v5 改动已回退，完整后端测试 633 passed / 9 skipped。
+  </div>
+
+  <div class="lead">
+    <b>一句话：</b>A 是「P0 只搬家，示例旁挂，版本不动」；B 是「示例进正式合同，升 v5，同步所有版本消费者」。
+  </div>
+
+  <h2>1. 两条路 <span class="n">先看取舍，再看文件</span></h2>
+  <div class="options">
+    <div class="option a">
+      <span class="tag">A · 稳定优先</span>
+      <h3>示例旁挂，P0 不升版本</h3>
+      <div class="oneline">persona.md 保持 v4，examples.md 只给评测/调试。</div>
+      <ul>
+        <li><code>AssistantPersona.dialogue_examples</code> 保持空</li>
+        <li>默认渲染不注入示例；评测/调试单独读 examples</li>
+        <li>不碰 <code>settings</code> / <code>.env.example</code> / 启动链</li>
+        <li>P0 风险低，部署不需要改环境变量</li>
+        <li>P1 再接示例进合同，届时升 v5</li>
+      </ul>
+      <div class="foot">适合：P0 想零配置、先保证搬家不出事。</div>
+    </div>
+    <div class="option b">
+      <span class="tag">B · 语义完整</span>
+      <h3>示例进合同，升 v5</h3>
+      <div class="oneline">persona.md + examples.md 一起解析，示例是正式人格资产。</div>
+      <ul>
+        <li><code>dialogue_examples</code> 有 6 条，合同里可见</li>
+        <li>默认渲染仍不注入；<code>include_examples=True</code> 才注入</li>
+        <li>要改 settings、.env.example、启动链、letters、测试</li>
+        <li>生产/本地 <code>.env</code> 必须同步到 v5，否则启动找不到人设</li>
+        <li>一次到位，评测和加载都走同一份资产</li>
+      </ul>
+      <div class="foot">适合：示例从第一天就是正式资产，且能盯部署配置。</div>
+    </div>
+  </div>
+
+  <h2>2. 逐项对比</h2>
+  <div class="matrix-wrap">
+    <table>
+      <thead><tr><th>维度</th><th>A：v4 + 旁挂</th><th>B：v5 + 进合同</th></tr></thead>
+      <tbody>
+        <tr><td><b>版本号</b></td><td>echo-persona-v4</td><td>echo-persona-v5</td></tr>
+        <tr><td><b>示例位置</b></td><td>examples.md，评测/调试旁挂</td><td>examples.md → dialogue_examples</td></tr>
+        <tr><td><b>默认注入</b></td><td>不注入</td><td>不注入（include_examples=False）</td></tr>
+        <tr><td><b>配置改动</b></td><td class="yes">无</td><td class="no">settings / .env / 启动链</td></tr>
+        <tr><td><b>部署要求</b></td><td class="yes">无</td><td class="no">生产 .env 必须改 v5</td></tr>
+        <tr><td><b>P0 风险</b></td><td class="yes">低</td><td class="mid">中</td></tr>
+        <tr><td><b>语义</b></td><td>示例是旁挂资料</td><td>示例是正式人格合同</td></tr>
+        <tr><td><b>后续成本</b></td><td class="mid">P1 再接一次、再升 v5</td><td class="yes">一次到位</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>3. 渲染流程差异 <span class="n">看示例有没有进合同</span></h2>
+  <div class="flowbox">
+    <h3>A：persona.md（v4）+ examples.md 旁挂</h3>
+    <div class="flow">
+      <span class="chip src">persona.md v4</span><span class="arw">→</span>
+      <span class="chip">loader</span><span class="arw">→</span>
+      <span class="chip ok">AssistantPersona(dialogue_examples=())</span><span class="arw">→</span>
+      <span class="chip">renderer 默认不注入</span>
+    </div>
+    <div class="flow">
+      <span class="chip src">examples.md</span><span class="arw">→</span>
+      <span class="chip off">不进合同</span><span class="arw">→</span>
+      <span class="chip">评测/调试单独读</span>
+    </div>
+  </div>
+  <div class="flowbox">
+    <h3>B：persona.md + examples.md 一起进合同（v5）</h3>
+    <div class="flow">
+      <span class="chip src">persona.md v5</span><span class="arw">+</span>
+      <span class="chip src">examples.md</span><span class="arw">→</span>
+      <span class="chip">loader</span><span class="arw">→</span>
+      <span class="chip ok">dialogue_examples=6</span><span class="arw">→</span>
+      <span class="chip">renderer 默认 False</span>
+    </div>
+    <div class="flow">
+      <span class="chip">include_examples=True</span><span class="arw">→</span>
+      <span class="chip ok">6 条 + 虚构示范标注</span>
+    </div>
+  </div>
+
+  <h2>4. B 要改的版本消费者</h2>
+  <div class="files">Echo-backend/shared/config/settings.py:80-81
+Echo-backend/.env.example:20
+Echo-backend/main.py:168
+Echo-backend/features/letters/infrastructure/container.py:83
+Echo-backend/tests/test_assistant_persona.py
+Echo-backend/tests/test_prompt_renderer.py
+生产/本地 .env（不在仓库里，最容易漏）</div>
+  <div class="note"><b>B 最危险的点：</b>仓库改了 v5，但生产 `.env` 还写着 v4，启动时 `get_assistant_persona("echo-persona-v4")` 会直接找不到人设。A 没这个问题。</div>
+
+  <h2>5. 我的建议</h2>
+  <div class="split">
+    <div class="box good">
+      <h3>P0 选 A</h3>
+      <ul>
+        <li>只搬家、不碰配置，符合原来「P0 不升版本」</li>
+        <li>先把人设资产、loader、画像开关、冷启动跑通</li>
+        <li>P1 接示例时再一起升 v5，版本消费者一次改完</li>
+      </ul>
+    </div>
+    <div class="box warn">
+      <h3>如果 P0 选 B</h3>
+      <ul>
+        <li>示例从第一天就是正式合同</li>
+        <li>必须同时改 settings / .env.example / 生产 .env</li>
+        <li>我会跑完整测试后再报，不能只改代码不验证部署</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>6. 你选哪个</h2>
+  <div class="decision">
+    <button class="btn a" onclick="choose('a')">选 A：v4，示例旁挂</button>
+    <button class="btn b" onclick="choose('b')">选 B：v5，示例进合同</button>
+  </div>
+  <div class="result" id="result"></div>
+
+  <div class="foot">
+    决策已选 A：P0 保持 v4，示例旁挂，P1 再决定是否升 v5。此页保留作决策记录。
+  </div>
+</main>
+
+<script>
+function choose(kind){
+  const box = document.getElementById('result');
+  box.className = 'result on' + (kind === 'b' ? ' b' : '');
+  if (kind === 'a') {
+    box.innerHTML = '<b>你倾向 A：P0 不升版本，示例旁挂。</b><ul>' +
+      '<li>回退 settings / .env.example / loader / 测试里的 v5 改动</li>' +
+      '<li>persona.md 回到 v4；examples.md 只给评测/调试，不进 dialogue_examples</li>' +
+      '<li>P0 继续做画像开关、来信补画像、8 轮引导；P1 再接示例升 v5</li>' +
+      '</ul>';
+  } else {
+    box.innerHTML = '<b>你倾向 B：P0 升 v5，示例进合同。</b><ul>' +
+      '<li>保留当前 v5 资产和 loader</li>' +
+      '<li>补完 settings / .env.example / 启动链 / letters / 测试</li>' +
+      '<li>部署前必须把生产 .env 改到 echo-persona-v5</li>' +
+      '</ul>';
+  }
+  box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+</script>
+</body>
+</html>

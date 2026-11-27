@@ -273,6 +273,31 @@ def sanitize_dialogue_reply(reply: str, *, allow_empty: bool = False) -> str:
     return "我在听。你可以直接告诉我，现在最希望我怎样回应你。"
 
 
+def guard_dialogue_reply(
+    reply: str,
+    user_message: str,
+    *,
+    allow_empty: bool = False,
+    pause_followup_questions: bool = False,
+    suppress_repeated_greeting: bool = False,
+    grounded_weekday: str = "",
+) -> tuple[str, tuple[str, ...]]:
+    """主动动作分支与 prepare 共用同一套风格判定。"""
+    violations = find_dialogue_style_violations(
+        reply,
+        user_message,
+        pause_followup_questions=pause_followup_questions,
+        suppress_repeated_greeting=suppress_repeated_greeting,
+        grounded_weekday=grounded_weekday,
+    )
+    if not violations:
+        return reply, ()
+    return (
+        apply_dialogue_fallback(reply, user_message, violations, allow_empty=allow_empty),
+        violations,
+    )
+
+
 def apply_dialogue_fallback(
     reply: str,
     user_message: str,

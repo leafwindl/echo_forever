@@ -120,53 +120,12 @@ class TurnPolicy:
         call_route_instruction: str = "",
     ) -> list[dict]:
         del message  # 触发语只用于路由，不再影响提示词内容
-        if conversation_mode == "call":
-            sticker_rule = "当前为语音通话，不发送图片。"
-        elif conversation_mode == "daily_letter":
-            sticker_rule = "来信图片通过 image_brief 交给来信业务处理。"
-        elif conversation_mode == "proactive":
-            sticker_rule = (
-                "本轮由后台触发，并非用户发来新消息；用户是否醒着、在线、有空未知。"
-            )
-        else:
-            sticker_rule = ""
-        delivery_rule = ""
-        if conversation_mode in {"chat", "proactive"}:
-            delivery_rule = (
-                "直接输出自然文字，用空行分气泡，保持列表、代码和颜文字完整。"
-                "send_sticker 可发送表情包，按语境自由使用；"
-                "成功时图片由系统附加，未成功不要声称已发图。"
-            )
-        elif conversation_mode == "daily_letter":
-            delivery_rule = (
-                "每日来信最终只输出一个 JSON 对象，字段必须为：subject、content、mood、"
-                "core_topics、reflection、closing_style、image_brief、source_message_ids、"
-                "source_memory_ids。content 是完整正文，建议 600 到 1000 个中文字符；"
-                "reflection 必须包含 Echo 基于证据形成的个人观察或想法，不能只复述事件。"
-                "image_brief 必须是对象，包含 emotion、scene、visual_symbols、avoid；"
-                "visual_symbols 和 avoid 必须是字符串数组；"
-                "不要在输出中编造图片 URL、storage key 或 Provider 结果；不要使用 Markdown 代码块。"
-            )
-        if conversation_mode == "daily_letter":
-            orchestration_rule = (
-                "你正在 Echo 的统一 Agent 回路中执行每日来信任务。输入中的人物设定、关系上下文、"
-                "昨日消息和长期记忆具有不同证据等级；不得把长期记忆伪装成昨日事实，也不得虚构"
-                "Echo 的离线现实活动。当前无可用工具，必须直接完成结构化来信。"
-            )
-        else:
-            orchestration_rule = (
-                "按当前工具清单使用能力，以实际返回结果为执行依据。自然回复，不暴露内部流程。"
-            )
-        instruction = {
-            "role": "system",
-            "content": orchestration_rule + sticker_rule + delivery_rule,
-        }
         context_messages = (
             sanitize_time_metadata(messages)
             if conversation_mode == "proactive"
             else [dict(message_item) for message_item in messages]
         )
-        result = [instruction, *context_messages]
+        result = [*context_messages]
         clean_call_instruction = call_route_instruction.strip()
         if conversation_mode in {"call", "chat"} and clean_call_instruction:
             result.insert(

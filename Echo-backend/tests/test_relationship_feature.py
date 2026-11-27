@@ -11,16 +11,13 @@ from features.relationship.application.relationship_management import (
 from features.relationship.domain.entities import (
     RelationshipSignal,
     RelationshipState,
-    RelationshipValidationError,
     default_relationship_state,
 )
 from features.relationship.domain.rules import (
     advance_relationship_state,
     build_relationship_context,
-    calculate_relationship_score,
     detect_relationship_signals,
     infer_interaction_warmth,
-    resolve_proposable_direction,
     resolve_relationship_stage,
 )
 
@@ -45,18 +42,8 @@ class InMemoryRelationshipRepository:
         return state
 
     def reset(self, user_id):
-        self.state = replace(
-            default_relationship_state(user_id), relationship_mode=self.state.relationship_mode
-        )
+        self.state = default_relationship_state(user_id)
         return self.state
-
-    def update_mode(self, user_id, relationship_mode):
-        assert user_id == self.state.user_id
-        self.state = replace(self.state, relationship_mode=relationship_mode)
-        return self.state
-
-    def list_direction_boundaries(self, user_id):
-        return ()
 
 
 class RelationshipRuleTests(unittest.TestCase):
@@ -67,35 +54,36 @@ class RelationshipRuleTests(unittest.TestCase):
             active_days=1,
             shared_memory_count=20,
         )
-        state = RelationshipState(**{**state.__dict__, "score": calculate_relationship_score(state)})
 
         self.assertEqual("new", resolve_relationship_stage(state, "natural"))
 
-    def test_relationship_stage_uses_pace_and_requires_explicit_close_signal(self):
-        trusted = RelationshipState(
-            user_id="user-a",
-            stage="new",
-            score=90,
-            active_days=21,
-            explicit_relation_signal_count=0,
+    def test_affection_thresholds_map_to_five_stages(self):
+        cases = (
+            (1, "new"),
+            (99, "new"),
+            (100, "familiar"),
+            (299, "familiar"),
+            (300, "ambiguous"),
+            (499, "ambiguous"),
+            (500, "lover"),
+            (799, "lover"),
+            (800, "beloved"),
+            (1000, "beloved"),
         )
-        close = RelationshipState(
-            user_id="user-a",
-            stage="new",
-            score=90,
-            active_days=30,
-            explicit_relation_signal_count=1,
-        )
+        for affection, expected in cases:
+            with self.subTest(affection=affection):
+                state = RelationshipState(user_id="user-a", affection=affection)
+                self.assertEqual(expected, resolve_relationship_stage(state, "natural"))
 
-        self.assertEqual("trusted", resolve_relationship_stage(trusted, "natural"))
-        self.assertEqual("close", resolve_relationship_stage(close, "natural"))
-        self.assertEqual("close", resolve_relationship_stage(close, "slow"))
+    def test_stage_never_downgrades_even_if_affection_drops(self):
+        state = RelationshipState(user_id="user-a", stage="lover", affection=1)
+        self.assertEqual("lover", resolve_relationship_stage(state, "natural"))
 
-    def test_open_pace_changes_threshold_but_not_current_evidence(self):
-        state = RelationshipState(user_id="user-a", score=22, active_days=2)
-
-        self.assertEqual("new", resolve_relationship_stage(state, "natural"))
-        self.assertEqual("familiar", resolve_relationship_stage(state, "open"))
+    def test_legacy_stages_normalize_without_index_error(self):
+        trusted = RelationshipState(user_id="user-a", stage="trusted", affection=1)
+        close = RelationshipState(user_id="user-a", stage="close", affection=1)
+        self.assertEqual("ambiguous", resolve_relationship_stage(trusted, "natural"))
+        self.assertEqual("lover", resolve_relationship_stage(close, "natural"))
 
     def test_explicit_boundary_immediately_restrains_affection_and_warmth(self):
         state = RelationshipState(
@@ -112,7 +100,7 @@ class RelationshipRuleTests(unittest.TestCase):
 
         self.assertEqual("reserved", context.interaction_warmth)
         self.assertEqual("restrained", context.effective_affection_style)
-        self.assertEqual("close", context.state.stage)
+        self.assertEqual("lover", context.state.stage)
 
     def test_positive_share_is_warm_without_becoming_relationship_signal(self):
         self.assertEqual("warm", infer_interaction_warmth("今天打球赢了，挺开心的"))
@@ -134,51 +122,6 @@ class RelationshipRuleTests(unittest.TestCase):
     def test_negated_happiness_does_not_trigger_warm_turn(self):
         self.assertEqual("normal", infer_interaction_warmth("和你聊天不开心"))
         self.assertEqual("warm", infer_interaction_warmth("开始不开心，后来终于搞定了"))
-
-    def test_proposable_direction_requires_stage_and_evidence(self):
-        familiar = RelationshipState(
-            user_id="user-a",
-            stage="familiar",
-            relationship_type="acquaintance",
-            positive_signal_count=1,
-            explicit_relation_signal_count=0,
-        )
-        self.assertEqual("friend", resolve_proposable_direction(familiar))
-        self.assertEqual("", resolve_proposable_direction(familiar, recent_support=False))
-        self.assertEqual(
-            "",
-            resolve_proposable_direction(
-                familiar, blocked_directions=frozenset({"friend"})
-            ),
-        )
-
-        ambiguous = RelationshipState(
-            user_id="user-a",
-            stage="trusted",
-            relationship_type="friend",
-            positive_signal_count=1,
-            explicit_relation_signal_count=0,
-        )
-        self.assertEqual("ambiguous", resolve_proposable_direction(ambiguous))
-
-        partner_without_consent = RelationshipState(
-            user_id="user-a",
-            stage="trusted",
-            relationship_type="ambiguous",
-            positive_signal_count=1,
-            explicit_relation_signal_count=0,
-        )
-        self.assertEqual("", resolve_proposable_direction(partner_without_consent))
-
-    def test_restrained_permission_blocks_proposal(self):
-        state = RelationshipState(
-            user_id="user-a",
-            stage="familiar",
-            relationship_type="acquaintance",
-            positive_signal_count=1,
-            affection_permission="restrained",
-        )
-        self.assertEqual("", resolve_proposable_direction(state))
 
     def test_advance_records_active_day_and_explicit_permission(self):
         progress = advance_relationship_state(
@@ -222,22 +165,10 @@ class RelationshipManagementTests(unittest.TestCase):
 
         self.assertEqual("user-a", reset.user_id)
         self.assertEqual("new", reset.stage)
-        self.assertEqual(0, reset.score)
+        self.assertEqual(1, reset.affection)
 
     def test_explicit_mode_does_not_fabricate_progress_and_reset_keeps_the_choice(self):
-        changed = self.service.update_mode("user-a", "ai_partner")
-        self.assertEqual("ai_partner", changed.relationship_mode)
-        self.assertEqual("new", changed.stage)
-        self.assertEqual(0, changed.interaction_turns)
-        context = self.service.get_context("user-a", "你好", "natural", "contextual")
-        self.assertEqual("ai_partner", context.state.relationship_mode)
-        self.assertEqual("ai_partner", self.service.reset("user-a").relationship_mode)
-        self.assertEqual("friend", self.service.update_mode("user-a", "friend").relationship_mode)
-
-    def test_invalid_mode_never_reaches_persistence(self):
-        with self.assertRaises(RelationshipValidationError):
-            self.service.update_mode("user-a", "pretend_human")
-        self.assertEqual("friend", self.repository.state.relationship_mode)
+        self.assertEqual("new", self.service.reset("user-a").stage)
 
 
 if __name__ == "__main__":

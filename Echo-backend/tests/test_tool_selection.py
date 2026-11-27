@@ -152,8 +152,9 @@ class ProactiveToolSelectionTests(unittest.TestCase):
         )
 
         for forbidden in (
-            "propose_relationship",
-            "respond_relationship",
+            "adjust_affection",
+            "request_stage_advance",
+            "respond_stage_advance",
             "create_chat_schedule",
             "list_chat_schedules",
             "cancel_chat_schedule",

@@ -70,8 +70,9 @@ CHAT_TOOL_ORDER = (
     "phone_notifications",
     "phone_stop",
     "phone_run_task",
-    "propose_relationship",
-    "respond_relationship",
+    "adjust_affection",
+    "request_stage_advance",
+    "respond_stage_advance",
     "pause_proactive_contact",
     "resume_proactive_contact",
     "create_chat_schedule",
@@ -168,8 +169,9 @@ TOOL_SPECS = {
     "phone_notifications": (("chat", "proactive"), 20, 2),
     "phone_stop": (("chat", "proactive"), 15, 2),
     "phone_run_task": (("chat", "proactive"), 180, 1),
-    "propose_relationship": (("chat",), 5, 4),
-    "respond_relationship": (("chat",), 5, 4),
+    "adjust_affection": (("chat",), 5, 1),
+    "request_stage_advance": (("chat",), 5, 1),
+    "respond_stage_advance": (("chat",), 5, 1),
     "pause_proactive_contact": (("chat",), 5, 4),
     "resume_proactive_contact": (("chat",), 5, 4),
     "create_chat_schedule": (("chat", "call"), 5, 1),
@@ -181,7 +183,7 @@ TOOL_SPECS = {
 # 后续若再瘦身，继续收紧；新增工具应触发这里失败，先评估影响。
 # 微信三件套（send/messages/sessions）再占约 288 tok：Echo 自有电脑上的
 # 实际社交能力，评估后把棘轮放到 5,000。
-CHAT_TOKEN_BUDGET = 5_650  # 含 update_user_profile：参数 schema 较大
+CHAT_TOKEN_BUDGET = 6_000  # 含 update_user_profile、adjust_affection、阶段请求工具
 
 
 def _descriptions(registry, mode):

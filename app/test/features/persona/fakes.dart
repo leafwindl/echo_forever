@@ -29,11 +29,6 @@ class FakePersonaRepository implements PersonaRepository {
   int getRelationshipCalls = 0;
   int resetRelationshipCalls = 0;
   int resetCompanionshipCalls = 0;
-  String? acceptedProposalId;
-  String? deferredProposalId;
-  String? declinedProposalId;
-  RelationshipMode? updatedRelationshipMode;
-  Object? updateRelationshipModeError;
   final List<PersonaUpdate> updates = <PersonaUpdate>[];
 
   @override
@@ -47,24 +42,6 @@ class FakePersonaRepository implements PersonaRepository {
   Future<RelationshipStateDto> getRelationship() async {
     getRelationshipCalls += 1;
     if (getRelationshipError != null) throw getRelationshipError!;
-    return relationship;
-  }
-
-  @override
-  Future<RelationshipStateDto> updateRelationshipMode(
-    RelationshipMode mode,
-  ) async {
-    if (updateRelationshipModeError != null) throw updateRelationshipModeError!;
-    updatedRelationshipMode = mode;
-    relationship = RelationshipStateDto(
-      relationshipMode: mode,
-      stage: relationship.stage,
-      stageLabel: relationship.stageLabel,
-      interactionTurns: relationship.interactionTurns,
-      activeDays: relationship.activeDays,
-      affectionPermission: relationship.affectionPermission,
-      schemaVersion: relationship.schemaVersion,
-    );
     return relationship;
   }
 
@@ -83,38 +60,6 @@ class FakePersonaRepository implements PersonaRepository {
     relationship =
         nextResetRelationship ?? const RelationshipStateDto.initial();
     return relationship;
-  }
-
-  @override
-  Future<RelationshipStateDto> acceptRelationshipProposal(
-    String proposalId,
-  ) async {
-    acceptedProposalId = proposalId;
-    relationship = RelationshipStateDto(
-      relationshipMode: relationship.relationshipMode,
-      relationshipType: relationship.pendingProposal?.direction ?? 'friend',
-      relationshipTypeLabel:
-          relationship.pendingProposal?.directionLabel ?? '朋友',
-      stage: relationship.stage,
-      stageLabel: relationship.stageLabel,
-      interactionTurns: relationship.interactionTurns,
-      activeDays: relationship.activeDays,
-      affectionPermission: relationship.affectionPermission,
-      schemaVersion: relationship.schemaVersion,
-      createdAt: relationship.createdAt,
-      updatedAt: relationship.updatedAt,
-    );
-    return relationship;
-  }
-
-  @override
-  Future<void> deferRelationshipProposal(String proposalId) async {
-    deferredProposalId = proposalId;
-  }
-
-  @override
-  Future<void> declineRelationshipProposal(String proposalId) async {
-    declinedProposalId = proposalId;
   }
 
   @override
@@ -186,8 +131,8 @@ UserPersona personaFixture({
 }
 
 RelationshipStateDto relationshipFixture({
-  String stage = 'friend',
-  String stageLabel = 'Friend',
+  String stage = 'new',
+  String stageLabel = '初识',
   int interactionTurns = 12,
 }) {
   return RelationshipStateDto(
@@ -196,6 +141,6 @@ RelationshipStateDto relationshipFixture({
     interactionTurns: interactionTurns,
     activeDays: 3,
     affectionPermission: 'contextual',
-    schemaVersion: 1,
+    schemaVersion: 3,
   );
 }

@@ -67,7 +67,6 @@ class PresenceThought:
     action_intent: str = ""
     source_memory_id: str = ""
     source_memory_text: str = ""
-    draft_text: str = ""
     plan: str = ""
     created_at: datetime | None = None
 
@@ -113,7 +112,6 @@ class ThoughtDraft:
     shareable: bool = False
     action_intent: str = ""
     action_request: str = ""
-    draft_text: str = ""
     plan: str = ""
     next_wake_minutes: int = 0
 

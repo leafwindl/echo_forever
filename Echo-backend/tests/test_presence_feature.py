@@ -93,7 +93,7 @@ class FakeGenerator:
     def __init__(self, draft: ThoughtDraft | None = None):
         self.draft = draft or ThoughtDraft(
             text="也许她今天只是需要安静一会儿",
-            salience=0.7,
+            salience=0.2,
         )
         self.calls = 0
 
@@ -122,13 +122,12 @@ class FakeGoalCreator:
         *,
         user_id,
         intent,
-        draft_text,
         trigger_type="presence",
         trigger_ref="",
         action_intent="",
         plan="",
     ):
-        self.goals.append((user_id, draft_text, action_intent))
+        self.goals.append((user_id, intent, action_intent))
         return f"goal_{len(self.goals)}"
 
 
@@ -238,7 +237,7 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
             generator=generator,
         )
         result = await service.tick("user-1", now=now)
-        self.assertEqual(result.decision, "thought")
+        self.assertEqual(result.decision, "message")
         self.assertEqual(repository.state.consecutive_unanswered, 2)
         self.assertIsNotNone(repository.state.outreach_downshift_until)
 
@@ -280,7 +279,7 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         await service.tick("user-1", now=now)
         self.assertEqual(writer.written, [("他说最近总睡不好，我记着这件事", 0.8)])
 
-    async def test_shareable_thought_delivers_one_message(self):
+    async def test_shareable_thought_creates_goal_without_draft(self):
         now = datetime.now(UTC)
         repository = FakeRepository()
         creator = FakeGoalCreator()
@@ -289,7 +288,6 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
                 text="想起上次说的事",
                 salience=0.7,
                 shareable=True,
-                draft_text="上次说的事后来怎么样了？",
             )
         )
         service = _service(
@@ -300,8 +298,9 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         result = await service.tick("user-1", now=now)
         self.assertEqual(result.decision, "message")
-        self.assertEqual(result.message_text, "上次说的事后来怎么样了？")
+        self.assertEqual(result.message_text, "想起上次说的事")
         self.assertEqual(len(creator.goals), 1)
+        self.assertEqual(creator.goals[0][1], "想起上次说的事")
         self.assertEqual(repository.state.outreach_sent_count, 1)
         self.assertEqual(repository.state.last_decision, "message")
 
@@ -383,7 +382,8 @@ class PresenceServiceTests(unittest.IsolatedAsyncioTestCase):
             goal_creator=creator,
         )
         await service.tick("user-1", now=now)
-        self.assertEqual(creator.goals, [])
+        self.assertEqual(len(creator.goals), 1)
+        self.assertEqual(creator.goals[0][2], "")
         self.assertIn("action_unavailable", repository.events)
 
     async def test_downshift_extends_next_tick(self):

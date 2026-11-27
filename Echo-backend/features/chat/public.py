@@ -2,7 +2,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 
-from features.agent.domain.entities import ContentPart
+from features.agent.domain.entities import ContentPart, ProactiveAction, ProactiveDecision
 from features.chat.domain.entities import (
     CHAT_CHANNEL_APP,
     CHAT_CHANNEL_WECHAT,
@@ -178,6 +178,58 @@ async def send_chat_message(
     )
 
 
+async def build_proactive_writer_messages(
+    *,
+    user_id: str,
+    conversation_id: str,
+    brief: str,
+    plan: str = "",
+    action_intent: str = "",
+    sticker_intent: str = "",
+) -> list[dict[str, str]]:
+    """给需要工具执行的主动动作准备与 writer 相同的提示层。"""
+    from features.chat.application.generate_reply import GenerateChatReply
+    from features.chat.infrastructure.context_builder import build_chat_context
+
+    context = await build_chat_context(
+        user_id=user_id,
+        user_message=brief or "主动消息",
+        conversation_id=conversation_id,
+        conversation_mode="proactive",
+    )
+    if not context.proactive_writer_messages:
+        return []
+    decision = ProactiveDecision(
+        action=ProactiveAction.SEND,
+        topic="share_presence" if brief.strip() else "casual_check_in",
+        tone="gentle",
+        safe_fact_ids=("task_intent", "current_day_period"),
+        reason="presence_action",
+    )
+    messages = GenerateChatReply._build_proactive_writer_turn(
+        context.proactive_writer_messages,
+        dict(context.proactive_safe_facts),
+        decision,
+        brief=brief.strip()[:800],
+        plan=plan.strip()[:400],
+    )
+    if action_intent.strip():
+        messages.append(
+            {
+                "role": "system",
+                "content": f"本轮需要执行的动作：{action_intent.strip()[:160]}。",
+            }
+        )
+    if sticker_intent.strip():
+        messages.append(
+            {
+                "role": "system",
+                "content": f"当前可用的表情语义：{sticker_intent.strip()}。",
+            }
+        )
+    return messages
+
+
 def record_internal_assistant_note(
     *,
     user_id: str,
@@ -327,6 +379,7 @@ __all__ = [
     "clear_chat_context",
     "deliver_external_assistant_message",
     "accept_chat_message",
+    "build_proactive_writer_messages",
     "generate_chat_reply",
     "generate_proactive_action",
     "list_chat_messages",

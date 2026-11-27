@@ -134,7 +134,7 @@ class CompletionDeliveryTests(unittest.TestCase):
 
         self.assertEqual(len(goals), 1)
         self.assertEqual(repository.session.completion_goal_id, "goal_focus_2")
-        self.assertIn("有其他事情要忙吗", goals[0]["draft_text"])
+        self.assertIn("有其他事情要忙吗", goals[0]["intent"])
 
 
 class DailyLetterEvidenceTests(unittest.TestCase):

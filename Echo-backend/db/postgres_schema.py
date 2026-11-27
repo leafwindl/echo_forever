@@ -316,14 +316,10 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         """
         CREATE TABLE IF NOT EXISTS relationship_states (
             user_id TEXT PRIMARY KEY,
-            relationship_mode TEXT NOT NULL DEFAULT 'friend'
-                CHECK (relationship_mode IN ('friend', 'ai_partner')),
-            relationship_type VARCHAR(24) NOT NULL DEFAULT 'acquaintance'
-                CHECK (relationship_type IN ('acquaintance', 'friend', 'ambiguous', 'partner')),
-            relationship_type_updated_at TIMESTAMPTZ,
             reset_epoch BIGINT NOT NULL DEFAULT 0,
             stage VARCHAR(32) NOT NULL DEFAULT 'new',
-            score INTEGER NOT NULL DEFAULT 0 CHECK (score BETWEEN 0 AND 100),
+            affection INTEGER NOT NULL DEFAULT 1 CHECK (affection BETWEEN 1 AND 1000),
+            affection_updated_at TIMESTAMPTZ,
             interaction_turns INTEGER NOT NULL DEFAULT 0 CHECK (interaction_turns >= 0),
             active_days INTEGER NOT NULL DEFAULT 0 CHECK (active_days >= 0),
             shared_memory_count INTEGER NOT NULL DEFAULT 0 CHECK (shared_memory_count >= 0),
@@ -335,7 +331,7 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             last_interaction_at TIMESTAMPTZ,
             last_boundary_at TIMESTAMPTZ,
             stage_updated_at TIMESTAMPTZ,
-            schema_version INTEGER NOT NULL DEFAULT 2,
+            schema_version INTEGER NOT NULL DEFAULT 3,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
@@ -353,46 +349,31 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         )
         """,
         """
-        CREATE TABLE IF NOT EXISTS relationship_proposals (
+        CREATE TABLE IF NOT EXISTS relationship_stage_requests (
             id BIGSERIAL PRIMARY KEY,
-            proposal_id TEXT NOT NULL UNIQUE,
+            request_id TEXT NOT NULL UNIQUE,
             user_id TEXT NOT NULL,
-            direction VARCHAR(24) NOT NULL
-                CHECK (direction IN ('friend', 'ambiguous', 'partner')),
+            target_stage VARCHAR(16) NOT NULL
+                CHECK (target_stage IN ('familiar', 'ambiguous', 'lover', 'beloved')),
             status VARCHAR(16) NOT NULL DEFAULT 'pending'
                 CHECK (status IN ('pending', 'accepted', 'declined', 'deferred', 'expired', 'cancelled')),
             conversation_id TEXT,
             agent_turn_id TEXT,
-            source_message_id BIGINT,
             evidence TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             resolved_at TIMESTAMPTZ,
-            expires_at TIMESTAMPTZ NOT NULL
+            expires_at TIMESTAMPTZ NOT NULL,
+            cooldown_until TIMESTAMPTZ
         )
         """,
         """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_relationship_proposals_pending_direction
-        ON relationship_proposals(user_id, direction)
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_relationship_stage_requests_pending
+        ON relationship_stage_requests(user_id)
         WHERE status = 'pending'
         """,
         """
-        CREATE INDEX IF NOT EXISTS idx_relationship_proposals_user_status
-        ON relationship_proposals(user_id, status, created_at DESC)
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS relationship_direction_boundaries (
-            user_id TEXT NOT NULL,
-            direction VARCHAR(24) NOT NULL
-                CHECK (direction IN ('friend', 'ambiguous', 'partner')),
-            status VARCHAR(16) NOT NULL
-                CHECK (status IN ('declined', 'deferred')),
-            reason TEXT NOT NULL DEFAULT '',
-            source_message_id BIGINT,
-            revisit_after TIMESTAMPTZ,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            PRIMARY KEY (user_id, direction)
-        )
+        CREATE INDEX IF NOT EXISTS idx_relationship_stage_requests_user_status
+        ON relationship_stage_requests(user_id, status, created_at DESC)
         """,
         f"""
         CREATE TABLE IF NOT EXISTS memory_embeddings (
@@ -779,7 +760,6 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             trigger_ref TEXT NOT NULL DEFAULT '',
             intent TEXT NOT NULL DEFAULT '',
             action_intent TEXT NOT NULL DEFAULT '',
-            draft_text TEXT NOT NULL DEFAULT '',
             plan TEXT NOT NULL DEFAULT '',
             status VARCHAR(16) NOT NULL DEFAULT 'pending'
                 CHECK (status IN ('pending', 'reported', 'failed', 'expired', 'cancelled')),
@@ -1042,7 +1022,6 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
             action_intent TEXT NOT NULL DEFAULT '',
             source_memory_id TEXT NOT NULL DEFAULT '',
             source_memory_text TEXT NOT NULL DEFAULT '',
-            draft_text TEXT NOT NULL DEFAULT '',
             plan TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
@@ -1198,7 +1177,6 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         "ALTER TABLE proactive_goals ADD COLUMN IF NOT EXISTS result_status VARCHAR(16)",
         "ALTER TABLE proactive_goals ADD COLUMN IF NOT EXISTS result_summary TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE study_focus_sessions ADD COLUMN IF NOT EXISTS completion_goal_id TEXT",
-        "ALTER TABLE presence_thoughts ADD COLUMN IF NOT EXISTS draft_text TEXT NOT NULL DEFAULT ''",
         "CREATE INDEX IF NOT EXISTS idx_user_profiles_updated ON user_profiles(updated_at DESC)",
         "ALTER TABLE desktop_nodes ADD COLUMN IF NOT EXISTS owner_type VARCHAR(16) NOT NULL DEFAULT 'user'",
         "ALTER TABLE proactive_chat_preferences ADD COLUMN IF NOT EXISTS cycle_started_at TIMESTAMPTZ",
@@ -1222,19 +1200,47 @@ def build_postgres_schema_sql(vector_dimension: int | None = None) -> list[str]:
         """,
         "CREATE INDEX IF NOT EXISTS idx_user_memories_source_message_id ON user_memories(source_message_id)",
         "CREATE INDEX IF NOT EXISTS idx_user_personas_updated_at ON user_personas(updated_at DESC)",
-        "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS relationship_mode "
-        "TEXT NOT NULL DEFAULT 'friend' CHECK (relationship_mode IN ('friend', 'ai_partner'))",
-        "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS relationship_type "
-        "VARCHAR(24) NOT NULL DEFAULT 'acquaintance' "
-        "CHECK (relationship_type IN ('acquaintance', 'friend', 'ambiguous', 'partner'))",
-        "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS relationship_type_updated_at TIMESTAMPTZ",
         "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS reset_epoch BIGINT NOT NULL DEFAULT 0",
-        "ALTER TABLE relationship_states ALTER COLUMN schema_version SET DEFAULT 2",
-        "UPDATE relationship_states SET schema_version = 2 WHERE schema_version < 2",
+        "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS affection INTEGER NOT NULL DEFAULT 1 CHECK (affection BETWEEN 1 AND 1000)",
+        "ALTER TABLE relationship_states ADD COLUMN IF NOT EXISTS affection_updated_at TIMESTAMPTZ",
+        "UPDATE relationship_states SET stage = CASE "
+        "WHEN stage = 'trusted' THEN 'ambiguous' "
+        "WHEN stage = 'close' THEN 'lover' "
+        "ELSE stage END "
+        "WHERE stage IN ('trusted', 'close')",
+        "ALTER TABLE relationship_states ALTER COLUMN schema_version SET DEFAULT 3",
+        "UPDATE relationship_states SET schema_version = 3 WHERE schema_version < 3",
         "CREATE INDEX IF NOT EXISTS idx_relationship_states_stage ON relationship_states(stage)",
         "CREATE INDEX IF NOT EXISTS idx_relationship_states_updated_at ON relationship_states(updated_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_relationship_events_user_created ON relationship_events(user_id, created_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_relationship_events_user_type ON relationship_events(user_id, event_type)",
+        """
+        CREATE TABLE IF NOT EXISTS relationship_stage_requests (
+            id BIGSERIAL PRIMARY KEY,
+            request_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL,
+            target_stage VARCHAR(16) NOT NULL
+                CHECK (target_stage IN ('familiar', 'ambiguous', 'lover', 'beloved')),
+            status VARCHAR(16) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending', 'accepted', 'declined', 'deferred', 'expired', 'cancelled')),
+            conversation_id TEXT,
+            agent_turn_id TEXT,
+            evidence TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            resolved_at TIMESTAMPTZ,
+            expires_at TIMESTAMPTZ NOT NULL,
+            cooldown_until TIMESTAMPTZ
+        )
+        """,
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_relationship_stage_requests_pending
+        ON relationship_stage_requests(user_id)
+        WHERE status = 'pending'
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_relationship_stage_requests_user_status
+        ON relationship_stage_requests(user_id, status, created_at DESC)
+        """,
         "CREATE INDEX IF NOT EXISTS idx_memory_embeddings_memory_id ON memory_embeddings(memory_id)",
         "CREATE INDEX IF NOT EXISTS idx_memory_embeddings_user_id ON memory_embeddings(user_id)",
         """

@@ -30,10 +30,10 @@ class Settings(BaseSettings):
         le=1024,
     )
     call_history_messages: int = Field(
-        default=8,
+        default=30,
         validation_alias="CALL_HISTORY_MESSAGES",
         ge=2,
-        le=20,
+        le=60,
     )
     call_reply_max_chars: int = Field(
         default=80,
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     timeout: int = Field(default=30, validation_alias="TIMEOUT")
     prompt_version: str = Field(default="echo-v1.1.0", validation_alias="PROMPT_VERSION")
     assistant_persona_version: str = Field(
-        default="echo-persona-v4",
+        default="echo-persona-v5",
         validation_alias="ASSISTANT_PERSONA_VERSION",
     )
     persona_prompt_max_tokens: int = Field(

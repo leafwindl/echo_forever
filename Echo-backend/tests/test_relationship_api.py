@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from features.relationship.domain.entities import RelationshipState
+from features.relationship.domain.entities import RelationshipState, StageAdvanceRequest
 from features.relationship.interface.router import router
 from shared.interface.dependencies import CurrentUser, get_current_user
 
@@ -15,32 +15,41 @@ def make_app(authenticated=True):
     return app
 
 
-def test_mode_update_uses_authenticated_identity_and_returns_the_saved_choice():
-    saved = RelationshipState(user_id="current-user", relationship_mode="ai_partner")
+def test_old_mode_and_proposal_routes_are_removed():
+    client = TestClient(make_app())
+    assert client.put("/relationship/me", json={}).status_code == 405
+    assert client.get("/relationship/proposals/pending").status_code == 404
+
+
+def test_pending_stage_request_is_rendered_with_target_label():
+    request = StageAdvanceRequest(
+        request_id="req-1",
+        user_id="current-user",
+        target_stage="ambiguous",
+        status="pending",
+    )
     with patch(
-        "features.relationship.interface.router.update_relationship_mode", return_value=saved
-    ) as update:
-        response = TestClient(make_app()).put(
-            "/relationship/me",
-            json={
-                "relationship_mode": "ai_partner",
-                "user_id": "someone-else",
-            },
-        )
+        "features.relationship.interface.router.get_pending_stage_request",
+        return_value=request,
+    ):
+        response = TestClient(make_app()).get("/relationship/stage-requests/pending")
+
     assert response.status_code == 200
-    assert response.json()["relationship_mode"] == "ai_partner"
-    assert response.json()["stage"] == "new"
-    update.assert_called_once_with("current-user", "ai_partner")
+    assert response.json()["target_stage"] == "ambiguous"
+    assert response.json()["target_stage_label"] == "暧昧"
 
 
-def test_invalid_mode_and_unauthenticated_request_are_rejected_before_use_case():
-    with patch("features.relationship.interface.router.update_relationship_mode") as update:
-        response = TestClient(make_app()).put(
-            "/relationship/me", json={"relationship_mode": "anything"}
+def test_accept_stage_request_uses_authenticated_identity():
+    accepted = RelationshipState(user_id="current-user", stage="ambiguous", affection=320)
+    with patch(
+        "features.relationship.interface.router.accept_stage_request",
+        return_value=accepted,
+    ) as accept:
+        response = TestClient(make_app()).post(
+            "/relationship/stage-requests/req-1/accept"
         )
-        assert response.status_code == 422
-        response = TestClient(make_app(False)).put(
-            "/relationship/me", json={"relationship_mode": "ai_partner"}
-        )
-        assert response.status_code == 401
-        update.assert_not_called()
+
+    assert response.status_code == 200
+    assert response.json()["stage"] == "ambiguous"
+    assert response.json()["stage_label"] == "暧昧"
+    accept.assert_called_once_with("current-user", "req-1")

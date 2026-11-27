@@ -54,7 +54,6 @@ def _thought(row: dict[str, Any]) -> PresenceThought:
         action_intent=str(row["action_intent"] or ""),
         source_memory_id=str(row["source_memory_id"] or ""),
         source_memory_text=str(row["source_memory_text"] or ""),
-        draft_text=str(row.get("draft_text") or ""),
         plan=str(row.get("plan") or ""),
         created_at=row.get("created_at"),
     )
@@ -153,8 +152,8 @@ class PostgresPresenceRepository:
                 INSERT INTO presence_thoughts (
                     thought_id, user_id, text, salience, shareable,
                     action_intent, source_memory_id, source_memory_text,
-                    draft_text, plan, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()))
+                    plan, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()))
                 """,
                 (
                     thought.thought_id,
@@ -165,7 +164,6 @@ class PostgresPresenceRepository:
                     thought.action_intent,
                     thought.source_memory_id,
                     thought.source_memory_text,
-                    thought.draft_text,
                     thought.plan,
                     thought.created_at,
                 ),

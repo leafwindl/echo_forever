@@ -12,6 +12,7 @@ from features.agent.domain.delivery import (
 from features.agent.domain.entities import AgentRunStatus, AgentToolStatus
 from features.chat.application.generate_reply import GenerateChatReply
 from features.chat.domain.delivery_timing import DeliveryTimingPolicy
+from features.chat.domain.dialogue_style import guard_dialogue_reply
 from features.chat.domain.services import ChatRequestGuard
 from features.chat.infrastructure.events import ChatEvent, ChatEventBroker
 from features.proactive_chat.infrastructure.postgres_repository import (
@@ -354,15 +355,35 @@ class ProcessProactiveChatJobs:
                 )
                 return True
 
-            draft = goal.draft_text.strip()
-            pure_action = not draft and bool(goal.action_intent.strip())
-            if goal.action_intent.strip():
+            has_action = bool(goal.action_intent.strip())
+            pure_action = has_action
+            if has_action:
                 segments, result_status, result_summary = await self._execute_goal_actions(
                     goal,
                     conversation_id,
                 )
             else:
-                segments = (draft,) if draft else ()
+                prepared = await self.reply_generator.prepare(
+                    user_id=job.user_id,
+                    message=goal.intent,
+                    conversation_id=conversation_id,
+                    conversation_mode="proactive",
+                    proactive_intent=goal.intent,
+                    proactive_plan=goal.plan,
+                    proactive_force_send=True,
+                    proactive_skip_planner=True,
+                    proactive_brief=goal.intent,
+                )
+                if prepared.error_code:
+                    self.repository.suppress_job(job.job_id, "agent_output_rejected")
+                    self.repository.mark_goal_failed(goal.goal_id)
+                    logger.info(
+                        "Proactive chat job suppressed job_id=%s reason=agent_output_rejected code=%s",
+                        job.job_id,
+                        prepared.error_code,
+                    )
+                    return True
+                segments = prepared.reply_segments
                 result_status, result_summary = "success", ""
             if pure_action:
                 # L0 只写内部历史；L1/L2 才接触用户。
@@ -497,52 +518,49 @@ class ProcessProactiveChatJobs:
             parse_action_kind,
             run_chat_agent,
         )
+        from features.chat.public import build_proactive_writer_messages
 
         spec = get_action_spec(parse_action_kind(goal.action_intent))
         tool_scope = spec.tool_scope if spec is not None else None
-        fallback = goal.draft_text.strip() or f"本来想{goal.intent[:40]}，这次没做成。"
-        if not goal.draft_text.strip():
-            instruction = (
-                f"这是你自己的主动动作，不是用户发来的新消息：{goal.intent}\n"
-                + (f"这次计划：{goal.plan}\n" if goal.plan else "")
-                + f"你原本想做的事：{goal.action_intent or '随便看看'}\n"
-                "这次不需要发消息给用户，只做想做的事；做完用一两句简短的内部记录"
-                "说明你做了什么、结果如何。不要提工具名、系统、调度或内部流程。"
-                "不要用“在的/在吗/有什么可以帮你的”这类回应式开场；"
-                "直接说你在做什么或想提议什么。"
-            )
-        else:
-            instruction = (
-                f"这是你自己的主动念头，不是用户发来的新消息：{goal.intent}\n"
-                + (f"这次计划：{goal.plan}\n" if goal.plan else "")
-                + f"你原本倾向做的事：{goal.action_intent or '只是想说句话'}\n"
-                "可以照这个倾向做，也可以根据当下判断换一件更合适的事，或者只发一句话。"
-                "如果做了动作，做完就用一两句自然的话告诉用户你做了什么、结果如何；"
-                "没做成或只完成一部分，就如实说，不要假装完成。"
-                "不要提工具名、系统、调度或内部流程。"
-                "不要用“在的/在吗/有什么可以帮你的”这类回应式开场，"
-                "也不要假装用户刚叫你。"
-            )
+        messages = await build_proactive_writer_messages(
+            user_id=goal.user_id,
+            conversation_id=conversation_id,
+            brief=goal.intent,
+            plan=goal.plan,
+            action_intent=goal.action_intent,
+        )
+        if not messages:
+            return (), "failed", "主动动作提示缺失"
         try:
             result = await run_chat_agent(
                 user_id=goal.user_id,
-                message=instruction,
-                messages=[
-                    {"role": "system", "content": "这是一次主动执行，不是用户消息。"},
-                ],
+                message="根据后端批准的主动聊天安全摘要生成自然正文。",
+                messages=messages,
                 conversation_id=conversation_id,
                 conversation_mode="proactive",
                 tools_enabled=True,
                 tool_scope=tool_scope,
             )
         except Exception as exc:
-            return (fallback,), "failed", f"主动执行异常：{type(exc).__name__}"
+            return (), "failed", f"主动执行异常：{type(exc).__name__}"
 
         segments = result.reply_segments or (
             (result.reply_text,) if result.reply_text.strip() else ()
         )
         if result.status != AgentRunStatus.COMPLETED or not segments:
-            return (fallback,), "failed", f"主动执行未完成：{result.error_code or 'empty_reply'}"
+            return (), "failed", f"主动执行未完成：{result.error_code or 'empty_reply'}"
+
+        guarded_segments: list[str] = []
+        for segment in segments:
+            cleaned, _violations = guard_dialogue_reply(
+                segment,
+                goal.intent,
+                allow_empty=True,
+            )
+            if cleaned.strip():
+                guarded_segments.append(cleaned.strip())
+        if not guarded_segments:
+            return (), "failed", "风格检查后为空"
 
         failed_tools = [
             tool_result.tool_name
@@ -550,8 +568,12 @@ class ProcessProactiveChatJobs:
             if tool_result.status in {AgentToolStatus.FAILED, AgentToolStatus.TIMED_OUT}
         ]
         if failed_tools:
-            return tuple(segments), "partial", "部分动作失败：" + ",".join(failed_tools)
-        return tuple(segments), "success", ""
+            return (
+                tuple(guarded_segments),
+                "partial",
+                "部分动作失败：" + ",".join(failed_tools),
+            )
+        return tuple(guarded_segments), "success", ""
 
     def _suppress_changed_spontaneous_job(self, job, schedule, phase: str) -> bool:
         if schedule is not None or not self.repository.spontaneous_job_context_changed(job):

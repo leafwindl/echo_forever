@@ -62,8 +62,9 @@ PHONE_TOOL_NAMES = (
 )
 
 RELATIONSHIP_TOOL_NAMES = (
-    "propose_relationship",
-    "respond_relationship",
+    "adjust_affection",
+    "request_stage_advance",
+    "respond_stage_advance",
 )
 
 PROACTIVE_TOOL_NAMES = (

@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from features.chat.domain.dialogue_style import (
     apply_dialogue_fallback,
     find_dialogue_style_violations,
+    guard_dialogue_reply,
     sanitize_dialogue_reply,
     should_pause_followup_questions,
     should_suppress_repeated_greeting,
@@ -14,6 +15,15 @@ from features.chat.domain.dialogue_style import (
 
 
 class DialogueStyleTests(unittest.TestCase):
+    def test_guard_returns_clean_reply_and_violation_types(self):
+        cleaned, violations = guard_dialogue_reply("（摸摸头）在呢。", "在吗")
+        self.assertIn("parenthesized_action", violations)
+        self.assertNotIn("摸摸头", cleaned)
+
+        unchanged, no_violations = guard_dialogue_reply("在呢。", "在吗")
+        self.assertEqual("在呢。", unchanged)
+        self.assertEqual((), no_violations)
+
     def test_repeated_greeting_cooldown_only_applies_inside_live_session(self):
         history = [
             {

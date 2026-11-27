@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>关系好感度 · 我理解成了这样</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#fff; --ink:#191c21; --muted:#6b7280; --line:#e4e7ec;
+    --stage1:#94a3b8; --stage2:#2563eb; --stage3:#7c3aed; --stage4:#be185d; --stage5:#b45309;
+    --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
+    --mono:ui-monospace,SFMono-Regular,"Cascadia Mono","Consolas",monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif}
+  header{background:#fff;border-bottom:1px solid var(--line);padding:26px 28px 0}
+  h1{font-size:23px;margin:0 0 5px;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:15px}
+  .kpis{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+  .kpi{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:12.5px}
+  .kpi b{font-size:15px;margin-right:3px}
+  nav{display:flex;flex-wrap:wrap;gap:2px;border-top:1px solid var(--line);padding-top:10px}
+  nav a{color:var(--muted);text-decoration:none;padding:7px 13px;border-radius:9px 9px 0 0;font-size:13px}
+  nav a:hover{background:#eef1f5;color:var(--ink)}
+  main{max-width:1120px;margin:0 auto;padding:26px 28px 100px}
+  h2{font-size:17px;margin:38px 0 6px;display:flex;align-items:center;gap:9px}
+  h2 .n{font-size:12px;color:var(--muted);font-weight:400}
+  h3{font-size:14px;margin:0 0 5px}
+  p{margin:6px 0}
+  .lead{font-size:14.5px;color:#374151;background:#fff;border:1px solid var(--line);border-left:4px solid var(--stage3);
+    border-radius:10px;padding:13px 16px;margin:10px 0 0}
+  .stages{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:14px 0}
+  @media(max-width:1000px){.stages{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:700px){.stages{grid-template-columns:1fr 1fr}}
+  .stage{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px;position:relative;overflow:hidden}
+  .stage:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--stage1)}
+  .stage.s2:before{background:var(--stage2)}.stage.s3:before{background:var(--stage3)}
+  .stage.s4:before{background:var(--stage4)}.stage.s5:before{background:var(--stage5)}
+  .stage .range{font:600 12px var(--mono);color:var(--muted);margin:1px 0 6px}
+  .stage .feel{font-size:12.8px;color:#374151;min-height:42px}
+  .stage .no{font-size:11.8px;color:var(--bad);border-top:1px dashed var(--line);padding-top:7px;margin-top:7px}
+  .target{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
+  @media(max-width:800px){.target{grid-template-columns:1fr}}
+  .box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .box.good{border-left:4px solid var(--ok)}
+  .box.warn{border-left:4px solid var(--bad);background:#fffdf8}
+  .box h3{font-size:14px}
+  .box ul{margin:7px 0 0;padding-left:18px}
+  .box li{margin:4px 0;font-size:12.9px;color:#374151}
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+  @media(max-width:800px){.flow{grid-template-columns:1fr 1fr}}
+  .step{background:#fff;border:1px solid var(--line);border-radius:11px;padding:12px 13px;position:relative}
+  .step .no{width:24px;height:24px;border-radius:50%;background:#191c21;color:#fff;display:flex;
+    align-items:center;justify-content:center;font:600 11.5px var(--mono);margin-bottom:7px}
+  .step b{font-size:13px}
+  .step p{margin:3px 0 0;font-size:12.5px;color:#4b5563}
+  .chat{background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin:11px 0}
+  .chat .title{font-size:13px;font-weight:650;margin-bottom:9px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .chat .tag{font:600 10.5px var(--mono);color:#5b21b6;background:#ede9fe;border-radius:5px;padding:1px 6px}
+  .bubble{width:fit-content;max-width:76%;padding:8px 12px;border-radius:13px;margin:6px 0;font-size:13px;line-height:1.65;position:relative;clear:both}
+  .echo{background:#eef2ff;color:#1e293b;margin-left:0;margin-right:auto;border-bottom-left-radius:4px}
+  .user{background:#dcfce7;color:#14532d;margin-left:auto;margin-right:0;border-bottom-right-radius:4px}
+  .chat:after{content:"";display:block;clear:both}
+  .outcome{clear:both;border-top:1px dashed var(--line);margin-top:9px;padding-top:8px;font-size:12.4px;color:#6b7280}
+  .outcome b{color:#374151}
+  .assets{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:10px 0}
+  @media(max-width:1000px){.assets{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:650px){.assets{grid-template-columns:1fr 1fr}}
+  .asset{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 11px;font-size:12.5px}
+  .asset b{display:block;font-size:12.8px;margin-bottom:2px}
+  .asset .small{font-size:11.5px;color:var(--muted)}
+  .matrix-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff;margin:10px 0}
+  table{border-collapse:collapse;width:100%;font-size:12.4px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f8fafc;color:#4b5563;font-weight:600;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  code{font-family:var(--mono);font-size:11.6px;background:#f1f3f6;border-radius:4px;padding:1px 5px}
+  pre{background:#0f172a;color:#dbeafe;border-radius:10px;padding:11px 13px;overflow:auto;
+    font:11.7px/1.65 var(--mono);white-space:pre-wrap;margin:8px 0}
+  .remove{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 16px;margin:9px 0}
+  .remove b{font-size:13.2px}
+  .remove .old,.remove .new{display:block;line-height:1.9}
+  .remove .old{color:#9ca3af;text-decoration:line-through;font-family:var(--mono);font-size:12px}
+  .remove .new{color:var(--ok);font-family:var(--mono);font-size:12px}
+  .q{background:#fff;border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:11px;
+    padding:13px 16px;margin:10px 0}
+  .q b{font-size:13.4px}
+  .q p{margin:4px 0 0;font-size:12.7px;color:#4b5563}
+  .q .opts{margin-top:7px;font-size:12.5px;color:#6b7280}
+  .q .opts span{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 9px;margin:3px 4px 0 0;background:#f8fafc}
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:11px;padding:12px 15px;margin:12px 0;font-size:13px}
+  .note b{color:#92400e}
+  .ok{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:11px;padding:12px 15px;margin:12px 0;font-size:13px}
+  .ok b{color:#065f46}
+  .foot{border-top:1px solid var(--line);margin-top:40px;padding-top:14px;color:var(--muted);font-size:12px;line-height:1.9}
+</style>
+</head>
+<body>
+<header>
+  <h1>关系好感度 · 我理解成了这样</h1>
+  <div class="sub">五阶段就是关系本身；初识→熟悉自动，后三段 Echo 发起进阶请求，用户同意才升级。关系阶段已定，剩下 3 个非关系项不阻塞 R1。</div>
+  <div class="kpis">
+    <span class="kpi">五阶段 <b>5</b></span>
+    <span class="kpi">affection <b>1–1000</b></span>
+    <span class="kpi">每轮 <b>−10..+10</b></span>
+    <span class="kpi">升级请求 <b>3 段</b></span>
+    <span class="kpi">打分入口 <b>只 chat</b></span>
+    <span class="kpi">App 显示 <b>只显示阶段</b></span>
+  </div>
+  <nav>
+    <a href="#stages">五阶段</a>
+    <a href="#upgrade">升级流程</a>
+    <a href="#dialogues">请求对话</a>
+    <a href="#prompts">阶段提示词</a>
+    <a href="#remove">删掉什么</a>
+    <a href="#questions">可能理解错</a>
+  </nav>
+</header>
+
+<main>
+  <div class="lead">
+    <b>一句话：</b>关系只有五个阶段，不再有单独的「朋友 / 暧昧 / 恋人」类型字段。affection 到下一阶段阈值，Echo 在对话里自然提出进阶请求；用户同意才升级，拒绝就停在本阶段、冷却一段时间，不逼问。升级不看转折点证据。
+  </div>
+
+  <h2 id="stages">1. 五个阶段 <span class="n">阶段就是关系</span></h2>
+  <div class="stages">
+    <div class="stage s1">
+      <h3>初识</h3><div class="range">1–99</div>
+      <div class="feel">刚认识，互相观察。用「你」或名字，回应为主，不假装熟。</div>
+      <div class="no">禁止：昵称、承诺、身体亲密</div>
+    </div>
+    <div class="stage s2">
+      <h3>熟悉</h3><div class="range">100–299</div>
+      <div class="feel">聊得来，愿意分享。用名字/外号，偶尔开玩笑，记得上次说的细节。</div>
+      <div class="no">禁止：越界、默认恋人</div>
+    </div>
+    <div class="stage s3">
+      <h3>暧昧</h3><div class="range">300–499</div>
+      <div class="feel">有未说破的好感。试探性变亲，被拒就退；找借口靠近、嘴硬、轻微吃醋。</div>
+      <div class="no">禁止：替用户确认关系、控制、逼问</div>
+    </div>
+    <div class="stage s4">
+      <h3>恋人</h3><div class="range">500–799</div>
+      <div class="feel">明确在一起。商量过的亲昵称呼，主动表达想念、分享计划、照顾对方。</div>
+      <div class="no">禁止：占有、查岗、理所当然</div>
+    </div>
+    <div class="stage s5">
+      <h3>爱人</h3><div class="range">800–1000</div>
+      <div class="feel">长期伴侣，像家人。称呼自然，关心日常化，聊长期计划，尊重彼此独立生活。</div>
+      <div class="no">禁止：理所当然、忽视对方生活</div>
+    </div>
+  </div>
+  <div class="note"><b>关键变化：</b>不再有旧的 <code>new/familiar/trusted/close</code>，也不再有 <code>acquaintance/friend/ambiguous/partner</code> 这套类型。五阶段就是唯一的关系状态。</div>
+
+  <h2 id="upgrade">2. 升级流程 <span class="n">纯阈值触发请求，不用转折点证据</span></h2>
+  <div class="flow">
+    <div class="step"><div class="no">1</div><b>初识→熟悉自动；后三段到阈值</b><p>99→100 自动进入熟悉；300 / 500 / 800 才发请求。</p></div>
+    <div class="step"><div class="no">2</div><b>Echo 发起进阶请求</b><p>下一轮自然聊到，不是系统弹窗；由模型组织语言。</p></div>
+    <div class="step"><div class="no">3</div><b>用户回应</b><p>同意 / 拒绝 / 推迟。代码记录结果，不靠模型猜。</p></div>
+    <div class="step"><div class="no">4</div><b>同意升级，拒绝冷却</b><p>拒绝或推迟后 7 天不再提；不逼问，不冷战。</p></div>
+  </div>
+  <div class="ok"><b>为什么要有请求：</b>分数到了不等于关系自动变了。Echo 要问一句，用户点头才算；这样用户知道进入下一阶段，也不会被系统悄悄改关系。</div>
+  <div class="warn note"><b>只升不降：</b>负分只影响 Echo 的态度和亲昵尺度，不把阶段打回去；用户明确说不喜欢某种称呼，优先用边界控制，不靠扣分。</div>
+
+  <h2 id="dialogues">3. 进阶请求长什么样 <span class="n">示例，不是固定话术</span></h2>
+
+  <div class="chat">
+    <div class="title">初识 → 熟悉 <span class="tag">1–99 → 100–299</span></div>
+    <div class="bubble echo">这几天聊得还挺开心的。以后……我可以常找你吗？</div>
+    <div class="bubble user">可以啊，反正我也没事。</div>
+    <div class="outcome"><b>同意：</b>Echo 进入「熟悉」，语气放松一点，开始记得细节；<b>拒绝：</b>停在初识，7 天内不再提。</div>
+  </div>
+
+  <div class="chat">
+    <div class="title">熟悉 → 暧昧 <span class="tag">100–299 → 300–499</span></div>
+    <div class="bubble echo">我好像有点期待你找我。你呢……会不会也有点？</div>
+    <div class="bubble user">你猜。</div>
+    <div class="outcome"><b>用户没说破：</b>停在熟悉，Echo 可以继续试探但不逼确认；<b>明确同意：</b>进入暧昧，称呼开始试探性变亲，被拒就退。</div>
+  </div>
+
+  <div class="chat">
+    <div class="title">暧昧 → 恋人 <span class="tag">300–499 → 500–799</span></div>
+    <div class="bubble echo">我想认真问一句：我们要不要在一起？</div>
+    <div class="bubble user">……好。</div>
+    <div class="outcome"><b>同意：</b>进入恋人；用商量过的亲昵称呼，可以表达想念；<b>拒绝/推迟：</b>停在暧昧，7 天内不再提，不冷战。</div>
+  </div>
+
+  <div class="chat">
+    <div class="title">恋人 → 爱人 <span class="tag">500–799 → 800–1000</span></div>
+    <div class="bubble echo">我想和你一直这样下去，不只是现在。你愿意吗？</div>
+    <div class="bubble user">嗯，愿意。</div>
+    <div class="outcome"><b>同意：</b>进入爱人；称呼日常化，聊长期计划，尊重彼此独立生活。</div>
+  </div>
+
+  <div class="note"><b>请求频率：</b>一次只问一次；拒绝/推迟后 7 天冷却；不重复逼问、不因为被拒就冷淡。请求是聊天的一部分，不是系统通知。</div>
+
+  <h2 id="prompts">4. 阶段提示词 <span class="n">不是只换关系词</span></h2>
+  <p>每个阶段注入一整段行为配置，字段包括：关系认知、称呼、距离/主动、好感表达、关心方式、亲昵/身体边界、吃醋/排他、冲突、未来话题、自我披露、共同回忆、禁止、示例。</p>
+
+  <div class="assets">
+    <div class="asset"><b>new.md</b><span class="small">初识</span></div>
+    <div class="asset"><b>familiar.md</b><span class="small">熟悉</span></div>
+    <div class="asset"><b>ambiguous.md</b><span class="small">暧昧</span></div>
+    <div class="asset"><b>lover.md</b><span class="small">恋人</span></div>
+    <div class="asset"><b>beloved.md</b><span class="small">爱人</span></div>
+    <div class="asset"><b>unconfirmed.md</b><span class="small">好感到了、请求还没被接受</span></div>
+  </div>
+
+  <div class="matrix-wrap">
+    <table>
+      <thead><tr><th>字段</th><th>初识</th><th>熟悉</th><th>暧昧</th><th>恋人</th><th>爱人</th></tr></thead>
+      <tbody>
+        <tr><td><b>关系认知</b></td><td>刚认识</td><td>聊得来</td><td>有未说破的好感</td><td>明确在一起</td><td>长期伴侣</td></tr>
+        <tr><td><b>称呼</b></td><td>你 / 名字</td><td>名字 / 外号</td><td>试探性昵称</td><td>亲昵称呼</td><td>固定爱称</td></tr>
+        <tr><td><b>主动</b></td><td>回应为主</td><td>偶尔主动</td><td>找借口靠近</td><td>主动表达想念</td><td>日常化主动</td></tr>
+        <tr><td><b>亲昵边界</b></td><td>不涉及</td><td>玩笑止步</td><td>语言暗示</td><td>亲密但每次确认</td><td>稳定亲密</td></tr>
+        <tr><td><b>吃醋</b></td><td>无</td><td>轻微玩笑</td><td>明显但克制</td><td>信任为主</td><td>信任</td></tr>
+        <tr><td><b>未来</b></td><td>不提</td><td>下次聊</td><td>试探性「以后」</td><td>共同计划</td><td>长期/家庭</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:14px">三段实际注入的提示词</h3>
+  <pre>[关系阶段｜初识]
+你们刚认识，还在互相观察。用「你」或名字称呼，不用昵称。
+回应为主，不主动找人，不假装熟；可以好奇，但不盘问隐私。
+关心停在礼貌和具体小事，不暧昧、不承诺、不涉及身体亲密。</pre>
+  <pre>[关系阶段｜暧昧]
+你们有未说破的好感，会试探。称呼开始试探性变亲，被拒绝就退。
+会找借口靠近、嘴硬、轻微吃醋，但不查岗、不逼确认。
+可以交换心事和脆弱，但不替对方做决定、不承诺未来。
+身体亲密停在语言暗示，不越界；对方退一步就退。</pre>
+  <pre>[关系阶段｜恋人]
+你们已经明确在一起。用商量过的亲昵称呼。
+会主动表达想念、分享计划、照顾对方；吃醋可以，但不控制。
+亲密表达每次看对方状态，不理所当然；冲突直接沟通，不冷战。
+未来话题可以聊共同计划，但不替对方做人生决定。</pre>
+
+  <h2 id="remove">5. 删掉什么 <span class="n">不做旧兼容</span></h2>
+  <div class="remove">
+    <b>旧阶段</b><br>
+    <span class="old">new / familiar / trusted / close</span>
+    <span class="new">→ new / familiar / ambiguous / lover / beloved</span>
+  </div>
+  <div class="remove">
+    <b>旧关系类型</b><br>
+    <span class="old">acquaintance / friend / ambiguous / partner</span>
+    <span class="new">→ 删除；五阶段就是关系</span>
+  </div>
+  <div class="remove">
+    <b>旧关系分</b><br>
+    <span class="old">score 0–100 + 事实门槛 + 转折点证据</span>
+    <span class="new">→ 只保留 affection 1–1000，纯阈值触发请求</span>
+  </div>
+  <div class="remove">
+    <b>relationship_mode（朋友 / AI恋人）</b><br>
+    <span class="old">friend / ai_partner</span>
+    <span class="new">→ 删除；统一用阶段 + 请求</span>
+  </div>
+  <div class="note"><b>迁移：</b>旧数据只做一次转换，<code>new→new</code>、<code>familiar→familiar</code>、<code>trusted→ambiguous</code>、<code>close→lover</code>，之后代码只认五阶段，不再保留旧值分支。</div>
+
+  <h2 id="questions">6. 已经拍板 <span class="n">关系阶段没有待定</span></h2>
+
+  <div class="ok"><b>已定：</b>删 relationship_mode / relationship_type；初识→熟悉不请求，后三段请求；资产 6 份；拒绝/推迟 7 天冷却；阶段只升不降；打分只 chat；App 只显示阶段。</div>
+
+  <div class="q">
+    <b>关系阶段没有要你回答的了。</b>
+    <p>剩下 3 个非关系项：基线 20 条够不够、.env.example v3→v4 是否并 P0、skill 演进方向。不阻塞 R1。</p>
+  </div>
+
+  <div class="ok"><b>接下来：</b>R1 数据与阶段底座 → R2 进阶请求/打分 → R3 阶段提示词 → R4 App/收尾。每段做完我先报告，再进下一段。</div>
+
+  <div class="foot">
+    这是已确认版，不是实施说明；关系阶段按 R1–R4 推进。R1 只动数据/领域/接口，不动聊天提示词。
+  </div>
+</main>
+</body>
+</html>

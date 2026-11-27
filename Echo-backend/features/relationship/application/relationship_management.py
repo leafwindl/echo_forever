@@ -1,21 +1,22 @@
 from datetime import datetime, timedelta, timezone
 
+from features.relationship.domain.affection import (
+    stage_for_affection,
+    validate_adjustment,
+)
 from features.relationship.domain.entities import (
-    RELATIONSHIP_DIRECTIONS,
-    RELATIONSHIP_MODES,
-    RELATIONSHIP_TYPES,
+    AffectionAdjustment,
     RelationshipContext,
-    RelationshipDirectionBoundary,
-    RelationshipProposal,
     RelationshipState,
     RelationshipValidationError,
+    StageAdvanceRequest,
     default_relationship_state,
 )
 from features.relationship.domain.repositories import RelationshipRepository
 from features.relationship.domain.rules import (
     advance_relationship_state,
     build_relationship_context,
-    resolve_proposable_direction,
+    next_requestable_stage,
 )
 
 _PROPOSAL_TTL = timedelta(hours=24)
@@ -42,23 +43,6 @@ class RelationshipManagementService:
     def __init__(self, repository: RelationshipRepository):
         self.repository = repository
 
-    def _active_boundaries(
-        self, user_id: str, now: datetime | None = None
-    ) -> tuple[RelationshipDirectionBoundary, ...]:
-        current = now or _utc_now()
-        active: list[RelationshipDirectionBoundary] = []
-        for boundary in self.repository.list_direction_boundaries(user_id):
-            if boundary.status == "declined":
-                active.append(boundary)
-                continue
-            revisit_after = _parse_timestamp(boundary.revisit_after)
-            if revisit_after is None or revisit_after > current:
-                active.append(boundary)
-        return tuple(active)
-
-    def _blocked_directions(self, user_id: str) -> frozenset[str]:
-        return frozenset(boundary.direction for boundary in self._active_boundaries(user_id))
-
     def get_context(
         self,
         user_id: str,
@@ -67,18 +51,16 @@ class RelationshipManagementService:
         affection_style: str,
     ) -> RelationshipContext:
         state = self.repository.get_or_create(user_id.strip())
-        last_interaction = _parse_timestamp(state.last_interaction_at)
-        recent_support = (
-            last_interaction is not None
-            and _utc_now() - last_interaction <= timedelta(days=14)
-        )
+        pending_stage_request = None
+        get_pending = getattr(self.repository, "get_pending_stage_request", None)
+        if callable(get_pending):
+            pending_stage_request = get_pending(state.user_id)
         return build_relationship_context(
             state,
             user_message,
             relationship_pace,
             affection_style,
-            blocked_directions=self._blocked_directions(state.user_id),
-            recent_support=recent_support,
+            stage_asset="unconfirmed" if pending_stage_request is not None else "",
         )
 
     def record_turn(
@@ -111,135 +93,96 @@ class RelationshipManagementService:
     def reset(self, user_id: str) -> RelationshipState:
         return self.repository.reset(user_id.strip())
 
-    def update_mode(self, user_id: str, relationship_mode: str) -> RelationshipState:
+    def adjust_affection(
+        self,
+        *,
+        user_id: str,
+        delta: int,
+        reason: str,
+        agent_turn_id: str,
+    ) -> AffectionAdjustment:
         clean_user_id = default_relationship_state(user_id).user_id
-        mode = relationship_mode.strip().lower()
-        if mode not in RELATIONSHIP_MODES:
-            raise RelationshipValidationError("Invalid relationship_mode")
-        self.repository.get_or_create(clean_user_id)
-        return self.repository.update_mode(clean_user_id, mode)
+        clean_delta, clean_reason = validate_adjustment(delta, reason)
+        state, applied = self.repository.adjust_affection(
+            user_id=clean_user_id,
+            delta=clean_delta,
+            reason=clean_reason,
+            agent_turn_id=agent_turn_id.strip(),
+        )
+        return AffectionAdjustment(
+            delta=applied,
+            affection=state.affection,
+            affection_stage=stage_for_affection(state.affection),
+            stage=state.stage,
+        )
 
-    def pending_proposal(self, user_id: str) -> RelationshipProposal | None:
-        return self.repository.get_pending_proposal(user_id.strip())
+    def pending_stage_request(self, user_id: str) -> StageAdvanceRequest | None:
+        return self.repository.get_pending_stage_request(user_id.strip())
 
-    def propose_relationship(
+    def request_stage_advance(
         self,
         *,
         user_id: str,
         conversation_id: str | None,
         agent_turn_id: str | None,
         evidence: str,
-    ) -> RelationshipProposal:
-        clean_user_id = user_id.strip()
+    ) -> StageAdvanceRequest:
+        clean_user_id = default_relationship_state(user_id).user_id
         state = self.repository.get_or_create(clean_user_id)
-        now = _utc_now()
-        pending = self.repository.get_pending_proposal(clean_user_id)
+        target_stage = next_requestable_stage(state.stage, state.affection)
+        if not target_stage:
+            raise RelationshipValidationError("Stage advance is not eligible")
+        pending = self.repository.get_pending_stage_request(clean_user_id)
         if pending is not None:
-            return pending
-
-        last_interaction = _parse_timestamp(state.last_interaction_at)
-        recent_support = (
-            last_interaction is not None
-            and now - last_interaction <= timedelta(days=14)
-        )
-        direction = resolve_proposable_direction(
-            state,
-            blocked_directions=self._blocked_directions(clean_user_id),
-            recent_support=recent_support,
-        )
-        if not direction:
-            raise RelationshipValidationError("No relationship direction is eligible")
-        return self.repository.create_proposal(
+            raise RelationshipValidationError("Stage request already pending")
+        latest = self.repository.latest_stage_request(clean_user_id)
+        now = _utc_now()
+        if latest is not None and latest.cooldown_until:
+            cooldown_until = _parse_timestamp(latest.cooldown_until)
+            if cooldown_until is not None and cooldown_until > now:
+                raise RelationshipValidationError("Stage request is cooling down")
+        return self.repository.create_stage_request(
             user_id=clean_user_id,
-            direction=direction,
+            target_stage=target_stage,
             conversation_id=conversation_id,
             agent_turn_id=agent_turn_id,
             evidence=evidence.strip(),
             expires_at=(now + _PROPOSAL_TTL).isoformat(),
         )
 
-    def accept_proposal(self, user_id: str, proposal_id: str) -> RelationshipState:
-        clean_user_id = user_id.strip()
-        proposal = self.repository.get_proposal(clean_user_id, proposal_id.strip())
-        if proposal is None:
-            raise RelationshipValidationError("Proposal not found")
-        if proposal.status != "pending":
-            raise RelationshipValidationError("Proposal is not pending")
-        expires_at = _parse_timestamp(proposal.expires_at)
+    def accept_stage_request(self, user_id: str, request_id: str) -> RelationshipState:
+        clean_user_id = default_relationship_state(user_id).user_id
+        request = self.repository.get_stage_request(clean_user_id, request_id.strip())
+        if request is None or request.status != "pending":
+            raise RelationshipValidationError("No pending stage request")
+        expires_at = _parse_timestamp(request.expires_at)
         if expires_at is not None and expires_at <= _utc_now():
-            raise RelationshipValidationError("Proposal expired")
-        if proposal.direction not in RELATIONSHIP_TYPES:
-            raise RelationshipValidationError("Invalid proposal direction")
-        return self.repository.accept_proposal(
+            raise RelationshipValidationError("Stage request expired")
+        return self.repository.accept_stage_request(
             user_id=clean_user_id,
-            proposal_id=proposal.proposal_id,
-            relationship_type=proposal.direction,
+            request_id=request.request_id,
             resolved_at=_utc_now().isoformat(),
         )
 
-    def defer_proposal(
-        self, user_id: str, proposal_id: str, evidence: str = ""
-    ) -> RelationshipProposal:
-        clean_user_id = user_id.strip()
-        proposal = self.repository.get_proposal(clean_user_id, proposal_id.strip())
-        if proposal is None:
-            raise RelationshipValidationError("Proposal not found")
+    def decline_stage_request(
+        self, user_id: str, request_id: str, evidence: str = ""
+    ) -> StageAdvanceRequest:
+        return self._resolve_stage_request(user_id, request_id, "declined", evidence)
+
+    def defer_stage_request(
+        self, user_id: str, request_id: str, evidence: str = ""
+    ) -> StageAdvanceRequest:
+        return self._resolve_stage_request(user_id, request_id, "deferred", evidence)
+
+    def _resolve_stage_request(
+        self, user_id: str, request_id: str, status: str, evidence: str
+    ) -> StageAdvanceRequest:
+        clean_user_id = default_relationship_state(user_id).user_id
         now = _utc_now()
-        resolved = self.repository.resolve_proposal(
+        return self.repository.resolve_stage_request(
             user_id=clean_user_id,
-            proposal_id=proposal.proposal_id,
-            status="deferred",
+            request_id=request_id.strip(),
+            status=status,
             resolved_at=now.isoformat(),
+            cooldown_until=(now + timedelta(days=_DEFER_DAYS)).isoformat(),
         )
-        self.repository.upsert_direction_boundary(
-            user_id=clean_user_id,
-            direction=proposal.direction,
-            status="deferred",
-            reason=evidence.strip(),
-            source_message_id=proposal.source_message_id,
-            revisit_after=(now + timedelta(days=_DEFER_DAYS)).isoformat(),
-        )
-        return resolved
-
-    def decline_proposal(
-        self, user_id: str, proposal_id: str, evidence: str = ""
-    ) -> RelationshipProposal:
-        clean_user_id = user_id.strip()
-        proposal = self.repository.get_proposal(clean_user_id, proposal_id.strip())
-        if proposal is None:
-            raise RelationshipValidationError("Proposal not found")
-        resolved = self.repository.resolve_proposal(
-            user_id=clean_user_id,
-            proposal_id=proposal.proposal_id,
-            status="declined",
-            resolved_at=_utc_now().isoformat(),
-        )
-        self.repository.upsert_direction_boundary(
-            user_id=clean_user_id,
-            direction=proposal.direction,
-            status="declined",
-            reason=evidence.strip(),
-            source_message_id=proposal.source_message_id,
-            revisit_after=None,
-        )
-        return resolved
-
-    def decline_direction(
-        self, user_id: str, direction: str, evidence: str = ""
-    ) -> RelationshipDirectionBoundary:
-        clean_user_id = user_id.strip()
-        clean_direction = direction.strip().lower()
-        if clean_direction not in RELATIONSHIP_DIRECTIONS:
-            raise RelationshipValidationError("Invalid relationship direction")
-        self.repository.cancel_pending_proposals(clean_user_id)
-        return self.repository.upsert_direction_boundary(
-            user_id=clean_user_id,
-            direction=clean_direction,
-            status="declined",
-            reason=evidence.strip(),
-            source_message_id=None,
-            revisit_after=None,
-        )
-
-    def cancel_pending_proposals(self, user_id: str) -> int:
-        return self.repository.cancel_pending_proposals(user_id.strip())

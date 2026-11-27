@@ -225,7 +225,6 @@ class PresenceService:
             action_intent=action_intent,
             source_memory_id=memory.memory_id if memory else "",
             source_memory_text=_compact(memory.content, 500) if memory else "",
-            draft_text=_compact(draft.draft_text, 500),
             plan=_compact(draft.plan, 200),
             created_at=current,
         )
@@ -385,7 +384,6 @@ class PresenceService:
             goal_id = self.goal_creator.create_goal(
                 user_id=user_id,
                 intent=item.title,
-                draft_text="",
                 trigger_type="agenda",
                 trigger_ref=item.item_id,
                 action_intent=f"{action_kind}:{item.title}",
@@ -447,21 +445,23 @@ class PresenceService:
         thought: PresenceThought,
         now: datetime,
     ) -> str:
-        text = thought.draft_text.strip()
         intent_text = thought.action_intent.strip()
         if intent_text:
             from features.agent.public import get_action_spec, parse_action_kind
 
             if get_action_spec(parse_action_kind(intent_text)) is None:
                 intent_text = ""
-        if not text and not intent_text:
+        if (
+            not thought.shareable
+            and thought.salience < self.message_min_salience
+            and not intent_text
+        ):
             # 既不想说话、也没有想做的事，就自己待着。
             return ""
         try:
             goal_id = self.goal_creator.create_goal(
                 user_id=state.user_id,
                 intent=thought.text,
-                draft_text=text,
                 trigger_type="memory" if thought.source_memory_id else "presence",
                 trigger_ref=thought.source_memory_id,
                 action_intent=intent_text,
@@ -495,11 +495,11 @@ class PresenceService:
             detail={
                 "thought_id": thought.thought_id,
                 "goal_id": goal_id,
-                "text": text[:160],
+                "text": thought.text[:160],
             },
             now=now,
         )
-        return text
+        return thought.text
 
     async def run_once(self, *, now: datetime | None = None) -> int:
         current = now or datetime.now(UTC)

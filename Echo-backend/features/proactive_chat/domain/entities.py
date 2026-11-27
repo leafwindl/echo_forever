@@ -68,7 +68,6 @@ class ProactiveGoal:
     user_id: str
     trigger_type: str
     intent: str
-    draft_text: str
     status: str
     trigger_ref: str = ""
     action_intent: str = ""

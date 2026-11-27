@@ -12,8 +12,8 @@ from features.chat.infrastructure.context_builder import (
     _build_proactive_planner_input,
     _build_proactive_safe_facts,
     _build_proactive_writer_messages,
-    _call_requires_extended_context,
     _clean_proactive_history_content,
+    _should_inject_persona_anchor,
     _turn_input_message,
 )
 from features.chat.infrastructure.postgres_repositories import (
@@ -24,14 +24,23 @@ from features.chat.infrastructure.postgres_repositories import (
 )
 from shared.prompting.renderer import (
     BASELINE_SAFETY_POLICY,
-    CALL_DIALOGUE_POLICY,
+    DELIVERY_CALL_POLICY,
     NATURAL_DIALOGUE_POLICY,
+    PERSONA_ANCHOR_POLICY,
     format_long_term_memories,
     render_prompt_layers,
 )
 
 
 class ContextBuilderTests(unittest.TestCase):
+    def test_persona_anchor_requires_twenty_messages_and_dialogue_mode(self):
+        self.assertFalse(_should_inject_persona_anchor([{}] * 19, "chat"))
+        self.assertTrue(_should_inject_persona_anchor([{}] * 20, "chat"))
+        self.assertTrue(_should_inject_persona_anchor([{}] * 20, "call"))
+        self.assertFalse(_should_inject_persona_anchor([{}] * 20, "proactive"))
+        self.assertFalse(_should_inject_persona_anchor([{}] * 20, "daily_letter"))
+        self.assertIn("仍然是 Echo", PERSONA_ANCHOR_POLICY)
+
     def test_empty_or_invalid_user_timezone_falls_back_to_default(self):
         self.assertEqual(_resolve_timezone("", "Asia/Shanghai"), "Asia/Shanghai")
         self.assertEqual(_resolve_timezone("/invalid", "Asia/Shanghai"), "Asia/Shanghai")
@@ -154,11 +163,6 @@ class ContextBuilderTests(unittest.TestCase):
         self.assertNotIn("previous_user_at", context["conversation_gap"])
         self.assertNotIn("current_message_at", context["conversation_gap"])
 
-    def test_call_extended_context_requires_an_explicit_recall_reference(self):
-        self.assertFalse(_call_requires_extended_context("今天想吃什么？"))
-        self.assertFalse(_call_requires_extended_context("我刚才去吃饭了。"))
-        self.assertTrue(_call_requires_extended_context("你还记得我上次说的事吗？"))
-
     def test_call_prompt_uses_compact_dialogue_policy(self):
         messages = render_prompt_layers(
             persona=None,
@@ -171,7 +175,7 @@ class ContextBuilderTests(unittest.TestCase):
         )
         content = "\n".join(message["content"] for message in messages)
 
-        self.assertIn(CALL_DIALOGUE_POLICY, content)
+        self.assertIn(DELIVERY_CALL_POLICY, content)
         self.assertNotIn(NATURAL_DIALOGUE_POLICY, content)
 
     def test_formats_memory_type_content_and_score(self):

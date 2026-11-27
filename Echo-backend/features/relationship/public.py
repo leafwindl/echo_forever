@@ -2,15 +2,13 @@ from features.relationship.application.relationship_management import (
     RelationshipManagementService,
 )
 from features.relationship.domain.entities import (
-    RELATIONSHIP_DIRECTION_LABELS,
     RELATIONSHIP_SCHEMA_VERSION,
-    RELATIONSHIP_TYPE_LABELS,
     STAGE_LABELS,
+    AffectionAdjustment,
     RelationshipContext,
-    RelationshipDirectionBoundary,
-    RelationshipProposal,
     RelationshipState,
     RelationshipValidationError,
+    StageAdvanceRequest,
 )
 from features.relationship.infrastructure.container import (
     get_relationship_management_service,
@@ -53,22 +51,33 @@ def reset_relationship_state(user_id: str) -> RelationshipState:
     return get_relationship_management_service().reset(user_id)
 
 
-def update_relationship_mode(user_id: str, relationship_mode: str) -> RelationshipState:
-    return get_relationship_management_service().update_mode(user_id, relationship_mode)
+def adjust_affection(
+    *,
+    user_id: str,
+    delta: int,
+    reason: str,
+    agent_turn_id: str,
+) -> AffectionAdjustment:
+    return get_relationship_management_service().adjust_affection(
+        user_id=user_id,
+        delta=delta,
+        reason=reason,
+        agent_turn_id=agent_turn_id,
+    )
 
 
-def get_pending_relationship_proposal(user_id: str) -> RelationshipProposal | None:
-    return get_relationship_management_service().pending_proposal(user_id)
+def get_pending_stage_request(user_id: str) -> StageAdvanceRequest | None:
+    return get_relationship_management_service().pending_stage_request(user_id)
 
 
-def propose_relationship(
+def request_stage_advance(
     *,
     user_id: str,
     conversation_id: str | None,
     agent_turn_id: str | None,
     evidence: str,
-) -> RelationshipProposal:
-    return get_relationship_management_service().propose_relationship(
+) -> StageAdvanceRequest:
+    return get_relationship_management_service().request_stage_advance(
         user_id=user_id,
         conversation_id=conversation_id,
         agent_turn_id=agent_turn_id,
@@ -76,54 +85,43 @@ def propose_relationship(
     )
 
 
-def accept_relationship_proposal(user_id: str, proposal_id: str) -> RelationshipState:
-    return get_relationship_management_service().accept_proposal(user_id, proposal_id)
+def accept_stage_request(user_id: str, request_id: str) -> RelationshipState:
+    return get_relationship_management_service().accept_stage_request(user_id, request_id)
 
 
-def defer_relationship_proposal(
-    user_id: str, proposal_id: str, evidence: str = ""
-) -> RelationshipProposal:
-    return get_relationship_management_service().defer_proposal(
-        user_id, proposal_id, evidence
+def decline_stage_request(
+    user_id: str, request_id: str, evidence: str = ""
+) -> StageAdvanceRequest:
+    return get_relationship_management_service().decline_stage_request(
+        user_id, request_id, evidence
     )
 
 
-def decline_relationship_proposal(
-    user_id: str, proposal_id: str, evidence: str = ""
-) -> RelationshipProposal:
-    return get_relationship_management_service().decline_proposal(
-        user_id, proposal_id, evidence
-    )
-
-
-def decline_relationship_direction(
-    user_id: str, direction: str, evidence: str = ""
-) -> RelationshipDirectionBoundary:
-    return get_relationship_management_service().decline_direction(
-        user_id, direction, evidence
+def defer_stage_request(
+    user_id: str, request_id: str, evidence: str = ""
+) -> StageAdvanceRequest:
+    return get_relationship_management_service().defer_stage_request(
+        user_id, request_id, evidence
     )
 
 
 __all__ = [
-    "update_relationship_mode",
+    "AffectionAdjustment",
+    "RELATIONSHIP_SCHEMA_VERSION",
     "RelationshipContext",
-    "RelationshipDirectionBoundary",
     "RelationshipManagementService",
-    "RelationshipProposal",
     "RelationshipState",
     "RelationshipValidationError",
-    "RELATIONSHIP_DIRECTION_LABELS",
-    "RELATIONSHIP_SCHEMA_VERSION",
-    "RELATIONSHIP_TYPE_LABELS",
     "STAGE_LABELS",
-    "accept_relationship_proposal",
-    "decline_relationship_direction",
-    "decline_relationship_proposal",
-    "defer_relationship_proposal",
-    "get_pending_relationship_proposal",
+    "StageAdvanceRequest",
+    "accept_stage_request",
+    "adjust_affection",
+    "decline_stage_request",
+    "defer_stage_request",
+    "get_pending_stage_request",
     "get_relationship_context",
     "get_relationship_state",
-    "propose_relationship",
     "record_relationship_turn",
+    "request_stage_advance",
     "reset_relationship_state",
 ]

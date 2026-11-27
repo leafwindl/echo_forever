@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from providers.llm_provider import get_llm_provider
 
 from features.agent.public import ACTION_SPECS
+from features.assistant_persona.public import get_assistant_persona
 from features.presence.domain.entities import (
     PresenceContext,
     PresenceMemory,
@@ -14,17 +15,23 @@ from features.presence.domain.entities import (
     PresenceThought,
     ThoughtDraft,
 )
+from shared.config import settings
+from shared.prompting.renderer import render_persona_digest
+
+_PERSONA_DIGEST = render_persona_digest(
+    get_assistant_persona(settings.assistant_persona_version)
+)
 
 _ACTION_HINT = "\n".join(f'  "{spec.label}"' for spec in ACTION_SPECS)
 
 _SYSTEM_PROMPT = f"""你是 Echo 的内部念头生成器，不是聊天回复生成器。
+{_PERSONA_DIGEST}
 根据下面的事实，生成 Echo 此刻一个自然、短小的内心念头。
 只输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释。
 字段固定为：
 {{"thought": "第一人称中文念头，20-80字", "salience": 0.0到1.0,
  "shareable": true或false, "action_intent": "" 或结构化动作,
  "action_request": "" 或自然语言能力请求,
- "draft_text": "如果要主动发给用户，写成 20-80 字的第一人称自然消息；不适合发就留空",
  "plan": "这次准备做什么/不做什么，20-40字",
  "next_wake_minutes": 30到240的整数}}
 要求：
@@ -40,9 +47,6 @@ _SYSTEM_PROMPT = f"""你是 Echo 的内部念头生成器，不是聊天回复�
 - 念头可以平淡，不要为了显得有生命力而强行抒情。
 - 如果念头适合自然地说给用户听，不要过度保守，shareable 可以为 true；
   只有涉及隐私、重复、尴尬或明显不适合打扰时才为 false。
-- draft_text 是准备直接发出去的消息，不是念头复述：像微信里的一句话，
-  不提念头、系统、调度或内部机制；不适合打扰时留空字符串。
-- draft_text 非空时 shareable 必须为 true；两者不能互相矛盾。
 - 如果语境里有一个轻量、自然的小动作，可以填写 action_intent；不需要每轮都有，
   但不要因为害怕打扰而总是留空。
 - action_intent 只有语境明确支持时才填写，格式必须是以下之一：
@@ -51,7 +55,7 @@ _SYSTEM_PROMPT = f"""你是 Echo 的内部念头生成器，不是聊天回复�
 - 如果你想做点什么但不确定对应哪个动作，可以填 action_request，
   用自然语言说想要什么（如“想看看B站”“想看看你的屏幕”）；系统会路由到已注册能力，
   匹配不到会被记为能力缺口。不要编造工具名。
-- 填了 bili 时 draft_text 可以留空，表示这次只是自己想看看、不一定要发消息。
+- 填了 bili 时 plan 可以留空，表示这次只是自己想看看、不一定要发消息。
 - recent_actions 是你最近真的做过的事（刷过B站、分享过视频、执行过任务）。
   刚做过的事不要假装没发生过，也不要为了显得主动而重复做；如果有新理由
   （没看够、上次没分享成功、用户刚提过）可以说出来。"""
@@ -181,7 +185,6 @@ class ProviderPresenceThoughtGenerator:
             shareable=bool(payload.get("shareable", False)),
             action_intent=str(payload.get("action_intent") or "").strip()[:160],
             action_request=str(payload.get("action_request") or "").strip()[:160],
-            draft_text=str(payload.get("draft_text") or "").strip()[:500],
             plan=str(payload.get("plan") or "").strip()[:200],
             next_wake_minutes=next_wake,
         )

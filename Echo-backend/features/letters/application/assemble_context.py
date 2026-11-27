@@ -15,6 +15,7 @@ from features.memory.public import list_memories, retrieve_relevant_memories
 from features.persona.public import get_persona
 from features.relationship.public import get_relationship_context
 from features.study_focus.public import list_study_focus_evidence
+from features.user_profile.public import get_user_profile
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ class LetterContextAssembler:
         memories = await self._load_memories(user_id, user_text)
         persona = self._load_persona(user_id)
         relationship = self._load_relationship(user_id, persona)
+        user_profile = self._load_user_profile(user_id)
         assistant_persona = get_assistant_persona(self.config.assistant_persona_version)
 
         evidence = self._build_evidence(raw_messages, timezone_name)
@@ -108,7 +110,9 @@ class LetterContextAssembler:
             summary_maximum_tokens=self.config.summary_maximum_tokens,
             assistant_persona=assistant_persona,
             relationship=relationship,
+            user_profile=user_profile,
             conversation_mode="daily_letter",
+            include_user_profile=bool(user_profile is not None and not user_profile.is_empty),
         )
         messages.extend(
             [
@@ -198,6 +202,16 @@ class LetterContextAssembler:
             return get_persona(user_id)
         except Exception:
             logger.warning("Letter persona loading unavailable user_id=%s", user_id, exc_info=True)
+            return None
+
+    @staticmethod
+    def _load_user_profile(user_id: str):
+        try:
+            return get_user_profile(user_id)
+        except Exception:
+            logger.warning(
+                "Letter user profile loading unavailable user_id=%s", user_id, exc_info=True
+            )
             return None
 
     @staticmethod
