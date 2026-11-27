@@ -3,12 +3,12 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from features.agent.application.execute_tool import ToolExecutor
-from features.agent.domain.entities import AgentToolCall, AgentToolStatus
+from features.agent.domain.entities import AgentToolCall, AgentToolStatus, ContentPart
 from features.agent.domain.tools import ToolExecutionContext, ToolRegistry
 from features.agent.infrastructure.tools.schedule_tools import register_schedule_tools
 from features.chat.domain.entities import PreparedChatReply
@@ -462,6 +462,64 @@ class ProactiveWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(processed)
         self.assertEqual(repository.suppressed, [("job_due", "duplicate_delivery")])
         repository.persist_delivery.assert_not_called()
+
+    async def test_delivery_items_include_sticker_for_wechat(self):
+        repository = _DueSpontaneousJobRepository()
+        repository.persist_delivery = Mock(
+            return_value=[
+                {
+                    "message_id": "msg_proactive",
+                    "message_type": "text",
+                    "content": "给你看个表情",
+                    "reply_group_id": "group_proactive",
+                }
+            ]
+        )
+        sticker = ContentPart(
+            type="sticker",
+            sticker_id="stk_a",
+            url="https://api.example.com/static/stickers/a.png",
+            after_text_index=0,
+        )
+        reply_generator = SimpleNamespace(
+            prepare=AsyncMock(
+                return_value=PreparedChatReply(
+                    reply="给你看个表情",
+                    reply_segments=("给你看个表情",),
+                    content_parts=(sticker,),
+                    sticker_placement="after_text",
+                )
+            )
+        )
+        worker = ProcessProactiveChatJobs(
+            repository=repository,
+            reply_generator=reply_generator,
+            request_guard=SimpleNamespace(
+                try_acquire=lambda _user_id: True,
+                release=lambda _user_id: None,
+            ),
+            event_broker=SimpleNamespace(publish=AsyncMock()),
+            timing_policy=SimpleNamespace(
+                build=lambda **_kwargs: SimpleNamespace(
+                    agent_elapsed_ms=0,
+                    initial_delay_ms=0,
+                    message_delays_ms=(0,),
+                )
+            ),
+            lease_seconds=30,
+        )
+
+        with patch(
+            "features.desktop.public.send_wechat_delivery",
+            new=AsyncMock(return_value=True),
+        ) as delivery:
+            processed = await worker.run_once()
+
+        self.assertTrue(processed)
+        delivery.assert_awaited_once()
+        items = delivery.await_args.kwargs["items"]
+        self.assertEqual([item.message_type for item in items], ["text", "sticker"])
+        self.assertEqual(items[1].parts[0].sticker_id, "stk_a")
 
 
 if __name__ == "__main__":
