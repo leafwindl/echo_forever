@@ -111,6 +111,36 @@ class WechatDeliveryTests(unittest.IsolatedAsyncioTestCase):
         body = _sequence_body(remote.await_args_list[-1].kwargs["command"])
         self.assertEqual(body["items"], [{"type": "text", "text": "先说话"}])
 
+    async def test_only_first_sticker_is_sent(self):
+        remote = AsyncMock(
+            side_effect=[
+                RemoteCommandResult(True, "1234"),
+                RemoteCommandResult(True, '{"ok": true, "results": []}'),
+            ]
+        )
+        parts = (
+            _sticker_part("stk_a", "https://x/a.png", index=0),
+            _sticker_part("stk_b", "https://x/b.png", index=1),
+        )
+        items = build_chat_delivery_items(("第一句", "第二句"), parts, "after_text")
+
+        with patch.object(wechat_events, "run_remote_command", remote):
+            ok = await wechat_events.send_wechat_delivery(
+                service=object(),
+                user_id="user_1",
+                items=items,
+            )
+
+        self.assertTrue(ok)
+        self.assertEqual(remote.await_count, 2)
+        body = _sequence_body(remote.await_args_list[-1].kwargs["command"])
+        images = [item for item in body["items"] if item["type"] == "image"]
+        self.assertEqual(len(images), 1)
+        self.assertEqual(
+            images[0]["path"],
+            wechat_events._sticker_filename("stk_a", "https://x/a.png"),
+        )
+
     async def test_gif_is_skipped(self):
         remote = AsyncMock(return_value=RemoteCommandResult(True, '{"ok": true}'))
         items = build_chat_delivery_items(

@@ -165,8 +165,10 @@ async def send_wechat_delivery(
     """按交付顺序发文字和贴纸图片；图片失败只降级为文字，不伪造成功。
 
     微信桥固定在唯一联系人窗口发送，所以不需要再传 chat。
+    和 APP 的 firstSticker 一致：一轮回复只发第一张贴纸。
     """
     payload_items: list[dict] = []
+    sticker_handled = False
     for item in items:
         if item.message_type == "text":
             text = item.content.strip()
@@ -175,9 +177,12 @@ async def send_wechat_delivery(
             continue
         if item.message_type != "sticker" or not item.parts:
             continue
+        if sticker_handled:
+            continue
         part = item.parts[0]
         if part.type != "sticker":
             continue
+        sticker_handled = True
         filename = await _prepare_sticker_file(
             service=service,
             user_id=user_id,
