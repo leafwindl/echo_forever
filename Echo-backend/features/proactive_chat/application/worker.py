@@ -200,18 +200,16 @@ class ProcessProactiveChatJobs:
                     reason,
                 )
                 return True
-            delivery_types = [
-                item.message_type
-                for item in build_delivery_items(
-                    prepared.reply_segments,
-                    tuple(
-                        part
-                        for part in prepared.content_parts
-                        if part.type == "sticker"
-                    ),
-                    prepared.sticker_placement,
-                )
-            ]
+            delivery_items = build_delivery_items(
+                prepared.reply_segments,
+                tuple(
+                    part
+                    for part in prepared.content_parts
+                    if part.type == "sticker"
+                ),
+                prepared.sticker_placement,
+            )
+            delivery_types = [item.message_type for item in delivery_items]
             presentation = self.timing_policy.build(
                 delivery_types=tuple(delivery_types or ["text"]),
                 agent_elapsed_ms=int((time.perf_counter() - started) * 1000),
@@ -231,21 +229,19 @@ class ProcessProactiveChatJobs:
                 return True
             self._record_delivery_events(job.user_id, conversation_id, messages)
             # 主动消息优先走微信：App 侧照常记录，微信是主要触达渠道
-            from features.desktop.public import send_wechat_message
+            from features.desktop.public import send_wechat_delivery
 
-            for segment in prepared.reply_segments:
-                try:
-                    await send_wechat_message(
-                        user_id=job.user_id,
-                        chat=_WECHAT_NOTIFY_TARGET,
-                        text=segment,
-                    )
-                except Exception:
-                    logger.warning(
-                        "Proactive WeChat delivery failed job_id=%s",
-                        job.job_id,
-                        exc_info=True,
-                    )
+            try:
+                await send_wechat_delivery(
+                    user_id=job.user_id,
+                    items=delivery_items,
+                )
+            except Exception:
+                logger.warning(
+                    "Proactive WeChat delivery failed job_id=%s",
+                    job.job_id,
+                    exc_info=True,
+                )
             await self.event_broker.publish(
                 job.user_id,
                 ChatEvent(
@@ -378,7 +374,8 @@ class ProcessProactiveChatJobs:
                     self.repository.suppress_job(job.job_id, "agent_output_rejected")
                     self.repository.mark_goal_failed(goal.goal_id)
                     logger.info(
-                        "Proactive chat job suppressed job_id=%s reason=agent_output_rejected code=%s",
+                        "Proactive chat job suppressed job_id=%s "
+                        "reason=agent_output_rejected code=%s",
                         job.job_id,
                         prepared.error_code,
                     )

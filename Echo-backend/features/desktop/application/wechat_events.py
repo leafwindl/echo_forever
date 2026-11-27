@@ -1,19 +1,30 @@
-"""微信消息事件 → Echo 回复 → 发回微信。"""
+"""微信消息事件 → Echo 回复 → 发回微信（文字 + 表情包图片）。"""
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from datetime import datetime
+from urllib.parse import urlsplit
 
-from features.chat.public import CHAT_CHANNEL_WECHAT, generate_chat_reply
+from features.chat.public import (
+    CHAT_CHANNEL_WECHAT,
+    DeliveryItem,
+    build_chat_delivery_items,
+    generate_chat_reply,
+)
 from features.desktop.application.desktop_service import DesktopService
 from features.desktop.application.remote_command import run_remote_command
 
 logger = logging.getLogger(__name__)
 
 BRIDGE_SEND_TIMEOUT_SECONDS = 120
+STICKER_DOWNLOAD_TIMEOUT_SECONDS = 60
+STICKER_IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
+# 与 wechat_bridge.py 的 IMAGE_OUT_DIR 保持一致；bridge 只接受该目录下的文件名
+VM_IMAGE_DIR = "C:\\EchoComputer\\images"
 
 # 微信消息必须按顺序处理：并发会让多条回复交错、乱序
 _WECHAT_TURN_LOCK = asyncio.Lock()
@@ -32,15 +43,39 @@ def _bridge_send_command(chat: str, text: str) -> str:
     )
 
 
-def _bridge_send_many_command(chat: str, texts: list[str]) -> str:
-    body = json.dumps(
-        {"chat": chat, "texts": texts},
-        ensure_ascii=False,
-    ).replace("'", "''")
+def _bridge_send_sequence_command(items: list[dict]) -> str:
+    body = json.dumps({"items": items}, ensure_ascii=False).replace("'", "''")
     return (
-        "Invoke-RestMethod -Uri 'http://127.0.0.1:8765/send_many' -Method Post "
+        "Invoke-RestMethod -Uri 'http://127.0.0.1:8765/send_sequence' -Method Post "
         "-ContentType 'application/json; charset=utf-8' "
         f"-Body '{body}' -TimeoutSec 180 | ConvertTo-Json -Compress -Depth 6"
+    )
+
+
+def _sticker_suffix(url: str) -> str:
+    path = urlsplit(url).path
+    dot = path.rfind(".")
+    return path[dot:].lower() if dot >= 0 else ""
+
+
+def _sticker_filename(sticker_id: str, url: str) -> str:
+    """ASCII 文件名；同一张图命中 VM 本地缓存，不再重复下载。"""
+    seed = sticker_id.strip() or url.strip()
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:16]
+    return f"stk_{digest}{_sticker_suffix(url)}"
+
+
+def _sticker_download_command(url: str, filename: str) -> str:
+    target = f"{VM_IMAGE_DIR}\\{filename}"
+    # Stop 让下载失败变成 job failed，避免“命令成功但文件不存在”的假成功。
+    return (
+        "$ErrorActionPreference='Stop';"
+        f"$p='{_ps_quote(target)}';"
+        "if (-not (Test-Path -LiteralPath $p)) {"
+        f"Invoke-WebRequest -Uri '{_ps_quote(url)}' -OutFile $p "
+        "-UseBasicParsing -TimeoutSec 60"
+        "};"
+        "(Get-Item -LiteralPath $p).Length"
     )
 
 
@@ -84,6 +119,94 @@ async def send_wechat_text(
         command=_bridge_send_command(chat, text),
     )
     return ok
+
+
+async def _prepare_sticker_file(
+    *,
+    service: DesktopService,
+    user_id: str,
+    part,
+) -> str:
+    """确保贴纸图片在 VM 的 images 目录里，返回 bridge 可用的文件名。"""
+    url = part.url.strip()
+    if not url:
+        return ""
+    suffix = _sticker_suffix(url)
+    if suffix not in STICKER_IMAGE_SUFFIXES:
+        logger.info(
+            "wechat sticker skipped sticker_id=%s suffix=%s",
+            part.sticker_id,
+            suffix or "none",
+        )
+        return ""
+    filename = _sticker_filename(part.sticker_id, url)
+    ok, output = await _run_remote_command(
+        service=service,
+        user_id=user_id,
+        command=_sticker_download_command(url, filename),
+        timeout_seconds=STICKER_DOWNLOAD_TIMEOUT_SECONDS,
+    )
+    if not ok:
+        logger.warning(
+            "wechat sticker download failed sticker_id=%s detail=%s",
+            part.sticker_id,
+            output[:200],
+        )
+        return ""
+    return filename
+
+
+async def send_wechat_delivery(
+    *,
+    service: DesktopService,
+    user_id: str,
+    items: tuple[DeliveryItem, ...],
+) -> bool:
+    """按交付顺序发文字和贴纸图片；图片失败只降级为文字，不伪造成功。
+
+    微信桥固定在唯一联系人窗口发送，所以不需要再传 chat。
+    """
+    payload_items: list[dict] = []
+    for item in items:
+        if item.message_type == "text":
+            text = item.content.strip()
+            if text:
+                payload_items.append({"type": "text", "text": text})
+            continue
+        if item.message_type != "sticker" or not item.parts:
+            continue
+        part = item.parts[0]
+        if part.type != "sticker":
+            continue
+        filename = await _prepare_sticker_file(
+            service=service,
+            user_id=user_id,
+            part=part,
+        )
+        if filename:
+            payload_items.append({"type": "image", "path": filename})
+
+    if not payload_items:
+        logger.info("wechat delivery has no deliverable items")
+        return False
+
+    ok, output = await _run_remote_command(
+        service=service,
+        user_id=user_id,
+        command=_bridge_send_sequence_command(payload_items),
+    )
+    if not ok:
+        logger.warning("wechat delivery failed detail=%s", output[:300])
+        return False
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        payload = {}
+    if not isinstance(payload, dict) or not payload.get("ok"):
+        logger.warning("wechat bridge rejected delivery: %s", str(payload)[:300])
+        return False
+    logger.info("wechat delivery sent items=%s", len(payload_items))
+    return True
 
 
 async def handle_wechat_message(
@@ -148,30 +271,30 @@ async def _handle_wechat_message_locked(
         if not segments:
             fallback = (result.reply or "").strip()
             segments = (fallback,) if fallback else ()
-        if not segments:
+        delivery_items = build_chat_delivery_items(
+            segments,
+            result.content_parts,
+            result.sticker_placement,
+        )
+        if not delivery_items:
             logger.info("wechat event produced empty reply local_id=%s", local_id)
             return
-        # 一次批量发送：bridge 复用常驻 WeChat 实例，避免每条消息都起新进程
-        ok, detail = await _run_remote_command(
+        ok = await send_wechat_delivery(
             service=service,
             user_id=user_id,
-            command=_bridge_send_many_command(chat, list(segments)),
-            timeout_seconds=BRIDGE_SEND_TIMEOUT_SECONDS,
+            items=delivery_items,
         )
         if not ok:
-            logger.warning(
-                "wechat reply delivery failed local_id=%s detail=%s",
-                local_id,
-                detail[:200],
-            )
+            logger.warning("wechat reply delivery failed local_id=%s", local_id)
             return
         logger.info(
-            "wechat reply delivered local_id=%s segments=%s",
+            "wechat reply delivered local_id=%s items=%s stickers=%s",
             local_id,
-            len(segments),
+            len(delivery_items),
+            sum(1 for item in delivery_items if item.message_type == "sticker"),
         )
     except Exception:
         logger.warning("wechat event handling failed local_id=%s", local_id, exc_info=True)
 
 
-__all__ = ["handle_wechat_message"]
+__all__ = ["handle_wechat_message", "send_wechat_delivery"]

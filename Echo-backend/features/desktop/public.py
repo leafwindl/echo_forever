@@ -89,6 +89,19 @@ async def send_wechat_message(*, user_id: str, chat: str, text: str) -> bool:
     )
 
 
+async def send_wechat_delivery(*, user_id: str, items: tuple) -> bool:
+    """主动消息投递微信：文字与表情包按交付顺序一次发出。"""
+    from features.desktop.application.wechat_events import (
+        send_wechat_delivery as _send_wechat_delivery,
+    )
+
+    return await _send_wechat_delivery(
+        service=get_desktop_service(),
+        user_id=user_id,
+        items=items,
+    )
+
+
 def create_desktop_pairing_code(user_id: str) -> PairingCode:
     return get_desktop_node_management().create_pairing_code(user_id)
 
@@ -199,5 +212,6 @@ __all__ = [
     "revoke_desktop_node",
     "run_desktop_command",
     "recent_bili_scan_summaries",
+    "send_wechat_delivery",
     "start_bili_scan",
 ]

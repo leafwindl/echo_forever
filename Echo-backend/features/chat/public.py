@@ -2,6 +2,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 
+from features.agent.domain.delivery import DeliveryItem, build_delivery_items
 from features.agent.domain.entities import ContentPart, ProactiveAction, ProactiveDecision
 from features.chat.domain.entities import (
     CHAT_CHANNEL_APP,
@@ -89,6 +90,19 @@ def list_chat_messages(
         before_id=before_id,
         after_id=after_id,
         limit=limit,
+    )
+
+
+def build_chat_delivery_items(
+    reply_segments: tuple[str, ...],
+    content_parts: tuple[ContentPart, ...],
+    sticker_placement: str = "after_text",
+) -> tuple[DeliveryItem, ...]:
+    """Order text and sticker parts for a channel that delivers the reply itself."""
+    return build_delivery_items(
+        reply_segments,
+        tuple(part for part in content_parts if part.type == "sticker"),
+        sticker_placement,
     )
 
 
@@ -375,7 +389,9 @@ __all__ = [
     "ChatRequestInProgressError",
     "ChatTurnResult",
     "ChatValidationError",
+    "DeliveryItem",
     "ExternalAssistantDelivery",
+    "build_chat_delivery_items",
     "clear_chat_context",
     "deliver_external_assistant_message",
     "accept_chat_message",
